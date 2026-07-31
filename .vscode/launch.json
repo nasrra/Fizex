@@ -1,0 +1,13 @@
+{
+    "configurations": [
+        {
+            "name": "Debug Unix",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/main",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "Debug Build"
+        }
+    ]
+}

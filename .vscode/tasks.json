@@ -1,0 +1,13 @@
+{
+    "tasks": [
+        {
+            "label": "Debug Build",
+            "type": "shell",
+            "command": "clang -g main.c -Werror -o main",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
