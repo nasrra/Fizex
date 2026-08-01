@@ -16,18 +16,16 @@ typedef struct{
     void* ptr;
     u64 capacity;
     u64 stride;
-    bool is_init;
 } Arena;
 
-bool arena_init(Arena *arena, u64 capacity){
+bool arena_init(Arena* arena, u64 capacity){
     arena->ptr = malloc(capacity);
     arena->capacity = capacity;
     arena->stride = 0;
-    arena->is_init = true;
     return true;
 }
 
-bool arena_push(Arena *arena, void* data, size_t size){
+bool arena_push(Arena* arena, void* data, size_t size){
     u64 new_stride = arena->stride + size;
     if(new_stride > arena->capacity){
         return false;
@@ -37,7 +35,7 @@ bool arena_push(Arena *arena, void* data, size_t size){
     return true;
 }
 
-void arena_clear(Arena *arena){
+void arena_clear(Arena* arena){
     arena->stride = 0;
 }
 
@@ -45,4 +43,11 @@ void arena_clear_zeroed(Arena *arena){
     // MemZero(arena->ptr, arena->capacity);
     memset(arena->ptr, 0, arena->capacity); // test pattern
     arena->stride = 0;
+}
+
+void arena_free(Arena* arena){
+    assert(arena != NULL);
+    assert(arena->ptr != NULL);
+    free(arena->ptr);
+    *arena = (Arena){0};
 }

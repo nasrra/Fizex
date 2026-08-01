@@ -3,7 +3,7 @@
         {
             "label": "Debug Build",
             "type": "shell",
-            "command": "clang -g main.c -Werror -o main",
+            "command": "clang -g main.c -Werror -fsanitize=address -o main",
             "group": {
                 "kind": "build",
                 "isDefault": true
