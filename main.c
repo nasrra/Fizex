@@ -1,8 +1,7 @@
-#include <stdlib.h>
 #include "base_layer/base.c"
+#include "base_layer/base_memory.c"
 #include "base_layer/base_simd.c"
 #include "base_layer/base_math.c"
-#include "base_layer/base_memory.c"
 
 typedef struct{
     char a;
@@ -11,21 +10,24 @@ typedef struct{
     char d;
 } Person;
 
-int main(){
-    Arena arena1;
-    Arena arena2;
-    arena_init(&arena1, sizeof(Person));
-    arena_init(&arena2, sizeof(Person));
-    Person person = {};
-    person.a = 'a';
-    person.b = 'b';
-    person.c = 'c';
-    person.d = 'd';
-    arena_push(&arena1, &person, sizeof(Person));
-    arena_push(&arena2, &person, sizeof(Person));
-    arena_clear_zeroed(&arena1);
-    // i64 nums[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 32};
-    // i64 dst[12] = {0};
-    // simd_i64_add_val(nums, 2, dst, 9);    
-    return 0;
+int main(void){
+    MemoryArena arena1;
+    MemoryArena arena2;
+    init_memory_arena(&arena1, Kilobyte(1));
+    init_memory_arena(&arena2, Kilobyte(1));
+
+    Soa_Aabb soa = {0};
+    init_soa_aabb(&soa, &arena1, 3);
+    append_soa_aabb(&soa, -1.0f, -1.0f, 2.0f, 2.0f);
+    append_soa_aabb(&soa, -1.0f, -1.0f, 3.0f, 3.0f);
+    append_soa_aabb(&soa, -1.0f, -1.0f, 4.0f, 4.0f);
+
+    f32* centroids_x;
+    size_t centroids_x_size;
+    f32* centroids_y;
+    size_t centroids_y_size;
+
+    ALLOC_ARRAY_MEMORY_ARENA(&arena1, centroids_x, &centroids_x_size, 3);
+    ALLOC_ARRAY_MEMORY_ARENA(&arena1, centroids_y, &centroids_y_size, 3);
+    calculate_centroids_soa_aabb(&soa, centroids_x, centroids_y);
 }

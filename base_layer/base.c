@@ -7,9 +7,9 @@
     types.
 ========================================*//**/
 
-typedef int bool;
-#define false 0;
-#define true 1;
+typedef int8_t bool;
+#define false 0
+#define true 1
 typedef float f32;
 typedef double f64;
 typedef int8_t i8;
@@ -130,17 +130,75 @@ typedef uint64_t u64;
 
 #define ArrayLength(arr) (sizeof(arr)/sizeof(*(arr)))
 #define PtrArraySize(ptr, length) (length * sizeof(*(ptr)))
+
 #ifdef NDEBUG
-    #define DebugAssert(val, msg)
+#   define DEBUG_ASSERT(val, msg)
 #else
-    #define DebugAssert(val, msg) do { \
-        assert(val, msg); \
+#   if OS_WINDOWS
+#        define DEBUG_ASSERT(val, msg) \
+            ((void)((val) || (_wassert(L##msg, _CRT_WIDE(__FILE__), (unsigned)(__LINE__)), 0)))
+#   elif OS_LINUX
+#       define DEBUG_ASSERT(val, msg) \
+            ((void)((val) || (__assert_fail(msg, __FILE__, __LINE__, __func__), 0)))
+#   elif OS_MAC
+#       define DEBUG_ASSERT(val, msg) \
+           ((void)((val) || (__assert_rtn(__func__, __FILE__, __LINE__, msg), 0)))
+#   else
+    // fallback.
+#       define DEBUG_ASSERT(val, msg) do { \
+            assert(val); \
+        } while(0)
+#   endif
+#endif
+
+#ifdef NDEBUG
+#   define BND_CHCK(val, size)
+#else
+#   define BNDS_CHCK(val, size) do { \
+        assert(val >= 0 && val < size); \
     } while(0)
 #endif
-#ifdef NDEBUG
-    #define BoundsCheck(val)
-#else
-    #define BoundsCheck(val, len) do { \
-        assert(val >= 0 && val < len); \
-    } while(0)
-#endif
+
+#define foo FLT_MIN
+
+/* 
+    Minimum of signed integral types.  
+*/
+#define I8_MIN  (-128)
+#define I16_MIN (-32767-1)
+#define I32_MIN (-2147483647-1)
+#define I64_MIN (-__INT64_C(9223372036854775807)-1)
+
+/* 
+    Maximum of signed integral types.  
+*/
+#define I8_MAX  (127)
+#define I16_MAX (32767)
+#define I32_MAX (2147483647)
+#define I64_MAX (__INT64_C(9223372036854775807))
+
+/* 
+    Maximum of unsigned integral types.  
+*/
+#define U8_MAX  (255)
+#define U16_MAX (65535)
+#define U32_MAX (4294967295U)
+#define U64_MAX (__UINT64_C(18446744073709551615))
+
+/*
+    maximum of floating-point types.
+*/
+#define F32_MAX 3.40282347e+38F
+#define F64_MAX 1.7976931348623157e+308
+
+/*
+    minimum of floating-point types.
+*/
+#define F32_MIN 1.17549435e-38F
+#define F64_MIN 2.2250738585072014e-308
+
+/*
+    epsilon of floating-point types.
+*/
+#define F32_EPSILON 1.19209290e-7F
+#define F64_EPSILON 2.2204460492503131e-16

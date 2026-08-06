@@ -17,35 +17,35 @@
     types.
 ========================================*//**/
 
-typedef void (*simd_f32_funcptr)(const f32* lhs, const f32* rhs, f32* dst, size_t size);
-typedef void (*simd_f32_val_funcptr)(const f32* lhs, const f32 rhs, f32* dst, size_t size);
+typedef void (*simd_funcptr_f32)(const f32* lhs, const f32* rhs, f32* dst, size_t size);
+typedef void (*simd_val_funcptr_f32)(const f32* lhs, const f32 rhs, f32* dst, size_t size);
 
-typedef void (*simd_f64_funcptr)(const f64* lhs, const f64* rhs, f64* dst, size_t size);
-typedef void (*simd_f64_val_funcptr)(const f64* lhs, const f64 rhs, f64* dst, size_t size);
+typedef void (*simd_funcptr_f64)(const f64* lhs, const f64* rhs, f64* dst, size_t size);
+typedef void (*simd_val_funcptr_f64)(const f64* lhs, const f64 rhs, f64* dst, size_t size);
 
-typedef void (*simd_i8_funcptr)(const i8* lhs, const i8* rhs, i8* dst, size_t size);
-typedef void (*simd_i8_val_funcptr)(const i8* lhs, const i8 rhs, i8* dst, size_t size);
+typedef void (*simd_funcptr_i8)(const i8* lhs, const i8* rhs, i8* dst, size_t size);
+typedef void (*simd_val_funcptr_i8)(const i8* lhs, const i8 rhs, i8* dst, size_t size);
 
-typedef void (*simd_i16_funcptr)(const i16* lhs, const i16* rhs, i16* dst, size_t size);
-typedef void (*simd_i16_val_funcptr)(const i16* lhs, const i16 rhs, i16* dst, size_t size);
+typedef void (*simd_funcptr_i16)(const i16* lhs, const i16* rhs, i16* dst, size_t size);
+typedef void (*simd_val_funcptr_i16)(const i16* lhs, const i16 rhs, i16* dst, size_t size);
 
-typedef void (*simd_i32_funcptr)(const i32* lhs, const i32* rhs, i32* dst, size_t size);
-typedef void (*simd_i32_val_funcptr)(const i32* lhs, const i32 rhs, i32* dst, size_t size);
+typedef void (*simd_funcptr_i32)(const i32* lhs, const i32* rhs, i32* dst, size_t size);
+typedef void (*simd_val_funcptr_i32)(const i32* lhs, const i32 rhs, i32* dst, size_t size);
 
-typedef void (*simd_i64_funcptr)(const i64* lhs, const i64* rhs, i64* dst, size_t size);
-typedef void (*simd_i64_val_funcptr)(const i64* lhs, const i64 rhs, i64* dst, size_t size);
+typedef void (*simd_funcptr_i64)(const i64* lhs, const i64* rhs, i64* dst, size_t size);
+typedef void (*simd_val_funcptr_i64)(const i64* lhs, const i64 rhs, i64* dst, size_t size);
 
-typedef void (*simd_u8_funcptr)(const u8* lhs, const u8* rhs, u8* dst, size_t size);
-typedef void (*simd_u8_val_funcptr)(const u8* lhs, const u8 rhs, u8* dst, size_t size);
+typedef void (*simd_funcptr_u8)(const u8* lhs, const u8* rhs, u8* dst, size_t size);
+typedef void (*simd_val_funcptr_u8)(const u8* lhs, const u8 rhs, u8* dst, size_t size);
 
-typedef void (*simd_u16_funcptr)(const u16* lhs, const u16* rhs, u16* dst, size_t size);
-typedef void (*simd_u16_val_funcptr)(const u16* lhs, const u16 rhs, u16* dst, size_t size);
+typedef void (*simd_funcptr_u16)(const u16* lhs, const u16* rhs, u16* dst, size_t size);
+typedef void (*simd_val_funcptr_u16)(const u16* lhs, const u16 rhs, u16* dst, size_t size);
 
-typedef void (*simd_u32_funcptr)(const u32* lhs, const u32* rhs, u32* dst, size_t size);
-typedef void (*simd_u32_val_funcptr)(const u32* lhs, const u32 rhs, u32* dst, size_t size);
+typedef void (*simd_funcptr_u32)(const u32* lhs, const u32* rhs, u32* dst, size_t size);
+typedef void (*simd_val_funcptr_u32)(const u32* lhs, const u32 rhs, u32* dst, size_t size);
 
-typedef void (*simd_u64_funcptr)(const u64* lhs, const u64* rhs, u64* dst, size_t size);
-typedef void (*simd_u64_val_funcptr)(const u64* lhs, const u64 rhs, u64* dst, size_t size);
+typedef void (*simd_funcptr_u64)(const u64* lhs, const u64* rhs, u64* dst, size_t size);
+typedef void (*simd_val_funcptr_u64)(const u64* lhs, const u64 rhs, u64* dst, size_t size);
 
 /*========================================
     globals.
@@ -55,75 +55,75 @@ typedef void (*simd_u64_val_funcptr)(const u64* lhs, const u64 rhs, u64* dst, si
     All funcptrs are lazy loaded when `simd_##type##_##op()` is first called.
 *//**/
 
-static simd_f32_funcptr simd_f32_add_funcptr = NULL;
-static simd_f32_funcptr simd_f32_sub_funcptr = NULL;
-static simd_f32_funcptr simd_f32_div_funcptr = NULL;
-static simd_f32_funcptr simd_f32_mul_funcptr = NULL;
-static simd_f64_funcptr simd_f64_add_funcptr = NULL;
-static simd_f64_funcptr simd_f64_sub_funcptr = NULL;
-static simd_f64_funcptr simd_f64_div_funcptr = NULL;
-static simd_f64_funcptr simd_f64_mul_funcptr = NULL;
+static simd_funcptr_f32 simd_add_funcptr_f32 = NULL;
+static simd_funcptr_f32 simd_sub_funcptr_f32 = NULL;
+static simd_funcptr_f32 simd_div_funcptr_f32 = NULL;
+static simd_funcptr_f32 simd_mul_funcptr_f32 = NULL;
+static simd_funcptr_f64 simd_add_funcptr_f64 = NULL;
+static simd_funcptr_f64 simd_sub_funcptr_f64 = NULL;
+static simd_funcptr_f64 simd_div_funcptr_f64 = NULL;
+static simd_funcptr_f64 simd_mul_funcptr_f64 = NULL;
 
-static simd_f32_val_funcptr simd_f32_add_val_funcptr = NULL;
-static simd_f32_val_funcptr simd_f32_sub_val_funcptr = NULL;
-static simd_f32_val_funcptr simd_f32_div_val_funcptr = NULL;
-static simd_f32_val_funcptr simd_f32_mul_val_funcptr = NULL;
-static simd_f64_val_funcptr simd_f64_add_val_funcptr = NULL;
-static simd_f64_val_funcptr simd_f64_sub_val_funcptr = NULL;
-static simd_f64_val_funcptr simd_f64_div_val_funcptr = NULL;
-static simd_f64_val_funcptr simd_f64_mul_val_funcptr = NULL;
+static simd_val_funcptr_f32 simd_add_val_funcptr_f32 = NULL;
+static simd_val_funcptr_f32 simd_sub_val_funcptr_f32 = NULL;
+static simd_val_funcptr_f32 simd_div_val_funcptr_f32 = NULL;
+static simd_val_funcptr_f32 simd_mul_val_funcptr_f32 = NULL;
+static simd_val_funcptr_f64 simd_add_val_funcptr_f64 = NULL;
+static simd_val_funcptr_f64 simd_sub_val_funcptr_f64 = NULL;
+static simd_val_funcptr_f64 simd_div_val_funcptr_f64 = NULL;
+static simd_val_funcptr_f64 simd_mul_val_funcptr_f64 = NULL;
 
-static simd_i8_funcptr  simd_i8_add_funcptr = NULL;
-static simd_i8_funcptr  simd_i8_sub_funcptr = NULL;
-static simd_i8_funcptr  simd_i8_mul_funcptr = NULL;
-static simd_i16_funcptr simd_i16_add_funcptr = NULL;
-static simd_i16_funcptr simd_i16_sub_funcptr = NULL;
-static simd_i16_funcptr simd_i16_mul_funcptr = NULL;
-static simd_i32_funcptr simd_i32_add_funcptr = NULL;
-static simd_i32_funcptr simd_i32_sub_funcptr = NULL;
-static simd_i32_funcptr simd_i32_mul_funcptr = NULL;
-static simd_i64_funcptr simd_i64_add_funcptr = NULL;
-static simd_i64_funcptr simd_i64_sub_funcptr = NULL;
-static simd_i64_funcptr simd_i64_mul_funcptr = NULL;
+static simd_funcptr_i8  simd_add_funcptr_i8  = NULL;
+static simd_funcptr_i8  simd_sub_funcptr_i8  = NULL;
+static simd_funcptr_i8  simd_mul_funcptr_i8  = NULL;
+static simd_funcptr_i16 simd_add_funcptr_i16 = NULL;
+static simd_funcptr_i16 simd_sub_funcptr_i16 = NULL;
+static simd_funcptr_i16 simd_mul_funcptr_i16 = NULL;
+static simd_funcptr_i32 simd_add_funcptr_i32 = NULL;
+static simd_funcptr_i32 simd_sub_funcptr_i32 = NULL;
+static simd_funcptr_i32 simd_mul_funcptr_i32 = NULL;
+static simd_funcptr_i64 simd_add_funcptr_i64 = NULL;
+static simd_funcptr_i64 simd_sub_funcptr_i64 = NULL;
+static simd_funcptr_i64 simd_mul_funcptr_i64 = NULL;
 
-static simd_i8_val_funcptr simd_i8_add_val_funcptr = NULL;
-static simd_i8_val_funcptr simd_i8_sub_val_funcptr = NULL;
-static simd_i8_val_funcptr simd_i8_mul_val_funcptr = NULL;
-static simd_i16_val_funcptr simd_i16_add_val_funcptr = NULL;
-static simd_i16_val_funcptr simd_i16_sub_val_funcptr = NULL;
-static simd_i16_val_funcptr simd_i16_mul_val_funcptr = NULL;
-static simd_i32_val_funcptr simd_i32_add_val_funcptr = NULL;
-static simd_i32_val_funcptr simd_i32_sub_val_funcptr = NULL;
-static simd_i32_val_funcptr simd_i32_mul_val_funcptr = NULL;
-static simd_i64_val_funcptr simd_i64_add_val_funcptr = NULL;
-static simd_i64_val_funcptr simd_i64_sub_val_funcptr = NULL;
-static simd_i64_val_funcptr simd_i64_mul_val_funcptr = NULL;
+static simd_val_funcptr_i8  simd_add_val_funcptr_i8  = NULL;
+static simd_val_funcptr_i8  simd_sub_val_funcptr_i8  = NULL;
+static simd_val_funcptr_i8  simd_mul_val_funcptr_i8  = NULL;
+static simd_val_funcptr_i16 simd_add_val_funcptr_i16 = NULL;
+static simd_val_funcptr_i16 simd_sub_val_funcptr_i16 = NULL;
+static simd_val_funcptr_i16 simd_mul_val_funcptr_i16 = NULL;
+static simd_val_funcptr_i32 simd_add_val_funcptr_i32 = NULL;
+static simd_val_funcptr_i32 simd_sub_val_funcptr_i32 = NULL;
+static simd_val_funcptr_i32 simd_mul_val_funcptr_i32 = NULL;
+static simd_val_funcptr_i64 simd_add_val_funcptr_i64 = NULL;
+static simd_val_funcptr_i64 simd_sub_val_funcptr_i64 = NULL;
+static simd_val_funcptr_i64 simd_mul_val_funcptr_i64 = NULL;
 
-static simd_u8_funcptr simd_u8_add_funcptr = NULL;
-static simd_u8_funcptr simd_u8_sub_funcptr = NULL;
-static simd_u8_funcptr simd_u8_mul_funcptr = NULL;
-static simd_u16_funcptr simd_u16_add_funcptr = NULL;
-static simd_u16_funcptr simd_u16_sub_funcptr = NULL;
-static simd_u16_funcptr simd_u16_mul_funcptr = NULL;
-static simd_u32_funcptr simd_u32_add_funcptr = NULL;
-static simd_u32_funcptr simd_u32_sub_funcptr = NULL;
-static simd_u32_funcptr simd_u32_mul_funcptr = NULL;
-static simd_u64_funcptr simd_u64_add_funcptr = NULL;
-static simd_u64_funcptr simd_u64_sub_funcptr = NULL;
-static simd_u64_funcptr simd_u64_mul_funcptr = NULL;
+static simd_funcptr_u8  simd_add_funcptr_u8  = NULL;
+static simd_funcptr_u8  simd_sub_funcptr_u8  = NULL;
+static simd_funcptr_u8  simd_mul_funcptr_u8  = NULL;
+static simd_funcptr_u16 simd_add_funcptr_u16 = NULL;
+static simd_funcptr_u16 simd_sub_funcptr_u16 = NULL;
+static simd_funcptr_u16 simd_mul_funcptr_u16 = NULL;
+static simd_funcptr_u32 simd_add_funcptr_u32 = NULL;
+static simd_funcptr_u32 simd_sub_funcptr_u32 = NULL;
+static simd_funcptr_u32 simd_mul_funcptr_u32 = NULL;
+static simd_funcptr_u64 simd_add_funcptr_u64 = NULL;
+static simd_funcptr_u64 simd_sub_funcptr_u64 = NULL;
+static simd_funcptr_u64 simd_mul_funcptr_u64 = NULL;
 
-static simd_u8_val_funcptr simd_u8_add_val_funcptr = NULL;
-static simd_u8_val_funcptr simd_u8_sub_val_funcptr = NULL;
-static simd_u8_val_funcptr simd_u8_mul_val_funcptr = NULL;
-static simd_u16_val_funcptr simd_u16_add_val_funcptr = NULL;
-static simd_u16_val_funcptr simd_u16_sub_val_funcptr = NULL;
-static simd_u16_val_funcptr simd_u16_mul_val_funcptr = NULL;
-static simd_u32_val_funcptr simd_u32_add_val_funcptr = NULL;
-static simd_u32_val_funcptr simd_u32_sub_val_funcptr = NULL;
-static simd_u32_val_funcptr simd_u32_mul_val_funcptr = NULL;
-static simd_u64_val_funcptr simd_u64_add_val_funcptr = NULL;
-static simd_u64_val_funcptr simd_u64_sub_val_funcptr = NULL;
-static simd_u64_val_funcptr simd_u64_mul_val_funcptr = NULL;
+static simd_val_funcptr_u8  simd_add_val_funcptr_u8  = NULL;
+static simd_val_funcptr_u8  simd_sub_val_funcptr_u8  = NULL;
+static simd_val_funcptr_u8  simd_mul_val_funcptr_u8  = NULL;
+static simd_val_funcptr_u16 simd_add_val_funcptr_u16 = NULL;
+static simd_val_funcptr_u16 simd_sub_val_funcptr_u16 = NULL;
+static simd_val_funcptr_u16 simd_mul_val_funcptr_u16 = NULL;
+static simd_val_funcptr_u32 simd_add_val_funcptr_u32 = NULL;
+static simd_val_funcptr_u32 simd_sub_val_funcptr_u32 = NULL;
+static simd_val_funcptr_u32 simd_mul_val_funcptr_u32 = NULL;
+static simd_val_funcptr_u64 simd_add_val_funcptr_u64 = NULL;
+static simd_val_funcptr_u64 simd_sub_val_funcptr_u64 = NULL;
+static simd_val_funcptr_u64 simd_mul_val_funcptr_u64 = NULL;
 
 /*========================================
     defines.
@@ -133,14 +133,14 @@ static simd_u64_val_funcptr simd_u64_mul_val_funcptr = NULL;
 #   define SIMD_ATTR_SSE4 __attribute__((target("sse2,sse4.1")))
 #   define SIMD_ATTR_AVX2 __attribute__((target("avx,avx2,avx512vl")))
 #else
-#   define SIMD_ATTR_SSE2
+#   define SIMD_ATTR_sse
 #   define SIMD_ATTR_AVX2
 #endif
 
 // 256 bits = 32 bytes.
-#define SIMD_AVX2_LANE_SIZE 32
+#define SIMD_AVX_LANE_SIZE 32
 // 128 bits = 16 bytes.
-#define SIMD_SSE2_LANE_SIZE 16
+#define SIMD_SSE_LANE_SIZE 16
 
 /*========================================
     generators.
@@ -156,7 +156,7 @@ static simd_u64_val_funcptr simd_u64_mul_val_funcptr = NULL;
     `op`: the operator to apply to each element in the loop. 
 */
 #define SIMD_IMPL_SCALAR(type, op_name, op) \
-void simd_##type##_##op_name##_scalar(const type* lhs, const type* rhs, type* dst, size_t size){ \
+void simd_##op_name##_scalar_##type(const type* lhs, const type* rhs, type* dst, size_t size){ \
     for(size_t i = 0; i < size; i++){ \
         dst[i] = lhs[i] op rhs[i]; \
     } \
@@ -173,7 +173,7 @@ void simd_##type##_##op_name##_scalar(const type* lhs, const type* rhs, type* ds
     `op`: the operator to apply to each element in the loop. 
 */
 #define SIMD_IMPL_VAL_SCALAR(type, name, operator) \
-void simd_##type##_##name##_val_scalar(const type* lhs, const type rhs, type* dst, size_t size){ \
+void simd_##name##_val_scalar_##type(const type* lhs, const type rhs, type* dst, size_t size){ \
     for(size_t i = 0; i < size; i++){ \
         dst[i] = lhs[i] operator rhs; \
     } \
@@ -189,12 +189,12 @@ void simd_##type##_##name##_val_scalar(const type* lhs, const type rhs, type* ds
     `op_name`: the name of the operator.
     `op`: the operator to apply to each element in the loop. 
 */
-#define SIMD_IMPL_FLT_SSE2(type, func_name, simd_op_name, scalar_op, simd_precision) \
+#define SIMD_IMPL_FLT_SSE(type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_SSE4 \
-void simd_##type##_##func_name##_sse2(const type* lhs, const type* rhs, type* dst, size_t size){ \
-    int i = 0; \
-    int lanes = (16 / (sizeof(type))); \
-    int size_relative = size - lanes; \
+void simd_##func_name##_sse_##type(const type* lhs, const type* rhs, type* dst, size_t size){ \
+    i32 i = 0; \
+    i32 lanes = (SIMD_SSE_LANE_SIZE / (sizeof(type))); \
+    i32 size_relative = size - lanes; \
     for(; i <= size_relative; size += lanes){ \
         __m128 v_lhs    = _mm_loadu_##simd_precision(&lhs[i]); \
         __m128 v_rhs    = _mm_loadu_##simd_precision(&rhs[i]); \
@@ -216,11 +216,11 @@ void simd_##type##_##func_name##_sse2(const type* lhs, const type* rhs, type* ds
     `op_name`: the name of the operator.
     `op`: the operator to apply to each element in the loop. 
 */
-#define SIMD_IMPL_VAL_FLT_SSE2(type, func_name, simd_op_name, scalar_op, simd_precision) \
-SIMD_ATTR_AVX2 \
-void simd_##type##_##func_name##_val_sse2(const type* lhs, const type rhs, type* dst, size_t size){ \
+#define SIMD_IMPL_VAL_FLT_SSE(type, func_name, simd_op_name, scalar_op, simd_precision) \
+SIMD_ATTR_SSE4 \
+void simd_##func_name##_val_sse_##type(const type* lhs, const type rhs, type* dst, size_t size){ \
     int i = 0; \
-    int lanes = (32 / (sizeof(type))); \
+    int lanes = (SIMD_SSE_LANE_SIZE / (sizeof(type))); \
     int size_relative = size - lanes; \
     __m128 v_rhs = _mm_set1_##simd_precision(rhs); \
     for(; i <= size_relative; i+= lanes){ \
@@ -243,11 +243,11 @@ void simd_##type##_##func_name##_val_sse2(const type* lhs, const type rhs, type*
     `op_name`: the name of the operator.
     `op`: the operator to apply to each element in the loop. 
 */
-#define SIMD_IMPL_FLT_AVX2(type, func_name, simd_op_name, scalar_op, simd_precision) \
+#define SIMD_IMPL_FLT_AVX(type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_AVX2 \
-void simd_##type##_##func_name##_avx2(const type* lhs, const type* rhs, type* dst, size_t size){ \
+void simd_##func_name##_avx_##type(const type* lhs, const type* rhs, type* dst, size_t size){ \
     int i = 0; \
-    int lanes = (32 / (sizeof(type))); \
+    int lanes = (SIMD_AVX_LANE_SIZE / (sizeof(type))); \
     int size_relative = size - lanes; \
     for(; i <= size_relative; i+= lanes){ \
         __m256 v_lhs    = _mm256_loadu_##simd_precision(&lhs[i]); \
@@ -270,11 +270,11 @@ void simd_##type##_##func_name##_avx2(const type* lhs, const type* rhs, type* ds
     `op_name`: the name of the operator.
     `op`: the operator to apply to each element in the loop. 
 */
-#define SIMD_IMPL_VAL_FLT_AVX2(type, func_name, simd_op_name, scalar_op, simd_precision) \
+#define SIMD_IMPL_VAL_FLT_AVX(type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_AVX2 \
-void simd_##type##_##func_name##_val_avx2(const type* lhs, const type rhs, type* dst, size_t size){ \
+void simd_##func_name##_val_avx_##type(const type* lhs, const type rhs, type* dst, size_t size){ \
     int i = 0; \
-    int lanes = (32 / (sizeof(type))); \
+    int lanes = (SIMD_AVX_LANE_SIZE / (sizeof(type))); \
     int size_relative = size - lanes; \
     __m256 v_rhs = _mm256_set1_##simd_precision(rhs); \
     for(; i <= size_relative; i+= lanes){ \
@@ -299,9 +299,9 @@ void simd_##type##_##func_name##_val_avx2(const type* lhs, const type rhs, type*
 */
 #define SIMD_IMPL_INT_SSE(type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_SSE4 \
-void simd_##type##_##func_name##_sse2(const type* lhs, const type* rhs, type* dst, size_t size) { \
+void simd_##func_name##_sse_##type(const type* lhs, const type* rhs, type* dst, size_t size) { \
     int i = 0; \
-    int lanes = sizeof(__m128i) / sizeof(type); \
+    int lanes = SIMD_SSE_LANE_SIZE / sizeof(type); \
     int size_relative = size - lanes; \
     for (; i <= size_relative; i += lanes) { \
         __m128i v_lhs   = _mm_loadu_si128((const __m128i*)&lhs[i]); \
@@ -326,9 +326,9 @@ void simd_##type##_##func_name##_sse2(const type* lhs, const type* rhs, type* ds
 */
 #define SIMD_IMPL_VAL_INT_SSE(type, func_name, simd_op_name, scalar_op, simd_precision, set1_suffix) \
 SIMD_ATTR_SSE4 \
-void simd_##type##_##func_name##_val_sse2(const type* lhs, const type rhs, type* dst, size_t size) { \
+void simd_##func_name##_val_sse_##type(const type* lhs, const type rhs, type* dst, size_t size) { \
     int i = 0; \
-    int lanes = sizeof(__m128i) / sizeof(type); \
+    int lanes = SIMD_SSE_LANE_SIZE / sizeof(type); \
     int size_relative = size - lanes; \
     __m128i v_rhs = _mm_set1_##simd_precision##set1_suffix(rhs); \
     for (; i <= size_relative; i += lanes) { \
@@ -353,9 +353,9 @@ void simd_##type##_##func_name##_val_sse2(const type* lhs, const type rhs, type*
 */
 #define SIMD_IMPL_INT_AVX(type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_AVX2 \
-void simd_##type##_##func_name##_avx2(const type* lhs, const type* rhs, type* dst, size_t size) { \
+void simd_##func_name##_avx_##type(const type* lhs, const type* rhs, type* dst, size_t size) { \
     int i = 0; \
-    int lanes = sizeof(__m256i) / sizeof(type); \
+    int lanes = SIMD_AVX_LANE_SIZE / sizeof(type); \
     int size_relative = size - lanes; \
     for (; i <= size_relative; i += lanes) { \
         __m256i v_lhs   = _mm256_loadu_si256((const __m256i*)&lhs[i]); \
@@ -380,9 +380,9 @@ void simd_##type##_##func_name##_avx2(const type* lhs, const type* rhs, type* ds
 */
 #define SIMD_IMPL_VAL_INT_AVX(type, func_name, simd_op_name, scalar_op, simd_precision, set1_suffix) \
 SIMD_ATTR_AVX2 \
-void simd_##type##_##func_name##_val_avx2(const type* lhs, const type rhs, type* dst, size_t size) { \
+void simd_##func_name##_val_avx_##type(const type* lhs, const type rhs, type* dst, size_t size) { \
     int i = 0; \
-    int lanes = sizeof(__m256i) / sizeof(type); \
+    int lanes = SIMD_AVX_LANE_SIZE / sizeof(type); \
     int size_relative = size - lanes; \
     __m256i v_rhs = _mm256_set1_##simd_precision##set1_suffix(rhs); \
     for (; i <= size_relative; i += lanes) { \
@@ -410,19 +410,19 @@ void simd_##type##_##func_name##_val_avx2(const type* lhs, const type rhs, type*
     `name`: the name of the operator.
 */
 #define SIMD_IMPL_DISPATCH(type, name) \
-void simd_##type##_##name(const type* lhs, const type* rhs, type* dst, size_t size){ \
-    if(!simd_##type##_##name##_funcptr){ \
-        if(is_avx2_supported()){ \
-            simd_##type##_##name##_funcptr = simd_##type##_##name##_avx2; \
+void simd_##name##_##type(const type* lhs, const type* rhs, type* dst, size_t size){ \
+    if(!simd_##name##_funcptr_##type){ \
+        if(simd_is_avx_supported()){ \
+            simd_##name##_funcptr_##type = simd_##name##_avx_##type; \
         } \
-        else if(is_sse2_supported()){ \
-            simd_##type##_##name##_funcptr = simd_##type##_##name##_sse2; \
+        else if(simd_is_sse_supported()){ \
+            simd_##name##_funcptr_##type = simd_##name##_sse_##type; \
         } \
         else{ \
-            simd_##type##_##name##_funcptr = simd_##type##_##name##_scalar; \
+            simd_##name##_funcptr_##type = simd_##name##_scalar_##type; \
         } \
     } \
-    simd_##type##_##name##_funcptr(lhs,rhs,dst,size); \
+    simd_##name##_funcptr_##type(lhs,rhs,dst,size); \
 }
 
 /*
@@ -440,34 +440,34 @@ void simd_##type##_##name(const type* lhs, const type* rhs, type* dst, size_t si
     `name`: the name of the operator.
 */
 #define SIMD_IMPL_VAL_DISPATCH(type, name) \
-void simd_##type##_##name##_val(const type* lhs, const type rhs, type* dst, size_t size){ \
-    if(!simd_##type##_##name##_val_funcptr){ \
-        if(is_avx2_supported()){ \
-            simd_##type##_##name##_val_funcptr = simd_##type##_##name##_val_avx2; \
+void simd_##name##_val_##type(const type* lhs, const type rhs, type* dst, size_t size){ \
+    if(!simd_##name##_val_funcptr_##type){ \
+        if(simd_is_avx_supported()){ \
+            simd_##name##_val_funcptr_##type = simd_##name##_val_avx_##type; \
         } \
-        else if(is_sse2_supported()){ \
-            simd_##type##_##name##_val_funcptr = simd_##type##_##name##_val_sse2; \
+        else if(simd_is_sse_supported()){ \
+            simd_##name##_val_funcptr_##type = simd_##name##_val_sse_##type; \
         } \
         else{ \
-            simd_##type##_##name##_val_funcptr = simd_##type##_##name##_val_scalar; \
+            simd_##name##_val_funcptr_##type = simd_##name##_val_scalar_##type; \
         } \
     } \
-    simd_##type##_##name##_val_funcptr(lhs,rhs,dst,size); \
+    simd_##name##_val_funcptr_##type(lhs,rhs,dst,size); \
 }
 
 /*========================================
     procedures.
 ========================================*//**/
 
-bool is_avx2_supported(){
+bool simd_is_avx_supported(){
 #if ARCH_X64 || ARCH_X86
     int info[4] = {0};
 #   if COMPILER_CL
-    __cpuid(info, 7);
+        __cpuid(info, 7);
 #   elif COMPILER_CLANG || COMPILER_GCC
-    __cpuid_count(7, 0, info[0], info[1], info[2], info[3]);
+        __cpuid_count(7, 0, info[0], info[1], info[2], info[3]);
 #   else
-#   error unknown compiler.
+#       error unknown compiler.
 #   endif
     return (info[1] & (1 << 5)) != 0; // Bit 5 of EBX is AVX2
 #else
@@ -479,15 +479,15 @@ bool is_avx2_supported(){
 #endif
 }
 
-bool is_sse2_supported(){
+bool simd_is_sse_supported(){
 #if ARCH_X64 || ARCH_X86
     int info[4] = {0};
 #   if COMPILER_CL
-    __cpuid(info, 1);
+        __cpuid(info, 1);
 #   elif COMPILER_GCC || COMPILER_CLANG
-    __cpuid(1, info[0], info[1], info[2], info[3]);
+        __cpuid(1, info[0], info[1], info[2], info[3]);
 #   else
-#   error unknown compiler.
+#       error unknown compiler.
 #   endif
     return (info[3] & (1 << 26)) != 0; // Bit 26 of EDX is SSE2
 #else
@@ -504,69 +504,69 @@ bool is_sse2_supported(){
 ========================================*//**/
 
 SIMD_IMPL_SCALAR(       f32, add, +)
-SIMD_IMPL_FLT_SSE2(     f32, add, add, +, ps)
-SIMD_IMPL_FLT_AVX2(     f32, add, add, +, ps)
+SIMD_IMPL_FLT_SSE(     f32, add, add, +, ps)
+SIMD_IMPL_FLT_AVX(     f32, add, add, +, ps)
 SIMD_IMPL_DISPATCH(     f32, add)
 SIMD_IMPL_SCALAR(       f32, sub, -)
-SIMD_IMPL_FLT_SSE2(     f32, sub, sub, -, ps)
-SIMD_IMPL_FLT_AVX2(     f32, sub, sub, -, ps)
+SIMD_IMPL_FLT_SSE(     f32, sub, sub, -, ps)
+SIMD_IMPL_FLT_AVX(     f32, sub, sub, -, ps)
 SIMD_IMPL_DISPATCH(     f32, sub)
 SIMD_IMPL_SCALAR(       f32, mul, *)
-SIMD_IMPL_FLT_SSE2(     f32, mul, mul, *, ps)
-SIMD_IMPL_FLT_AVX2(     f32, mul, mul, *, ps)
+SIMD_IMPL_FLT_SSE(     f32, mul, mul, *, ps)
+SIMD_IMPL_FLT_AVX(     f32, mul, mul, *, ps)
 SIMD_IMPL_DISPATCH(     f32, mul)
 SIMD_IMPL_SCALAR(       f32, div, /)
-SIMD_IMPL_FLT_SSE2(     f32, div, div, /, ps)
-SIMD_IMPL_FLT_AVX2(     f32, div, div, /, ps)
+SIMD_IMPL_FLT_SSE(     f32, div, div, /, ps)
+SIMD_IMPL_FLT_AVX(     f32, div, div, /, ps)
 SIMD_IMPL_DISPATCH(     f32, div)
 SIMD_IMPL_VAL_SCALAR(   f32, add, +)
-SIMD_IMPL_VAL_FLT_SSE2( f32, add, add, +, ps)
-SIMD_IMPL_VAL_FLT_AVX2( f32, add, add, +, ps)
+SIMD_IMPL_VAL_FLT_SSE( f32, add, add, +, ps)
+SIMD_IMPL_VAL_FLT_AVX( f32, add, add, +, ps)
 SIMD_IMPL_VAL_DISPATCH( f32, add)
 SIMD_IMPL_VAL_SCALAR(   f32, sub, -)
-SIMD_IMPL_VAL_FLT_SSE2( f32, sub, sub, -, ps)
-SIMD_IMPL_VAL_FLT_AVX2( f32, sub, sub, -, ps)
+SIMD_IMPL_VAL_FLT_SSE( f32, sub, sub, -, ps)
+SIMD_IMPL_VAL_FLT_AVX( f32, sub, sub, -, ps)
 SIMD_IMPL_VAL_DISPATCH( f32, sub)
 SIMD_IMPL_VAL_SCALAR(   f32, mul, *)
-SIMD_IMPL_VAL_FLT_SSE2( f32, mul, mul, *, ps)
-SIMD_IMPL_VAL_FLT_AVX2( f32, mul, mul, *, ps)
+SIMD_IMPL_VAL_FLT_SSE( f32, mul, mul, *, ps)
+SIMD_IMPL_VAL_FLT_AVX( f32, mul, mul, *, ps)
 SIMD_IMPL_VAL_DISPATCH( f32, mul)
 SIMD_IMPL_VAL_SCALAR(   f32, div, /)
-SIMD_IMPL_VAL_FLT_SSE2( f32, div, div, /, ps)
-SIMD_IMPL_VAL_FLT_AVX2( f32, div, div, /, ps)
+SIMD_IMPL_VAL_FLT_SSE( f32, div, div, /, ps)
+SIMD_IMPL_VAL_FLT_AVX( f32, div, div, /, ps)
 SIMD_IMPL_VAL_DISPATCH( f32, div)
 
 SIMD_IMPL_SCALAR(       f64, add, +)
-SIMD_IMPL_FLT_SSE2(     f64, add, add, +, pd)
-SIMD_IMPL_FLT_AVX2(     f64, add, add, +, pd)
+SIMD_IMPL_FLT_SSE(     f64, add, add, +, pd)
+SIMD_IMPL_FLT_AVX(     f64, add, add, +, pd)
 SIMD_IMPL_DISPATCH(     f64, add)
 SIMD_IMPL_SCALAR(       f64, sub, -)
-SIMD_IMPL_FLT_SSE2(     f64, sub, sub, -, pd)
-SIMD_IMPL_FLT_AVX2(     f64, sub, sub, -, pd)
+SIMD_IMPL_FLT_SSE(     f64, sub, sub, -, pd)
+SIMD_IMPL_FLT_AVX(     f64, sub, sub, -, pd)
 SIMD_IMPL_DISPATCH(     f64, sub)
 SIMD_IMPL_SCALAR(       f64, mul, *)
-SIMD_IMPL_FLT_SSE2(     f64, mul, mul, *, pd)
-SIMD_IMPL_FLT_AVX2(     f64, mul, mul, *, pd)
+SIMD_IMPL_FLT_SSE(     f64, mul, mul, *, pd)
+SIMD_IMPL_FLT_AVX(     f64, mul, mul, *, pd)
 SIMD_IMPL_DISPATCH(     f64, mul)
 SIMD_IMPL_SCALAR(       f64, div, /)
-SIMD_IMPL_FLT_SSE2(     f64, div, div, /, pd)
-SIMD_IMPL_FLT_AVX2(     f64, div, div, /, pd)
+SIMD_IMPL_FLT_SSE(     f64, div, div, /, pd)
+SIMD_IMPL_FLT_AVX(     f64, div, div, /, pd)
 SIMD_IMPL_DISPATCH(     f64, div)
 SIMD_IMPL_VAL_SCALAR(   f64, add, +)
-SIMD_IMPL_VAL_FLT_SSE2( f64, add, add, +, pd)
-SIMD_IMPL_VAL_FLT_AVX2( f64, add, add, +, pd)
+SIMD_IMPL_VAL_FLT_SSE( f64, add, add, +, pd)
+SIMD_IMPL_VAL_FLT_AVX( f64, add, add, +, pd)
 SIMD_IMPL_VAL_DISPATCH( f64, add)
 SIMD_IMPL_VAL_SCALAR(   f64, sub, -)
-SIMD_IMPL_VAL_FLT_SSE2( f64, sub, sub, -, pd)
-SIMD_IMPL_VAL_FLT_AVX2( f64, sub, sub, -, pd)
+SIMD_IMPL_VAL_FLT_SSE( f64, sub, sub, -, pd)
+SIMD_IMPL_VAL_FLT_AVX( f64, sub, sub, -, pd)
 SIMD_IMPL_VAL_DISPATCH( f64, sub)
 SIMD_IMPL_VAL_SCALAR(   f64, mul, *)
-SIMD_IMPL_VAL_FLT_SSE2( f64, mul, mul, *, pd)
-SIMD_IMPL_VAL_FLT_AVX2( f64, mul, mul, *, pd)
+SIMD_IMPL_VAL_FLT_SSE( f64, mul, mul, *, pd)
+SIMD_IMPL_VAL_FLT_AVX( f64, mul, mul, *, pd)
 SIMD_IMPL_VAL_DISPATCH( f64, mul)
 SIMD_IMPL_VAL_SCALAR(   f64, div, /)
-SIMD_IMPL_VAL_FLT_SSE2( f64, div, div, /, pd)
-SIMD_IMPL_VAL_FLT_AVX2( f64, div, div, /, pd)
+SIMD_IMPL_VAL_FLT_SSE( f64, div, div, /, pd)
+SIMD_IMPL_VAL_FLT_AVX( f64, div, div, /, pd)
 SIMD_IMPL_VAL_DISPATCH( f64, div)
 
 

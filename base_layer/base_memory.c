@@ -1,7 +1,7 @@
 #include <string.h>
 
 #define MemZero(ptr, size) memset(ptr, 0, size)
-#define MemCopy(dst, src, size) memcpy(dst, src, size)
+#define MEMCPY(dst, src, size) memcpy(dst, src, size)
 
 /*
     zeroes out an array. 
@@ -14,40 +14,100 @@
 
 typedef struct{
     void* ptr;
-    u64 capacity;
-    u64 stride;
-} Arena;
+    size_t capacity;
+    size_t stride;
+} MemoryArena;
 
-bool arena_init(Arena* arena, u64 capacity){
+bool init_memory_arena(MemoryArena* arena, u64 capacity){
     arena->ptr = malloc(capacity);
     arena->capacity = capacity;
     arena->stride = 0;
     return true;
 }
 
-bool arena_push(Arena* arena, void* data, size_t size){
-    u64 new_stride = arena->stride + size;
-    if(new_stride > arena->capacity){
-        return false;
-    }
-    MemCopy(arena->ptr+arena->stride, data, size);
-    arena->stride = new_stride;
-    return true;
-}
+/*
+    Example:
 
-void arena_clear(Arena* arena){
+    MemoryArena arena;
+    int* ints = (int[]){1,2,3};
+    PUSH_ARRAY_MEMARENA(&arena, ints, 3).
+
+        OR
+
+    MemoryArena arena;
+    int ints[] = {1,2,3};
+    PUSH_ARRAY_MEMARENA(&arena, ints, 3).
+*/
+#define PUSH_ARRAY_MEMORY_ARENA(arena, data, array_size) do { \
+    DEBUG_ASSERT(data != NULL, "attempted to push a nullptr onto a memory arena."); \
+    size_t size_PUSH_ARRAY_MEMARENA = sizeof(*data) * (array_size); \
+    size_t new_stride_PUSH_ARRAY_MEMARENA = (arena)->stride + size; \
+    if(new_stride <= (arena)->capacity){ \
+        void* dst = (arena)->ptr + (arena)->stride; \
+        MEMCPY(dst, data, size_PUSH_ARRAY_MEMARENA); \
+        (arena)->stride = new_stride_PUSH_ARRAY_MEMARENA; \
+    } \
+    else{ \
+        DEBUG_ASSERT(0!=0, "insufficient space to push data onto memory arena."); \
+    } \
+} while(0)
+
+/*
+    Example:
+
+    MemoryArena arena;
+    Data data = {0};
+    PUSH_STRUCT_MEMARENA(&arena, data);
+*/
+#define PUSH_STRUCT_MEMORY_ARENA(arena, data) do { \
+    size_t size_PUSH_STRUCT_MEMARENA = sizeof(data); \
+    size_t new_stride_PUSH_STRUCT_MEMARENA = (arena)->stride + size; \
+    if(new_stride_PUSH_STRUCT_MEMARENA <= (arena)->capacity){ \
+        void* dst = (arena)->ptr + (arena)->stride; \
+        MEMCPY(dst, &(data), size_PUSH_STRUCT_MEMARENA); \
+        (arena)->stride = new_stride; \
+    } \
+    else{ \
+        DEBUG_ASSERT(0!=0, "insufficient space to push data onto memory arena."); \
+    } \
+} while(0)
+
+
+/*
+    Example:
+
+    MemoryArena arena;
+    Data* datas;
+    i32 datas_size;
+    ALLOC_ARRAY_MEMARENA(&arena, datas, &datas_size, 2);
+*/
+#define ALLOC_ARRAY_MEMORY_ARENA(arena, out_arr_ptr, out_arr_size, array_size) do { \
+    size_t size_ALLOC_ARRAY_MEMARENA = sizeof(*out_arr_ptr) * (array_size); \
+    size_t new_stride_ALLOC_ARRAY_MEMARENA = (arena)->stride + size_ALLOC_ARRAY_MEMARENA; \
+    if(new_stride_ALLOC_ARRAY_MEMARENA <= (arena)->capacity){ \
+        out_arr_ptr = (arena)->ptr + (arena)->stride; \
+        (arena)->stride = new_stride_ALLOC_ARRAY_MEMARENA; \
+        *out_arr_size = array_size; \
+    } \
+    else{ \
+        DEBUG_ASSERT(0!=0, "insufficient space to alloc array onto memory arena."); \
+        *out_arr_size = 0; \
+    } \
+} while(0)
+
+void clear_memory_arena(MemoryArena* arena){
     arena->stride = 0;
 }
 
-void arena_clear_zeroed(Arena *arena){
+void clear_zeroed_memory_arena(MemoryArena *arena){
     // MemZero(arena->ptr, arena->capacity);
     memset(arena->ptr, 0, arena->capacity); // test pattern
     arena->stride = 0;
 }
 
-void arena_free(Arena* arena){
+void free_memory_arena(MemoryArena* arena){
     assert(arena != NULL);
     assert(arena->ptr != NULL);
     free(arena->ptr);
-    *arena = (Arena){0};
+    *arena = (MemoryArena){0};
 }
