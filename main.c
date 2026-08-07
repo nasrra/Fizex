@@ -3,7 +3,7 @@
 #include "base_layer/base_simd.c"
 #include "base_layer/base_math.c"
 #include "input/input.c"
-#include "sdl/sdl.c"
+// #include "sdl/sdl.c"
 
 typedef struct{
     char a;
@@ -25,15 +25,13 @@ int main(void){
     append_soa_aabb(&soa, -1.0f, -1.0f, 4.0f, 4.0f);
 
     f32* centroids_x;
-    size_t centroids_x_size;
+    i32 centroids_x_size;
     f32* centroids_y;
-    size_t centroids_y_size;
+    i32 centroids_y_size;
 
     ALLOC_ARRAY_MEMORY_ARENA(&arena1, centroids_x, &centroids_x_size, 3);
     ALLOC_ARRAY_MEMORY_ARENA(&arena1, centroids_y, &centroids_y_size, 3);
     calculate_centroids_soa_aabb(&soa, centroids_x, centroids_y);
-
-    // bool success = linux_wayland_init();
 
     i32 i_a = rand_i32();
     i32 i_b = rand_i32();
@@ -42,7 +40,7 @@ int main(void){
     i32 i_e = rand_i32();
 
     input_init(&arena1);
-    sdl_init("hello, sailour", 1280, 720);
-    while(sdl_should_close==false){
-    }
+    // sdl_init("hello, sailour", 1280, 720);
+    // while(sdl_should_close==false){
+    // }
 }

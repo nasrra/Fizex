@@ -17,35 +17,35 @@
     types.
 ========================================*//**/
 
-typedef void (*simd_funcptr_f32)(const f32* lhs, const f32* rhs, f32* dst, size_t size);
-typedef void (*simd_val_funcptr_f32)(const f32* lhs, const f32 rhs, f32* dst, size_t size);
+typedef void (*simd_funcptr_f32)(const f32* lhs, const f32* rhs, f32* dst, i32 size);
+typedef void (*simd_val_funcptr_f32)(const f32* lhs, const f32 rhs, f32* dst, i32 size);
 
-typedef void (*simd_funcptr_f64)(const f64* lhs, const f64* rhs, f64* dst, size_t size);
-typedef void (*simd_val_funcptr_f64)(const f64* lhs, const f64 rhs, f64* dst, size_t size);
+typedef void (*simd_funcptr_f64)(const f64* lhs, const f64* rhs, f64* dst, i32 size);
+typedef void (*simd_val_funcptr_f64)(const f64* lhs, const f64 rhs, f64* dst, i32 size);
 
-typedef void (*simd_funcptr_i8)(const i8* lhs, const i8* rhs, i8* dst, size_t size);
-typedef void (*simd_val_funcptr_i8)(const i8* lhs, const i8 rhs, i8* dst, size_t size);
+typedef void (*simd_funcptr_i8)(const i8* lhs, const i8* rhs, i8* dst, i32 size);
+typedef void (*simd_val_funcptr_i8)(const i8* lhs, const i8 rhs, i8* dst, i32 size);
 
-typedef void (*simd_funcptr_i16)(const i16* lhs, const i16* rhs, i16* dst, size_t size);
-typedef void (*simd_val_funcptr_i16)(const i16* lhs, const i16 rhs, i16* dst, size_t size);
+typedef void (*simd_funcptr_i16)(const i16* lhs, const i16* rhs, i16* dst, i32 size);
+typedef void (*simd_val_funcptr_i16)(const i16* lhs, const i16 rhs, i16* dst, i32 size);
 
-typedef void (*simd_funcptr_i32)(const i32* lhs, const i32* rhs, i32* dst, size_t size);
-typedef void (*simd_val_funcptr_i32)(const i32* lhs, const i32 rhs, i32* dst, size_t size);
+typedef void (*simd_funcptr_i32)(const i32* lhs, const i32* rhs, i32* dst, i32 size);
+typedef void (*simd_val_funcptr_i32)(const i32* lhs, const i32 rhs, i32* dst, i32 size);
 
-typedef void (*simd_funcptr_i64)(const i64* lhs, const i64* rhs, i64* dst, size_t size);
-typedef void (*simd_val_funcptr_i64)(const i64* lhs, const i64 rhs, i64* dst, size_t size);
+typedef void (*simd_funcptr_i64)(const i64* lhs, const i64* rhs, i64* dst, i32 size);
+typedef void (*simd_val_funcptr_i64)(const i64* lhs, const i64 rhs, i64* dst, i32 size);
 
-typedef void (*simd_funcptr_u8)(const u8* lhs, const u8* rhs, u8* dst, size_t size);
-typedef void (*simd_val_funcptr_u8)(const u8* lhs, const u8 rhs, u8* dst, size_t size);
+typedef void (*simd_funcptr_u8)(const u8* lhs, const u8* rhs, u8* dst, i32 size);
+typedef void (*simd_val_funcptr_u8)(const u8* lhs, const u8 rhs, u8* dst, i32 size);
 
-typedef void (*simd_funcptr_u16)(const u16* lhs, const u16* rhs, u16* dst, size_t size);
-typedef void (*simd_val_funcptr_u16)(const u16* lhs, const u16 rhs, u16* dst, size_t size);
+typedef void (*simd_funcptr_u16)(const u16* lhs, const u16* rhs, u16* dst, i32 size);
+typedef void (*simd_val_funcptr_u16)(const u16* lhs, const u16 rhs, u16* dst, i32 size);
 
-typedef void (*simd_funcptr_u32)(const u32* lhs, const u32* rhs, u32* dst, size_t size);
-typedef void (*simd_val_funcptr_u32)(const u32* lhs, const u32 rhs, u32* dst, size_t size);
+typedef void (*simd_funcptr_u32)(const u32* lhs, const u32* rhs, u32* dst, i32 size);
+typedef void (*simd_val_funcptr_u32)(const u32* lhs, const u32 rhs, u32* dst, i32 size);
 
-typedef void (*simd_funcptr_u64)(const u64* lhs, const u64* rhs, u64* dst, size_t size);
-typedef void (*simd_val_funcptr_u64)(const u64* lhs, const u64 rhs, u64* dst, size_t size);
+typedef void (*simd_funcptr_u64)(const u64* lhs, const u64* rhs, u64* dst, i32 size);
+typedef void (*simd_val_funcptr_u64)(const u64* lhs, const u64 rhs, u64* dst, i32 size);
 
 /*========================================
     globals.
@@ -133,7 +133,7 @@ static simd_val_funcptr_u64 simd_mul_val_funcptr_u64 = NULL;
 #   define SIMD_ATTR_SSE4 __attribute__((target("sse2,sse4.1")))
 #   define SIMD_ATTR_AVX2 __attribute__((target("avx,avx2,avx512vl")))
 #else
-#   define SIMD_ATTR_sse
+#   define SIMD_ATTR_SSE4
 #   define SIMD_ATTR_AVX2
 #endif
 
@@ -156,8 +156,8 @@ static simd_val_funcptr_u64 simd_mul_val_funcptr_u64 = NULL;
     `op`: the operator to apply to each element in the loop. 
 */
 #define SIMD_IMPL_SCALAR(type, op_name, op) \
-void simd_##op_name##_scalar_##type(const type* lhs, const type* rhs, type* dst, size_t size){ \
-    for(size_t i = 0; i < size; i++){ \
+void simd_##op_name##_scalar_##type(const type* lhs, const type* rhs, type* dst, i32 size){ \
+    for(i32 i = 0; i < size; i++){ \
         dst[i] = lhs[i] op rhs[i]; \
     } \
 }
@@ -173,8 +173,8 @@ void simd_##op_name##_scalar_##type(const type* lhs, const type* rhs, type* dst,
     `op`: the operator to apply to each element in the loop. 
 */
 #define SIMD_IMPL_VAL_SCALAR(type, name, operator) \
-void simd_##name##_val_scalar_##type(const type* lhs, const type rhs, type* dst, size_t size){ \
-    for(size_t i = 0; i < size; i++){ \
+void simd_##name##_val_scalar_##type(const type* lhs, const type rhs, type* dst, i32 size){ \
+    for(i32 i = 0; i < size; i++){ \
         dst[i] = lhs[i] operator rhs; \
     } \
 }
@@ -189,16 +189,16 @@ void simd_##name##_val_scalar_##type(const type* lhs, const type rhs, type* dst,
     `op_name`: the name of the operator.
     `op`: the operator to apply to each element in the loop. 
 */
-#define SIMD_IMPL_FLT_SSE(type, func_name, simd_op_name, scalar_op, simd_precision) \
+#define SIMD_IMPL_FLT_SSE(type, vector_type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_SSE4 \
-void simd_##func_name##_sse_##type(const type* lhs, const type* rhs, type* dst, size_t size){ \
+void simd_##func_name##_sse_##type(const type* lhs, const type* rhs, type* dst, i32 size){ \
     i32 i = 0; \
     i32 lanes = (SIMD_SSE_LANE_SIZE / (sizeof(type))); \
     i32 size_relative = size - lanes; \
     for(; i <= size_relative; size += lanes){ \
-        __m128 v_lhs    = _mm_loadu_##simd_precision(&lhs[i]); \
-        __m128 v_rhs    = _mm_loadu_##simd_precision(&rhs[i]); \
-        __m128 result   = _mm_##simd_op_name##_##simd_precision(v_lhs, v_rhs); \
+        vector_type v_lhs    = _mm_loadu_##simd_precision(&lhs[i]); \
+        vector_type v_rhs    = _mm_loadu_##simd_precision(&rhs[i]); \
+        vector_type result   = _mm_##simd_op_name##_##simd_precision(v_lhs, v_rhs); \
         _mm_storeu_##simd_precision(&dst[i], result); \
     } \
     for(; i < size; i++){ \
@@ -216,16 +216,16 @@ void simd_##func_name##_sse_##type(const type* lhs, const type* rhs, type* dst, 
     `op_name`: the name of the operator.
     `op`: the operator to apply to each element in the loop. 
 */
-#define SIMD_IMPL_VAL_FLT_SSE(type, func_name, simd_op_name, scalar_op, simd_precision) \
+#define SIMD_IMPL_VAL_FLT_SSE(type, vector_type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_SSE4 \
-void simd_##func_name##_val_sse_##type(const type* lhs, const type rhs, type* dst, size_t size){ \
-    int i = 0; \
-    int lanes = (SIMD_SSE_LANE_SIZE / (sizeof(type))); \
-    int size_relative = size - lanes; \
-    __m128 v_rhs = _mm_set1_##simd_precision(rhs); \
+void simd_##func_name##_val_sse_##type(const type* lhs, const type rhs, type* dst, i32 size){ \
+    i32 i = 0; \
+    i32 lanes = (SIMD_SSE_LANE_SIZE / (sizeof(type))); \
+    i32 size_relative = size - lanes; \
+    vector_type v_rhs = _mm_set1_##simd_precision(rhs); \
     for(; i <= size_relative; i+= lanes){ \
-        __m128 v_lhs    = _mm_loadu_##simd_precision(&lhs[i]); \
-        __m128 result   = _mm_##simd_op_name##_##simd_precision(v_lhs, v_rhs); \
+        vector_type v_lhs    = _mm_loadu_##simd_precision(&lhs[i]); \
+        vector_type result   = _mm_##simd_op_name##_##simd_precision(v_lhs, v_rhs); \
         _mm_storeu_##simd_precision(&dst[i], result); \
     } \
     for(; i < size; i++){ \
@@ -243,16 +243,16 @@ void simd_##func_name##_val_sse_##type(const type* lhs, const type rhs, type* ds
     `op_name`: the name of the operator.
     `op`: the operator to apply to each element in the loop. 
 */
-#define SIMD_IMPL_FLT_AVX(type, func_name, simd_op_name, scalar_op, simd_precision) \
+#define SIMD_IMPL_FLT_AVX(type, vector_type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_AVX2 \
-void simd_##func_name##_avx_##type(const type* lhs, const type* rhs, type* dst, size_t size){ \
-    int i = 0; \
-    int lanes = (SIMD_AVX_LANE_SIZE / (sizeof(type))); \
-    int size_relative = size - lanes; \
+void simd_##func_name##_avx_##type(const type* lhs, const type* rhs, type* dst, i32 size){ \
+    i32 i = 0; \
+    i32 lanes = (SIMD_AVX_LANE_SIZE / (sizeof(type))); \
+    i32 size_relative = size - lanes; \
     for(; i <= size_relative; i+= lanes){ \
-        __m256 v_lhs    = _mm256_loadu_##simd_precision(&lhs[i]); \
-        __m256 v_rhs    = _mm256_loadu_##simd_precision(&rhs[i]); \
-        __m256 result   = _mm256_##simd_op_name##_##simd_precision(v_lhs, v_rhs); \
+        vector_type v_lhs    = _mm256_loadu_##simd_precision(&lhs[i]); \
+        vector_type v_rhs    = _mm256_loadu_##simd_precision(&rhs[i]); \
+        vector_type result   = _mm256_##simd_op_name##_##simd_precision(v_lhs, v_rhs); \
         _mm256_storeu_##simd_precision(&dst[i], result); \
     } \
     for(; i < size; i++){ \
@@ -270,16 +270,16 @@ void simd_##func_name##_avx_##type(const type* lhs, const type* rhs, type* dst, 
     `op_name`: the name of the operator.
     `op`: the operator to apply to each element in the loop. 
 */
-#define SIMD_IMPL_VAL_FLT_AVX(type, func_name, simd_op_name, scalar_op, simd_precision) \
+#define SIMD_IMPL_VAL_FLT_AVX(type, vector_type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_AVX2 \
-void simd_##func_name##_val_avx_##type(const type* lhs, const type rhs, type* dst, size_t size){ \
-    int i = 0; \
-    int lanes = (SIMD_AVX_LANE_SIZE / (sizeof(type))); \
-    int size_relative = size - lanes; \
-    __m256 v_rhs = _mm256_set1_##simd_precision(rhs); \
+void simd_##func_name##_val_avx_##type(const type* lhs, const type rhs, type* dst, i32 size){ \
+    i32 i = 0; \
+    i32 lanes = (SIMD_AVX_LANE_SIZE / (sizeof(type))); \
+    i32 size_relative = size - lanes; \
+    vector_type v_rhs = _mm256_set1_##simd_precision(rhs); \
     for(; i <= size_relative; i+= lanes){ \
-        __m256 v_lhs    = _mm256_loadu_##simd_precision(&lhs[i]); \
-        __m256 result   = _mm256_##simd_op_name##_##simd_precision(v_lhs, v_rhs); \
+        vector_type v_lhs    = _mm256_loadu_##simd_precision(&lhs[i]); \
+        vector_type result   = _mm256_##simd_op_name##_##simd_precision(v_lhs, v_rhs); \
         _mm256_storeu_##simd_precision(&dst[i], result); \
     } \
     for(; i < size; i++){ \
@@ -299,10 +299,10 @@ void simd_##func_name##_val_avx_##type(const type* lhs, const type rhs, type* ds
 */
 #define SIMD_IMPL_INT_SSE(type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_SSE4 \
-void simd_##func_name##_sse_##type(const type* lhs, const type* rhs, type* dst, size_t size) { \
-    int i = 0; \
-    int lanes = SIMD_SSE_LANE_SIZE / sizeof(type); \
-    int size_relative = size - lanes; \
+void simd_##func_name##_sse_##type(const type* lhs, const type* rhs, type* dst, i32 size) { \
+    i32 i = 0; \
+    i32 lanes = SIMD_SSE_LANE_SIZE / sizeof(type); \
+    i32 size_relative = size - lanes; \
     for (; i <= size_relative; i += lanes) { \
         __m128i v_lhs   = _mm_loadu_si128((const __m128i*)&lhs[i]); \
         __m128i v_rhs   = _mm_loadu_si128((const __m128i*)&rhs[i]); \
@@ -326,10 +326,10 @@ void simd_##func_name##_sse_##type(const type* lhs, const type* rhs, type* dst, 
 */
 #define SIMD_IMPL_VAL_INT_SSE(type, func_name, simd_op_name, scalar_op, simd_precision, set1_suffix) \
 SIMD_ATTR_SSE4 \
-void simd_##func_name##_val_sse_##type(const type* lhs, const type rhs, type* dst, size_t size) { \
-    int i = 0; \
-    int lanes = SIMD_SSE_LANE_SIZE / sizeof(type); \
-    int size_relative = size - lanes; \
+void simd_##func_name##_val_sse_##type(const type* lhs, const type rhs, type* dst, i32 size) { \
+    i32 i = 0; \
+    i32 lanes = SIMD_SSE_LANE_SIZE / sizeof(type); \
+    i32 size_relative = size - lanes; \
     __m128i v_rhs = _mm_set1_##simd_precision##set1_suffix(rhs); \
     for (; i <= size_relative; i += lanes) { \
         __m128i v_lhs   = _mm_loadu_si128((const __m128i*)&lhs[i]); \
@@ -353,10 +353,10 @@ void simd_##func_name##_val_sse_##type(const type* lhs, const type rhs, type* ds
 */
 #define SIMD_IMPL_INT_AVX(type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_AVX2 \
-void simd_##func_name##_avx_##type(const type* lhs, const type* rhs, type* dst, size_t size) { \
-    int i = 0; \
-    int lanes = SIMD_AVX_LANE_SIZE / sizeof(type); \
-    int size_relative = size - lanes; \
+void simd_##func_name##_avx_##type(const type* lhs, const type* rhs, type* dst, i32 size) { \
+    i32 i = 0; \
+    i32 lanes = SIMD_AVX_LANE_SIZE / sizeof(type); \
+    i32 size_relative = size - lanes; \
     for (; i <= size_relative; i += lanes) { \
         __m256i v_lhs   = _mm256_loadu_si256((const __m256i*)&lhs[i]); \
         __m256i v_rhs   = _mm256_loadu_si256((const __m256i*)&rhs[i]); \
@@ -380,10 +380,10 @@ void simd_##func_name##_avx_##type(const type* lhs, const type* rhs, type* dst, 
 */
 #define SIMD_IMPL_VAL_INT_AVX(type, func_name, simd_op_name, scalar_op, simd_precision, set1_suffix) \
 SIMD_ATTR_AVX2 \
-void simd_##func_name##_val_avx_##type(const type* lhs, const type rhs, type* dst, size_t size) { \
-    int i = 0; \
-    int lanes = SIMD_AVX_LANE_SIZE / sizeof(type); \
-    int size_relative = size - lanes; \
+void simd_##func_name##_val_avx_##type(const type* lhs, const type rhs, type* dst, i32 size) { \
+    i32 i = 0; \
+    i32 lanes = SIMD_AVX_LANE_SIZE / sizeof(type); \
+    i32 size_relative = size - lanes; \
     __m256i v_rhs = _mm256_set1_##simd_precision##set1_suffix(rhs); \
     for (; i <= size_relative; i += lanes) { \
         __m256i v_lhs   = _mm256_loadu_si256((const __m256i*)&lhs[i]); \
@@ -410,7 +410,7 @@ void simd_##func_name##_val_avx_##type(const type* lhs, const type rhs, type* ds
     `name`: the name of the operator.
 */
 #define SIMD_IMPL_DISPATCH(type, name) \
-void simd_##name##_##type(const type* lhs, const type* rhs, type* dst, size_t size){ \
+void simd_##name##_##type(const type* lhs, const type* rhs, type* dst, i32 size){ \
     if(!simd_##name##_funcptr_##type){ \
         if(simd_is_avx_supported()){ \
             simd_##name##_funcptr_##type = simd_##name##_avx_##type; \
@@ -440,7 +440,7 @@ void simd_##name##_##type(const type* lhs, const type* rhs, type* dst, size_t si
     `name`: the name of the operator.
 */
 #define SIMD_IMPL_VAL_DISPATCH(type, name) \
-void simd_##name##_val_##type(const type* lhs, const type rhs, type* dst, size_t size){ \
+void simd_##name##_val_##type(const type* lhs, const type rhs, type* dst, i32 size){ \
     if(!simd_##name##_val_funcptr_##type){ \
         if(simd_is_avx_supported()){ \
             simd_##name##_val_funcptr_##type = simd_##name##_val_avx_##type; \
@@ -504,69 +504,69 @@ bool simd_is_sse_supported(){
 ========================================*//**/
 
 SIMD_IMPL_SCALAR(       f32, add, +)
-SIMD_IMPL_FLT_SSE(     f32, add, add, +, ps)
-SIMD_IMPL_FLT_AVX(     f32, add, add, +, ps)
+SIMD_IMPL_FLT_SSE(     f32, __m128, add, add, +, ps)
+SIMD_IMPL_FLT_AVX(     f32, __m256, add, add, +, ps)
 SIMD_IMPL_DISPATCH(     f32, add)
 SIMD_IMPL_SCALAR(       f32, sub, -)
-SIMD_IMPL_FLT_SSE(     f32, sub, sub, -, ps)
-SIMD_IMPL_FLT_AVX(     f32, sub, sub, -, ps)
+SIMD_IMPL_FLT_SSE(     f32, __m128, sub, sub, -, ps)
+SIMD_IMPL_FLT_AVX(     f32, __m256, sub, sub, -, ps)
 SIMD_IMPL_DISPATCH(     f32, sub)
 SIMD_IMPL_SCALAR(       f32, mul, *)
-SIMD_IMPL_FLT_SSE(     f32, mul, mul, *, ps)
-SIMD_IMPL_FLT_AVX(     f32, mul, mul, *, ps)
+SIMD_IMPL_FLT_SSE(     f32, __m128, mul, mul, *, ps)
+SIMD_IMPL_FLT_AVX(     f32, __m256, mul, mul, *, ps)
 SIMD_IMPL_DISPATCH(     f32, mul)
 SIMD_IMPL_SCALAR(       f32, div, /)
-SIMD_IMPL_FLT_SSE(     f32, div, div, /, ps)
-SIMD_IMPL_FLT_AVX(     f32, div, div, /, ps)
+SIMD_IMPL_FLT_SSE(     f32, __m128, div, div, /, ps)
+SIMD_IMPL_FLT_AVX(     f32, __m256, div, div, /, ps)
 SIMD_IMPL_DISPATCH(     f32, div)
 SIMD_IMPL_VAL_SCALAR(   f32, add, +)
-SIMD_IMPL_VAL_FLT_SSE( f32, add, add, +, ps)
-SIMD_IMPL_VAL_FLT_AVX( f32, add, add, +, ps)
+SIMD_IMPL_VAL_FLT_SSE( f32, __m128, add, add, +, ps)
+SIMD_IMPL_VAL_FLT_AVX( f32, __m256, add, add, +, ps)
 SIMD_IMPL_VAL_DISPATCH( f32, add)
 SIMD_IMPL_VAL_SCALAR(   f32, sub, -)
-SIMD_IMPL_VAL_FLT_SSE( f32, sub, sub, -, ps)
-SIMD_IMPL_VAL_FLT_AVX( f32, sub, sub, -, ps)
+SIMD_IMPL_VAL_FLT_SSE( f32, __m128, sub, sub, -, ps)
+SIMD_IMPL_VAL_FLT_AVX( f32, __m256, sub, sub, -, ps)
 SIMD_IMPL_VAL_DISPATCH( f32, sub)
 SIMD_IMPL_VAL_SCALAR(   f32, mul, *)
-SIMD_IMPL_VAL_FLT_SSE( f32, mul, mul, *, ps)
-SIMD_IMPL_VAL_FLT_AVX( f32, mul, mul, *, ps)
+SIMD_IMPL_VAL_FLT_SSE( f32, __m128, mul, mul, *, ps)
+SIMD_IMPL_VAL_FLT_AVX( f32, __m256, mul, mul, *, ps)
 SIMD_IMPL_VAL_DISPATCH( f32, mul)
 SIMD_IMPL_VAL_SCALAR(   f32, div, /)
-SIMD_IMPL_VAL_FLT_SSE( f32, div, div, /, ps)
-SIMD_IMPL_VAL_FLT_AVX( f32, div, div, /, ps)
+SIMD_IMPL_VAL_FLT_SSE( f32, __m128, div, div, /, ps)
+SIMD_IMPL_VAL_FLT_AVX( f32, __m256, div, div, /, ps)
 SIMD_IMPL_VAL_DISPATCH( f32, div)
 
 SIMD_IMPL_SCALAR(       f64, add, +)
-SIMD_IMPL_FLT_SSE(     f64, add, add, +, pd)
-SIMD_IMPL_FLT_AVX(     f64, add, add, +, pd)
+SIMD_IMPL_FLT_SSE(     f64, __m128d, add, add, +, pd)
+SIMD_IMPL_FLT_AVX(     f64, __m256d, add, add, +, pd)
 SIMD_IMPL_DISPATCH(     f64, add)
 SIMD_IMPL_SCALAR(       f64, sub, -)
-SIMD_IMPL_FLT_SSE(     f64, sub, sub, -, pd)
-SIMD_IMPL_FLT_AVX(     f64, sub, sub, -, pd)
+SIMD_IMPL_FLT_SSE(     f64, __m128d, sub, sub, -, pd)
+SIMD_IMPL_FLT_AVX(     f64, __m256d, sub, sub, -, pd)
 SIMD_IMPL_DISPATCH(     f64, sub)
 SIMD_IMPL_SCALAR(       f64, mul, *)
-SIMD_IMPL_FLT_SSE(     f64, mul, mul, *, pd)
-SIMD_IMPL_FLT_AVX(     f64, mul, mul, *, pd)
+SIMD_IMPL_FLT_SSE(     f64, __m128d, mul, mul, *, pd)
+SIMD_IMPL_FLT_AVX(     f64, __m256d, mul, mul, *, pd)
 SIMD_IMPL_DISPATCH(     f64, mul)
 SIMD_IMPL_SCALAR(       f64, div, /)
-SIMD_IMPL_FLT_SSE(     f64, div, div, /, pd)
-SIMD_IMPL_FLT_AVX(     f64, div, div, /, pd)
+SIMD_IMPL_FLT_SSE(     f64, __m128d, div, div, /, pd)
+SIMD_IMPL_FLT_AVX(     f64, __m256d, div, div, /, pd)
 SIMD_IMPL_DISPATCH(     f64, div)
 SIMD_IMPL_VAL_SCALAR(   f64, add, +)
-SIMD_IMPL_VAL_FLT_SSE( f64, add, add, +, pd)
-SIMD_IMPL_VAL_FLT_AVX( f64, add, add, +, pd)
+SIMD_IMPL_VAL_FLT_SSE( f64, __m128d, add, add, +, pd)
+SIMD_IMPL_VAL_FLT_AVX( f64, __m256d, add, add, +, pd)
 SIMD_IMPL_VAL_DISPATCH( f64, add)
 SIMD_IMPL_VAL_SCALAR(   f64, sub, -)
-SIMD_IMPL_VAL_FLT_SSE( f64, sub, sub, -, pd)
-SIMD_IMPL_VAL_FLT_AVX( f64, sub, sub, -, pd)
+SIMD_IMPL_VAL_FLT_SSE( f64, __m128d, sub, sub, -, pd)
+SIMD_IMPL_VAL_FLT_AVX( f64, __m256d, sub, sub, -, pd)
 SIMD_IMPL_VAL_DISPATCH( f64, sub)
 SIMD_IMPL_VAL_SCALAR(   f64, mul, *)
-SIMD_IMPL_VAL_FLT_SSE( f64, mul, mul, *, pd)
-SIMD_IMPL_VAL_FLT_AVX( f64, mul, mul, *, pd)
+SIMD_IMPL_VAL_FLT_SSE( f64, __m128d, mul, mul, *, pd)
+SIMD_IMPL_VAL_FLT_AVX( f64, __m256d, mul, mul, *, pd)
 SIMD_IMPL_VAL_DISPATCH( f64, mul)
 SIMD_IMPL_VAL_SCALAR(   f64, div, /)
-SIMD_IMPL_VAL_FLT_SSE( f64, div, div, /, pd)
-SIMD_IMPL_VAL_FLT_AVX( f64, div, div, /, pd)
+SIMD_IMPL_VAL_FLT_SSE( f64, __m128d, div, div, /, pd)
+SIMD_IMPL_VAL_FLT_AVX( f64, __m256d, div, div, /, pd)
 SIMD_IMPL_VAL_DISPATCH( f64, div)
 
 

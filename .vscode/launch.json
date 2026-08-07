@@ -1,13 +1,13 @@
 {
     "configurations": [
         {
-            "name": "Debug Linux",
+            "name": "Debug (Win32)",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/main",
+            "program": "${workspaceFolder}/main.exe",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "Debug Build Linux"
+            "preLaunchTask": "Debug Build (MSVC)"
         }
     ]
 }

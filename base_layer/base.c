@@ -246,13 +246,17 @@ i32 rand_next_seed(){
     i32 month   = t->tm_mon+1; // +1 for 1-12; not 0-11
     i32 year    = t->tm_year+1980; // years since 1980.
 
-    i32 result; 
+    // Use the stack address of a local variable as entropy noise
+    i32 stack_noise; 
+    i32 result = (i32)(uintptr_t)&stack_noise;
+    
     result += second;
     result += minute;
     result += hour;
     result += day;
     result += month;
     result += year;
+
     base_rand_state = result;
     return result;
 }

@@ -1,13 +1,24 @@
 {
+    "version": "2.0.0",
     "tasks": [
         {
-            "label": "Debug Build Linux",
+            "label": "Debug Build (MSVC)",
             "type": "shell",
-            "command": "clang -g main.c -Werror -fsanitize=address -o main $(pkg-config --cflags --libs sdl3) -lm",
+            "command": "cl",
+            "args": [
+                "/Zi",
+                "main.c",
+                "/W3",
+                "/WX",
+                "/Fe:main.exe"
+            ],
             "group": {
                 "kind": "build",
                 "isDefault": true
-            }
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ]
         }
     ]
 }

@@ -83,13 +83,13 @@ bool init_memory_arena(MemoryArena* arena, u64 capacity){
     size_t size_ALLOC_ARRAY_MEMARENA = sizeof(*out_arr_ptr) * (array_size); \
     size_t new_stride_ALLOC_ARRAY_MEMARENA = (arena)->stride + size_ALLOC_ARRAY_MEMARENA; \
     if(new_stride_ALLOC_ARRAY_MEMARENA <= (arena)->capacity){ \
-        out_arr_ptr = (arena)->ptr + (arena)->stride; \
+        (out_arr_ptr) = (void*)((u8*)(arena)->ptr + (arena)->stride); \
         (arena)->stride = new_stride_ALLOC_ARRAY_MEMARENA; \
-        *out_arr_size = array_size; \
+        *(out_arr_size) = array_size; \
     } \
     else{ \
         DEBUG_ASSERT(0!=0, "insufficient space to alloc array onto memory arena."); \
-        *out_arr_size = 0; \
+        *(out_arr_size) = 0; \
     } \
 } while(0)
 

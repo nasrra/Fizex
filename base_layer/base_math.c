@@ -7,7 +7,7 @@
 typedef struct{
     f32* verts_x;
     f32* verts_y;
-    size_t verts_size;
+    i32 verts_size;
 } Polygon;
 
 typedef struct{
@@ -33,7 +33,7 @@ typedef struct {
     /*
         the size of all backing arrays.
     */
-    size_t size;
+    i32 size;
     bool is_init;
 } Soa_Vector2;
 
@@ -43,19 +43,19 @@ typedef struct{
         elements are accessed via `entryElementIndex`.
     */
     f32* x;
-    size_t x_size;
+    i32 x_size;
     /*
         Remarks:
         elements are accessed via `entryElementIndex`.
     */
     f32* y;
-    size_t y_size;
+    i32 y_size;
     /*
         Remarks:
         Elements are accessed via `entryIndex`.
     */
     i32* append_counts;
-    size_t append_counts_size;
+    i32 append_counts_size;
     /*
         the fixed stride of each entry.
     */
@@ -129,7 +129,7 @@ typedef struct{
     /*
         the size of all backing arrays.
     */
-    size_t size;
+    i32 size;
     /*
         the count of allocated entries from appending.
     */
@@ -175,7 +175,7 @@ typedef struct{
 #define QUATERNION_IDENTITY ((Quaternion){.w = 1.0f})
 #define TRANSFORM_IDENTITY ((Transform){.scale = VECTOR3_ONE, .rotation = QUATERNION_IDENTITY})
 #define TRANSFORM2D_IDENTITY ((Transform2D){.scale = VECTOR2_ONE, .cosine = 1})
-#define POLYGON_RECTANGLE_VERTICES_SIZE (size_t)4
+#define POLYGON_RECTANGLE_VERTICES_SIZE (i32)4
 #define PI 3.1415926535897932384626433f
 #define TAU 6.283185307179586f
 #define ONE_SIXTH 1.0f / 6.0f
@@ -1078,7 +1078,7 @@ void clear_append_counts_fssoa_vector2(FsSoa_Vector2* soa){
     }
 }
 
-bool init_soa_vector2(Soa_Vector2* soa, MemoryArena* arena, size_t size){
+bool init_soa_vector2(Soa_Vector2* soa, MemoryArena* arena, i32 size){
     
     if (soa->is_init){
         DEBUG_ASSERT(0!=0, "attempted to init an already init soa_vector2.");
@@ -1353,7 +1353,7 @@ void closest_point_with_sqrd_dist_line_segment(Vector2 line_start, Vector2 line_
     );
 }
 
-bool init_soa_aabb(Soa_Aabb* soa, MemoryArena* arena, size_t size){
+bool init_soa_aabb(Soa_Aabb* soa, MemoryArena* arena, i32 size){
     
     if(soa->is_init){
         DEBUG_ASSERT(0!=0, "attempted to init an already init soa_aabb");
@@ -1524,12 +1524,12 @@ Aabb combine_aabb(Aabb a, Aabb b){
 /*
     finds the closest vertex on a polygon to a given position and returns its index.
 */
-i32 find_closest_vertex_scalar_polygon(f32 query_pos_x, f32 query_pos_y, f32* verts_x, f32* verts_y, size_t verts_size){
+i32 find_closest_vertex_scalar_polygon(f32 query_pos_x, f32 query_pos_y, f32* verts_x, f32* verts_y, i32 verts_size){
     
     i32 result = 0;
     f32 min_dist = F32_MAX;
     
-    for(size_t i = 0; i < verts_size; i++){
+    for(i32 i = 0; i < verts_size; i++){
         f32 distance = dist_sqrd_2d_f32(verts_x[i], verts_y[i], query_pos_x, query_pos_y);
 
         if(distance <= min_dist){
@@ -1544,7 +1544,7 @@ i32 find_closest_vertex_scalar_polygon(f32 query_pos_x, f32 query_pos_y, f32* ve
 /*
     finds the closest vertex on a polygon to a given position and returns its index.
 */
-i32 find_closest_vertex_polygon(Vector2 query_pos, f32* verts_x, f32* verts_y, size_t verts_size){
+i32 find_closest_vertex_polygon(Vector2 query_pos, f32* verts_x, f32* verts_y, i32 verts_size){
     return find_closest_vertex_scalar_polygon(query_pos.x, query_pos.y, verts_x, verts_y, verts_size);
 }
 
@@ -1554,7 +1554,7 @@ i32 find_closest_vertex_polygon(Vector2 query_pos, f32* verts_x, f32* verts_y, s
     remarks:
     none of the polygon edges can be self-intersecting; otherwise the calculation will be wrong.
 */
-void calc_centroid_scalar_polygon(f32* verts_x, f32* verts_y, size_t verts_size, f32* out_centroid_x, f32* out_centroid_y){
+void calc_centroid_scalar_polygon(f32* verts_x, f32* verts_y, i32 verts_size, f32* out_centroid_x, f32* out_centroid_y){
     f32 area = 0;
     f32 inv_area = 0;
     f32 temp_x = 0;
@@ -1606,7 +1606,7 @@ void calc_centroid_scalar_polygon(f32* verts_x, f32* verts_y, size_t verts_size,
     }
 }
 
-Vector2 calc_centroid_polygon(f32* verts_x, f32* verts_y, size_t verts_size){
+Vector2 calc_centroid_polygon(f32* verts_x, f32* verts_y, i32 verts_size){
     Vector2 result;
     calc_centroid_scalar_polygon(verts_x, verts_y, verts_size, &result.x, &result.y);
     return result;
@@ -1688,7 +1688,7 @@ Vector2 calc_centroid_polygon_rectangle(PolygonRectangle rect){
 }
 
 void get_min_max_vectors_scalar_polygon(
-    f32* verts_x, f32* verts_y, size_t verts_size, 
+    f32* verts_x, f32* verts_y, i32 verts_size, 
     f32* out_min_x, f32* out_min_y, f32* out_max_x, f32* out_max_y 
 ){
     *out_min_x = F32_MAX;
@@ -1696,7 +1696,7 @@ void get_min_max_vectors_scalar_polygon(
     *out_max_x = F32_MIN;
     *out_max_y = F32_MIN;
 
-    for(size_t i = 0; i < verts_size; i++){
+    for(i32 i = 0; i < verts_size; i++){
         f32 v = verts_x[i];
         if (v < *out_min_x){
             *out_min_x = v;
@@ -1706,7 +1706,7 @@ void get_min_max_vectors_scalar_polygon(
         }
     }
 
-    for(size_t i = 0; i < verts_size; i++){
+    for(i32 i = 0; i < verts_size; i++){
         f32 v = verts_y[i];
         if(v < *out_min_y){
             *out_min_y = v;
@@ -1836,14 +1836,14 @@ Vector2 calc_contact_points_circle(Circle a, Circle b){
     the 'edge' of a polygon is defined as the outer most vertices that are projected onto the axis.
 */
 void project_polygon(
-    f32* verts_x, f32* verts_y, size_t verts_size, 
+    f32* verts_x, f32* verts_y, i32 verts_size, 
     f32 axis_x, f32 axis_y,
     f32* out_min_edge, f32* out_max_edge
 ){
     *out_min_edge = F32_MAX;
     *out_max_edge = F32_MIN;
 
-    for(size_t i = 0; i < verts_size; i++){
+    for(i32 i = 0; i < verts_size; i++){
         f32 projection = dot_2d_f32(verts_x[i], verts_y[i], axis_x, axis_y);
 
         if(projection < *out_min_edge){
@@ -1856,7 +1856,7 @@ void project_polygon(
 }
 
 bool is_overlapping_point_scalar_polygon(
-    f32* verts_x, f32* verts_y, size_t verts_size,
+    f32* verts_x, f32* verts_y, i32 verts_size,
     f32 point_x, f32 point_y, 
     f32* out_normal_x, f32* out_normal_y, f32* out_depth
 ){
@@ -1873,7 +1873,7 @@ bool is_overlapping_point_scalar_polygon(
     f32 min_edge        = F32_MAX;
     f32 max_edge        = F32_MAX;
 
-    for(size_t i = 0; i < verts_size; i++){
+    for(i32 i = 0; i < verts_size; i++){
 
         i32 next_index = (i + 1 == verts_size) ? 0 : i + 1;
 
@@ -1922,8 +1922,8 @@ bool is_overlapping_point_scalar_polygon(
     do NOT use this function; instead use said function instead.
 */
 bool is_overlapping_one_way_polygon(
-    f32* a_verts_x, f32* a_verts_y, size_t a_verts_size,
-    f32* b_verts_x, f32* b_verts_y, size_t b_verts_size,
+    f32* a_verts_x, f32* a_verts_y, i32 a_verts_size,
+    f32* b_verts_x, f32* b_verts_y, i32 b_verts_size,
     f32* out_normal_x, f32* out_normal_y, f32* out_depth
 ){
     *out_depth      = F32_MAX;
@@ -1940,16 +1940,16 @@ bool is_overlapping_one_way_polygon(
     f32 a_max_edge      = F32_MAX;
     f32 b_max_edge      = F32_MAX;
 
-    for(size_t i = 0; i < a_verts_size; i++){
-        size_t next_index = (i + 1 == a_verts_size) ? 0 : i + 1;
+    for(i32 i = 0; i < a_verts_size; i++){
+        i32 next_index = (i + 1 == a_verts_size) ? 0 : i + 1;
 
         // edge.
         f32 axis_x = -(a_verts_y[next_index] - a_verts_y[i]);
         f32 axis_y = a_verts_x[next_index] - a_verts_x[i];
 
         // project using axis.
-        project_polygon(a_verts_x, a_verts_y, axis_x, axis_y, a_verts_size, &a_min_edge, &a_max_edge);
-        project_polygon(b_verts_x, b_verts_y, axis_x, axis_y, b_verts_size, &b_min_edge, &b_max_edge);
+        project_polygon(a_verts_x, a_verts_y, a_verts_size, axis_x, axis_y, &a_min_edge, &a_max_edge);
+        project_polygon(b_verts_x, b_verts_y, b_verts_size, axis_x, axis_y, &b_min_edge, &b_max_edge);
         
         if(a_min_edge >= b_max_edge || b_min_edge >= a_max_edge){
             return false; // Separation found.
@@ -1982,8 +1982,8 @@ bool is_overlapping_one_way_polygon(
 }
 
 bool is_overlapping_polygon(
-    f32* lhs_verts_x, f32* lhs_verts_y, size_t lhs_verts_size,
-    f32* rhs_verts_x, f32* rhs_verts_y, size_t rhs_verts_size,
+    f32* lhs_verts_x, f32* lhs_verts_y, i32 lhs_verts_size,
+    f32* rhs_verts_x, f32* rhs_verts_y, i32 rhs_verts_size,
     f32 lhs_centroid_x, f32 lhs_centroid_y, f32 rhs_centroid_x, f32 rhs_centroid_y, 
     f32* out_normal_x, f32* out_normal_y, f32* out_depth
 ){
@@ -2044,17 +2044,17 @@ bool is_overlapping_polygon(
     do NOT use this function; instead use said function instead.
 */
 void find_contact_points_one_way_polygon(
-    f32* a_verts_x, f32* a_verts_y, size_t a_verts_size, 
-    f32* b_verts_x, f32* b_verts_y, size_t b_verts_size, 
+    f32* a_verts_x, f32* a_verts_y, i32 a_verts_size, 
+    f32* b_verts_x, f32* b_verts_y, i32 b_verts_size, 
     f32 epsilon, f32* out_min_dist_sqrd, f32* out_contact_point_1_x, f32* out_contact_point_1_y, 
     f32* out_contact_point_2_x, f32* out_contact_point_2_y, i32* out_contact_point_count
 ){
-    for(size_t i = 0; i < a_verts_size; i++)
+    for(i32 i = 0; i < a_verts_size; i++)
     {
         f32 point_x = a_verts_x[i];
         f32 point_y = a_verts_y[i];
 
-        for(size_t start_index = 0; start_index < b_verts_size; start_index++)
+        for(i32 start_index = 0; start_index < b_verts_size; start_index++)
         {
             // find the closest poi32 on polygon b to the vertice on polygon a.
             
@@ -2118,8 +2118,8 @@ void find_contact_points_one_way_polygon(
     `out_contact_point_count`: can return either 1 or 2.
 */
 void find_contact_points_polygon(
-    f32* a_verts_x, f32* a_verts_y, size_t a_verts_size,
-    f32* b_verts_x, f32* b_verts_y, size_t b_verts_size,
+    f32* a_verts_x, f32* a_verts_y, i32 a_verts_size,
+    f32* b_verts_x, f32* b_verts_y, i32 b_verts_size,
     f32 epsilon, f32* out_contact_point_1_x, f32* out_contact_point_1_y, 
     f32* out_contact_point_2_x, f32* out_contact_point_2_y, i32* out_contact_point_count
 ){
@@ -2148,7 +2148,7 @@ void find_contact_points_polygon(
 }
 
 bool is_circle_overlapping_scalar_polygon(
-    f32* poly_verts_x, f32* poly_verts_y, f32 poly_centroid_x, f32 poly_centroid_y, size_t poly_verts_size,
+    f32* poly_verts_x, f32* poly_verts_y, f32 poly_centroid_x, f32 poly_centroid_y, i32 poly_verts_size,
     f32 circle_x, f32 circle_y, f32 circle_radius,
     f32* out_normal_x, f32* out_normal_y, f32* out_depth
 ){
@@ -2194,7 +2194,7 @@ bool is_circle_overlapping_scalar_polygon(
     
         // project all vertices onto the current edge to find the min and max values
         // of the two rectangles along the edge.
-        project_polygon(poly_verts_x, poly_verts_y, axis_x, axis_y, poly_verts_size, &a_min, &a_max);
+        project_polygon(poly_verts_x, poly_verts_y, poly_verts_size, axis_x, axis_y, &a_min, &a_max);
         project_circle_scalar(circle_x, circle_y, circle_radius, axis_x, axis_y, &b_min, &b_max);
 
         if(a_min > b_max || b_min > a_max){
@@ -2265,7 +2265,7 @@ bool is_circle_overlapping_polygon(Polygon polygon, Vector2 polygon_centroid, Ci
     finds the contact points between a polygon and a query-point.
 */
 void find_point_contact_points_scalar_polygon(
-    f32* poly_verts_x, f32* poly_verts_y, size_t poly_verts_size,
+    f32* poly_verts_x, f32* poly_verts_y, i32 poly_verts_size,
     f32 point_x, f32 point_y,
     f32* out_contact_point_x, f32* out_contact_point_y
 ){
@@ -2278,8 +2278,8 @@ void find_point_contact_points_scalar_polygon(
     f32 dist_sqrd;
 
     // find the closest poi32 for each edge of the rectangle.
-    for(size_t start_index = 0; start_index < poly_verts_size; start_index++){        
-        size_t next_index = start_index + 1;
+    for(i32 start_index = 0; start_index < poly_verts_size; start_index++){        
+        i32 next_index = start_index + 1;
         // this is faster than modulo.
         if(next_index >= poly_verts_size)
             next_index = 0;
