@@ -1,10 +1,9 @@
 {
     "tasks": [
         {
-            "label": "Debug Build",
+            "label": "Debug Build Linux",
             "type": "shell",
-            "command": "clang -g main.c -Werror -fsanitize=address -o main -lm",
-            // "command": "clang -g main.c -o main -lm",
+            "command": "clang -g main.c -Werror -fsanitize=address -o main $(pkg-config --cflags --libs sdl3) -lm",
             "group": {
                 "kind": "build",
                 "isDefault": true

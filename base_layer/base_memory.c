@@ -1,5 +1,3 @@
-#include <string.h>
-
 #define MemZero(ptr, size) memset(ptr, 0, size)
 #define MEMCPY(dst, src, size) memcpy(dst, src, size)
 

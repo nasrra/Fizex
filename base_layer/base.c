@@ -1,7 +1,18 @@
 #include <assert.h>
-#include <immintrin.h> // Supported by MSVC, GCC, and Clang
+/*
+    Supported by MSVC, GCC, and Clang
+*/
+#include <immintrin.h>
 #include <stdint.h>
 #include <float.h>
+/*
+    used in:
+    - base_memory
+    - base_linux
+*/
+#include <string.h>
+#include <time.h>
+#include <stdio.h>
 
 /*========================================
     types.
@@ -202,3 +213,79 @@ typedef uint64_t u64;
 */
 #define F32_EPSILON 1.19209290e-7F
 #define F64_EPSILON 2.2204460492503131e-16
+
+/*========================================
+    globals.
+========================================*//**/
+/*
+    base_rand_seed is lazy init.
+*/
+i32 base_rand_state;
+bool base_rand_initial_state_set;
+
+/*========================================
+    functions
+========================================*//**/
+
+/*
+    sets the global random seed to a new seed.
+
+    returns:
+    the newl set seed. 
+*/
+i32 rand_next_seed(){
+    // get the current calender time.
+    time_t raw_time;
+    time(&raw_time);
+    struct tm *t = localtime(&raw_time);
+
+    i32 second  = t->tm_sec;
+    i32 minute  = t->tm_min;
+    i32 hour    = t->tm_hour;
+    i32 day     = t->tm_mday;
+    i32 month   = t->tm_mon+1; // +1 for 1-12; not 0-11
+    i32 year    = t->tm_year+1980; // years since 1980.
+
+    i32 result; 
+    result += second;
+    result += minute;
+    result += hour;
+    result += day;
+    result += month;
+    result += year;
+    base_rand_state = result;
+    return result;
+}
+
+i32 rand_i32(){
+    
+    // lazy init the first seed.
+    if(base_rand_initial_state_set == false){
+        rand_next_seed();
+        base_rand_initial_state_set = true;
+    }
+   
+    i32 result = base_rand_state;
+	result ^= result << 13;
+	result ^= result >> 17;
+	result ^= result << 5;
+    base_rand_state = result;
+	return result;
+}
+
+f32 rand_f32(){
+    f32 r = (f32)rand_i32();
+    return r * r;
+}
+
+i32 srand_i32(i32 seed){
+    base_rand_state = seed;
+    base_rand_initial_state_set = true;
+    return rand_i32();
+}
+
+f32 srand_f32(i32 seed){
+    base_rand_state = seed;
+    base_rand_initial_state_set = true;
+    return rand_f32();
+}
