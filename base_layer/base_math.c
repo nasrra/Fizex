@@ -1038,9 +1038,9 @@ bool init_fssoa_vector2(FsSoa_Vector2* soa, MemoryArena* arena, i32 entry_stride
     }
     soa->is_init = true;
     i32 array_size = entry_stride*max_entries;
-    ALLOC_ARRAY_MEMORY_ARENA(arena, soa->x, &soa->x_size, array_size);
-    ALLOC_ARRAY_MEMORY_ARENA(arena, soa->y, &soa->y_size, array_size);
-    ALLOC_ARRAY_MEMORY_ARENA(arena, soa->append_counts, &soa->append_counts_size, array_size);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->x, &soa->x_size, array_size);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->y, &soa->y_size, array_size);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->append_counts, &soa->append_counts_size, array_size);
     soa->entry_stride = entry_stride;
     soa->max_entries = max_entries;
     return true;
@@ -1068,7 +1068,7 @@ bool append_fssoa_vector2(FsSoa_Vector2* soa, i32 entry_index, f32 x, f32 y){
     Sets the append count of an entry to zero in a fixed stride soa instance.
 */
 void clear_entry_append_count_fssoa_vector2(FsSoa_Vector2* soa, i32 entryIndex){
-    BNDS_CHCK(entryIndex, soa->append_counts_size);
+    BOUNDS_CHECK(entryIndex, soa->append_counts_size);
     soa->append_counts[entryIndex] = 0;
 }
 
@@ -1086,13 +1086,13 @@ bool init_soa_vector2(Soa_Vector2* soa, MemoryArena* arena, i32 size){
     }
 
     soa->is_init = true;
-    ALLOC_ARRAY_MEMORY_ARENA(arena, soa->x, &soa->size, size);
-    ALLOC_ARRAY_MEMORY_ARENA(arena, soa->y, &soa->size, size);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->x, &soa->size, size);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->y, &soa->size, size);
     return true;
 }
 
 void insert_soa_vector2(Soa_Vector2* soa, i32 insert_index, f32 x, f32 y){
-    BNDS_CHCK(insert_index, soa->size);
+    BOUNDS_CHECK(insert_index, soa->size);
     soa->x[insert_index] = x;
     soa->y[insert_index] = y;
 }
@@ -1122,29 +1122,29 @@ bool init_soa_transform2d(Soa_Transform2D* soa, MemoryArena* arena, i32 size){
     soa->is_init = true;
     init_soa_vector2(&soa->positions, arena, size);
     init_soa_vector2(&soa->scales, arena, size);
-    ALLOC_ARRAY_MEMORY_ARENA(arena, soa->sines, &soa->sines_size, size);
-    ALLOC_ARRAY_MEMORY_ARENA(arena, soa->cosines, &soa->cosines_size, size);
-    ALLOC_ARRAY_MEMORY_ARENA(arena, soa->rotation_radii, &soa->rotation_radii_size, size);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->sines, &soa->sines_size, size);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->cosines, &soa->cosines_size, size);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->rotation_radii, &soa->rotation_radii_size, size);
     return true;
 }
 
 void copy_elem_from_soa_transform2d(Soa_Transform2D* soa, Transform2D* dst, i32 index){
     
-    BNDS_CHCK(index, soa->positions.size);
+    BOUNDS_CHECK(index, soa->positions.size);
     dst->position.x = soa->positions.x[index];
     dst->position.y = soa->positions.y[index];
     
-    BNDS_CHCK(index, soa->scales.size);
+    BOUNDS_CHECK(index, soa->scales.size);
     dst->scale.x = soa->scales.x[index];
     dst->scale.y = soa->scales.y[index];
     
-    BNDS_CHCK(index, soa->sines_size);
+    BOUNDS_CHECK(index, soa->sines_size);
     dst->sine = soa->sines[index];
     
-    BNDS_CHCK(index, soa->cosines_size);
+    BOUNDS_CHECK(index, soa->cosines_size);
     dst->cosine = soa->cosines[index];
 
-    BNDS_CHCK(index, soa->rotation_radii_size);
+    BOUNDS_CHECK(index, soa->rotation_radii_size);
     dst->rotation_radii = soa->rotation_radii[index];
 }
 
@@ -1152,21 +1152,21 @@ void insert_scalar_soa_transform2d(
     Soa_Transform2D* soa, i32 elem_index, f32 pos_x, f32 pos_y, 
     f32 scale_x, f32 scale_y, f32 sin, f32 cos, f32 rot_radians
 ){
-    BNDS_CHCK(elem_index, soa->positions.size);
+    BOUNDS_CHECK(elem_index, soa->positions.size);
     soa->positions.x[elem_index] = pos_x;
     soa->positions.y[elem_index] = pos_y;
 
-    BNDS_CHCK(elem_index, soa->scales.size);
+    BOUNDS_CHECK(elem_index, soa->scales.size);
     soa->scales.x[elem_index] = scale_x;
     soa->scales.y[elem_index] = scale_y;
 
-    BNDS_CHCK(elem_index, soa->sines_size);
+    BOUNDS_CHECK(elem_index, soa->sines_size);
     soa->sines[elem_index] = sin;
 
-    BNDS_CHCK(elem_index, soa->cosines_size);
+    BOUNDS_CHECK(elem_index, soa->cosines_size);
     soa->cosines[elem_index] = cos;
 
-    BNDS_CHCK(elem_index, soa->rotation_radii_size);
+    BOUNDS_CHECK(elem_index, soa->rotation_radii_size);
     soa->rotation_radii[elem_index] = rot_radians;
 }
 
@@ -1362,15 +1362,15 @@ bool init_soa_aabb(Soa_Aabb* soa, MemoryArena* arena, i32 size){
 
     soa->is_init = true;
     
-    ALLOC_ARRAY_MEMORY_ARENA(arena, soa->max_x, &soa->size, size);
-    ALLOC_ARRAY_MEMORY_ARENA(arena, soa->max_y, &soa->size, size);
-    ALLOC_ARRAY_MEMORY_ARENA(arena, soa->min_x, &soa->size, size);
-    ALLOC_ARRAY_MEMORY_ARENA(arena, soa->min_y, &soa->size, size);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->max_x, &soa->size, size);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->max_y, &soa->size, size);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->min_x, &soa->size, size);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->min_y, &soa->size, size);
     return true;
 }
 
 void insert_soa_aabb(Soa_Aabb* soa, i32 elem_index, f32 min_x, f32 min_y, f32 max_x, f32 max_y){
-    BNDS_CHCK(elem_index, soa->size);
+    BOUNDS_CHECK(elem_index, soa->size);
     soa->min_x[elem_index] = min_x;
     soa->min_y[elem_index] = min_y;
     soa->max_x[elem_index] = max_x;

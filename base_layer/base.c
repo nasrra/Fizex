@@ -1,231 +1,4 @@
-#include <assert.h>
-/*
-    Supported by MSVC, GCC, and Clang
-*/
-#include <immintrin.h>
-#include <stdint.h>
-#include <float.h>
-/*
-    used in:
-    - base_memory
-    - base_linux
-*/
-#include <string.h>
-#include <time.h>
-#include <stdio.h>
-
-/*========================================
-    types.
-========================================*//**/
-
-typedef int8_t bool;
-#define false 0
-#define true 1
-typedef float f32;
-typedef double f64;
-typedef int8_t i8;
-typedef int16_t i16;
-typedef int32_t i32;
-typedef int64_t i64;
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-/*========================================
-    defines.
-========================================*//**/
-
-/*
-    Context Cracking.
-*//**/
-
-#if defined(__clang__)
-#   define COMPILER_CLANG 1
-#   if defined(_WIN32)
-#       define OS_WINDOWS 1
-#   elif defined(__gnu_linux__)
-#       define OS_LINUX 1
-#   elif defined(__APPLE__) && defined(__MACH__)
-#       define OS_MAC 1
-#   else
-#       error missing OS detection.
-#   endif
-#   if defined(__amd64__)
-#       define ARCH_X64 1
-#   elif defined(__i386__)
-#       define ARCH_X86 1
-#   elif defined(__arm__)
-#       define ARCH_ARM
-#   elif defined(__aarch64__)
-#       define ARCH_ARM64 1
-#   else
-#       error missing ARCH detection.
-#   endif
-#elif defined(__GNUC__)
-#   define COMPILER_GCC 1
-#   if defined(_WIN32)
-#       define OS_WINDOWS 1
-#   elif defined(__gnu_linux__)
-#       define OS_LINUX 1
-#   elif defined(__APPLE__) && defined(__MACH__)
-#       define OS_MAC 1
-#   else
-#       error missing OS detection.
-#   endif
-#   if defined(__amd64__)
-#       define ARCH_X64 1
-#   elif defined(__i386__)
-#       define ARCH_X86 1
-#   elif defined(__arm__)
-#       define ARCH_ARM
-#   elif defined(__aarch64__)
-#       define ARCH_ARM64 1
-#   else
-#       error missing ARCH detection.
-#   endif
-/*
-    make sure to keep this last as windows msvc would always be present regardless of another compiler being used.
-    microsoft is awesome :)))
-*/
-#elif defined(_MSC_VER) 
-#   define COMPILER_CL 1
-#   if defined(_WIN32)
-#       define OS_WINDOWS 1
-#   else
-#       error missing OS detection.
-#   endif
-#   if defined(_M_AMD64)
-#       define ARCH_X64 1
-#   elif defined(_M_I86)
-#       define ARCH_X86 1
-#   elif defined(_M_ARM)
-#       define ARCH_ARM 1
-#   else
-#       error missing ARCH detection.
-#   endif
-#endif
-#if !defined(COMPILER_CLANG)
-#   define COMPILER_CLANG 0
-#endif
-#if !defined(COMPILER_GCC)
-#   define COMPILER_GCC 0
-#endif
-#if !defined(COMPILER_CL)
-#   define COMPILER_C 0
-#endif
-#if !defined(OS_WINDOWS)
-#   define OS_WINDOWS 0
-#endif
-#if !defined(OS_LINUX)
-#   define OS_LINUX 0
-#endif
-#if !defined(OS_MAC)
-#   define OS_MAC 0
-#endif
-#if !defined(ARCH_X64)
-#   define ARCH_X64 0
-#endif
-#if !defined(ARCH_X86)
-#   define ARCH_X86 0
-#endif
-#if !defined(ARCH_X86)
-#   define ARCH_X86 0
-#endif
-#if !defined(ARCH_ARM)
-#   define ARCH_ARM 0
-#endif
-#if !defined(ARCH_ARM64)
-#   define ARCH_ARM64 0
-#endif
-
-#define ArrayLength(arr) (sizeof(arr)/sizeof(*(arr)))
-#define PtrArraySize(ptr, length) (length * sizeof(*(ptr)))
-
-#ifdef NDEBUG
-#   define DEBUG_ASSERT(val, msg)
-#else
-#   if OS_WINDOWS
-#        define DEBUG_ASSERT(val, msg) \
-            ((void)((val) || (_wassert(L##msg, _CRT_WIDE(__FILE__), (unsigned)(__LINE__)), 0)))
-#   elif OS_LINUX
-#       define DEBUG_ASSERT(val, msg) \
-            ((void)((val) || (__assert_fail(msg, __FILE__, __LINE__, __func__), 0)))
-#   elif OS_MAC
-#       define DEBUG_ASSERT(val, msg) \
-           ((void)((val) || (__assert_rtn(__func__, __FILE__, __LINE__, msg), 0)))
-#   else
-    // fallback.
-#       define DEBUG_ASSERT(val, msg) do { \
-            assert(val); \
-        } while(0)
-#   endif
-#endif
-
-#ifdef NDEBUG
-#   define BND_CHCK(val, size)
-#else
-#   define BNDS_CHCK(val, size) do { \
-        assert(val >= 0 && val < size); \
-    } while(0)
-#endif
-
-#define foo FLT_MIN
-
-/* 
-    Minimum of signed integral types.  
-*/
-#define I8_MIN  (-128)
-#define I16_MIN (-32767-1)
-#define I32_MIN (-2147483647-1)
-#define I64_MIN (-__INT64_C(9223372036854775807)-1)
-
-/* 
-    Maximum of signed integral types.  
-*/
-#define I8_MAX  (127)
-#define I16_MAX (32767)
-#define I32_MAX (2147483647)
-#define I64_MAX (__INT64_C(9223372036854775807))
-
-/* 
-    Maximum of unsigned integral types.  
-*/
-#define U8_MAX  (255)
-#define U16_MAX (65535)
-#define U32_MAX (4294967295U)
-#define U64_MAX (__UINT64_C(18446744073709551615))
-
-/*
-    maximum of floating-point types.
-*/
-#define F32_MAX 3.40282347e+38F
-#define F64_MAX 1.7976931348623157e+308
-
-/*
-    minimum of floating-point types.
-*/
-#define F32_MIN 1.17549435e-38F
-#define F64_MIN 2.2250738585072014e-308
-
-/*
-    epsilon of floating-point types.
-*/
-#define F32_EPSILON 1.19209290e-7F
-#define F64_EPSILON 2.2204460492503131e-16
-
-/*========================================
-    globals.
-========================================*//**/
-/*
-    base_rand_seed is lazy init.
-*/
-i32 base_rand_state;
-bool base_rand_initial_state_set;
-
-/*========================================
-    functions
-========================================*//**/
+#include "base.h"
 
 /*
     sets the global random seed to a new seed.
@@ -292,4 +65,80 @@ f32 srand_f32(i32 seed){
     base_rand_state = seed;
     base_rand_initial_state_set = true;
     return rand_f32();
+}
+
+bool memory_arena_partition(MemoryArena* parent, MemoryArena* out_child, u64 size){
+    u64 new_stride = parent->stride + size;
+    if(new_stride >= parent->size){
+        DEBUG_ASSERT(0!=0, "memory arena cannot support partition size.");
+        return false;
+    }
+
+    parent->stride = new_stride;
+    out_child->ptr = (u8*)(parent->ptr) + new_stride;
+    out_child->size = size;
+    out_child->stride = 0;
+    
+    return true;
+}
+
+void clear_memory_arena(MemoryArena* arena){
+    arena->stride = 0;
+}
+
+void clear_zeroed_memory_arena(MemoryArena *arena){
+    // MemZero(arena->ptr, arena->size);
+    memset(arena->ptr, 0, arena->size); // test pattern
+    arena->stride = 0;
+}
+
+void free_memory_arena(MemoryArena* arena){
+    assert(arena != NULL);
+    assert(arena->ptr != NULL);
+    free(arena->ptr);
+    *arena = (MemoryArena){0};
+}
+
+GenId genid_make(i32 index, i32 generation){
+    GenId result = 0;
+    DEBUG_ASSERT(index >= 0 && index <= GENID_MAX_INDEX, "index value is out of bounds.");
+    DEBUG_ASSERT(generation >= 0 && generation <= GENID_MAX_GENERATION, "generation value is out of bounds.");
+
+    // shift generation up by 20 bit so its the last 12 bits in the integer. 
+    result = (u32)(generation & GENID_GENERATION_MASK) << 20; // apply the mask anyways so there is no crash in release mode.
+
+    // Or with the index to that the index values are the first 20 bits in the integer.
+    result |= (u32)index & GENID_INDEX_MASK; // apply the mask anyways so there is no crash in release mode.
+    return result;
+}
+
+i32 genid_get_index(GenId genid){
+    return (i32)(genid & GENID_INDEX_MASK);
+}
+
+i32 genid_get_generation(GenId genid){
+    return (i32)genid >> 20;
+}
+
+GenId genid_increment_generation(GenId genid){
+    // adding (1<<20) effectively adds 1 to the generation slice of the integer.
+    // if the generation was at 4095, adding 1 makes it 4096; which would
+    // "overflow" out of the 32-bit uint, wrapping back to 0 naturally.
+
+    i32 next_gen = (genid_get_generation(genid)+1) & GENID_GENERATION_MASK;
+    return genid_make(genid_get_index(genid), next_gen);
+}
+
+GenId genid_increment_index(GenId genid){
+    // Get the current index and add 1.
+    // mask it so the index value stays within th 20 bit range; wrapping around to zero if it hits max index.
+    // this preserves the existing generation bits from overflow corruption of the index value.
+
+    u32 curr_gen = genid & ~GENID_INDEX_MASK; // Isolate the top 12 bits;
+    u32 next_index = (genid + 1) & GENID_INDEX_MASK;
+    return curr_gen | next_index;
+}
+
+void string_init(String* string, MemoryArena* arena, i32 size){
+    MEMORY_ARENA_ALLOC_ARRAY(arena, string->chars, &string->size, size);
 }

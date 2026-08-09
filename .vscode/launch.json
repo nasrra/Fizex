@@ -2,9 +2,9 @@
     "configurations": [
         {
             "name": "Debug (Win32)",
-            "type": "lldb",
+            "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/main.exe",
+            "program": "${workspaceFolder}/build/app.exe",
             "args": [],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "Debug Build (MSVC)"

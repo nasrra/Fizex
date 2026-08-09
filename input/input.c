@@ -197,84 +197,84 @@ InputState* input_prev_mouse_button_state;
 void input_set_key_down(Key key){
     DEBUG_ASSERT(input_is_init, "input is not init");
     size_t index = (size_t)key;
-    BNDS_CHCK(index, KEY_ENUM_SIZE);
+    BOUNDS_CHECK(index, KEY_ENUM_SIZE);
     input_key_down_state[(size_t)key] = true;
 }
 
 void input_set_key_up(Key key){
     DEBUG_ASSERT(input_is_init, "input is not init");
     size_t index = (size_t)key;
-    BNDS_CHCK(index, KEY_ENUM_SIZE);
+    BOUNDS_CHECK(index, KEY_ENUM_SIZE);
     input_key_down_state[(size_t)key] = false;
 }
 
 void input_set_mouse_button_down(MouseButton button){
     DEBUG_ASSERT(input_is_init, "input is not init");
     size_t index = (size_t)button;
-    BNDS_CHCK(index, MOUSE_BUTTON_ENUM_SIZE);
+    BOUNDS_CHECK(index, MOUSE_BUTTON_ENUM_SIZE);
     input_mouse_button_down_state[(size_t)button] = true;
 }
 
 void input_set_mouse_button_up(MouseButton button){
     DEBUG_ASSERT(input_is_init, "input is not init");
     size_t index = (size_t)button;
-    BNDS_CHCK(index, MOUSE_BUTTON_ENUM_SIZE);
+    BOUNDS_CHECK(index, MOUSE_BUTTON_ENUM_SIZE);
     input_mouse_button_down_state[(size_t)button] = false;
 }
 
 bool input_is_key_pressed(Key key){
     DEBUG_ASSERT(input_is_init, "input is not init");
     size_t index = (size_t)key;
-    BNDS_CHCK(index, KEY_ENUM_SIZE);
+    BOUNDS_CHECK(index, KEY_ENUM_SIZE);
     return input_curr_key_state[index] == INPUT_STATE_PRESSED || INPUT_STATE_JUST_PRESSED;
 }
 
 bool input_is_key_just_pressed(Key key){
     DEBUG_ASSERT(input_is_init, "input is not init");
     size_t index = (size_t)key;
-    BNDS_CHCK(index, KEY_ENUM_SIZE);
+    BOUNDS_CHECK(index, KEY_ENUM_SIZE);
     return input_curr_key_state[index] == INPUT_STATE_JUST_PRESSED;
 }
 
 bool input_is_key_released(Key key){
     DEBUG_ASSERT(input_is_init, "input is not init");
     size_t index = (size_t)key;
-    BNDS_CHCK(index, KEY_ENUM_SIZE);
+    BOUNDS_CHECK(index, KEY_ENUM_SIZE);
     return input_curr_key_state[index] == INPUT_STATE_RELEASED || INPUT_STATE_JUST_RELEASED;
 }
 
 bool input_is_key_just_released(Key key){
     DEBUG_ASSERT(input_is_init, "input is not init");
     size_t index = (size_t)key;
-    BNDS_CHCK(index, KEY_ENUM_SIZE);
+    BOUNDS_CHECK(index, KEY_ENUM_SIZE);
     return input_curr_key_state[index] == INPUT_STATE_JUST_RELEASED;
 }
 
 bool input_is_mouse_button_pressed(MouseButton button){
     DEBUG_ASSERT(input_is_init, "input is not init");
     size_t index = (size_t)button;
-    BNDS_CHCK(index, MOUSE_BUTTON_ENUM_SIZE);
+    BOUNDS_CHECK(index, MOUSE_BUTTON_ENUM_SIZE);
     return input_curr_mouse_button_state[index] == INPUT_STATE_PRESSED || INPUT_STATE_JUST_PRESSED;
 }
 
 bool input_is_mouse_button_just_pressed(MouseButton button){
     DEBUG_ASSERT(input_is_init, "input is not init");
     size_t index = (size_t)button;
-    BNDS_CHCK(index, MOUSE_BUTTON_ENUM_SIZE);
+    BOUNDS_CHECK(index, MOUSE_BUTTON_ENUM_SIZE);
     return input_curr_mouse_button_state[index] == INPUT_STATE_JUST_PRESSED;
 }
 
 bool input_is_mouse_button_released(MouseButton button){
     DEBUG_ASSERT(input_is_init, "input is not init");
     size_t index = (size_t)button;
-    BNDS_CHCK(index, MOUSE_BUTTON_ENUM_SIZE);
+    BOUNDS_CHECK(index, MOUSE_BUTTON_ENUM_SIZE);
     return input_curr_mouse_button_state[index] == INPUT_STATE_RELEASED || INPUT_STATE_JUST_RELEASED;
 }
 
 bool input_is_mouse_button_just_released(MouseButton button){
     DEBUG_ASSERT(input_is_init, "input is not init");
     size_t index = (size_t)button;
-    BNDS_CHCK(index, MOUSE_BUTTON_ENUM_SIZE);
+    BOUNDS_CHECK(index, MOUSE_BUTTON_ENUM_SIZE);
     return input_curr_mouse_button_state[index] == INPUT_STATE_JUST_RELEASED;
 }
 
@@ -377,12 +377,12 @@ void input_update(){
 void input_init(MemoryArena* arena){
     DEBUG_ASSERT(!input_is_init, "attempted to init an already init input system.");
     size_t temp;
-    ALLOC_ARRAY_MEMORY_ARENA(arena, input_key_down_state, &temp, (size_t)KEY_ENUM_SIZE);
-    ALLOC_ARRAY_MEMORY_ARENA(arena, input_curr_key_state, &temp, (size_t)KEY_ENUM_SIZE);
-    ALLOC_ARRAY_MEMORY_ARENA(arena, input_prev_key_state, &temp, (size_t)KEY_ENUM_SIZE);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, input_key_down_state, &temp, (size_t)KEY_ENUM_SIZE);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, input_curr_key_state, &temp, (size_t)KEY_ENUM_SIZE);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, input_prev_key_state, &temp, (size_t)KEY_ENUM_SIZE);
 
-    ALLOC_ARRAY_MEMORY_ARENA(arena, input_mouse_button_down_state, &temp, (size_t)KEY_ENUM_SIZE);
-    ALLOC_ARRAY_MEMORY_ARENA(arena, input_curr_mouse_button_state, &temp, (size_t)KEY_ENUM_SIZE);
-    ALLOC_ARRAY_MEMORY_ARENA(arena, input_prev_mouse_button_state, &temp, (size_t)KEY_ENUM_SIZE);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, input_mouse_button_down_state, &temp, (size_t)KEY_ENUM_SIZE);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, input_curr_mouse_button_state, &temp, (size_t)KEY_ENUM_SIZE);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, input_prev_mouse_button_state, &temp, (size_t)KEY_ENUM_SIZE);
     input_is_init = true;
 }
