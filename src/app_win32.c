@@ -199,3 +199,7 @@ void platform_init_transient_memory(size_t size){
     transient_memory.size = size;
     transient_memory.stride = 0;
 }
+
+void platform_error_message_box(char* msg){
+    MessageBox(0, msg, "app", MB_OK | MB_ICONERROR);
+}

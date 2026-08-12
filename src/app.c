@@ -1,5 +1,5 @@
-#include "base_layer/base.h"
 #include "platform.h"
+#include "base_layer/base.h"
 #include "base_layer/base_simd.c"
 #include "base_layer/base_math.c"
 #include "input/input.c"
@@ -15,6 +15,17 @@ typedef struct{
 void app_main(){
     platform_init_persistent_memory(MEGABYTE(4));    
     platform_init_transient_memory(MEGABYTE(1));    
+    i32 asd;
+    asd = 12;
+    i32 nums[4] = {0};
+    i32* nums_ptr = nums;
+    i32 nums_length = 4;
+    i32 nums_count = 0;
+    ARRAY_PUSH(nums_ptr, nums_length, &nums_count, 12);
+    ARRAY_PUSH(nums_ptr, nums_length, &nums_count, 33);
+    ARRAY_PUSH(nums_ptr, nums_length, &nums_count, 34);
+    ARRAY_PUSH(nums_ptr, nums_length, &nums_count, 132);
+
 }
 
 GenId a;
@@ -42,5 +53,4 @@ void app_update_and_render(MemoryArena* persistent, MemoryArena* transient){
     i32 i_c = rand_i32();
     i32 i_d = rand_i32();
     i32 i_e = rand_i32();
-
 }

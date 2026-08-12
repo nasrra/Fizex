@@ -1,6 +1,7 @@
 #ifndef BASE_H
 #define BASE_H
 
+#include <stdlib.h>
 #include <assert.h>
 /*
     Supported by MSVC, GCC, and Clang
@@ -37,7 +38,7 @@ typedef uint64_t u64;
 
 typedef struct{
     char* chars;
-    i32 size;
+    i32 length;
 } String;
 
 typedef struct{
@@ -47,6 +48,7 @@ typedef struct{
 } MemoryArena;
 
 typedef u32 GenId;
+void * (*base_panic_pre_abort_funcptr) (char* msg);
 
 /*========================================
     defines.
@@ -158,35 +160,23 @@ typedef u32 GenId;
 #define ARRAY_SIZE(arr) (sizeof(arr)/sizeof(*(arr)))
 #define PTR_ARRAY_SIZE(ptr, length) (length * sizeof(*(ptr)))
 
-#ifdef NDEBUG
-#   define DEBUG_ASSERT(val, msg)
+#ifdef PLATFORM_H
+#   define ABORT(msg) do { platform_error_message_box(msg); abort(); } while(0)
 #else
-#   if OS_WINDOWS
-#        define DEBUG_ASSERT(val, msg) \
-            ((void)((val) || (_wassert(L##msg, _CRT_WIDE(__FILE__), (unsigned)(__LINE__)), 0)))
-#   elif OS_LINUX
-#       define DEBUG_ASSERT(val, msg) \
-            ((void)((val) || (__assert_fail(msg, __FILE__, __LINE__, __func__), 0)))
-#   elif OS_MAC
-#       define DEBUG_ASSERT(val, msg) \
-           ((void)((val) || (__assert_rtn(__func__, __FILE__, __LINE__, msg), 0)))
-#   else
-    // fallback.
-#       define DEBUG_ASSERT(val, msg) do { \
-            assert(val); \
-        } while(0)
-#   endif
+#   define ABORT(msg) do { abort(); } while(0)
 #endif
 
+#define PANIC(condition, msg) do { if((condition)==true){ABORT(msg);} } while(0)
+
 #ifdef NDEBUG
+#   define ASSERT(condition, msg)
 #   define BOUNDS_CHECK(val, size)
 #else
+#   define ASSERT(condition, msg) (assert(msg && (condition)))
 #   define BOUNDS_CHECK(val, size) do { \
-        assert(val >= 0 && val < size); \
+        ASSERT(val >= 0 && val < size, "Index Out Of Bounds."); \
     } while(0)
 #endif
-
-#define foo FLT_MIN
 
 /* 
     Minimum of signed integral types.  
@@ -304,7 +294,7 @@ typedef u32 GenId;
         *(out_arr_size) = array_size; \
     } \
     else{ \
-        DEBUG_ASSERT(0!=0, "insufficient space to alloc array onto memory arena."); \
+        ASSERT(0!=0, "insufficient space to alloc array onto memory arena."); \
         *(out_arr_size) = 0; \
     } \
 } while(0)
@@ -347,6 +337,12 @@ typedef u32 GenId;
     this is because the first 20 bits of a uint are used for a indexing. 
 */
 #define GENID_MAX_INDEX (GENID_UNIQUE_INDICES_COUNT - 1)
+
+#define ARRAY_PUSH(array, array_length, array_count, value) do { \
+    BOUNDS_CHECK(*array_count, array_length); \
+    array[*array_count] = value; \
+    *array_count += 1; \
+} while (0)
 
 /*========================================
     globals.

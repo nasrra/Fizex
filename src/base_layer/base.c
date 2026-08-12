@@ -70,7 +70,7 @@ f32 srand_f32(i32 seed){
 bool memory_arena_partition(MemoryArena* parent, MemoryArena* out_child, u64 size){
     u64 new_stride = parent->stride + size;
     if(new_stride >= parent->size){
-        DEBUG_ASSERT(0!=0, "memory arena cannot support partition size.");
+        ASSERT(0!=0, "memory arena cannot support partition size.");
         return false;
     }
 
@@ -101,8 +101,8 @@ void free_memory_arena(MemoryArena* arena){
 
 GenId genid_make(i32 index, i32 generation){
     GenId result = 0;
-    DEBUG_ASSERT(index >= 0 && index <= GENID_MAX_INDEX, "index value is out of bounds.");
-    DEBUG_ASSERT(generation >= 0 && generation <= GENID_MAX_GENERATION, "generation value is out of bounds.");
+    ASSERT(index >= 0 && index <= GENID_MAX_INDEX, "index value is out of bounds.");
+    ASSERT(generation >= 0 && generation <= GENID_MAX_GENERATION, "generation value is out of bounds.");
 
     // shift generation up by 20 bit so its the last 12 bits in the integer. 
     result = (u32)(generation & GENID_GENERATION_MASK) << 20; // apply the mask anyways so there is no crash in release mode.
@@ -139,6 +139,6 @@ GenId genid_increment_index(GenId genid){
     return curr_gen | next_index;
 }
 
-void string_init(String* string, MemoryArena* arena, i32 size){
-    MEMORY_ARENA_ALLOC_ARRAY(arena, string->chars, &string->size, size);
+void string_init(String* string, MemoryArena* arena, i32 length){
+    MEMORY_ARENA_ALLOC_ARRAY(arena, string->chars, &string->length, length);
 }

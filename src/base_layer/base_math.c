@@ -539,7 +539,7 @@ void rotor_multiply(f32 sine, f32 cosine, f32 theta, f32* new_sine, f32* new_cos
     `n` should not be larger than 46430.
 */
 i32 calculate_triangular_sum(i32 n){
-    DEBUG_ASSERT(n < 46430, "'n' is greater than or equal to 46430.");
+    ASSERT(n < 46430, "'n' is greater than or equal to 46430.");
     return n * (n+1) / 2;
 }
 
@@ -1033,7 +1033,7 @@ Vector2 transform_vector2(Vector2 v, Transform2D t){
 
 bool init_fssoa_vector2(FsSoa_Vector2* soa, MemoryArena* arena, i32 entry_stride, i32 max_entries){
     if(soa->is_init){
-        DEBUG_ASSERT(!soa->is_init, "attempted to init an already init FsSoa_Vector2.");
+        ASSERT(!soa->is_init, "attempted to init an already init FsSoa_Vector2.");
         return false;
     }
     soa->is_init = true;
@@ -1050,7 +1050,7 @@ bool append_fssoa_vector2(FsSoa_Vector2* soa, i32 entry_index, f32 x, f32 y){
     // ensure that the entry slot isnt full.
     i32 append_count = soa->append_counts[entry_index];
     if(append_count >= soa->entry_stride){
-        DEBUG_ASSERT(0!=0, "attempted to append to a full fssoa_vector2.");
+        ASSERT(0!=0, "attempted to append to a full fssoa_vector2.");
         return false;
     }
     i32 append_index = entry_index * soa->entry_stride + append_count;
@@ -1081,7 +1081,7 @@ void clear_append_counts_fssoa_vector2(FsSoa_Vector2* soa){
 bool init_soa_vector2(Soa_Vector2* soa, MemoryArena* arena, i32 size){
     
     if (soa->is_init){
-        DEBUG_ASSERT(0!=0, "attempted to init an already init soa_vector2.");
+        ASSERT(0!=0, "attempted to init an already init soa_vector2.");
         return false;
     }
 
@@ -1100,7 +1100,7 @@ void insert_soa_vector2(Soa_Vector2* soa, i32 insert_index, f32 x, f32 y){
 bool append_soa_vector2(Soa_Vector2* soa, f32 x, f32 y){
 
     if(soa->append_count >= soa->size){
-        DEBUG_ASSERT(0!=0, "attempted to append to a full soa_vector2");
+        ASSERT(0!=0, "attempted to append to a full soa_vector2");
         return false;
     }
 
@@ -1115,7 +1115,7 @@ void reset_count_soa_vector2(Soa_Vector2* soa){
 
 bool init_soa_transform2d(Soa_Transform2D* soa, MemoryArena* arena, i32 size){
     if(soa->is_init){
-        DEBUG_ASSERT(0!=0, "attempted to init already init soa_transform2d.");
+        ASSERT(0!=0, "attempted to init already init soa_transform2d.");
         return false;
     }
 
@@ -1356,7 +1356,7 @@ void closest_point_with_sqrd_dist_line_segment(Vector2 line_start, Vector2 line_
 bool init_soa_aabb(Soa_Aabb* soa, MemoryArena* arena, i32 size){
     
     if(soa->is_init){
-        DEBUG_ASSERT(0!=0, "attempted to init an already init soa_aabb");
+        ASSERT(0!=0, "attempted to init an already init soa_aabb");
         return false;
     }
 
@@ -1380,7 +1380,7 @@ void insert_soa_aabb(Soa_Aabb* soa, i32 elem_index, f32 min_x, f32 min_y, f32 ma
 bool append_soa_aabb(Soa_Aabb* soa, f32 min_x, f32 min_y, f32 max_x, f32 max_y){
     
     if(soa->append_count >= soa->size){
-        DEBUG_ASSERT(0!=0, "attempted to append to a full soa_aabb");
+        ASSERT(0!=0, "attempted to append to a full soa_aabb");
         return false;
     }
 
