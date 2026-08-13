@@ -5,9 +5,16 @@
 ====================*//**/
 
 typedef struct{
+    f32 x;
+    f32 y;
+    u32 width;
+    u32 height;
+} DestinationRectangle;
+
+typedef struct{
     WGPUSurfaceTexture ptr;
     WGPUTextureView view;
-    WGPUExtent3D Extents;
+    WGPUExtent3D extents;
 } SurfaceTexture;
 
 typedef struct{
@@ -21,7 +28,7 @@ typedef struct{
         The count of the `host` and `device` buffers respectively.
     */
     u32 count_in_bytes;
-} Buffer;
+} RenderBuffer;
 
 typedef struct{
     Vector3 position;
@@ -130,7 +137,7 @@ typedef struct{
     i32 host_virtual_textures_length;
     TextureArray* texture_arrays;
     i32 texture_arrays_length;
-    Buffer virtual_texture_buffer;
+    RenderBuffer device_virtual_texture_buffer;
     bool is_init;
 } VirtualTextureManager;
 
@@ -334,7 +341,7 @@ typedef struct {
     i32 device_sprites_scratch_space_length;
     SpriteLayer* sprite_layers;
     i32 sprite_layers_length;
-    Buffer sprite_buffer;
+    RenderBuffer sprite_buffer;
     bool is_init;
 } SpriteManager;
 
@@ -344,10 +351,10 @@ typedef struct{
     WGPUDevice device;
     GraphicsPipeline graphics_pipeline;
     BlitPipeline blit_pipeline;
-    Buffer vertex_buffer;
-    Buffer index_buffer;
-    Buffer user_defined_uniform_buffer;
-    Buffer user_defined_storage_buffer;
+    RenderBuffer vertex_buffer;
+    RenderBuffer index_buffer;
+    RenderBuffer user_defined_uniform_buffer;
+    RenderBuffer user_defined_storage_buffer;
     VirtualTextureManager virtual_texture_manager;
     SpriteManager sprite_manager;
     WindowSurface window_surface;
@@ -360,7 +367,7 @@ typedef struct{
     /*
         the destination rectangle for renderering the final render texture onto the back-buffer.
     */
-    Rectangle destination_rectangle;
+    DestinationRectangle destination_rectangle;
     bool is_init;
 } RendererCtx;
 
@@ -657,9 +664,9 @@ WGPUDevice renderer_request_device(WGPUAdapter adapter){
     return wgpu_device;
 }
 
-void renderer_buffer_init(Buffer* buffer, WGPUDevice device, WGPUBufferUsage host_usage, WGPUBufferUsage device_usage, u32 array_length, u32 element_length_in_bytes){
+void renderer_buffer_init(RenderBuffer* buffer, WGPUDevice device, WGPUBufferUsage host_usage, WGPUBufferUsage device_usage, u32 array_length, u32 element_length_in_bytes){
 
-    *buffer = (Buffer){0};
+    *buffer = (RenderBuffer){0};
 
     buffer->length_in_bytes = element_length_in_bytes * array_length;
     /*
@@ -736,7 +743,7 @@ void renderer_virtual_texture_manager_init(
     // initialise virtual textures.
     WGPUBufferUsage host_usage = WGPUBufferUsage_CopySrc | WGPUBufferUsage_MapWrite;
     WGPUBufferUsage device_usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform;
-    renderer_buffer_init(&manager->virtual_texture_buffer, device, host_usage, device_usage, max_virtual_textures, sizeof(DeviceVirtualTexture));
+    renderer_buffer_init(&manager->device_virtual_texture_buffer, device, host_usage, device_usage, max_virtual_textures, sizeof(DeviceVirtualTexture));
     for(i32 i = 0; i < manager->host_virtual_textures_length; i++){
         BOUNDS_CHECK(i,manager->host_virtual_textures_length);
         string_init(&manager->host_virtual_textures[i].file_path, arena, file_path_max_chars);
@@ -846,7 +853,7 @@ void renderer_buffer_map_async_callback(WGPUMapAsyncStatus status, WGPUStringVie
     ctx->request_ended = true;
 }
 
-bool renderer_write_to_buffer(Buffer* dst, WGPUDevice device, void* src, u32 src_byte_size){
+bool renderer_write_to_buffer(RenderBuffer* dst, WGPUDevice device, void* src, u32 src_byte_size){
 
     if(src_byte_size > dst->length_in_bytes){
         ASSERT(0!=0, "attempted to write data to a buffer of insufficient size.");
@@ -891,7 +898,7 @@ bool renderer_write_to_buffer(Buffer* dst, WGPUDevice device, void* src, u32 src
     return true;
 }
 
-void renderer_vertex_buffer_init(Buffer* buffer, WGPUDevice device){
+void renderer_vertex_buffer_init(RenderBuffer* buffer, WGPUDevice device){
     ASSERT(buffer->host == NULL && buffer->device == NULL, "attempted to init an already init vertex buffer.");
     WGPUBufferUsage host_usage = WGPUBufferUsage_MapWrite | WGPUBufferUsage_CopySrc;
     WGPUBufferUsage device_usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex;
@@ -918,7 +925,7 @@ void renderer_vertex_buffer_init(Buffer* buffer, WGPUDevice device){
     renderer_write_to_buffer(buffer, device, (void*)vertices, sizeof(Vertex) * 4);
 }
 
-void renderer_index_buffer_init(Buffer* buffer, WGPUDevice device, i32 max_sprites){
+void renderer_index_buffer_init(RenderBuffer* buffer, WGPUDevice device, i32 max_sprites){
 
     ASSERT(buffer->host == NULL && buffer->device == NULL, "attempted to init index buffer with an already init buffer.");
 
@@ -946,7 +953,7 @@ void renderer_index_buffer_init(Buffer* buffer, WGPUDevice device, i32 max_sprit
     renderer_write_to_buffer(buffer, device, indices, sizeof(u32) * total_indices);
 }
 
-void renderer_user_defined_uniform_buffer_init(Buffer* buffer, WGPUDevice device, u32 size_in_bytes){
+void renderer_user_defined_uniform_buffer_init(RenderBuffer* buffer, WGPUDevice device, u32 size_in_bytes){
     ASSERT(buffer->host == NULL && buffer->device == NULL, "attempted to init user-uniform-buffer with an already init buffer.");
     // ensure that the size is a multiple of 16; accounting for the 16 byte padding of WG.
     // uint adjustedSize = (sizeOfUbo + 15) & ~15u;
@@ -955,7 +962,7 @@ void renderer_user_defined_uniform_buffer_init(Buffer* buffer, WGPUDevice device
     renderer_buffer_init(buffer, device, host_usage, device_usage, 1, size_in_bytes);
 }
 
-void renderer_user_defined_storage_buffer_init(Buffer* buffer, WGPUDevice device, u32 size_in_bytes){
+void renderer_user_defined_storage_buffer_init(RenderBuffer* buffer, WGPUDevice device, u32 size_in_bytes){
     ASSERT(buffer->host == NULL && buffer->device, "attempted to init a user-defined-storage buffer with an aleady init buffer.");
     WGPUBufferUsage host_usage = WGPUBufferUsage_MapWrite | WGPUBufferUsage_CopySrc;
     WGPUBufferUsage device_usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Storage;
@@ -1199,76 +1206,468 @@ void renderer_blit_pipeline_init(BlitPipeline* pipeline, WindowSurface window_su
             .sampler.type = WGPUSamplerBindingType_NonFiltering
         };
         WGPUBindGroupLayoutEntry* texture_layout_entry = &group_layout_entries[BLIT_PIPELINE_TEXTURE_BINDING];
-        // *texture_layout_entry = (WGPUBindGroupLayout){
-        //     .binding 
-        // };
+        *texture_layout_entry = (WGPUBindGroupLayoutEntry){
+            .binding = BLIT_PIPELINE_TEXTURE_BINDING,
+            .visibility = WGPUShaderStage_Fragment,
+            .texture.sampleType = WGPUTextureSampleType_Float,
+            .texture.viewDimension = WGPUTextureViewDimension_2D
+        };
         WGPUBindGroupLayoutDescriptor group_layout_desc = {
             .entryCount = BLIT_PIPELINE_BIND_GROUP_ENTRY_COUNT,
-
+            .entries = group_layout_entries
         };
+        pipeline->bind_group_layout = wgpuDeviceCreateBindGroupLayout(device, &group_layout_desc);
+        
+        WGPUBindGroupLayout* layouts = (WGPUBindGroupLayout[1]){pipeline->bind_group_layout};
+        WGPUPipelineLayoutDescriptor pipeline_layout_desc = {0};
+        pipeline_layout_desc.bindGroupLayoutCount = 1;
+        pipeline_layout_desc.bindGroupLayouts = layouts;
+        WGPUPipelineLayout pipeline_layout = wgpuDeviceCreatePipelineLayout(device, &pipeline_layout_desc);
 
-    //     groupLayoutDesc.EntryCount = BlitPipeline.BindGroupEntryCount;
-    //     WebGPU.BindGroupLayoutEntry* groupLayoutEntries = stackalloc WebGPU.BindGroupLayoutEntry[(int)BlitPipeline.BindGroupEntryCount];
-    //         ref WebGPU.BindGroupLayoutEntry textureLayoutEntry = ref groupLayoutEntries[BlitPipeline.TextureBinding];
-    //         textureLayoutEntry.Binding = BlitPipeline.TextureBinding;
-    //         textureLayoutEntry.Visibility = WebGPU.ShaderStage.Fragment;
-    //         textureLayoutEntry.Texture.SampleType = WebGPU.TextureSampleType.Float;
-    //         textureLayoutEntry.Texture.ViewDimension = WebGPU.TextureViewDimension.Dimension2D;
-    //     }
-    //     groupLayoutDesc.Entries = groupLayoutEntries;
-    //     ctx.BlitPipeline.BindGroupLayout = WebGPUApi.DeviceCreateBindGroupLayout(GetChosenDevice(ref ctx).Pointer, ref groupLayoutDesc);
+        /*
+            descriptor sets.
+        */
+            /*
+                bind group
+            */
+            /**
+                note that the binding groups are not setup here at all as they should be dynamically created during the render pass,
+                This is because the swap chain texture which is being blitted constantly changes (as per the nature of swap chain structures).
+            **/
 
-    // WebGPU.BindGroupLayout** layouts = stackalloc WebGPU.BindGroupLayout*[1]{ctx.BlitPipeline.BindGroupLayout};
-    // WebGPU.PipelineLayoutDescriptor pipelineLayoutDesc = default;
-    // pipelineLayoutDesc.BindGroupLayoutCount = 1;
-    // pipelineLayoutDesc.BindGroupLayouts = layouts;
-    // WebGPU.PipelineLayout* pipelineLayout = WebGPUApi.DeviceCreatePipelineLayout(device.Pointer, ref pipelineLayoutDesc);
-
-
-    // /**========================================
-    //     DESCRIPTOR SETS
-    // ========================================**/
-    //     /**========================================
-    //         BIND GROUP
-    //     ========================================**/
-    //     /**
-    //         note that the binding groups are not setup here at all as they should be dynamically created during the render pass,
-    //         This is because the swap chain texture which is being blitted constantly changes (as per the nature of swap chain structures).
-    //     **/
-
-    // /**========================================
-    //     PIPELINE CREATION.
-    // ========================================**/    
-    // WebGPU.RenderPipelineDescriptor pipelineDesc = default;
-    // pipelineDesc.Layout = pipelineLayout;
-    // pipelineDesc.Primitive = primitiveState;
-    // pipelineDesc.Multisample = multisampleState;
-    // pipelineDesc.Fragment = &fragState;
-    // pipelineDesc.Vertex = vertState;
-    // pipelineDesc.DepthStencil = null;
-    // ctx.BlitPipeline.RenderPipeline = WebGPUApi.DeviceCreateRenderPipeline(device.Pointer, ref pipelineDesc);
-    // ctx.BlitPipeline.IsInitialised = true;
-
+        /*
+            pipeline creation.
+        */
+        WGPURenderPipelineDescriptor pipeline_desc = {0};
+        pipeline_desc.layout = pipeline_layout;
+        pipeline_desc.primitive = primitive_state;
+        pipeline_desc.multisample = multisample_state;
+        pipeline_desc.fragment = &fragment_state;
+        pipeline_desc.vertex = vertext_state;
+        pipeline_desc.depthStencil = NULL;
+        pipeline->render_pipeline = wgpuDeviceCreateRenderPipeline(device, &pipeline_desc);
+        pipeline->is_init = true;
+    
     /*
         cleanup.
     */
     wgpuSurfaceCapabilitiesFreeMembers(capabilities);
-
-    // /**========================================
-    //     CLEAN-UP.
-    // ========================================**/
-    // WebGPUApi.PipelineLayoutRelease(pipelineLayout);
-    // WebGPUApi.ShaderModuleRelease(shaderModule);
+    wgpuPipelineLayoutRelease(pipeline_layout);
+    wgpuShaderModuleRelease(shader_module);
 }
 
-/*
-public static void FreeBlitPipeline(
-    ref BlitPipeline pipeline
+/*  
+    parameters:
+
+    `texture_arrays_count`: the total amount of texture arrays to store. 
+*/  
+void renderer_graphics_pipeline_init(
+    GraphicsPipeline* pipeline, MemoryArena* transient, WGPUDevice device, WGPUAdapter device_adapter, 
+    WindowSurface window_surface, VirtualTextureManager virtual_texture_manager, Texture final_render_texture, 
+    String shader_file_path, 
+    RenderBuffer user_uniform_buffer, RenderBuffer user_storage_buffer, RenderBuffer sprite_storage_buffer,
+    u32 user_uniform_buffer_size_in_bytes, u32 user_storage_buffer_size_in_bytes
 ){
-    WebGPUApi.RenderPipelineRelease(pipeline.RenderPipeline);
+    
+    { // validation.
+        ASSERT(pipeline->is_init==false, "attempted to init an already init graphics pipeline.");
+    }
+
+    i32 texture_arrays_count = virtual_texture_manager.texture_arrays_length;
+
+    renderer_sampler_init(&pipeline->non_filter_sampler, device);
+    WGPUShaderModule shader_module = {0};
+    
+    // TODO: Load Shader Module.
+    WGPURenderPipelineDescriptor pipeline_desc = {0};
+    pipeline_desc.vertex.module = shader_module;
+    pipeline_desc.vertex.bufferCount = 0;
+    pipeline_desc.vertex.entryPoint = (WGPUStringView){.data = VERTEX_SHADER_ENTRY_POINT, .length = VERTEX_SHADER_ENTRY_POINT_LENGTH};
+    pipeline_desc.vertex.constantCount = 0;
+    pipeline_desc.primitive.topology = WGPUPrimitiveTopology_TriangleList;
+    // Specify the order of vertices that should be connected; when not specified like so: vertices are considered sequentially.
+    pipeline_desc.primitive.stripIndexFormat = WGPUIndexFormat_Undefined;
+    // clock wise.
+    pipeline_desc.primitive.frontFace = WGPUFrontFace_CW;
+    pipeline_desc.primitive.cullMode = WGPUCullMode_None;
+
+    /*
+        fragment state.
+    */
+    WGPUBlendState blend_state = {
+        /** 
+            The blending equation can be set independently for the rgb channels and the alpha channel, in general, it takes the following form:
+
+                rgb = Color.SrcFactor * srcRgb [Color.Operation] Color.DstFactor * dstRgb;
+
+            the usual blending equation is configures as:
+
+                rgb = srcAlpha * srcRgb + (1 - srcAlpha) * dstRgb;
+
+            corresponding to the intuition of "layering" rendered fragments over the existing pixel's value.
+        */
+        .color.srcFactor = WGPUBlendFactor_SrcAlpha,
+        .color.operation = WGPUBlendOperation_Add,
+        .color.dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
+        /*
+            There is a similar blending equation for the alpha channel:
+
+                alpha = Alpha.SrcFactor * srcAlpha [Alpha.Operation] Alpha.DstFactor * dstAlpha
+
+            the target alpha should stay untouched:
+
+                alpha = dstAlpha = 0 * srcAlpha + 1 * dstAlpha;
+        */
+        .alpha.srcFactor = WGPUBlendFactor_SrcAlpha,
+        .alpha.operation = WGPUBlendOperation_Add,
+        .alpha.dstFactor = WGPUBlendFactor_OneMinusSrcAlpha
+    };
+    WGPUSurfaceCapabilities capabilities = {0};
+    wgpuSurfaceGetCapabilities(window_surface.surface, device_adapter, &capabilities);
+    WGPUTextureFormat preferred_format = capabilities.formats[0]; // 0 is guaranteed to be the preferred/optimal format.
+    WGPUColorTargetState colour_target_state = {
+        .format = preferred_format,
+        .blend = &blend_state,
+        .writeMask = WGPUColorWriteMask_All,
+    };
+    WGPUFragmentState frag_state = {
+        .module = shader_module,
+        .entryPoint = (WGPUStringView){.data = FRAGMENT_SHADER_ENTRY_POINT, .length = FRAGMENT_SHADER_ENTRY_POINT_LENGTH},
+        .constantCount = 0,
+        .targetCount = 1,
+        .targets = &colour_target_state
+    };
+    pipeline_desc.fragment  = &frag_state;
+
+    /*
+        depth state.
+    */
+    WGPUStencilFaceState stencil_face_state = {
+        .compare = WGPUCompareFunction_Less,
+        .depthFailOp = WGPUStencilOperation_Keep,
+        .failOp = WGPUStencilOperation_Keep,
+        .passOp = WGPUStencilOperation_Replace,
+    };
+    WGPUDepthStencilState depth_stencil_state = {
+        .depthCompare = WGPUCompareFunction_Less,
+        .depthWriteEnabled = WGPUOptionalBool_True,
+        .format = WGPUTextureFormat_Depth24Plus,
+        .stencilFront = stencil_face_state,
+        .stencilBack = stencil_face_state,
+        .stencilReadMask = 0,
+        .stencilWriteMask = 0,
+        .depthWriteEnabled = WGPUOptionalBool_False,
+    };
+    pipeline_desc.depthStencil = &depth_stencil_state;
+
+    /*
+        multisample state.
+    */
+    // Multi-sampling/Anti-aliasing is off for now with the set values.
+    pipeline_desc.multisample.count = 1u;
+    pipeline_desc.multisample.mask = ~0u;
+    pipeline_desc.multisample.alphaToCoverageEnabled = WGPU_FALSE;
+
+    /*
+        layouts.
+    */
+    /*
+        Layouts define the way a resource (buffer/texture) is accessed by the driver, where as a descriptor set (a descriptor in WebGPU)
+        defines the actual data that is accessed; this enables the driver to perform optimisations and validation checks ahead of time.
+    */
+    // create the pipeline layout.
+    WGPUPipelineLayoutDescriptor layout_desc = {0};
+        /*
+            vertex buffer layout.
+        */
+        /*
+            For the 'vertex fetch' stage to transform this raw data from the vertex buffer 
+            into what the vertex shader expects, we need to specify a layout.
+        */
+        i32 vertex_attribute_count = 2;
+        WGPUVertexAttribute* vertex_atts = (WGPUVertexAttribute[]){
+            { // position attribute.
+                .shaderLocation = SHADER_VERTEX_LOCATION_POSITION,
+                .format = WGPUVertexFormat_Float32x3, // vector3 = WGPUVertexFormat_Float32x3.
+                .offset = offsetof(Vertex, position)
+            },
+            { // uv attribute.
+                .shaderLocation = SHADER_VERTEX_LOCATION_UV,
+                .format = WGPUVertexFormat_Float32x2, // vector2 = WGPUVertexFormat_Float32x2.
+                .offset = offsetof(Vertex, uv)
+            }
+        };
+        WGPUVertexBufferLayout vertex_buffer_layout = {
+            /**
+                The stride designates the number of bytes between two consecutive elements that form a vertex; in out case, the positions are
+                contiguous so the stride is equal to the size of a vector2. This should only change when adding more interleaved attributes.
+            **/
+            .arrayStride = (u32)sizeof(Vertex),
+            // vertexBufferLayout.ArrayStride = (uint)sizeof(Vertex);
+            /**
+                StepMode = Vertex:
+                    each entry in the buffer corresponds to a different vertex.
+
+                StepMode = Instance:
+                    each entry is shared by all vertices of the same instance (i.e, copy) of the shape.
+            **/
+            .stepMode = WGPUVertexStepMode_Vertex,
+            .attributeCount = (u32)vertex_attribute_count,
+            .attributes = vertex_atts
+        };
+    pipeline_desc.vertex.bufferCount = 1;
+    pipeline_desc.vertex.buffers = &vertex_buffer_layout;
+
+    /*
+        Bindings
+    */
+        /*
+            Layouts.
+        */
+            
+            /*
+                Group 0 (buffers).
+            */
+            WGPUBindGroupLayoutEntry* gle0;
+            i32 gle0_length;
+            MEMORY_ARENA_ALLOC_ARRAY(transient, gle0, &gle0_length, SHADER_BUFFERS_GROUP_BINDING_COUNT);
+            // user-defined uniform.
+            gle0[SHADER_BINDING_USER_UNIFORM] = (WGPUBindGroupLayoutEntry){
+                .buffer.type = WGPUBufferBindingType_Uniform,
+                .buffer.minBindingSize = 0,
+                .binding = (u32)SHADER_BINDING_USER_UNIFORM,
+                .visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment
+            }; 
+            // virtual textures uniform.
+            gle0[SHADER_BINDING_VIRTUAL_TEXTURES_UNIFORM] = (WGPUBindGroupLayoutEntry){
+                .buffer.type = WGPUBufferBindingType_Uniform,
+                .buffer.minBindingSize = 0,
+                .binding = SHADER_BINDING_VIRTUAL_TEXTURES_UNIFORM,
+                .visibility = WGPUShaderStage_Fragment
+            };
+            // sprite storage.
+            gle0[SHADER_BINDING_SPRITE_STORAGE] = (WGPUBindGroupLayoutEntry){
+                .buffer.type = WGPUBufferBindingType_ReadOnlyStorage,
+                .buffer.minBindingSize = 0,
+                .binding = (u32)SHADER_BINDING_SPRITE_STORAGE,
+                .visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment
+            };
+            // user-defined storage.
+            gle0[SHADER_BINDING_USER_STORAGE] = (WGPUBindGroupLayoutEntry){
+                .buffer.type = WGPUBufferBindingType_ReadOnlyStorage,
+                .buffer.minBindingSize = 0,
+                .binding = SHADER_BINDING_USER_STORAGE,
+                .visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment
+            };
+            // create bind group layout.
+            WGPUBindGroupLayoutDescriptor gld0 = (WGPUBindGroupLayoutDescriptor){
+                .entryCount = SHADER_BUFFERS_GROUP_BINDING_COUNT,
+                .entries = gle0,
+            };
+            pipeline->bind_group_layout_0 = wgpuDeviceCreateBindGroupLayout(device, &gld0);
+            
+            /*  
+                Group 1 (texture arrays)
+            */  
+            WGPUBindGroupLayoutEntry* gle1;
+            i32 gle1_length;
+            MEMORY_ARENA_ALLOC_ARRAY(transient, gle1, &gle1_length, texture_arrays_count);
+            // define the texture array entries.
+            for(i32 i = 0; i < gle1_length; i++){
+                gle1[i] = (WGPUBindGroupLayoutEntry){
+                    .binding = i,
+                    .visibility = WGPUShaderStage_Fragment,
+                    .texture.sampleType = WGPUTextureSampleType_Float,
+                    .texture.viewDimension = WGPUTextureViewDimension_2DArray 
+                };
+            } 
+            // bind group layout creation.
+            WGPUBindGroupLayoutDescriptor gld1 = (WGPUBindGroupLayoutDescriptor){
+                .entryCount = texture_arrays_count,
+                .entries = gle1
+            };
+            pipeline->bind_group_layout_1 = wgpuDeviceCreateBindGroupLayout(device, &gld1);
+            
+            /*  
+                Group 2 (utilities)
+            */  
+            WGPUBindGroupLayoutEntry* gle2;
+            i32 gle2_length;
+            MEMORY_ARENA_ALLOC_ARRAY(transient, gle2, &gle2_length, SHADER_UTILITIES_GROUP_BINDING_COUNT);
+            // define the entries
+            gle2[SHADER_BINDING_NON_FILTER_SAMPLER] = (WGPUBindGroupLayoutEntry){
+                .binding = SHADER_BINDING_NON_FILTER_SAMPLER,
+                .visibility = WGPUShaderStage_Fragment,
+                // non filtering as we dont use bilinear interpolation or whater; nearest is best for pixel art.
+                .sampler.type = WGPUSamplerBindingType_NonFiltering
+            };
+            // create the group layout.
+            WGPUBindGroupLayoutDescriptor gld2 = {
+                .entryCount = gle2_length,
+                .entries = gle2,
+            };
+            pipeline->bind_group_layout_2 = wgpuDeviceCreateBindGroupLayout(device, &gld2);
+        /*
+            set the layouts; note that ordering matters here, descriptor sets cannot be made without their 
+            respective layouts not being binded to the descriptor before hand. 
+        */
+        layout_desc.bindGroupLayoutCount = 3;
+        layout_desc.bindGroupLayouts = (WGPUBindGroupLayout[]){pipeline->bind_group_layout_0, pipeline->bind_group_layout_1, pipeline->bind_group_layout_2};
+
+        /*  
+            Descriptor Sets.
+        */  
+            /*  
+                Group 0
+            */  
+            WGPUBindGroupEntry* ge0;
+            i32 ge0_length;
+            MEMORY_ARENA_ALLOC_ARRAY(transient, ge0, &ge0_length, SHADER_BUFFERS_GROUP_BINDING_COUNT);
+            // user-uniform.
+            ge0[SHADER_BINDING_USER_UNIFORM] = (WGPUBindGroupEntry){
+                .binding = SHADER_BINDING_USER_UNIFORM,
+                .buffer = user_uniform_buffer.device,
+                .size = user_uniform_buffer_size_in_bytes
+            };
+            // user-storage
+            ge0[SHADER_BINDING_USER_STORAGE] = (WGPUBindGroupEntry){
+                .binding = SHADER_BINDING_USER_STORAGE,
+                .buffer = user_storage_buffer.device,
+                .size = user_storage_buffer_size_in_bytes
+            };
+            // virtual textures uniform.
+            ge0[SHADER_BINDING_VIRTUAL_TEXTURES_UNIFORM] = (WGPUBindGroupEntry){
+                .binding = SHADER_BINDING_VIRTUAL_TEXTURES_UNIFORM,
+                .buffer = virtual_texture_manager.device_virtual_texture_buffer.device,
+                .size = virtual_texture_manager.device_virtual_texture_buffer.length_in_bytes
+            };
+            // sprite storage.
+            ge0[SHADER_BINDING_SPRITE_STORAGE] = (WGPUBindGroupEntry){
+                .binding = SHADER_BINDING_SPRITE_STORAGE,
+                .buffer = sprite_storage_buffer.device,
+                .size = sprite_storage_buffer.length_in_bytes
+            };
+            // bind group creation.
+            WGPUBindGroupDescriptor gd0 = {
+                .layout = pipeline->bind_group_layout_0,
+                .entryCount = SHADER_BUFFERS_GROUP_BINDING_COUNT,
+                .entries = ge0,
+            };
+            pipeline->bind_group_0 = wgpuDeviceCreateBindGroup(device, &gd0);
+
+            /*  
+                Group 1.
+            */  
+            // texture array entries.
+            WGPUBindGroupEntry* ge1;
+            i32 ge1_length;
+            MEMORY_ARENA_ALLOC_ARRAY(transient, ge1, &ge1_length, texture_arrays_count);
+            for(i32 i = 0; i < texture_arrays_count; i++){
+                ge1[i] = (WGPUBindGroupEntry){
+                    .binding = i,
+                    .textureView = virtual_texture_manager.texture_arrays[i].view
+                };
+            }
+            // bind group creation.
+            WGPUBindGroupDescriptor gd1 = {
+                .layout = pipeline->bind_group_layout_1,
+                .entryCount = texture_arrays_count,
+                .entries = ge1
+            };
+            pipeline->bind_group_1 = wgpuDeviceCreateBindGroup(device, &gd1);
+
+            /*  
+                Group 2.
+            */  
+            // sampler entry 
+            WGPUBindGroupEntry* ge2;
+            i32 ge2_length;
+            MEMORY_ARENA_ALLOC_ARRAY(transient, ge2, &ge2_length, SHADER_UTILITIES_GROUP_BINDING_COUNT);
+            // non-filter sampler.
+            ge2[SHADER_BINDING_NON_FILTER_SAMPLER] = (WGPUBindGroupEntry){
+                .binding = SHADER_BINDING_NON_FILTER_SAMPLER,
+                .sampler = pipeline->non_filter_sampler,
+            };
+            // bind group creation.
+            WGPUBindGroupDescriptor gd2 = {
+                .layout = pipeline->bind_group_layout_2,
+                .entryCount = SHADER_UTILITIES_GROUP_BINDING_COUNT,
+                .entries = ge2
+            };
+            pipeline->bind_group_2 = wgpuDeviceCreateBindGroup(device, &gd2);
+    
+    // create the pipeline layout.
+    pipeline->pipeline_layout = wgpuDeviceCreatePipelineLayout(device, &layout_desc);
+    pipeline_desc.layout = pipeline->pipeline_layout;
+
+    /*  
+        Creation.
+    */  
+    pipeline->render_pipeline = wgpuDeviceCreateRenderPipeline(device, &pipeline_desc);
+    pipeline->is_init = true;
+
+    /*  
+        cleanup.
+    */  
+    wgpuShaderModuleRelease(shader_module);
 }
 
-*/
+DestinationRectangle renderer_calculate_destination_rectangle(u32 src_width, u32 src_height, u32 dst_width, u32 dst_height){
+    f32 back_buffer_aspect_ratio = (f32)dst_width / (f32)dst_height;
+    f32 render_target_aspect_ratio = (f32)src_width / (f32)src_height;
+    // scale the image to fit into the window'sback buffer.
+    DestinationRectangle rect = {.width = dst_width, .height = dst_height};
+    // stretch image (render target) width to fit on the window's back buffer.
+    if(back_buffer_aspect_ratio > render_target_aspect_ratio){
+        rect.width = (u32)((f32)rect.height * render_target_aspect_ratio);
+        rect.x = ((float)dst_width - rect.width) * 0.5f;
+    }
+    // shrink image (render target) height to fit on the window's back buffer.
+    else if (back_buffer_aspect_ratio < render_target_aspect_ratio){
+        rect.height = (u32)((f32)rect.width / render_target_aspect_ratio);
+        rect.y = ((float)dst_height - rect.height) * 0.5f;
+    }
+    return rect;
+}
+
+void renderer_update_render_destination_rectangle(RendererCtx* ctx){
+    ASSERT(ctx->is_init, "attempted to mutate an unintialised renderer context.");
+    ctx->destination_rectangle = renderer_calculate_destination_rectangle(
+        ctx->final_render_texture.extents.width, ctx->final_render_texture.extents.height,
+        ctx->window_surface.window_extents.width, ctx->window_surface.window_extents.height
+    );
+}
+
+SurfaceTexture renderer_get_next_spawn_chain_image_view(RendererCtx* ctx){
+    ASSERT(ctx->is_init, "attempted to use a non initialised rendering context.");
+
+    /*  
+        Get the texture to draw onto; Note that the 'surface texture' is not really an object, 
+        rather a container for the multiple things that this function returns.
+    */  
+    SurfaceTexture surface_texture = {0};
+    wgpuSurfaceGetCurrentTexture(ctx->window_surface.surface, &surface_texture.ptr);
+    if(surface_texture.ptr.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal || surface_texture.ptr.status != WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal){
+        ASSERT(0!=0, "Failed to get next swapchain surface texture.");
+        return (SurfaceTexture){0};
+    }
+    /*
+        Wrap up the raw surface texture data into a texture view.
+    */
+    WGPUTextureViewDescriptor desc = {
+        .format = wgpuTextureGetFormat(surface_texture.ptr.texture),
+        .dimension = WGPUTextureViewDimension_2D,
+        // swap chain images dont use mipmaps.
+        .baseMipLevel = 0,
+        .mipLevelCount = 1,
+        .baseArrayLayer = 0,
+        .arrayLayerCount = 1,
+        .aspect = WGPUTextureAspect_All, // equivalent to vulkan image aspect.
+    };
+    surface_texture.view = wgpuTextureCreateView(surface_texture.ptr.texture, &desc);
+    surface_texture.extents = ctx->window_surface.window_extents;
+    return surface_texture;
+}
 
 void renderer_renderer_ctx_init(
     RendererCtx* ctx, RendererCtxInitInfo info, 
@@ -1299,14 +1698,18 @@ void renderer_renderer_ctx_init(
     renderer_link_to_window(ctx, window_ctx, window_width, window_height);
     renderer_final_render_target_init(&ctx->final_render_texture, ctx->device, info.final_render_texture_width, info.final_render_texture_height);
     renderer_depth_texture_init(&ctx->depth_texture, ctx->device, info.final_render_texture_width, info.final_render_texture_height);
-
-    /*    
-    InitBlitPipeline(ref ctx);
-    InitGraphicsPipeline(
-        ref ctx, info.GraphicsPipelineShaderFilePath, 
-        info.MaxUserUniformBufferSizeInBytes, info.MaxUserStorageBufferSizeInBytes
+    renderer_blit_pipeline_init(&ctx->blit_pipeline, ctx->window_surface, ctx->device, ctx->adapter);
+    renderer_graphics_pipeline_init(
+        &ctx->graphics_pipeline, transient, ctx->device, ctx->adapter, ctx->window_surface, 
+        ctx->virtual_texture_manager, ctx->final_render_texture, info.graphics_pipeline_shader_file_path,
+        ctx->user_defined_uniform_buffer, ctx->user_defined_storage_buffer, ctx->sprite_manager.sprite_buffer,
+        info.max_user_defined_uniform_buffer_size_in_bytes, info.max_user_defined_storage_buffer_size_in_bytes
     );
-    UpdateDestinationRectangle(ref ctx);
-    ctx.IsInitialised = true;
-    */
+    renderer_update_render_destination_rectangle(ctx);
+    ctx->is_init = true;
+}
+
+void renderer_draw_renderer(RendererCtx* ctx){
+    ASSERT(ctx->is_init, "attempted to draw a non-initialised rendering context.");
+    SurfaceTexture swapchain_texture = renderer_get_next_spawn_chain_image_view(ctx);
 }
