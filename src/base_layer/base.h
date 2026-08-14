@@ -344,6 +344,134 @@ void * (*base_panic_pre_abort_funcptr) (char* msg);
     *array_count += 1; \
 } while (0)
 
+#define DEFINE_QUICKSORT_STRUCT(STRUCT_TYPE, MEMBER_TYPE, MEMBER_ACCESSOR, FUNCTION_NAME)   \
+                                                                                            \
+static void FUNCTION_NAME##_recursion_asc(STRUCT_TYPE* array_ptr, i32 low, i32 high){       \
+    if(low >= high){                                                                        \
+        return;                                                                             \
+    }                                                                                       \
+    MEMBER_TYPE pivot = array_ptr[high] MEMBER_ACCESSOR;                                    \
+    i32 i = low;                                                                            \
+    for(i32 j = low; j < high; j++){                                                        \
+        if(array_ptr[j] MEMBER_ACCESSOR <= pivot){                                          \
+            STRUCT_TYPE temp = array_ptr[i];                                                \
+            array_ptr[i] = array_ptr[j];                                                    \
+            array_ptr[j] = temp;                                                            \
+            i++;                                                                            \
+        }                                                                                   \
+    }                                                                                       \
+    STRUCT_TYPE temp = array_ptr[i];                                                        \
+    array_ptr[i] = array_ptr[high];                                                         \
+    array_ptr[high] = temp;                                                                 \
+    if(i > low){FUNCTION_NAME##_recursion_asc(array_ptr, low, i - 1);}                      \
+    if(i < high){FUNCTION_NAME##_recursion_asc(array_ptr, i + 1, high);}                    \
+}                                                                                           \
+                                                                                            \
+static void FUNCTION_NAME##_asc(STRUCT_TYPE* array_ptr, i32 array_length){                  \
+    i32 high = array_length-1;                                                              \
+    if(high > 0 && high < array_length){                                                    \
+        FUNCTION_NAME##_recursion_asc(array_ptr, 0, array_length-1);                        \
+    }                                                                                       \
+}                                                                                           \
+                                                                                            \
+static void FUNCTION_NAME##_recursion_dsc(STRUCT_TYPE* array_ptr, i32 low, i32 high){       \
+    if(low >= high){                                                                        \
+        return;                                                                             \
+    }                                                                                       \
+    MEMBER_TYPE pivot = array_ptr[high] MEMBER_ACCESSOR;                                    \
+    i32 i = low;                                                                            \
+    for(i32 j = low; j < high; j++){                                                        \
+        if(array_ptr[j] MEMBER_ACCESSOR >= pivot){                                          \
+            STRUCT_TYPE temp = array_ptr[i];                                                \
+            array_ptr[i] = array_ptr[j];                                                    \
+            array_ptr[j] = temp;                                                            \
+            i++;                                                                            \
+        }                                                                                   \
+    }                                                                                       \
+    STRUCT_TYPE temp = array_ptr[i];                                                        \
+    array_ptr[i] = array_ptr[high];                                                         \
+    array_ptr[high] = temp;                                                                 \
+    if(i > low){FUNCTION_NAME##_recursion_dsc(array_ptr, low, i - 1);}                      \
+    if(i < high){FUNCTION_NAME##_recursion_dsc(array_ptr, i + 1, high);}                    \
+}                                                                                           \
+                                                                                            \
+static void FUNCTION_NAME##_dsc(STRUCT_TYPE* array_ptr, i32 array_length){                  \
+    i32 high = array_length-1;                                                              \
+    if(high > 0 && high < array_length){                                                    \
+        FUNCTION_NAME##_recursion_dsc(array_ptr, 0, array_length-1);                        \
+    }                                                                                       \
+}                                                                                           
+
+#define DEFINE_QUICKSORT(TYPE, FUNCTION_NAME)                                   \
+                                                                                \
+static void FUNCTION_NAME##_recursion_asc(TYPE* array_ptr, i32 low, i32 high){  \
+    if(low >= high){                                                            \
+        return;                                                                 \
+    }                                                                           \
+    TYPE pivot = array_ptr[high];                                               \
+    i32 i = low;                                                                \
+    for(i32 j = low; j < high; j++){                                            \
+        if(array_ptr[j] <= pivot){                                              \
+            TYPE temp = array_ptr[i];                                           \
+            array_ptr[i] = array_ptr[j];                                        \
+            array_ptr[j] = temp;                                                \
+            i++;                                                                \
+        }                                                                       \
+    }                                                                           \
+    TYPE temp = array_ptr[i];                                                   \
+    array_ptr[i] = array_ptr[high];                                             \
+    array_ptr[high] = temp;                                                     \
+    if(i > low){FUNCTION_NAME##_recursion_asc(array_ptr, low, i - 1);}          \
+    if(i < high){FUNCTION_NAME##_recursion_asc(array_ptr, i + 1, high);}        \
+}                                                                               \
+                                                                                \
+static void FUNCTION_NAME##_recursion_dsc(TYPE* array_ptr, i32 low, i32 high){  \
+    if(low >= high){                                                            \
+        return;                                                                 \
+    }                                                                           \
+    TYPE pivot = array_ptr[high];                                               \
+    i32 i = low;                                                                \
+    for(i32 j = low; j < high; j++){                                            \
+        if(array_ptr[j] >= pivot){                                              \
+            TYPE temp = array_ptr[i];                                           \
+            array_ptr[i] = array_ptr[j];                                        \
+            array_ptr[j] = temp;                                                \
+            i++;                                                                \
+        }                                                                       \
+    }                                                                           \
+    TYPE temp = array_ptr[i];                                                   \
+    array_ptr[i] = array_ptr[high];                                             \
+    array_ptr[high] = temp;                                                     \
+    if(i > low){FUNCTION_NAME##_recursion_dsc(array_ptr, low, i - 1);}          \
+    if(i < high){FUNCTION_NAME##_recursion_dsc(array_ptr, i + 1, high);}        \
+}                                                                               \
+                                                                                \
+static void FUNCTION_NAME##_asc(TYPE* array_ptr, i32 array_length){             \
+    i32 high = array_length-1;                                                  \
+    if(high > 0 && high < array_length){                                        \
+        FUNCTION_NAME##_recursion_asc(array_ptr, 0, array_length-1);            \
+    }                                                                           \
+}                                                                               \
+                                                                                \
+static void FUNCTION_NAME##_dsc(TYPE* array_ptr, i32 array_length){             \
+    i32 high = array_length-1;                                                  \
+    if(high > 0 && high < array_length){                                        \
+        FUNCTION_NAME##_recursion_dsc(array_ptr, 0, array_length-1);            \
+    }                                                                           \
+}
+
+
+DEFINE_QUICKSORT(i8,  quicksort_i8)
+DEFINE_QUICKSORT(i16, quicksort_i16)
+DEFINE_QUICKSORT(i32, quicksort_i32)
+DEFINE_QUICKSORT(i64, quicksort_i64)
+DEFINE_QUICKSORT(i8,  quicksort_u8)
+DEFINE_QUICKSORT(i16, quicksort_u16)
+DEFINE_QUICKSORT(i32, quicksort_u32)
+DEFINE_QUICKSORT(i64, quicksort_u64)
+DEFINE_QUICKSORT(f32, quicksort_f32)
+DEFINE_QUICKSORT(f64, quicksort_f64)
+
 /*========================================
     globals.
 ========================================*//**/

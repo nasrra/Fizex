@@ -1710,6 +1710,20 @@ void renderer_renderer_ctx_init(
 }
 
 void renderer_draw_renderer(RendererCtx* ctx){
+    
     ASSERT(ctx->is_init, "attempted to draw a non-initialised rendering context.");
     SurfaceTexture swapchain_texture = renderer_get_next_spawn_chain_image_view(ctx);
+    
+    /**
+        uniform preparation.
+    **/
+    // renderer_write_to_buffer(ctx->virtual_texture_manager.device_virtual_texture_buffer, ctx->device, ctx->virtual_texture_manager.device_virtual_textures, ctx->virtual_texture_manager.device_virtual_textures_length);
+    /**
+        TODO: (nich s)
+        This may have to be optimised out later for a compute buffer operation to sort sprites; so that it is faster.
+        but that depends entirely upon how many sprites the game is actually going to have; right now CPU sorting is fast enough.
+    **/
+    // prepare for sorting.
+    // ZERO_MEMORY(ctx->sprite_manager.device_sprites_scratch_space, ctx->sprite_manager.device_sprites_scratch_space_length);
+    
 }
