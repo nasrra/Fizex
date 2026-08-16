@@ -6,7 +6,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/build/app.exe",
             "args": [],
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/build",
             "preLaunchTask": "Debug Build (MSVC)"
         }
     ]

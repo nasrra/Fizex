@@ -291,7 +291,7 @@ Quaternion normalise_quaternion(Quaternion q){
     return q;
 }
 
-Matrix4x4 multiply_matrix4x4(Matrix4x4 lhs, Matrix4x4 rhs){
+Matrix4x4 matrix4x4_mul(Matrix4x4 lhs, Matrix4x4 rhs){
     Matrix4x4 dst = {0};
     f32* d = dst.m;
     f32* l = lhs.m;
@@ -670,7 +670,7 @@ Matrix4x4 matrix4x4_create_look_at(Vector3 camera_pos, Vector3 look_at_pos, Vect
 /*
     Computes a Left-Handed Perspective Matrix mapping depth to Vulkan 0..1 (Column-Major)
 */
-Matrix4x4 create_perspective_matrix4x4(f32 fov_y_radians, f32 aspect_ratio, f32 z_near, f32 z_far){
+Matrix4x4 matrix4x4_create_perspective(f32 fov_y_radians, f32 aspect_ratio, f32 z_near, f32 z_far){
     /**
         Calculate half of the vertical line that describes the length from the bottom to the top of out total vertical viewing angle;
         
@@ -795,7 +795,7 @@ Matrix4x4 rotate_matrix4x4(Matrix4x4 src, f32 radians, Vector3 axis){
     `lowerY`: the lower-bound y-value of the camera resolution in pixels; e.g, 0.
     `upperY`: the upper-bound y-value of the camera resolution in pixels; e.g, 1080.
 */
-Matrix4x4 create_orthographic_matrix4x4(f32 lower_x, f32 upper_x, f32 lower_y, f32 upper_y, f32 z_near, f32 z_far){
+Matrix4x4 matrix4x4_create_orthographic(f32 lower_x, f32 upper_x, f32 lower_y, f32 upper_y, f32 z_near, f32 z_far){
     Matrix4x4 result = {0};
 
     // calculate the absolute width, height and depth of the viewing frustrum (box) to display to the screen.
@@ -838,7 +838,7 @@ Matrix4x4 create_orthographic_matrix4x4(f32 lower_x, f32 upper_x, f32 lower_y, f
 /*
     Creates a col-major matrix from a transform.
 */
-Matrix4x4 create_matrix4x4_from_transform(Transform transform){
+Matrix4x4 matrix4x4_from_transform(Transform transform){
     Matrix4x4 result = {0};
     f32* m = result.m;
 

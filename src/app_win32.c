@@ -2,6 +2,7 @@
 #include <windows.h>
 #include "app.h"
 #include "stdint.h"
+#include "platform.h"
 #include "base_layer/base.h"
 
 /*
@@ -28,9 +29,20 @@ MemoryArena transient_memory;
 ====================*//**/
 
 LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM l_param){
+
+    WindowContext* ctx = (WindowContext*)GetWindowLongPtr(window, GWLP_USERDATA);
+
     LRESULT result = 0;
     switch(message){
         
+        case WM_CREATE:{
+            // extract the 'ctx' pointer passed during CreateWindow()
+            CREATESTRUCT* create_struct = (CREATESTRUCT*)l_param;
+            ctx = (WindowContext*)create_struct->lpCreateParams;
+            // store it in the window's user data for future messages.
+            SetWindowLongPtr(window, GWLP_USERDATA, (LONG_PTR)ctx);
+        }break;
+
         case WM_SIZE:{
             OutputDebugStringA("WM_SIZE\n");
         }break;
@@ -41,6 +53,7 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
         
         case WM_CLOSE:{
             OutputDebugStringA("WM_CLOSE\n");
+            platform_window_destroy(ctx);
         }break;
         
         case WM_ACTIVATEAPP:{
@@ -96,67 +109,7 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
 
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_code){
     app_main();
-    WNDCLASSA window_class = {0};
-    /*
-        CS_OWNDC: have an individual device context for every window in the window_class.
-        CS_HREDRAW: redraw the window on horizontal mutations (movement, resize, etc).
-        CS_VREDRAW: redraw the window on vertical mutations (movement, resize, etc).
-    */
-    window_class.style = CS_OWNDC|CS_HREDRAW|CS_VREDRAW;
-
-    window_class.lpfnWndProc = main_window_callback;
-    window_class.hInstance = instance;
-    // window_class.hIcon;
-    // window_class.hCursor;
-    // window_class.hbrBackground;
-    window_class.lpszClassName = "WindowClass";
-
-    if(RegisterClass(&window_class)){
-        HWND window_handle = CreateWindowExA(
-            0,
-            "WindowClass",
-            "win32 app",
-            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            NULL,
-            0,
-            instance,
-            0
-        );
-        if(window_handle){
-            MSG message;
-            for(;;){
-                /*
-                    window handle is 0 here as we want to get messages from all active windows.
-                */
-                BOOL msg_result = GetMessage(&message, 0, 0, 0); 
-                if(msg_result > 0){
-                    TranslateMessage(&message);
-                    DispatchMessage(&message);
-                    app_update_and_render(&persistent_memory, &transient_memory);
-                    transient_memory.stride = 0;
-                }
-                else{
-                    break;
-                }
-            }
-        }
-        else{
-            /*
-                TODO(nich s)
-                log this error.  
-            */
-        }
-    }
-    else{
-        /*
-            TODO(nich s)
-            log this error.    
-        */
-    }
+    return(0);
 }
 
 /*====================
@@ -201,5 +154,206 @@ void platform_init_transient_memory(size_t size){
 }
 
 void platform_error_message_box(char* msg){
-    MessageBox(0, msg, "app", MB_OK | MB_ICONERROR);
+    MessageBox(0, msg, "win32app", MB_OK | MB_ICONERROR);
+}
+
+MemoryArena* platform_get_persistent_memory(){
+    return &persistent_memory;
+}
+
+MemoryArena* platform_get_transient_memory(){
+    return &transient_memory;
+}
+
+WindowContext* platform_window_create(i32 width, i32 height){
+    WindowContext* ctx = (WindowContext*)platform_alloc_memory(sizeof(WindowContext));
+
+    HWND window_handle = NULL;
+    HINSTANCE instance = GetModuleHandle(0);
+
+    char* class_name = "WindowClass";
+
+    WNDCLASSA window_class = {
+        /*
+            CS_OWNDC: have an individual device context for every window in the window_class.
+            CS_HREDRAW: redraw the window on horizontal mutations (movement, resize, etc).
+            CS_VREDRAW: redraw the window on vertical mutations (movement, resize, etc).
+        */
+        .style = CS_OWNDC|CS_HREDRAW|CS_VREDRAW,
+        .lpfnWndProc = main_window_callback,
+        .hInstance = instance,
+        .lpszClassName = class_name
+    };
+
+    if(RegisterClass(&window_class)){
+        window_handle = CreateWindowEx(
+            0,
+            class_name,
+            "win32 app",
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            width,
+            height,
+            NULL,
+            0,
+            instance,
+            ctx
+        );
+        if(!window_handle){
+            PANIC(false, "failed to create win32 window.");            
+        }
+    }
+    else{
+        PANIC(false, "failed to register win32 window class.");
+    }
+
+    ctx->win32_hinstance = instance;
+    ctx->win32_hwnd = window_handle;
+    ctx->win32_hdc = GetDC(window_handle);
+    ctx->width = width;
+    ctx->height = height;    
+    return ctx;
+}
+
+void platform_window_update(WindowContext* ctx){
+    ASSERT(ctx->win32_hwnd != (HWND){0}, "window context doesnt have an init win32 window handle.");
+    ASSERT(ctx->win32_hdc != (HDC){0}, "window context doesnt have an init win32 device context handle.");
+    ASSERT(ctx->win32_hinstance != (HINSTANCE){0}, "window context doesnt have an init win32 instance handle");
+    MSG message;
+    BOOL msg_result = GetMessage(&message, 0, 0, 0); 
+    if(msg_result > 0){
+        TranslateMessage(&message);
+        DispatchMessage(&message);
+    }
+}
+
+void platform_window_destroy(WindowContext* ctx){
+    ASSERT(ctx->win32_hwnd != (HWND){0}, "window context doesnt have an init win32 window handle.");
+    ASSERT(ctx->win32_hdc != (HDC){0}, "window context doesnt have an init win32 device context handle.");
+    ASSERT(ctx->win32_hinstance != (HINSTANCE){0}, "window context doesnt have an init win32 instance handle");
+    ReleaseDC(ctx->win32_hwnd, ctx->win32_hdc);
+    DestroyWindow(ctx->win32_hwnd);
+    ctx->is_destroyed = true;
+}
+
+void platform_window_context_free(WindowContext* ctx){
+    platform_free_memory(ctx);
+}
+
+bool platform_load_file_into_memory_arena(String file_path, MemoryArena* arena){
+
+    /**
+        convert to null terminated string.
+    **/
+    char* null_terminated_file_path;
+    i32 null_terminated_file_path_length;
+    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.length+1);
+    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
+    null_terminated_file_path[null_terminated_file_path_length] = '\0';
+
+    /**
+        open file.
+    **/
+    HANDLE file = CreateFileA(null_terminated_file_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if(file == INVALID_HANDLE_VALUE){
+        ASSERT(false, "failed to open file.");
+        return false;
+    }
+
+    /**
+        Get file size.
+    **/
+    LARGE_INTEGER file_size;
+    if(!GetFileSizeEx(file, &file_size)){
+        ASSERT(false, "failed to retrieve file size.");
+        return false;
+    }
+    size_t bytes_to_read = (size_t)file_size.QuadPart;
+    if(bytes_to_read > (arena->size - arena->stride)){
+        ASSERT(false, "buffer is too small to store file contents.");
+        return false;
+    }
+
+    /**
+        read file into buffer.
+    **/
+    DWORD bytes_read = 0;
+    while(bytes_to_read > 0){
+        BOOL read_success = ReadFile(file, ((u8*)arena->ptr)+arena->stride, (DWORD)bytes_to_read, &bytes_read, NULL);
+        if(!read_success){
+            ASSERT(false, "failed to read file contents.");
+            return false;
+        }
+        bytes_to_read -= (size_t)bytes_read; 
+    }
+    arena->stride += (size_t)bytes_read;
+
+    /**
+        complete.
+    **/
+    CloseHandle(file);
+    return true;
+}
+
+void* platform_load_file(String file_path, size_t* out_buffer_size){    
+
+    /**
+        convert to null terminated string.
+    **/
+    char* null_terminated_file_path;
+    i32 null_terminated_file_path_length;
+    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.length+1);
+    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
+    null_terminated_file_path[null_terminated_file_path_length] = '\0';
+
+    /**
+        open file.
+    **/
+    HANDLE file = CreateFileA(null_terminated_file_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if(file == INVALID_HANDLE_VALUE){
+        ASSERT(false, "failed to open file.");
+        return NULL;
+    }
+
+    /**
+        Get file size.
+    **/
+    LARGE_INTEGER file_size;
+    if(!GetFileSizeEx(file, &file_size)){
+        ASSERT(false, "failed to retrieve file size.");
+        return NULL;
+    }
+    size_t bytes_to_read = (size_t)file_size.QuadPart;
+    void* buffer = platform_alloc_memory(bytes_to_read+1); // add +1 for the NULL terminator.
+
+    /**
+        read file into buffer.
+    **/
+    DWORD bytes_read = 0;
+    size_t total_bytes_read = 0;
+    while(bytes_to_read > 0){
+        BOOL read_success = ReadFile(file, (u8*)buffer + total_bytes_read, (DWORD)bytes_to_read, &bytes_read, NULL);
+        if(!read_success){
+            ASSERT(false, "failed to read file contents.");
+            platform_free_memory(buffer);
+            return NULL;
+        }
+        total_bytes_read += (size_t)bytes_read;
+        bytes_to_read -= (size_t)bytes_read; 
+    }
+    
+    *out_buffer_size = total_bytes_read;
+    u8* u8_buffer = (u8*)buffer;
+    u8_buffer[total_bytes_read] = '\0';
+
+    /**
+        complete.
+    **/
+    CloseHandle(file);
+    return buffer;
+}
+
+f32 platform_window_calc_aspect_ratio(WindowContext ctx){
+    return (f32)ctx.width / (f32)ctx.height;
 }

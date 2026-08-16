@@ -157,9 +157,6 @@ void * (*base_panic_pre_abort_funcptr) (char* msg);
 #   define ARCH_ARM64 0
 #endif
 
-#define ARRAY_SIZE(arr) (sizeof(arr)/sizeof(*(arr)))
-#define PTR_ARRAY_SIZE(ptr, length) (length * sizeof(*(ptr)))
-
 #ifdef PLATFORM_H
 #   define ABORT(msg) do { platform_error_message_box(msg); abort(); } while(0)
 #else
@@ -220,14 +217,57 @@ void * (*base_panic_pre_abort_funcptr) (char* msg);
 #define F32_EPSILON 1.19209290e-7F
 #define F64_EPSILON 2.2204460492503131e-16
 #define ZERO_MEMORY(ptr, size) memset(ptr, 0, size)
-#define COPY_MEMORY(dst, src, size) memcpy(dst, src, size)
+#define COPY_MEMORY(DST, SRC, SIZE_IN_BYTES) memcpy(DST, SRC, SIZE_IN_BYTES)
 /*
     zeroes out an array. 
 */
-#define ARRAY_ZERO(array, length) ZERO_MEMORY(array, PTR_ARRAY_SIZE(array, length))
 #define GIGABYTE(val) MEGABYTE(val) * 1024
 #define MEGABYTE(val) KILOBYTE(val) * 1024
 #define KILOBYTE(val) val * 1024
+
+/**
+    arrays.
+**/
+#define PTR_ARRAY_SIZE(ptr, length) (length * sizeof(*(ptr)))
+
+#define ARRAY_ZERO(array, length) ZERO_MEMORY(array, PTR_ARRAY_SIZE(array, length))
+
+#define ARRAY_SIZE(arr) (sizeof(arr)/sizeof(*(arr)))
+
+/**
+    example:
+
+    i32* array = (i32[1]){};
+    i32 length = 1;
+    i32 count = 0;
+    i32 value = 22;
+    ARRAY_PUSH(array, length, &count, value);
+**/
+#define ARRAY_PUSH(array, array_length, array_count, value) do {    \
+    BOUNDS_CHECK(*array_count, array_length);                       \
+    array[*array_count] = value;                                    \
+    *array_count += 1;                                              \
+} while (0)
+
+/**
+    example:
+
+    i32* array = (i32[1]){1};
+    i32 length = 1;
+    i32 count = 1;
+    i32 out_value;
+    ARRAY_POP(array, length, &count, &out_value);
+**/
+#define ARRAY_POP(array, array_length, array_count, out_value) do {         \
+    *array_count -= 1;                                                      \
+    BOUNDS_CHECK(*array_count, array_length);                               \
+    if(*array_count < 0){                                                   \
+        *array_count += 1;                                                  \
+    }                                                                       \
+    else{                                                                   \
+        *out_value = array[*array_count];                                    \
+    }                                                                       \
+} while (0)
 
 /*
     Example:
@@ -242,18 +282,19 @@ void * (*base_panic_pre_abort_funcptr) (char* msg);
     int ints[] = {1,2,3};
     PUSH_ARRAY_MEMARENA(&arena, ints, 3).
 */
-#define PUSH_ARRAY_MEMORY_ARENA(arena, data, array_size) do { \
-    DEBUG_ASSERT(data != NULL, "attempted to push a nullptr onto a memory arena."); \
-    size_t size_PUSH_ARRAY_MEMARENA = sizeof(*data) * (array_size); \
-    size_t new_stride_PUSH_ARRAY_MEMARENA = (arena)->stride + size; \
-    if(new_stride <= (arena)->size){ \
-        void* dst = (arena)->ptr + (arena)->stride; \
-        COPY_MEMORY(dst, data, size_PUSH_ARRAY_MEMARENA); \
-        (arena)->stride = new_stride_PUSH_ARRAY_MEMARENA; \
-    } \
-    else{ \
-        DEBUG_ASSERT(0!=0, "insufficient space to push data onto memory arena."); \
-    } \
+#define MEMORY_ARENA_PUSH_ARRAY(arena, data, array_size) do {                                   \
+                                                                                                \
+    DEBUG_ASSERT(data != NULL, "attempted to push a nullptr onto a memory arena.");             \
+    size_t MEMORY_ARENA_PUSH_ARRAY_size = sizeof(*data) * (array_size);                         \
+    size_t MEMORY_ARENA_PUSH_ARRAY_new_stride = (arena)->stride + MEMORY_ARENA_PUSH_ARRAY_size; \
+    if(MEMORY_ARENA_PUSH_ARRAY_new_stride <= (arena)->size){                                    \
+        void* dst = (void*)((u8*)(arena)->ptr + (arena)->stride);                               \
+        COPY_MEMORY(dst, data, MEMORY_ARENA_PUSH_ARRAY_size);                                   \
+        (arena)->stride = MEMORY_ARENA_PUSH_ARRAY_new_stride;                                   \
+    }                                                                                           \
+    else{                                                                                       \
+        PANIC(false, "insufficient space to push data onto memory arena.");                     \
+    }                                                                                           \
 } while(0)
 
 /*
@@ -263,17 +304,18 @@ void * (*base_panic_pre_abort_funcptr) (char* msg);
     Data data = {0};
     PUSH_STRUCT_MEMARENA(&arena, data);
 */
-#define PUSH_STRUCT_MEMORY_ARENA(arena, data) do { \
-    size_t size_PUSH_STRUCT_MEMARENA = sizeof(data); \
-    size_t new_stride_PUSH_STRUCT_MEMARENA = (arena)->stride + size; \
-    if(new_stride_PUSH_STRUCT_MEMARENA <= (arena)->size){ \
-        void* dst = (arena)->ptr + (arena)->stride; \
-        COPY_MEMORY(dst, &(data), size_PUSH_STRUCT_MEMARENA); \
-        (arena)->stride = new_stride; \
-    } \
-    else{ \
-        DEBUG_ASSERT(0!=0, "insufficient space to push data onto memory arena."); \
-    } \
+#define MEMORY_ARENA_PUSH_STRUCT(arena, data) do {                                                  \
+                                                                                                    \
+    size_t MEMORY_ARENA_PUSH_STRUCT_size = sizeof(data);                                            \
+    size_t MEMORY_ARENA_PUSH_STRUCT_new_stride = (arena)->stride + MEMORY_ARENA_PUSH_STRUCT_size;   \
+    if(MEMORY_ARENA_PUSH_STRUCT_new_stride <= (arena)->size){                                       \
+        void* dst = (void*)((u8*)(arena)->ptr + (arena)->stride);                                   \
+        COPY_MEMORY(dst, &(data), MEMORY_ARENA_PUSH_STRUCT_size);                                   \
+        (arena)->stride = MEMORY_ARENA_PUSH_STRUCT_new_stride;                                      \
+    }                                                                                               \
+    else{                                                                                           \
+        PANIC(false, "insufficient space to push data onto memory arena.");                         \
+    }                                                                                               \
 } while(0)
 
 
@@ -285,18 +327,19 @@ void * (*base_panic_pre_abort_funcptr) (char* msg);
     i32 datas_size;
     ALLOC_ARRAY_MEMARENA(&arena, datas, &datas_size, 2);
 */
-#define MEMORY_ARENA_ALLOC_ARRAY(arena, out_arr_ptr, out_arr_size, array_size) do { \
-    size_t size_ALLOC_ARRAY_MEMARENA = sizeof(*out_arr_ptr) * (array_size); \
-    size_t new_stride_ALLOC_ARRAY_MEMARENA = (arena)->stride + size_ALLOC_ARRAY_MEMARENA; \
-    if(new_stride_ALLOC_ARRAY_MEMARENA <= (arena)->size){ \
-        (out_arr_ptr) = (void*)((u8*)(arena)->ptr + (arena)->stride); \
-        (arena)->stride = new_stride_ALLOC_ARRAY_MEMARENA; \
-        *(out_arr_size) = array_size; \
-    } \
-    else{ \
-        ASSERT(0!=0, "insufficient space to alloc array onto memory arena."); \
-        *(out_arr_size) = 0; \
-    } \
+#define MEMORY_ARENA_ALLOC_ARRAY(arena, out_arr_ptr, out_arr_size, array_size) do {                 \
+                                                                                                    \
+    size_t MEMORY_ARENA_ALLOC_ARRAY_size = sizeof(*out_arr_ptr) * (array_size);                     \
+    size_t MEMORY_ARENA_ALLOC_ARRAY_new_stride = (arena)->stride + MEMORY_ARENA_ALLOC_ARRAY_size;   \
+    if(MEMORY_ARENA_ALLOC_ARRAY_new_stride <= (arena)->size){                                       \
+        (out_arr_ptr) = (void*)((u8*)(arena)->ptr + (arena)->stride);                               \
+        (arena)->stride = MEMORY_ARENA_ALLOC_ARRAY_new_stride;                                      \
+        *(out_arr_size) = array_size;                                                               \
+    }                                                                                               \
+    else{                                                                                           \
+        PANIC(false, "insufficient space to push data onto memory arena.");                         \
+        *(out_arr_size) = 0;                                                                        \
+    }                                                                                               \
 } while(0)
 
 /*
@@ -337,12 +380,6 @@ void * (*base_panic_pre_abort_funcptr) (char* msg);
     this is because the first 20 bits of a uint are used for a indexing. 
 */
 #define GENID_MAX_INDEX (GENID_UNIQUE_INDICES_COUNT - 1)
-
-#define ARRAY_PUSH(array, array_length, array_count, value) do { \
-    BOUNDS_CHECK(*array_count, array_length); \
-    array[*array_count] = value; \
-    *array_count += 1; \
-} while (0)
 
 #define DEFINE_QUICKSORT_STRUCT(STRUCT_TYPE, MEMBER_TYPE, MEMBER_ACCESSOR, FUNCTION_NAME)   \
                                                                                             \
@@ -509,30 +546,30 @@ void free_memory_arena(MemoryArena* arena);
     - `index` must be between 0 and 1,048,576. 
     - `generation` must be between 0 and 4,096.
 */
-GenId genid_make(i32 index, i32 generation);
+GenId gen_id_make(i32 index, i32 generation);
 /*
     Increments the generational value of a gen id by one.
 
     remarks:
     the generational slice of the integer will be wrapped around automatically when exceeding its max value.
 */
-GenId genid_increment_generation(GenId genid);
+GenId gen_id_increment_generation(GenId gen_id);
 /*
     Increments the index value of a gen id by one.
 */
-GenId genid_increment_index(GenId genid);
+GenId gen_id_increment_index(GenId gen_id);
 /*
     Gets the index value that is packed inside a gen id.
 */
-i32 genid_get_index(GenId genid);
+i32 gen_id_get_index(GenId gen_id);
 /*
     Gets the generation value that is packed inside of a gen id.
 */
-i32 genid_get_generation(GenId genid);
+i32 gen_id_get_generation(GenId gen_id);
 /*
     Checks if two gen ids are equal. 
 */
-bool genid_equals(GenId a, GenId b); 
+bool gen_id_equals(GenId a, GenId b); 
 
 void string_init(String* string, MemoryArena* arena, i32 size);
 

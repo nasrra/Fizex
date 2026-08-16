@@ -99,7 +99,7 @@ void free_memory_arena(MemoryArena* arena){
     *arena = (MemoryArena){0};
 }
 
-GenId genid_make(i32 index, i32 generation){
+GenId gen_id_make(i32 index, i32 generation){
     GenId result = 0;
     ASSERT(index >= 0 && index <= GENID_MAX_INDEX, "index value is out of bounds.");
     ASSERT(generation >= 0 && generation <= GENID_MAX_GENERATION, "generation value is out of bounds.");
@@ -112,30 +112,30 @@ GenId genid_make(i32 index, i32 generation){
     return result;
 }
 
-i32 genid_get_index(GenId genid){
-    return (i32)(genid & GENID_INDEX_MASK);
+i32 gen_id_get_index(GenId gen_id){
+    return (i32)(gen_id & GENID_INDEX_MASK);
 }
 
-i32 genid_get_generation(GenId genid){
-    return (i32)genid >> 20;
+i32 gen_id_get_generation(GenId gen_id){
+    return (i32)gen_id >> 20;
 }
 
-GenId genid_increment_generation(GenId genid){
+GenId gen_id_increment_generation(GenId gen_id){
     // adding (1<<20) effectively adds 1 to the generation slice of the integer.
     // if the generation was at 4095, adding 1 makes it 4096; which would
     // "overflow" out of the 32-bit uint, wrapping back to 0 naturally.
 
-    i32 next_gen = (genid_get_generation(genid)+1) & GENID_GENERATION_MASK;
-    return genid_make(genid_get_index(genid), next_gen);
+    i32 next_gen = (gen_id_get_generation(gen_id)+1) & GENID_GENERATION_MASK;
+    return gen_id_make(gen_id_get_index(gen_id), next_gen);
 }
 
-GenId genid_increment_index(GenId genid){
+GenId gen_id_increment_index(GenId gen_id){
     // Get the current index and add 1.
     // mask it so the index value stays within th 20 bit range; wrapping around to zero if it hits max index.
     // this preserves the existing generation bits from overflow corruption of the index value.
 
-    u32 curr_gen = genid & ~GENID_INDEX_MASK; // Isolate the top 12 bits;
-    u32 next_index = (genid + 1) & GENID_INDEX_MASK;
+    u32 curr_gen = gen_id & ~GENID_INDEX_MASK; // Isolate the top 12 bits;
+    u32 next_index = (gen_id + 1) & GENID_INDEX_MASK;
     return curr_gen | next_index;
 }
 
