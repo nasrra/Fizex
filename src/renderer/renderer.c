@@ -1910,6 +1910,20 @@ SpriteId renderer_sprite_alloc(RendererContext* ctx, i32 layer_index, bool* out_
     return (SpriteId){.gen_id = gen_id, .layer = layer_index};
 }
 
+SpriteId renderer_one_frame_sprite_alloc(RendererContext* ctx, i32 layer, bool* out_success){
+    SpriteId sprite_id = renderer_sprite_alloc(ctx, layer, out_success);
+    SpriteManager* manager = &ctx->sprite_manager;
+    if(*out_success){
+        ARRAY_PUSH(
+            manager->one_frame_sprites_stack, 
+            manager->one_frame_sprites_stack_length, 
+            &manager->one_frame_sprites_stack_count, 
+            sprite_id
+        );
+    }
+    return sprite_id;
+}
+
 bool renderer_sprite_init(
     RendererContext* ctx, SpriteId sprite_id, Matrix4x4 transform, Colour colour, SpriteRegion region, ColourState colour_state,
     i32 virtual_texture, i32 material, bool is_active    
@@ -2383,4 +2397,17 @@ void renderer_camera_update_projection_matrix(Camera* camera, f32 surface_aspect
             camera->projection = matrix4x4_create_orthographic(-half_width, half_width, -half_height, half_height, camera->near_z, camera->far_z);
         }break;
     }
+}
+
+void renderer_draw_line(RendererContext* ctx, Colour colour, Vector3 start, Vector3 end, i32 layer, i32 material, f32 thickness){
+    ASSERT(ctx->is_init, "renderer context has not been init.");
+    Transform transform = {
+        .rotation = get_rotation_between_points(start, end),
+        .position = vector3_mul_val(vector3_add(end, start), 0.5f),
+        .scale = (Vector3){.x = thickness, .y = vector3_len(vector3_sub(end, start))}
+    };
+
+    bool success;
+    SpriteId sprite_id = renderer_one_frame_sprite_alloc(ctx, layer, &success);
+    renderer_sprite_init(ctx, sprite_id, matrix4x4_from_transform(transform), colour, (SpriteRegion){0}, ColourState_Override, 1, material, true);
 }

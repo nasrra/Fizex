@@ -320,41 +320,50 @@ Matrix4x4 matrix4x4_mul(Matrix4x4 lhs, Matrix4x4 rhs){
     return dst;
 }
 
-Vector3 sub_vector3(Vector3 lhs, Vector3 rhs){
+Vector3 vector3_sub(Vector3 lhs, Vector3 rhs){
     lhs.x -= rhs.x;
     lhs.y -= rhs.y;
     lhs.z -= rhs.z;
     return lhs;
 }
 
-Vector3 add_vector3(Vector3 lhs, Vector3 rhs){
+Vector3 vector3_add(Vector3 lhs, Vector3 rhs){
     lhs.x += rhs.x;
     lhs.y += rhs.y;
     lhs.z += rhs.z;
     return lhs;
 }
 
-Vector3 mul_vector3(Vector3 lhs, Vector3 rhs){
+Vector3 vector3_mul(Vector3 lhs, Vector3 rhs){
     lhs.x *= rhs.x;
     lhs.y *= rhs.y;
     lhs.z *= rhs.z;
     return lhs;
 }
 
-Vector3 mul_val_vector3(Vector3 lhs, f32 rhs){
+Vector3 vector3_mul_val(Vector3 lhs, f32 rhs){
     lhs.x *= rhs;
     lhs.y *= rhs;
     lhs.z *= rhs;
     return lhs;
 }
 
-Vector3 div_vector3(Vector3 lhs, Vector3 rhs){
+Vector3 vector3_div(Vector3 lhs, Vector3 rhs){
     lhs.x /= rhs.x;
     lhs.y /= rhs.y;
     lhs.z /= rhs.z;
     return lhs;
 }
-        
+
+f32 vector3_len_sqrd(Vector3 vector){
+    return (vector.x * vector.x) + (vector.y * vector.y) + (vector.z * vector.z);
+}
+
+f32 vector3_len(Vector3 vector){
+    f32 sqrd = vector3_len_sqrd(vector);
+    return sqrd == 0.0f ? 0.0f : sqrt_f32(sqrd);
+}
+
 Vector2 unary_vector2(Vector2 val){
     val.x *= -1.0f;
     val.y *= -1.0f;
@@ -405,15 +414,6 @@ Vector2I sub_vector2i(Vector2I lhs, Vector2I rhs){
     return lhs;
 }
 
-f32 len_sqrd_vector3(Vector3 vector){
-    return (vector.x * vector.x) + (vector.y * vector.y) + (vector.z * vector.z);
-}
-
-f32 len_vector3(Vector3 vector){
-    f32 sqrd = len_sqrd_vector3(vector);
-    return sqrd == 0.0f ? 0.0f : sqrt_f32(sqrd);
-}
-
 Vector3 cross_vector3(Vector3 a, Vector3 b){
     Vector3 result;
     result.x = (a.y * b.z) - (a.z * b.y);
@@ -434,13 +434,13 @@ Vector3 rotate_vector3(Vector3 v, Quaternion q){
     Vector3 cross1 = cross_vector3(q_v, v);
     Vector3 cross2 = cross_vector3(q_v, cross1);
 
-    cross1 = mul_val_vector3(cross1, (2.0f * q.w));
-    cross2 = mul_val_vector3(cross2, 2.0f);
+    cross1 = vector3_mul_val(cross1, (2.0f * q.w));
+    cross2 = vector3_mul_val(cross2, 2.0f);
 
     Vector3 result;
     result = v;
-    result = add_vector3(result, cross1);
-    result = add_vector3(result, cross2);
+    result = vector3_add(result, cross1);
+    result = vector3_add(result, cross2);
     return result;
 }
 
@@ -624,7 +624,7 @@ f32 cross_2d_f32(f32 lhs_x, f32 lhs_y, f32 rhs_x, f32 rhs_y){
 Matrix4x4 matrix4x4_create_look_at(Vector3 camera_pos, Vector3 look_at_pos, Vector3 world_up_dir){
     // Left-Handed forward: Positive Z goes forward i32o the screen
     Vector3 forward = normalise_vector3(
-        sub_vector3(look_at_pos, camera_pos)
+        vector3_sub(look_at_pos, camera_pos)
     );
 
     // find the local space right and up directions of the camera.
@@ -934,7 +934,7 @@ Quaternion create_from_axis_angle_quaternion(Vector3 axis, f32 angle){
     return result;
 }
 
-Quaternion get_rotation_between_poi32s(Vector3 poi32_a, Vector3 poi32_b){
+Quaternion get_rotation_between_points(Vector3 poi32_a, Vector3 poi32_b){
     // Get the direction vector target poi32ing from A to B
     Vector3 delta;
     delta.x = poi32_b.x - poi32_a.x; 
@@ -953,7 +953,7 @@ Quaternion get_rotation_between_poi32s(Vector3 poi32_a, Vector3 poi32_b){
         
         // Pick an arbitrary perpendicular backup axis to rotate around instead
         Vector3 perpendicular = cross_vector3(starting_axis, VECTOR3_RIGHT);
-        if (len_sqrd_vector3(perpendicular) < 0.001f){
+        if (vector3_len_sqrd(perpendicular) < 0.001f){
             perpendicular = cross_vector3(starting_axis, VECTOR3_FORWARD);
         }
         
@@ -1275,13 +1275,13 @@ Transform to_transform_transform2d(Transform2D transform2D){
 Transform transform_transform(Transform lhs, Transform rhs){
     Transform result;
     // combine scales.
-    result.scale = mul_vector3(lhs.scale, rhs.scale);
+    result.scale = vector3_mul(lhs.scale, rhs.scale);
     // combine rotations (order matters: rhs*lhs means rhs rotates lhs)
     result.rotation = mul_quaternion(lhs.rotation, rhs.rotation);
     // combine positions (order matters: scale->rotate->translate).
-    Vector3 sp = mul_vector3(lhs.position, rhs.scale);
+    Vector3 sp = vector3_mul(lhs.position, rhs.scale);
     result.position = rotate_vector3(sp, rhs.rotation);
-    result.position = add_vector3(result.position, rhs.position); 
+    result.position = vector3_add(result.position, rhs.position); 
     return result;
 }
 

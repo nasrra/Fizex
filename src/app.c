@@ -164,6 +164,8 @@ void app_late_update(){
     };
 
     renderer_write_to_user_uniform_buffer(&renderer_ctx, &ubo, sizeof(Ubo));
+
+    renderer_draw_line(&renderer_ctx, COLOUR_BLUE, (Vector3){0}, (Vector3){.x = 2}, SPRITE_LAYER_WORLD, SPRITE_MATERIAL_DEBUG, 0.01f);
 }
 
 void app_main(){
@@ -180,15 +182,15 @@ void app_main(){
     
     renderer_ctx = app_renderer_init(persistent, transient, *window_ctx);
 
-    // renderer_orthographic_camera_init(&world_camera, (Vector3){.z = -4.0f}, 0.01f, 100.0f, 0.01f);
-    renderer_perspective_camera_init(&world_camera, (Vector3){.z = -5.0f}, 0.01f, 1024.0f, to_radians(45.0f));
+    renderer_orthographic_camera_init(&world_camera, (Vector3){.z = -4.0f}, 0.01f, 100.0f, 10.0f);
+    // renderer_perspective_camera_init(&world_camera, (Vector3){.z = -5.0f}, 0.01f, 1024.0f, to_radians(45.0f));
     // CameraSystem.InitPerspectiveCamera(ref CameraSystem.GetCamera(CameraId.World), new(){Z = -5}, 0.01f, 1024, Math.ToRadians(45));
 
     bool success = false;
     SpriteId sprite_id = renderer_sprite_alloc(&renderer_ctx, SPRITE_LAYER_WORLD, &success);
     Transform transform = TRANSFORM_IDENTITY;
     transform.scale = (Vector3){.x = 1, .y = 1, .z = 100};
-    renderer_sprite_init(&renderer_ctx, sprite_id, matrix4x4_from_transform(transform), COLOUR_ORANGE, (SpriteRegion){0}, ColourState_Override, 1, SPRITE_MATERIAL_DEBUG, true);
+    // renderer_sprite_init(&renderer_ctx, sprite_id, matrix4x4_from_transform(transform), COLOUR_ORANGE, (SpriteRegion){0}, ColourState_Override, 1, SPRITE_MATERIAL_DEBUG, true);
 
     while(!window_ctx->is_destroyed){
         app_update(persistent, transient);
