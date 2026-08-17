@@ -407,7 +407,7 @@ typedef struct{
 #define COLOUR_WHITE    (Colour){.r = 1.0f, .g = 1.0f, .b = 1.0f, .a = 1.0f}
 #define COLOUR_ORANGE   (Colour){.r = 0.5f, .g = 0.5f, .a = 1.0f}
 #define COLOUR_YELLOW   (Colour){.r = 1.0f, .g = 1.0f, .a = 1.0f}
-#define COLOUR_PINK     (Colour){.r = 1.0f, .g = 0.5f, .b 0.5f, .a = 0.5f}
+#define COLOUR_PINK     (Colour){.r = 1.0f, .g = 0.25f, .b = 0.25f, .a = 1.0f}
 #define COLOUR_BLACK    (Colour){.a = 1.0f}
 #define COLOUR_PURPLE   (Colour){.r = 0.5f, .b = 0.5f, .a = 1.0f}
 
@@ -612,6 +612,13 @@ bool renderer_sprite_chain_set_##MEMBER_NAME(RendererContext* ctx, SpriteId spri
     As the camera is not expected to rotate or move from its fixed position; this is okay.
 **/
 DEFINE_QUICKSORT_STRUCT(DeviceSprite, f32, .transform.m[14], quicksort_device_sprite);
+
+/**====================
+    globals.
+====================**//**/
+
+f32 renderer_global_wireframe_thickness = 4;
+f32 renderer_global_circle_vertice_count = 24;
 
 /*====================
     functions.
@@ -1866,22 +1873,6 @@ void renderer_free_surface_texture(SurfaceTexture* texture){
     wgpuTextureViewRelease(texture->view);
 }
 
-void renderer_dealloc_sprite_unsafe(RendererContext* ctx, i32 sprite_index, i32 sprite_layer){
-    
-    SpriteManager* manager = &ctx->sprite_manager;
-    
-    BOUNDS_CHECK(sprite_layer, manager->sprite_layers_length);
-    SpriteLayer* layer = &manager->sprite_layers[sprite_layer];
-
-    BOUNDS_CHECK(sprite_index, manager->host_sprites_length);
-    manager->host_sprites[sprite_index] = (HostSprite){0};
-
-    BOUNDS_CHECK(sprite_index, manager->device_sprites_length);
-    manager->device_sprites[sprite_index].state = SpriteState_Deallocated;
-    
-    ARRAY_PUSH(layer->free_sprite_indices, layer->free_sprite_indices_length, &layer->free_sprite_indices_count, sprite_index);
-}
-
 SpriteId renderer_sprite_alloc(RendererContext* ctx, i32 layer_index, bool* out_success){
 
     ASSERT(ctx->sprite_manager.is_init == true, "sprite manager has not been init");
@@ -1953,6 +1944,22 @@ bool renderer_sprite_init(
     return true;
 }
 
+void renderer_dealloc_sprite_unsafe(RendererContext* ctx, i32 sprite_index, i32 sprite_layer){
+    
+    SpriteManager* manager = &ctx->sprite_manager;
+    
+    BOUNDS_CHECK(sprite_layer, manager->sprite_layers_length);
+    SpriteLayer* layer = &manager->sprite_layers[sprite_layer];
+
+    BOUNDS_CHECK(sprite_index, manager->host_sprites_length);
+    manager->host_sprites[sprite_index] = (HostSprite){0};
+
+    BOUNDS_CHECK(sprite_index, manager->device_sprites_length);
+    manager->device_sprites[sprite_index].state = SpriteState_Deallocated;
+   
+    ARRAY_PUSH(layer->free_sprite_indices, layer->free_sprite_indices_length, &layer->free_sprite_indices_count, sprite_index);
+}
+
 bool renderer_dealloc_sprite(RendererContext* ctx, SpriteId sprite_id){
     
     // validation.
@@ -1979,9 +1986,8 @@ bool renderer_dealloc_sprite(RendererContext* ctx, SpriteId sprite_id){
         return false;
     }
 
-    // DeallocSpriteUnsafe(ref manager, index, spriteId.Layer);
+    renderer_dealloc_sprite_unsafe(ctx, index, sprite_id.layer);
     return true;
-
 }
 
 bool renderer_sprite_string_init(
@@ -2411,3 +2417,54 @@ void renderer_draw_line(RendererContext* ctx, Colour colour, Vector3 start, Vect
     SpriteId sprite_id = renderer_one_frame_sprite_alloc(ctx, layer, &success);
     renderer_sprite_init(ctx, sprite_id, matrix4x4_from_transform(transform), colour, (SpriteRegion){0}, ColourState_Override, 1, material, true);
 }
+
+void renderer_draw_wire_circle(RendererContext* ctx, Circle shape, Colour colour, f32 position_z, i32 layer, i32 material){
+    f32 rotation = TAU / renderer_global_circle_vertice_count;
+    f32 sin = f32_sin(rotation);
+    f32 cos = f32_cos(rotation);
+    f32 start_x = shape.x;
+    f32 start_y = shape.y + shape.radius;
+
+    for(i32 i = 0; i < renderer_global_circle_vertice_count; i++){
+        // remove the circle position as rotation must be around the origin.
+        f32 rel_x = start_x - shape.x;  
+        f32 rel_y = start_y - shape.y;
+        // add back the circle position with the added rotation.
+        f32 end_x = cos * rel_x - sin * rel_y + shape.x;
+        f32 end_y = sin * rel_x + cos * rel_y + shape.y;
+        Vector3 start = {.x = start_x, .y = start_y, .z = position_z};
+        Vector3 end = {.x = end_x, .y = end_y, .z = position_z};
+        renderer_draw_line(ctx, colour, start, end, layer, material, renderer_global_wireframe_thickness);
+        // iterate around the circle.
+        start_x = end_x;
+        start_y = end_y;
+    }
+}
+
+void renderer_draw_wire_poly(RendererContext* ctx, f32* vertices_x, f32* vertices_y, i32 vertices_length, Colour colour, f32 position_z, i32 layer, i32 material){
+    i32 next_index;
+    for(i32 start_index = 0; start_index < vertices_length; start_index++){
+        next_index = (start_index + 1) % vertices_length;
+        Vector3 start = {.x = vertices_x[start_index], .y = vertices_y[start_index], .z = position_z};
+        Vector3 end = {.x = vertices_x[next_index], .y = vertices_y[next_index], .z = position_z};
+        renderer_draw_line(ctx, colour, start, end, layer, material, renderer_global_wireframe_thickness);
+    }
+}
+
+void renderer_draw_wire_rect(RendererContext* ctx, Rectangle shape, Colour colour, f32 position_z, i32 layer, i32 material){
+    f32 top_y = shape.y;
+    f32 left_x = shape.x;
+    f32 right_x = shape.x + shape.width;
+    f32 bottom_y = shape.y - shape.height;
+
+    Vector3 top_left = {.x = left_x, .y = top_y, .z = position_z};
+    Vector3 top_right = {.x = right_x, .y = top_y, .z = position_z};
+    Vector3 bottom_left = {.x = left_x, .y = bottom_y, .z = position_z};
+    Vector3 bottom_right = {.x = right_x, .y = bottom_y, .z = position_z};
+
+    renderer_draw_line(ctx, colour, top_left, top_right, layer, material, renderer_global_wireframe_thickness);
+    renderer_draw_line(ctx, colour, top_right, bottom_right, layer, material, renderer_global_wireframe_thickness);
+    renderer_draw_line(ctx, colour, bottom_right, bottom_left, layer, material, renderer_global_wireframe_thickness);
+    renderer_draw_line(ctx, colour, bottom_left, top_left, layer, material, renderer_global_wireframe_thickness);
+}
+

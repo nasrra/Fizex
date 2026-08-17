@@ -165,7 +165,16 @@ void app_late_update(){
 
     renderer_write_to_user_uniform_buffer(&renderer_ctx, &ubo, sizeof(Ubo));
 
-    renderer_draw_line(&renderer_ctx, COLOUR_BLUE, (Vector3){0}, (Vector3){.x = 2}, SPRITE_LAYER_WORLD, SPRITE_MATERIAL_DEBUG, 0.01f);
+    // renderer_draw_line(&renderer_ctx, COLOUR_BLUE, (Vector3){0}, (Vector3){.x = 2}, SPRITE_LAYER_WORLD, SPRITE_MATERIAL_DEBUG, 0.01f);
+    renderer_draw_wire_circle(&renderer_ctx, (Circle){.radius = 256}, COLOUR_WHITE, 0, SPRITE_LAYER_WORLD, SPRITE_MATERIAL_DEBUG);
+
+    f32* vertices_x = (f32[]){-400.0f, 500.0f, 500.0f, -500.0f};
+    f32* vertices_y = (f32[]){350.0f, 250.0f, -250.0f, -250.0f};
+    i32 vertices_length = 4;
+    renderer_draw_wire_poly(&renderer_ctx, vertices_x, vertices_y, vertices_length, COLOUR_RED, 0, SPRITE_LAYER_WORLD, SPRITE_MATERIAL_DEBUG);
+
+    Rectangle rect = {.width = 256.0f, .height = 128.0f};
+    renderer_draw_wire_rect(&renderer_ctx, rect, COLOUR_PINK, 0, SPRITE_LAYER_WORLD, SPRITE_MATERIAL_DEBUG);
 }
 
 void app_main(){
@@ -182,7 +191,7 @@ void app_main(){
     
     renderer_ctx = app_renderer_init(persistent, transient, *window_ctx);
 
-    renderer_orthographic_camera_init(&world_camera, (Vector3){.z = -4.0f}, 0.01f, 100.0f, 10.0f);
+    renderer_orthographic_camera_init(&world_camera, (Vector3){.z = -4.0f}, 0.01f, 100.0f, 1080.0f);
     // renderer_perspective_camera_init(&world_camera, (Vector3){.z = -5.0f}, 0.01f, 1024.0f, to_radians(45.0f));
     // CameraSystem.InitPerspectiveCamera(ref CameraSystem.GetCamera(CameraId.World), new(){Z = -5}, 0.01f, 1024, Math.ToRadians(45));
 

@@ -208,43 +208,43 @@ typedef struct{
     functions
 ========================================*//**/
 
-f32 sin_f32(f32 val){
+f32 f32_sin(f32 val){
     return sinf(val);
 }
 
-f64 sin_f64(f64 val){
+f64 f64_sin(f64 val){
     return sin(val);
 }
 
-f32 cos_f32(f32 val){
+f32 f32_cos(f32 val){
     return cosf(val);
 }
 
-f64 cos_f64(f64 val){
+f64 f64_cos(f64 val){
     return cos(val);
 }
 
-f32 tan_f32(f32 val){
+f32 f32_tan(f32 val){
     return tanf(val);
 }
 
-f64 tan_f64(f64 val){
+f64 f64_tan(f64 val){
     return tan(val);
 }
 
-f32 sqrt_f32(f32 val){
+f32 f32_sqrt(f32 val){
     return sqrtf(val);
 }
 
-f64 sqrt_f64(f64 val){
+f64 f64_sqrt(f64 val){
     return sqrt(val);
 }
 
-f32 atan2_f32(f32 y, f32 x){
+f32 f32_atan2(f32 y, f32 x){
     return atan2f(y, x);
 }
 
-f64 atan2_f64(f64 y, f64 x){
+f64 f64_atan2(f64 y, f64 x){
     return atan2(y, x);
 }
 
@@ -283,7 +283,7 @@ Quaternion normalise_quaternion(Quaternion q){
         return (Quaternion){0};
     } 
 
-    f32 len = sqrt_f32(len_sqrd);
+    f32 len = f32_sqrt(len_sqrd);
     q.x /= len;
     q.y /= len;
     q.z /= len;
@@ -361,7 +361,7 @@ f32 vector3_len_sqrd(Vector3 vector){
 
 f32 vector3_len(Vector3 vector){
     f32 sqrd = vector3_len_sqrd(vector);
-    return sqrd == 0.0f ? 0.0f : sqrt_f32(sqrd);
+    return sqrd == 0.0f ? 0.0f : f32_sqrt(sqrd);
 }
 
 Vector2 unary_vector2(Vector2 val){
@@ -610,8 +610,8 @@ f32 to_radians(f32 degrees){
 
 void rotate_radians(f32 increment, f32 src_radians, f32* dst_radians, f32* out_sine, f32* out_cosine){
     *dst_radians = src_radians + increment;
-    *out_sine = sin_f32(src_radians);
-    *out_cosine = cos_f32(src_radians);
+    *out_sine = f32_sin(src_radians);
+    *out_cosine = f32_cos(src_radians);
 }
 
 f32 cross_2d_f32(f32 lhs_x, f32 lhs_y, f32 rhs_x, f32 rhs_y){
@@ -678,7 +678,7 @@ Matrix4x4 matrix4x4_create_perspective(f32 fov_y_radians, f32 aspect_ratio, f32 
             think of it like the fovYRadians is how much your eye (or camera lens) sees, 
             the tangent describes the length from the top to bot.
     **/
-    f32 tan_half_fov_y = tan_f32(fov_y_radians * 0.5f);
+    f32 tan_half_fov_y = f32_tan(fov_y_radians * 0.5f);
     /**
         bring the half-total vertical viewing area i32o window-space coordinates:
 
@@ -731,9 +731,9 @@ Matrix4x4 matrix4x4_create_perspective(f32 fov_y_radians, f32 aspect_ratio, f32 
 Matrix4x4 rotate_matrix4x4(Matrix4x4 src, f32 radians, Vector3 axis){
 
     // how much the of the objects original orientation is kept along its original axis.
-    f32 c = cos_f32(radians);
+    f32 c = f32_cos(radians);
     // how much of the objects orientation is shifted perpendicularly i32o a new direction.
-    f32 s = sin_f32(radians);
+    f32 s = f32_sin(radians);
     
     axis = normalise_vector3(axis);
 
@@ -885,7 +885,7 @@ Matrix4x4 matrix4x4_from_transform(Transform transform){
 
 Quaternion rotate_quaternion(Quaternion q, f32 axis_x, f32 axis_y, f32 axis_z, f32 angle_radians){
     // 1. Normalize the axis vector to ensure safe rotation math
-    f32 length = sqrt_f32(axis_x * axis_x + axis_y * axis_y + axis_z * axis_z);
+    f32 length = f32_sqrt(axis_x * axis_x + axis_y * axis_y + axis_z * axis_z);
     if (length < 0.0001f) return q; // Avoid division by zero
     
     axis_x /= length;
@@ -894,8 +894,8 @@ Quaternion rotate_quaternion(Quaternion q, f32 axis_x, f32 axis_y, f32 axis_z, f
 
     // 2. Compute half-angles for the rotation representation
     f32 half_angle = angle_radians * 0.5f;
-    f32 sin_half = sin_f32(half_angle);
-    f32 cos_half = cos_f32(half_angle);
+    f32 sin_half = f32_sin(half_angle);
+    f32 cos_half = f32_cos(half_angle);
 
     // 3. Construct the 'new' rotation quaternion
     f32 new_x = axis_x * sin_half;
@@ -922,8 +922,8 @@ Quaternion create_from_axis_angle_quaternion(Vector3 axis, f32 angle){
     
     // Half angle calculations required by quaternion space
     f32 half_angle = angle * 0.5f;
-    f32 sin = sin_f32(half_angle);
-    f32 cos = cos_f32(half_angle);
+    f32 sin = f32_sin(half_angle);
+    f32 cos = f32_cos(half_angle);
 
     // Scale the normalized directional axis components by the sine projection
     Quaternion result;
@@ -934,12 +934,12 @@ Quaternion create_from_axis_angle_quaternion(Vector3 axis, f32 angle){
     return result;
 }
 
-Quaternion get_rotation_between_points(Vector3 poi32_a, Vector3 poi32_b){
+Quaternion get_rotation_between_points(Vector3 point_a, Vector3 point_b){
     // Get the direction vector target poi32ing from A to B
     Vector3 delta;
-    delta.x = poi32_b.x - poi32_a.x; 
-    delta.y = poi32_b.y - poi32_a.y; 
-    delta.z = poi32_b.z - poi32_a.z;
+    delta.x = point_b.x - point_a.x; 
+    delta.y = point_b.y - point_a.y; 
+    delta.z = point_b.z - point_a.z;
 
     Vector3 direction = normalise_vector3(delta);
     
@@ -973,7 +973,7 @@ Quaternion get_rotation_between_points(Vector3 poi32_a, Vector3 poi32_b){
     result.y = axis.y;
     result.z = axis.z;
     result.w = 1.0f + dot; // W component maps directly to the cosine length offset prior to normalization.
-    normalise_quaternion(result);
+    result = normalise_quaternion(result);
     
     return result;
 }
@@ -992,7 +992,7 @@ f32 dist_2d_f32(f32 from_x, f32 from_y, f32 to_x, f32 to_y){
         return 0.0f;
     }
 
-    return sqrt_f32(sqrd);
+    return f32_sqrt(sqrd);
 }
 
 f32 dist_sqrd_vector2(Vector2 from, Vector2 to){
@@ -1195,23 +1195,23 @@ Transform2D transform_to_transform2d(Transform transform){
     // Extract Roll (rotation around Z-axis) from Quaternion
     f32 num1 = (transform.rotation.w * transform.rotation.z) + (transform.rotation.x * transform.rotation.y);
     f32 num2 = (transform.rotation.y * transform.rotation.y) + (transform.rotation.z * transform.rotation.z);
-    f32 rot_rad = atan2_f32(2.0f * num1, 1.0f - (2.0f * num2));
+    f32 rot_rad = f32_atan2(2.0f * num1, 1.0f - (2.0f * num2));
 
     Transform2D result;
     result.position.x = transform.position.x;
     result.position.y = transform.position.y;
     result.scale.x = transform.scale.x;
     result.scale.y = transform.scale.y;
-    result.sine = sin_f32(rot_rad);
-    result.cosine = cos_f32(rot_rad);
+    result.sine = f32_sin(rot_rad);
+    result.cosine = f32_cos(rot_rad);
     result.rotation_radii = rot_rad;
     return result;
 }
 
 Transform2D rotate_transform2d(Transform2D transform, f32 radians){
     transform.rotation_radii += radians;
-    transform.sine = sin_f32(transform.rotation_radii);
-    transform.cosine = cos_f32(transform.rotation_radii);
+    transform.sine = f32_sin(transform.rotation_radii);
+    transform.cosine = f32_cos(transform.rotation_radii);
     return transform;
 }
 
@@ -1758,7 +1758,7 @@ bool is_overlapping_sat_scalar_circle(
         return true;
     }
 
-    f32 dist = sqrt_f32(dist_sqrd);
+    f32 dist = f32_sqrt(dist_sqrd);
     normalise_2d_f32(lhs_x - rhs_x, lhs_y - rhs_y, out_normal_x, out_normal_y);
     *out_depth = radius_sum - dist;
     return true;  
@@ -1906,7 +1906,7 @@ bool is_overlapping_point_scalar_polygon(
         }
     }
 
-    f32 mag = sqrt_f32(min_mag_sqrd);
+    f32 mag = f32_sqrt(min_mag_sqrd);
     *out_depth = min_axis_depth / mag; // Only one sqrt if this is the new minimum translation distance.
     *out_normal_x = min_axis_x / mag;
     *out_normal_y = min_axis_y / mag;
@@ -1973,7 +1973,7 @@ bool is_overlapping_one_way_polygon(
         }
     }
 
-    f32 mag = sqrt_f32(min_mag_sqrd);
+    f32 mag = f32_sqrt(min_mag_sqrd);
     *out_depth      = min_axis_depth / mag; // Only one sqrt if this is the new minimum translation distance.
     *out_normal_x   = min_axis_x / mag;
     *out_normal_y   = min_axis_y / mag;
