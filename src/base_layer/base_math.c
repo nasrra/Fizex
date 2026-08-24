@@ -5,9 +5,9 @@
 ========================================*//**/
 
 typedef struct{
-    f32* verts_x;
-    f32* verts_y;
-    i32 verts_size;
+    f32* x;
+    f32* y;
+    i32 length;
 } Polygon;
 
 typedef struct{
@@ -29,38 +29,41 @@ typedef struct {
     /*
         the count of allocated entries from appending.
     */
-    i32 append_count;
+    i32 count;
     /*
         the size of all backing arrays.
     */
-    i32 size;
+    i32 length;
     bool is_init;
 } Soa_Vector2;
 
 typedef struct{
     /*
         Remarks:
-        elements are accessed via `entryElementIndex`.
+        elements are accessed via `chunk_element_index`.
     */
     f32* x;
-    i32 x_size;
+    i32 x_length;
     /*
         Remarks:
-        elements are accessed via `entryElementIndex`.
+        elements are accessed via `chunk_element_index`.
     */
     f32* y;
-    i32 y_size;
+    i32 y_length;
     /*
         Remarks:
-        Elements are accessed via `entryIndex`.
+        Elements are accessed via `chunk_index`.
     */
-    i32* append_counts;
-    i32 append_counts_size;
+    i32* chunk_count;
+    i32 chunk_count_length;
     /*
         the fixed stride of each entry.
     */
-    i32 entry_stride;
-    i32 max_entries;
+    i32 chunk_stride;
+    /**
+        the amount of chunks stored.
+    **/
+    i32 chunk_length;
     bool is_init;
 } FsSoa_Vector2;
 
@@ -93,18 +96,24 @@ typedef struct{
     Vector2 scale;
     f32 sine;
     f32 cosine;
-    f32 rotation_radii;
+    /** 
+        `remarks`
+        this value is in radians.
+    **/ 
+    f32 rotation;
 } Transform2D;
 
 typedef struct{
-    Soa_Vector2 positions;
-    Soa_Vector2 scales;
-    f32* sines;
-    i32 sines_size;
-    f32* cosines;
-    i32 cosines_size;
-    f32* rotation_radii;
-    i32 rotation_radii_size;
+    Soa_Vector2 position;
+    Soa_Vector2 scale;
+    f32* sine;
+    f32* cosine;
+    /** 
+        `remarks`
+        the stored values are in radians.
+    **/ 
+    f32* rotation;
+    i32 length;
     bool is_init;
 } Soa_Transform2D;
 
@@ -127,13 +136,13 @@ typedef struct{
     f32* max_x;
     f32* max_y;
     /*
-        the size of all backing arrays.
+        the length of all backing arrays.
     */
-    i32 size;
+    i32 length;
     /*
         the count of allocated entries from appending.
     */
-    i32 append_count;
+    i32 count;
     bool is_init;
 } Soa_Aabb;
 
@@ -364,54 +373,129 @@ f32 vector3_len(Vector3 vector){
     return sqrd == 0.0f ? 0.0f : f32_sqrt(sqrd);
 }
 
-Vector2 unary_vector2(Vector2 val){
+
+
+
+/**====================
+    functions: Vector2
+====================**//**/
+
+
+
+
+f32 vector2_dist_sqrd_scalar(f32 from_x, f32 from_y, f32 to_x, f32 to_y){
+    f32 dx = from_x - to_x;
+    f32 dy = from_y - to_y; 
+    return dx * dx + dy * dy;
+}
+
+f32 vector2_dist_scalar(f32 from_x, f32 from_y, f32 to_x, f32 to_y){
+    f32 sqrd = vector2_dist_sqrd_scalar(from_x, from_y, to_x, to_y);
+    
+    // NAN guard.
+    if(sqrd <= 0.0f){
+        return 0.0f;
+    }
+
+    return f32_sqrt(sqrd);
+}
+
+void vector2_transform_scalar(
+    f32 x, f32 y, f32 transform_scale_x, f32 transform_scale_y, f32 transform_cos, f32 transform_sin, 
+    f32 transform_position_x, f32 transform_position_y, f32* out_x, f32* out_y
+){
+    // NOTE:
+    // This ordering: Scale -> rotation -> Translation
+    // should remain the same. It is pretty much Matrix math.
+
+    // Scale:
+    f32 sx = x * transform_scale_x;
+    f32 sy = y * transform_scale_y; 
+
+    // rotation:
+    f32 rx = sx * transform_cos - sy * transform_sin;
+    f32 ry = sx * transform_sin + sy * transform_cos;
+
+    // Translation:
+    *out_x = rx + transform_position_x;
+    *out_y = ry + transform_position_y;
+}
+
+Vector2 vector2_unary(Vector2 val){
     val.x *= -1.0f;
     val.y *= -1.0f;
     return val;
 }
         
-Vector2 add_vector2(Vector2 lhs, Vector2 rhs){
+Vector2 vector2_add(Vector2 lhs, Vector2 rhs){
     lhs.x += rhs.x;
     lhs.y += rhs.y;
     return lhs;
 }
 
-Vector2 sub_vector2(Vector2 lhs, Vector2 rhs){
+Vector2 vector2_sub(Vector2 lhs, Vector2 rhs){
     lhs.x -= rhs.x;
     lhs.y -= rhs.y;
     return lhs;
 }
 
-Vector2 mul_vector2(Vector2 lhs, Vector2 rhs){
+Vector2 vector2_mul(Vector2 lhs, Vector2 rhs){
     lhs.x *= rhs.x;
     lhs.y *= rhs.y;
     return lhs;
 }
 
-Vector2 div_vector2(Vector2 lhs, Vector2 rhs){
+Vector2 vector2_mul_val(Vector2 vec, f32 val){
+    vec.x *= val;
+    vec.y *= val;
+    return vec;
+}
+
+Vector2 vector2_div(Vector2 lhs, Vector2 rhs){
     lhs.x /= rhs.x;
     lhs.y /= rhs.y;
     return lhs;
 }
 
-Vector3 vector2_to_vector3(Vector2 v){
-    return (Vector3){v.x, v.y, 0.0f};
+f32 vector2_dist_sqrd(Vector2 from, Vector2 to){
+    return vector2_dist_sqrd_scalar(from.x, from.y, to.x, to.y);
+}
+
+f32 vector2_dist(Vector2 from, Vector2 to){
+    return vector2_dist_scalar(from.x, from.y, to.x, to.y);
+}
+
+Vector2 vector2_transform(Vector2 v, Transform2D t){
+    vector2_transform_scalar(    
+        v.x, v.y, t.scale.x, t.scale.y, t.cosine, t.sine, 
+        t.position.x, t.position.y, &v.x, &v.y
+    );
+    return v;
 }
 
 Vector2 vector3_to_vector2(Vector3 v){
     return (Vector2){v.x, v.y};
 }
 
-Vector2I add_vector2i(Vector2I lhs, Vector2I rhs){
+
+
+Vector2I vector2_addi(Vector2I lhs, Vector2I rhs){
     lhs.x += rhs.x;
     lhs.y += rhs.y;
     return lhs;
 }
 
-Vector2I sub_vector2i(Vector2I lhs, Vector2I rhs){
+Vector2I vector2_subi(Vector2I lhs, Vector2I rhs){
     lhs.x -= rhs.x;
     lhs.y -= rhs.y;
     return lhs;
+}
+
+
+
+
+Vector3 vector2_to_vector3(Vector2 v){
+    return (Vector3){v.x, v.y, 0.0f};
 }
 
 Vector3 cross_vector3(Vector3 a, Vector3 b){
@@ -457,7 +541,7 @@ Quaternion mul_quaternion(Quaternion lhs, Quaternion rhs){
     return result;
 }
 
-Aabb add_vector2_aabb(Aabb aabb, Vector2 vector){
+Aabb aabb_vector2_add(Aabb aabb, Vector2 vector){
     aabb.min_x += vector.x;
     aabb.min_y += vector.y;
     aabb.max_x += vector.x;
@@ -465,7 +549,7 @@ Aabb add_vector2_aabb(Aabb aabb, Vector2 vector){
     return aabb;
 }
 
-Aabb sub_vector2_aabb(Aabb aabb, Vector2 vector){
+Aabb aabb_vector2_sub(Aabb aabb, Vector2 vector){
     aabb.min_x -= vector.x;
     aabb.min_y -= vector.y;
     aabb.max_x -= vector.x;
@@ -978,217 +1062,214 @@ Quaternion get_rotation_between_points(Vector3 point_a, Vector3 point_b){
     return result;
 }
 
-f32 dist_sqrd_2d_f32(f32 from_x, f32 from_y, f32 to_x, f32 to_y){
-    f32 dx = from_x - to_x;
-    f32 dy = from_y - to_y; 
-    return dx * dx + dy * dy;
-}
-
-f32 dist_2d_f32(f32 from_x, f32 from_y, f32 to_x, f32 to_y){
-    f32 sqrd = dist_sqrd_2d_f32(from_x, from_y, to_x, to_y);
-    
-    // NAN guard.
-    if(sqrd <= 0.0f){
-        return 0.0f;
-    }
-
-    return f32_sqrt(sqrd);
-}
-
-f32 dist_sqrd_vector2(Vector2 from, Vector2 to){
-    return dist_sqrd_2d_f32(from.x, from.y, to.x, to.y);
-}
-
-f32 dist_vector2(Vector2 from, Vector2 to){
-    return dist_2d_f32(from.x, from.y, to.x, to.y);
-}
-void transform_scalar_2d_f32(
-    f32 x, f32 y, f32 transform_scale_x, f32 transform_scale_y, f32 transform_cos, f32 transform_sin, 
-    f32 transform_position_x, f32 transform_position_y, f32* out_x, f32* out_y
-){
-    // NOTE:
-    // This ordering: Scale -> rotation -> Translation
-    // should remain the same. It is pretty much Matrix math.
-
-    // Scale:
-    f32 sx = x * transform_scale_x;
-    f32 sy = y * transform_scale_y; 
-
-    // rotation:
-    f32 rx = sx * transform_cos - sy * transform_sin;
-    f32 ry = sx * transform_sin + sy * transform_cos;
-
-    // Translation:
-    *out_x = rx + transform_position_x;
-    *out_y = ry + transform_position_y;
-}
-
-Vector2 transform_vector2(Vector2 v, Transform2D t){
-    transform_scalar_2d_f32(    
-        v.x, v.y, t.scale.x, t.scale.y, t.cosine, t.sine, 
-        t.position.x, t.position.y, &v.x, &v.y
-    );
-    return v;
-}
-
-bool init_fssoa_vector2(FsSoa_Vector2* soa, MemoryArena* arena, i32 entry_stride, i32 max_entries){
+bool fssoa_vector2_init(FsSoa_Vector2* soa, MemoryArena* arena, i32 chunk_stride, i32 chunk_length){
     if(soa->is_init){
         ASSERT(!soa->is_init, "attempted to init an already init FsSoa_Vector2.");
         return false;
     }
     soa->is_init = true;
-    i32 array_size = entry_stride*max_entries;
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->x, &soa->x_size, array_size);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->y, &soa->y_size, array_size);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->append_counts, &soa->append_counts_size, array_size);
-    soa->entry_stride = entry_stride;
-    soa->max_entries = max_entries;
+    i32 length = chunk_stride * chunk_length;
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->x, &soa->x_length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->y, &soa->y_length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->chunk_count, &soa->chunk_count_length, length);
+    soa->chunk_stride = chunk_stride;
+    soa->chunk_length = chunk_length;
     return true;
 }
 
-bool append_fssoa_vector2(FsSoa_Vector2* soa, i32 entry_index, f32 x, f32 y){
+bool fssoa_vector2_push(FsSoa_Vector2* soa, i32 chunk_index, f32 x, f32 y){
     // ensure that the entry slot isnt full.
-    i32 append_count = soa->append_counts[entry_index];
-    if(append_count >= soa->entry_stride){
+    i32 append_count = soa->chunk_count[chunk_index];
+    if(append_count >= soa->chunk_stride){
         ASSERT(0!=0, "attempted to append to a full fssoa_vector2.");
         return false;
     }
-    i32 append_index = entry_index * soa->entry_stride + append_count;
+    i32 append_index = chunk_index * soa->chunk_stride + append_count;
 
     // set the value.
     soa->x[append_index] = x;
     soa->y[append_index] = y;
 
     // increment append index.
-    soa->append_counts[entry_index]++;
+    soa->chunk_count[chunk_index]++;
     return true;
 }
 
 /*
     Sets the append count of an entry to zero in a fixed stride soa instance.
 */
-void clear_entry_append_count_fssoa_vector2(FsSoa_Vector2* soa, i32 entryIndex){
-    BOUNDS_CHECK(entryIndex, soa->append_counts_size);
-    soa->append_counts[entryIndex] = 0;
+void fssoa_vector2_clear_chunk_count(FsSoa_Vector2* soa, i32 chunk_index){
+    BOUNDS_CHECK(chunk_index, soa->chunk_count_length);
+    soa->chunk_count[chunk_index] = 0;
 }
 
-void clear_append_counts_fssoa_vector2(FsSoa_Vector2* soa){
-    for(i32 i = 0; i < soa->append_counts_size; i++){
-        soa->append_counts[i] = 0;
-    }
-}
-
-bool init_soa_vector2(Soa_Vector2* soa, MemoryArena* arena, i32 size){
-    
-    if (soa->is_init){
-        ASSERT(0!=0, "attempted to init an already init soa_vector2.");
-        return false;
-    }
-
+void soa_vector2_init(Soa_Vector2* soa, MemoryArena* arena, i32 length){    
+    ASSERT(!soa->is_init, "already init");
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->x, &soa->length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->y, &soa->length, length);
     soa->is_init = true;
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->x, &soa->size, size);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->y, &soa->size, size);
-    return true;
 }
 
-void insert_soa_vector2(Soa_Vector2* soa, i32 insert_index, f32 x, f32 y){
-    BOUNDS_CHECK(insert_index, soa->size);
+void soa_vector2_insert(Soa_Vector2* soa, i32 insert_index, f32 x, f32 y){
+    BOUNDS_CHECK(insert_index, soa->length);
     soa->x[insert_index] = x;
     soa->y[insert_index] = y;
 }
 
-bool append_soa_vector2(Soa_Vector2* soa, f32 x, f32 y){
+bool soa_vector2_push(Soa_Vector2* soa, f32 x, f32 y){
 
-    if(soa->append_count >= soa->size){
+    if(soa->count >= soa->length){
         ASSERT(0!=0, "attempted to append to a full soa_vector2");
         return false;
     }
 
-    insert_soa_vector2(soa, soa->append_count, x, y);
-    soa->append_count++;
+    soa_vector2_insert(soa, soa->count, x, y);
+    soa->count++;
     return true;
 }
 
-void reset_count_soa_vector2(Soa_Vector2* soa){
-    soa->append_count = 0;
+void soa_vector2_reset_count(Soa_Vector2* soa){
+    soa->count = 0;
 }
 
-bool init_soa_transform2d(Soa_Transform2D* soa, MemoryArena* arena, i32 size){
+
+
+
+/**====================
+    functions: Transform2D.
+====================**//**/
+
+
+
+
+bool soa_transform2d_init(Soa_Transform2D* soa, MemoryArena* arena, i32 length){
     if(soa->is_init){
         ASSERT(0!=0, "attempted to init already init soa_transform2d.");
         return false;
     }
 
     soa->is_init = true;
-    init_soa_vector2(&soa->positions, arena, size);
-    init_soa_vector2(&soa->scales, arena, size);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->sines, &soa->sines_size, size);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->cosines, &soa->cosines_size, size);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->rotation_radii, &soa->rotation_radii_size, size);
+    soa_vector2_init(&soa->position, arena, length);
+    soa_vector2_init(&soa->scale, arena, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->sine, &soa->length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->cosine, &soa->length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->rotation, &soa->length, length);
     return true;
 }
 
 void copy_elem_from_soa_transform2d(Soa_Transform2D* soa, Transform2D* dst, i32 index){
     
-    BOUNDS_CHECK(index, soa->positions.size);
-    dst->position.x = soa->positions.x[index];
-    dst->position.y = soa->positions.y[index];
+    BOUNDS_CHECK(index, soa->position.length);
+    dst->position.x = soa->position.x[index];
+    dst->position.y = soa->position.y[index];
     
-    BOUNDS_CHECK(index, soa->scales.size);
-    dst->scale.x = soa->scales.x[index];
-    dst->scale.y = soa->scales.y[index];
+    BOUNDS_CHECK(index, soa->scale.length);
+    dst->scale.x = soa->scale.x[index];
+    dst->scale.y = soa->scale.y[index];
     
-    BOUNDS_CHECK(index, soa->sines_size);
-    dst->sine = soa->sines[index];
+    BOUNDS_CHECK(index, soa->length);
+    dst->sine = soa->sine[index];
     
-    BOUNDS_CHECK(index, soa->cosines_size);
-    dst->cosine = soa->cosines[index];
+    BOUNDS_CHECK(index, soa->length);
+    dst->cosine = soa->cosine[index];
 
-    BOUNDS_CHECK(index, soa->rotation_radii_size);
-    dst->rotation_radii = soa->rotation_radii[index];
+    BOUNDS_CHECK(index, soa->length); 
+    dst->rotation = soa->rotation[index];
 }
 
 void insert_scalar_soa_transform2d(
     Soa_Transform2D* soa, i32 elem_index, f32 pos_x, f32 pos_y, 
     f32 scale_x, f32 scale_y, f32 sin, f32 cos, f32 rot_radians
 ){
-    BOUNDS_CHECK(elem_index, soa->positions.size);
-    soa->positions.x[elem_index] = pos_x;
-    soa->positions.y[elem_index] = pos_y;
+    BOUNDS_CHECK(elem_index, soa->position.length);
+    soa->position.x[elem_index] = pos_x;
+    soa->position.y[elem_index] = pos_y;
 
-    BOUNDS_CHECK(elem_index, soa->scales.size);
-    soa->scales.x[elem_index] = scale_x;
-    soa->scales.y[elem_index] = scale_y;
+    BOUNDS_CHECK(elem_index, soa->scale.length);
+    soa->scale.x[elem_index] = scale_x;
+    soa->scale.y[elem_index] = scale_y;
 
-    BOUNDS_CHECK(elem_index, soa->sines_size);
-    soa->sines[elem_index] = sin;
+    BOUNDS_CHECK(elem_index, soa->length);
+    soa->sine[elem_index] = sin;
 
-    BOUNDS_CHECK(elem_index, soa->cosines_size);
-    soa->cosines[elem_index] = cos;
+    BOUNDS_CHECK(elem_index, soa->length);
+    soa->cosine[elem_index] = cos;
 
-    BOUNDS_CHECK(elem_index, soa->rotation_radii_size);
-    soa->rotation_radii[elem_index] = rot_radians;
+    BOUNDS_CHECK(elem_index, soa->length);
+    soa->rotation[elem_index] = rot_radians;
 }
 
 void insert_soa_transform2d(Soa_Transform2D* soa, Transform2D transform, i32 elem_index){
     insert_scalar_soa_transform2d(
         soa, elem_index, transform.position.x, transform.position.y, 
-        transform.scale.x, transform.scale.y, transform.sine, transform.cosine, transform.rotation_radii
+        transform.scale.x, transform.scale.y, transform.sine, transform.cosine, transform.rotation
     );
 }
 
-// public static void TransformRelative(Soa_Transform2D src, Soa_Transform2D dst, i32 srcReadIndex, i32 dstWriteIndex, 
-//     f32 worldPosX, f32 worldPosY, f32 worldScaleX, f32 worldScaleY, f32 worldSine, f32 worldCosine, f32 worldrotationRadians
-// )
-// {
-//     TransformRelative(src.positions.x[srcReadIndex], src.positions.y[srcReadIndex], src.scales.x[srcReadIndex], 
-//         src.scales.y[srcReadIndex], src.sines[srcReadIndex], src.cosines[srcReadIndex], src.rotation_radii[srcReadIndex], 
-//         worldPosX, worldPosY, worldScaleX, worldScaleY, worldSine, worldCosine, worldrotationRadians, 
-//         ref dst.positions.x[dstWriteIndex], ref dst.positions.y[dstWriteIndex], ref dst.scales.x[dstWriteIndex], 
-//         ref dst.scales.y[dstWriteIndex], ref dst.sines[dstWriteIndex], ref dst.cosines[dstWriteIndex], 
-//         ref dst.rotation_radii[dstWriteIndex] 
-//     );
-// }
+Transform2D transform2d_rotate(Transform2D transform, f32 radians){
+    transform.rotation += radians;
+    transform.sine = f32_sin(transform.rotation);
+    transform.cosine = f32_cos(transform.rotation);
+    return transform;
+}
+
+/** 
+    Offsets a transform2d by another.
+
+    `remarks`
+    `rhs` is applied to `lhs`.
+**/ 
+void transform2d_transform_scalar(
+    f32 lhs_pos_x, f32 lhs_pos_y, f32 lhs_scale_x, f32 lhs_scale_y, f32 lhs_sin, f32 lhs_cos, f32 lhs_rotation, 
+    f32 rhs_pos_x, f32 rhs_pos_y, f32 rhs_scale_x, f32 rhs_scale_y, f32 rhs_sin, f32 rhs_cos, f32 rhs_rotation, 
+    f32* out_pos_x, f32* out_pos_y, f32* out_scale_x, f32* out_scale_y, f32* out_sin, f32* out_cos, f32* out_rotation 
+){
+    // scale the local offset relative to the world.
+    f32 scaled_x = lhs_pos_x * rhs_scale_x;
+    f32 scaled_y = lhs_pos_y * rhs_scale_y;
+    
+    /** 
+        rotate the local scaled offset around the parents origin.
+            Standard 2D rotation matrix formula:
+                x' = x * cos - y * sin
+                y' = x * sin + y * cos        
+    **/ 
+    f32 rotated_x = (scaled_x * lhs_cos) - (scaled_y * rhs_sin);
+    f32 rotated_y = (scaled_x * rhs_sin) + (scaled_y * lhs_cos);
+
+    // translate the rotated offset to the world position.
+    *out_pos_x = rotated_x + rhs_pos_x;
+    *out_pos_y = rotated_y + rhs_pos_y;
+
+    // combine the scale properties
+    *out_scale_x = lhs_scale_x * rhs_scale_x;
+    *out_scale_y = lhs_scale_y * rhs_scale_y;
+
+    /** 
+        combine the rotation properties.
+            Use the trigonometrix identity formulas for combining angles:
+                sin(a + b) = sin(a)cos(b) + cos(a)sin(b)
+                cos(a + b) = cos(a)cos(b) - sin(a)sin(b)        
+    **/ 
+    *out_sin = (lhs_sin * lhs_cos) + (lhs_cos * rhs_sin);
+    *out_cos = (lhs_cos * lhs_cos) + (lhs_sin * rhs_sin);
+    *out_rotation = lhs_rotation + rhs_rotation;
+}
+
+Transform2D transform2d_transform(Transform2D lhs, Transform2D rhs){
+    Transform2D out;
+    transform2d_transform_scalar(
+        lhs.position.x, lhs.position.y, lhs.scale.x, lhs.scale.y, lhs.sine, lhs.cosine, lhs.rotation, 
+        rhs.position.x, rhs.position.y, rhs.scale.x, rhs.scale.y, rhs.sine, rhs.cosine, rhs.rotation, 
+        &out.position.x, &out.position.y, &out.scale.x, &out.scale.y, &out.sine, &out.cosine, &out.rotation 
+    );
+    return out;
+}
+
+
+
+
+
 
 Transform2D transform_to_transform2d(Transform transform){
     
@@ -1204,15 +1285,8 @@ Transform2D transform_to_transform2d(Transform transform){
     result.scale.y = transform.scale.y;
     result.sine = f32_sin(rot_rad);
     result.cosine = f32_cos(rot_rad);
-    result.rotation_radii = rot_rad;
+    result.rotation = rot_rad;
     return result;
-}
-
-Transform2D rotate_transform2d(Transform2D transform, f32 radians){
-    transform.rotation_radii += radians;
-    transform.sine = f32_sin(transform.rotation_radii);
-    transform.cosine = f32_cos(transform.rotation_radii);
-    return transform;
 }
 
 void transform_scalar_transform2d(
@@ -1251,16 +1325,16 @@ void transform_scalar_transform2d(
 Transform2D transform_transform2d(Transform2D lhs, Transform2D rhs){
     Transform2D res;
     transform_scalar_transform2d(
-        lhs.position.x, lhs.position.y, lhs.scale.x, lhs.scale.y, lhs.sine, lhs.cosine, lhs.rotation_radii, 
-        rhs.position.x, rhs.position.y, rhs.scale.x, rhs.scale.y, rhs.sine, rhs.cosine, rhs.rotation_radii, 
-        &res.position.x, &res.position.y, &res.scale.x, &res.scale.y, &res.sine, &res.cosine, &res.rotation_radii
+        lhs.position.x, lhs.position.y, lhs.scale.x, lhs.scale.y, lhs.sine, lhs.cosine, lhs.rotation, 
+        rhs.position.x, rhs.position.y, rhs.scale.x, rhs.scale.y, rhs.sine, rhs.cosine, rhs.rotation, 
+        &res.position.x, &res.position.y, &res.scale.x, &res.scale.y, &res.sine, &res.cosine, &res.rotation
     );
     return res;
 }
 
 Transform to_transform_transform2d(Transform2D transform2D){
     // Create a 3D Quaternion rotating only around the Z axis
-    Quaternion rotation = create_from_axis_angle_quaternion(VECTOR3_FORWARD, transform2D.rotation_radii);
+    Quaternion rotation = create_from_axis_angle_quaternion(VECTOR3_FORWARD, transform2D.rotation);
     Transform transform;
     transform.position.x = transform2D.position.x;
     transform.position.y = transform2D.position.y;
@@ -1285,7 +1359,7 @@ Transform transform_transform(Transform lhs, Transform rhs){
     return result;
 }
 
-void closest_point_scalar_line_segment(
+void line_segment_closest_point_scalar(
     f32 line_start_x, f32 line_start_y, f32 line_end_x, f32 line_end_y, 
     f32 query_point_x, f32 query_point_y, f32* out_closest_point_x, f32* out_closest_point_y
 ){
@@ -1314,24 +1388,11 @@ void closest_point_scalar_line_segment(
 }
 
 /*
-    calculates the closest point along a line segmenet towards the query point;
-    with the inclusion of the squared distance FROM the query point TO the closest point.
-*/
-void closest_point_with_sqrd_dist_scalar_line_segment(
-    f32 line_start_x, f32 line_start_y, f32 line_end_x, f32 line_end_y, 
-    f32 query_point_x, f32 query_point_y, f32* closest_point_x, f32* closest_point_y, 
-    f32* dist_sqrd
-){
-    closest_point_scalar_line_segment(line_start_x, line_start_y, line_end_x, line_end_y, query_point_x, query_point_y, closest_point_x, closest_point_y);
-    *dist_sqrd = dist_sqrd_2d_f32(query_point_x, query_point_y, *closest_point_x, *closest_point_y);
-}
-
-/*
     calculates the closest point along a line segmenet towards the query point.
 */
 Vector2 closest_point_line_segmenet(Vector2 line_start, Vector2 line_end, Vector2 query_point){
     Vector2 result;
-    closest_point_scalar_line_segment(
+    line_segment_closest_point_scalar(
         line_start.x, line_start.y,
         line_end.x, line_end.y,
         query_point.x, query_point.y,
@@ -1340,103 +1401,82 @@ Vector2 closest_point_line_segmenet(Vector2 line_start, Vector2 line_end, Vector
     return result;
 }
 
-/*
-    calculates the closest point along a line segmenet towards the query point;
-    with the inclusion of the squared distance FROM the query point TO the closest point.
-*/
-void closest_point_with_sqrd_dist_line_segment(Vector2 line_start, Vector2 line_end, Vector2 query_point, Vector2* out_closest_point, f32* out_dist_sqrd){
-    closest_point_with_sqrd_dist_scalar_line_segment(
-        line_start.x, line_start.y,
-        line_end.x, line_end.y,
-        query_point.x, query_point.y,
-        &out_closest_point->x, &out_closest_point->y, out_dist_sqrd
-    );
-}
-
-bool init_soa_aabb(Soa_Aabb* soa, MemoryArena* arena, i32 size){
-    
-    if(soa->is_init){
-        ASSERT(0!=0, "attempted to init an already init soa_aabb");
-        return false;
-    }
-
+void soa_aabb_init(Soa_Aabb* soa, MemoryArena* arena, i32 length){
+    ASSERT(!soa->is_init, "already init");
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->max_x, &soa->length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->max_y, &soa->length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->min_x, &soa->length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->min_y, &soa->length, length);
     soa->is_init = true;
-    
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->max_x, &soa->size, size);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->max_y, &soa->size, size);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->min_x, &soa->size, size);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->min_y, &soa->size, size);
-    return true;
 }
 
-void insert_soa_aabb(Soa_Aabb* soa, i32 elem_index, f32 min_x, f32 min_y, f32 max_x, f32 max_y){
-    BOUNDS_CHECK(elem_index, soa->size);
+void soa_aabb_insert(Soa_Aabb* soa, i32 elem_index, f32 min_x, f32 min_y, f32 max_x, f32 max_y){
+    BOUNDS_CHECK(elem_index, soa->length);
     soa->min_x[elem_index] = min_x;
     soa->min_y[elem_index] = min_y;
     soa->max_x[elem_index] = max_x;
     soa->max_y[elem_index] = max_y;   
 }
 
-bool append_soa_aabb(Soa_Aabb* soa, f32 min_x, f32 min_y, f32 max_x, f32 max_y){
+bool soa_aabb_push(Soa_Aabb* soa, f32 min_x, f32 min_y, f32 max_x, f32 max_y){
     
-    if(soa->append_count >= soa->size){
+    if(soa->count >= soa->length){
         ASSERT(0!=0, "attempted to append to a full soa_aabb");
         return false;
     }
 
-    insert_soa_aabb(soa, soa->append_count, min_x, min_y, max_x, max_y);
-    soa->append_count++;
+    soa_aabb_insert(soa, soa->count, min_x, min_y, max_x, max_y);
+    soa->count+=1;
     return true;
 }
 
-void reset_count_soa_aabb(Soa_Aabb* soa){
-    soa->append_count = 0;
+void soa_aabb_reset_count(Soa_Aabb* soa){
+    soa->count = 0;
 }
 
-void calculate_centroids_soa_aabb(Soa_Aabb* soa, f32* out_x, f32* out_y){
+void soa_aabb_calculate_centroids(Soa_Aabb* soa, f32* out_x, f32* out_y){
     
-    simd_add_f32(soa->max_x, soa->min_x, out_x, soa->size);
-    simd_mul_val_f32(out_x, 0.5f, out_x, soa->size);
+    simd_add_f32(soa->max_x, soa->min_x, out_x, soa->length);
+    simd_mul_val_f32(out_x, 0.5f, out_x, soa->length);
     
-    simd_add_f32(soa->max_y, soa->min_y, out_y, soa->size);
-    simd_mul_val_f32(out_y, 0.5f, out_y, soa->size);
+    simd_add_f32(soa->max_y, soa->min_y, out_y, soa->length);
+    simd_mul_val_f32(out_y, 0.5f, out_y, soa->length);
 }
 
-f32 get_height_aabb(Aabb aabb){
+f32 aabb_get_height(Aabb aabb){
     return aabb.max_y - aabb.min_y;
 }
 
-f32 get_width_aabb(Aabb aabb){
+f32 aabb_get_width(Aabb aabb){
     return aabb.max_x - aabb.min_x;
 }
 
-
-void calc_centroid_scalar_aabb(f32 min_x, f32 min_y, f32 max_x, f32 max_y, f32* out_center_x, f32* out_center_y){
+void aabb_calc_centroid_scalar(f32 min_x, f32 min_y, f32 max_x, f32 max_y, f32* out_center_x, f32* out_center_y){
     *out_center_x = (max_x + min_x) * 0.5f;
     *out_center_y = (max_y + min_y) * 0.5f;
 }
 
-Vector2 calc_centroid_aabb(Aabb aabb){
+Vector2 aabb_calc_centroid(Aabb aabb){
     Vector2 result;
-    calc_centroid_scalar_aabb(aabb.min_x, aabb.min_y, aabb.max_x, aabb.max_y, &result.x, &result.y);
+    aabb_calc_centroid_scalar(aabb.min_x, aabb.min_y, aabb.max_x, aabb.max_y, &result.x, &result.y);
     return result;
 }
 
-Vector2 get_min_vector_aabb(Aabb aabb){
+Vector2 aabb_get_min_vector(Aabb aabb){
     Vector2 result;
     result.x = aabb.min_x;
     result.y = aabb.min_y;
     return result;
 }
 
-Vector2 get_max_vector_aabb(Aabb aabb){
+Vector2 aabb_get_max_vector(Aabb aabb){
     Vector2 result;
     result.x = aabb.max_x;
     result.y = aabb.max_y;
     return result;
 }
 
-bool is_overlapping_scalar_aabb(f32 a_min_x, f32 b_min_x, f32 a_min_y, f32 b_min_y, f32 a_max_x, f32 b_max_x, f32 a_max_y, f32 b_max_y){
+bool aabb_overlaps_scalar(f32 a_min_x, f32 b_min_x, f32 a_min_y, f32 b_min_y, f32 a_max_x, f32 b_max_x, f32 a_max_y, f32 b_max_y){
     if(a_max_x <= b_min_x || b_max_x <= a_min_x){
         return false;
     }
@@ -1447,47 +1487,53 @@ bool is_overlapping_scalar_aabb(f32 a_min_x, f32 b_min_x, f32 a_min_y, f32 b_min
     return true;
 }
 
-bool is_overlapping_aabb(Aabb a, Aabb b){
-    return is_overlapping_scalar_aabb(a.min_x, b.min_x, a.min_y, b.min_y, a.max_x, b.max_x, a.max_y, b.max_y);
+bool aabb_overlaps(Aabb a, Aabb b){
+    return aabb_overlaps_scalar(
+        a.min_x, b.min_x,
+        a.min_y, b.min_y,
+        a.max_x, b.max_x,
+        a.max_y, b.max_y
+    );
+
 }
 
-bool is_overlapping_point_scalar_aabb(f32 aabbMinX, f32 aabbMinY, f32 aabbMaxX, f32 aabbMaxY, f32 poi32X, f32 poi32Y){
+bool aabb_overlaps_point_scalar(f32 aabb_min_x, f32 aabb_min_y, f32 aabb_max_x, f32 aabb_max_y, f32 point_x, f32 point_y){
     return 
-    aabbMinX <= poi32X &&
-    aabbMinY <= poi32Y && 
-    aabbMaxX >= poi32X &&
-    aabbMaxY >= poi32Y;
+    aabb_min_x <= point_x &&
+    aabb_min_y <= point_y && 
+    aabb_max_x >= point_x &&
+    aabb_max_y >= point_y;
 }
 
-bool is_overlapping_point_aabb(Aabb aabb, Vector2 point){
-    return is_overlapping_point_scalar_aabb(
+bool aabb_overlaps_point(Aabb aabb, Vector2 point){
+    return aabb_overlaps_point_scalar(
         aabb.min_x, aabb.min_y, aabb.max_x, aabb.max_y,
         point.x, point.y
     );
 }
 
-bool is_overlapping_line_scalar_aabb(
+bool aabb_overlaps_line_scalar(
     f32 aabb_min_x, f32 aabb_min_y, f32 aabb_max_x, f32 aabb_max_y,
     f32 line_start_x, f32 line_start_y, f32 line_end_x, f32 line_end_y
 ){
     f32 closest_point_x;
     f32 closest_point_y;
 
-    closest_point_scalar_line_segment(line_start_x, line_start_y, line_end_x, line_end_y, aabb_min_x, aabb_min_y, &closest_point_x, &closest_point_y);
+    line_segment_closest_point_scalar(line_start_x, line_start_y, line_end_x, line_end_y, aabb_min_x, aabb_min_y, &closest_point_x, &closest_point_y);
 
-    if(is_overlapping_point_scalar_aabb(aabb_min_x, aabb_min_y, aabb_max_x, aabb_max_y, closest_point_x, closest_point_y)){
+    if(aabb_overlaps_point_scalar(aabb_min_x, aabb_min_y, aabb_max_x, aabb_max_y, closest_point_x, closest_point_y)){
 
-        closest_point_scalar_line_segment(line_start_x, line_start_y, line_end_x, line_end_y, aabb_max_x, aabb_max_y, &closest_point_x, &closest_point_y);
+        line_segment_closest_point_scalar(line_start_x, line_start_y, line_end_x, line_end_y, aabb_max_x, aabb_max_y, &closest_point_x, &closest_point_y);
         
-        if(is_overlapping_point_scalar_aabb(aabb_min_x, aabb_min_y, aabb_max_x, aabb_max_y, closest_point_x, closest_point_y)){
+        if(aabb_overlaps_point_scalar(aabb_min_x, aabb_min_y, aabb_max_x, aabb_max_y, closest_point_x, closest_point_y)){
             return true;
         }
     }
     return false;
 }
 
-bool is_overlapping_line_aabb(Aabb aabb, Vector2 line_start, Vector2 line_end){
-    return is_overlapping_line_scalar_aabb(
+bool aabb_overlaps_line(Aabb aabb, Vector2 line_start, Vector2 line_end){
+    return aabb_overlaps_line_scalar(
         aabb.min_x, aabb.min_y, aabb.max_x, aabb.max_y,
         line_start.x, line_start.y, line_end.x, line_end.y
     );
@@ -1496,7 +1542,7 @@ bool is_overlapping_line_aabb(Aabb aabb, Vector2 line_start, Vector2 line_end){
 /*
     creates an AABB of the greatest max and lowest min vector.
 */
-void combine_scalar_aabb(
+void aabb_combine_scalar(
     f32 a_min_x, f32 a_min_y, f32 a_max_x, f32 a_max_y,
     f32 b_min_x, f32 b_min_y, f32 b_max_x, f32 b_max_y,
     f32* out_min_x, f32* out_min_y, f32* out_max_x, f32* out_max_y
@@ -1510,9 +1556,9 @@ void combine_scalar_aabb(
 /*
     creates an AABB of the greatest max and lowest min vector.
 */
-Aabb combine_aabb(Aabb a, Aabb b){
+Aabb aabb_combine(Aabb a, Aabb b){
     Aabb result;
-    combine_scalar_aabb(
+    aabb_combine_scalar(
         a.min_x, a.min_y, a.max_x, a.max_y,
         b.min_x, b.min_y, b.max_x, b.max_y,
         &result.min_x, &result.min_y,
@@ -1530,7 +1576,7 @@ i32 find_closest_vertex_scalar_polygon(f32 query_pos_x, f32 query_pos_y, f32* ve
     f32 min_dist = F32_MAX;
     
     for(i32 i = 0; i < verts_size; i++){
-        f32 distance = dist_sqrd_2d_f32(verts_x[i], verts_y[i], query_pos_x, query_pos_y);
+        f32 distance = vector2_dist_sqrd_scalar(verts_x[i], verts_y[i], query_pos_x, query_pos_y);
 
         if(distance <= min_dist){
             min_dist = distance;
@@ -1554,7 +1600,7 @@ i32 find_closest_vertex_polygon(Vector2 query_pos, f32* verts_x, f32* verts_y, i
     remarks:
     none of the polygon edges can be self-intersecting; otherwise the calculation will be wrong.
 */
-void calc_centroid_scalar_polygon(f32* verts_x, f32* verts_y, i32 verts_size, f32* out_centroid_x, f32* out_centroid_y){
+void polygon_calc_centroid_scalar(f32* verts_x, f32* verts_y, i32 verts_length, f32* out_centroid_x, f32* out_centroid_y){
     f32 area = 0;
     f32 inv_area = 0;
     f32 temp_x = 0;
@@ -1567,9 +1613,9 @@ void calc_centroid_scalar_polygon(f32* verts_x, f32* verts_y, i32 verts_size, f3
     i32 next_index;
     bool next_in_range;
 
-    for(i32 i = 0; i < verts_size; i++){
+    for(i32 i = 0; i < verts_length; i++){
         next_index = i + 1;
-        next_in_range = next_index < verts_size;
+        next_in_range = next_index < verts_length;
 
         // get curernt vertex and the next one.
         x0 = verts_x[i];
@@ -1608,7 +1654,7 @@ void calc_centroid_scalar_polygon(f32* verts_x, f32* verts_y, i32 verts_size, f3
 
 Vector2 calc_centroid_polygon(f32* verts_x, f32* verts_y, i32 verts_size){
     Vector2 result;
-    calc_centroid_scalar_polygon(verts_x, verts_y, verts_size, &result.x, &result.y);
+    polygon_calc_centroid_scalar(verts_x, verts_y, verts_size, &result.x, &result.y);
     return result;
 }
 
@@ -1664,23 +1710,23 @@ PolygonRectangle transform_polygon_rectangle(PolygonRectangle rect, Transform2D 
     PolygonRectangle result;
     
     Vector2 v0 = {rect.vertices_x[0], rect.vertices_y[0]};
-    v0 = transform_vector2(v0, transform);
+    v0 = vector2_transform(v0, transform);
 
     Vector2 v1 = {rect.vertices_x[1], rect.vertices_y[1]};
-    v1 = transform_vector2(v1, transform);
+    v1 = vector2_transform(v1, transform);
 
     Vector2 v2 = {rect.vertices_x[2], rect.vertices_y[2]};
-    v2 = transform_vector2(v2, transform);
+    v2 = vector2_transform(v2, transform);
 
     Vector2 v3 = {rect.vertices_x[3], rect.vertices_y[3]};
-    v3 = transform_vector2(v3, transform);
+    v3 = vector2_transform(v3, transform);
 
     init_from_verts_polygon_rectangle(&result, v0, v1, v2, v3);
     return result;
 }
 
-void calc_centroid_scalar_polygon_rectangle(PolygonRectangle rect, f32* out_centroid_x, f32* out_centroid_y){
-    calc_centroid_scalar_polygon(rect.vertices_x, rect.vertices_y, 4, out_centroid_x, out_centroid_y);
+void polygon_calc_centroid_scalar_rectangle(PolygonRectangle rect, f32* out_centroid_x, f32* out_centroid_y){
+    polygon_calc_centroid_scalar(rect.vertices_x, rect.vertices_y, 4, out_centroid_x, out_centroid_y);
 }
 
 Vector2 calc_centroid_polygon_rectangle(PolygonRectangle rect){
@@ -1727,14 +1773,30 @@ Aabb calc_aabb_polygon_rectangle(PolygonRectangle rect){
 }
 
 f32 get_width_polygon_rectangle(PolygonRectangle rect){
-    return dist_2d_f32(rect.vertices_x[0], rect.vertices_y[0], rect.vertices_x[1], rect.vertices_y[1]);
+    return vector2_dist_scalar(rect.vertices_x[0], rect.vertices_y[0], rect.vertices_x[1], rect.vertices_y[1]);
 }
 
 f32 get_height_polygon_rectangle(PolygonRectangle rect){
-    return dist_2d_f32(rect.vertices_x[0], rect.vertices_y[0], rect.vertices_x[3], rect.vertices_y[3]);
+    return vector2_dist_scalar(rect.vertices_x[0], rect.vertices_y[0], rect.vertices_x[3], rect.vertices_y[3]);
 }
 
-bool is_overlapping_sat_scalar_circle(
+
+
+
+/**====================
+    functions: Circle
+====================**//**/
+
+
+
+void circle_get_min_max_vertices(f32 x, f32 y, f32 radius, f32* out_min_x, f32* out_min_y, f32* out_max_x, f32* out_max_y){
+    *out_min_x = x - radius;
+    *out_min_y = y - radius;
+    *out_max_x = x + radius;
+    *out_max_y = y + radius;
+}
+
+bool circle_overlaps_scalar(
     f32 lhs_x, f32 lhs_y, f32 lhs_radius, 
     f32 rhs_x, f32 rhs_y, f32 rhs_radius, 
     f32* out_normal_x, f32* out_normal_y, f32* out_depth
@@ -1742,7 +1804,7 @@ bool is_overlapping_sat_scalar_circle(
     *out_normal_x = INITIAL_NORMAL.x;
     *out_normal_y = INITIAL_NORMAL.y;
 
-    f32 dist_sqrd = dist_sqrd_2d_f32(lhs_x, lhs_y, rhs_x, rhs_y);
+    f32 dist_sqrd = vector2_dist_sqrd_scalar(lhs_x, lhs_y, rhs_x, rhs_y);
     f32 radius_sum = lhs_radius + rhs_radius;
     f32 radis_sum_sqrd = radius_sum * radius_sum;
 
@@ -1764,8 +1826,8 @@ bool is_overlapping_sat_scalar_circle(
     return true;  
 }
 
-bool is_overlapping_sat_circle(Circle lhs, Circle rhs, Vector2* out_normal, f32* out_depth){
-    return is_overlapping_sat_scalar_circle(
+bool circle_overlaps(Circle lhs, Circle rhs, Vector2* out_normal, f32* out_depth){
+    return circle_overlaps_scalar(
         lhs.x, lhs.y, lhs.radius, 
         rhs.x, rhs.y, rhs.radius, 
         &out_normal->x, &out_normal->y, out_depth
@@ -1775,7 +1837,7 @@ bool is_overlapping_sat_circle(Circle lhs, Circle rhs, Vector2* out_normal, f32*
 /*
     projects the edges of a circle onto a given axis.
 */
-void project_circle_scalar(
+void circle_project_scalar(
     f32 circle_x, f32 circle_y, f32 circle_radius, f32 axis_x, f32 axis_y,
     f32* out_min_circle_edge, f32* out_max_circle_edge
 ){
@@ -1801,14 +1863,14 @@ void project_circle_scalar(
 /*
     projects the edges of a circle onto a given axis.
 */
-void project_circle(Circle circle, Vector2 axis, f32* out_min_circle_edge, f32* out_max_circle_edge){
-    project_circle_scalar(circle.x, circle.y, circle.radius, axis.x, axis.y, out_min_circle_edge, out_max_circle_edge);
+void circle_project(Circle circle, Vector2 axis, f32* out_min_circle_edge, f32* out_max_circle_edge){
+    circle_project_scalar(circle.x, circle.y, circle.radius, axis.x, axis.y, out_min_circle_edge, out_max_circle_edge);
 }
 
 /*
     calculates the contact point between two circles.
 */
-void calc_contact_points_scalar_circle(f32 a_x, f32 a_y, f32 a_radius, f32 b_x, f32 b_y, f32* out_contact_point_x, f32* out_contact_point_y){
+void circle_calc_contact_points_scalar(f32 a_x, f32 a_y, f32 a_radius, f32 b_x, f32 b_y, f32* out_contact_point_x, f32* out_contact_point_y){
     f32 dist_x = b_x - a_x;
     f32 dist_y = b_y - a_y;
     f32 dir_x;
@@ -1824,11 +1886,16 @@ void calc_contact_points_scalar_circle(f32 a_x, f32 a_y, f32 a_radius, f32 b_x, 
 /*
     calculates the contact point between two circles.
 */
-Vector2 calc_contact_points_circle(Circle a, Circle b){
+Vector2 circle_calc_contact_points(Circle a, Circle b){
     Vector2 result;
-    calc_contact_points_scalar_circle(a.x, a.y, a.radius, b.x, b.y, &result.x, &result.y);
+    circle_calc_contact_points_scalar(a.x, a.y, a.radius, b.x, b.y, &result.x, &result.y);
     return result;
 }
+
+
+
+
+
 /*
     projects a set of vertices onto a normalised axis.
 
@@ -1855,7 +1922,7 @@ void project_polygon(
     }
 }
 
-bool is_overlapping_point_scalar_polygon(
+bool overlaps_point_scalar_polygon(
     f32* verts_x, f32* verts_y, i32 verts_size,
     f32 point_x, f32 point_y, 
     f32* out_normal_x, f32* out_normal_y, f32* out_depth
@@ -1918,10 +1985,10 @@ bool is_overlapping_point_scalar_polygon(
     remarks:
     `out_normal` and `out_depth` are relative to polygon `a`.
 
-    this is an internal function for `is_overlapping_polygon()`.
+    this is an internal function for `polygon_overlaps()`.
     do NOT use this function; instead use said function instead.
 */
-bool is_overlapping_one_way_polygon(
+bool polygon_overlaps_one_way(
     f32* a_verts_x, f32* a_verts_y, i32 a_verts_size,
     f32* b_verts_x, f32* b_verts_y, i32 b_verts_size,
     f32* out_normal_x, f32* out_normal_y, f32* out_depth
@@ -1981,7 +2048,7 @@ bool is_overlapping_one_way_polygon(
     return true;
 }
 
-bool is_overlapping_polygon(
+bool polygon_overlaps(
     f32* lhs_verts_x, f32* lhs_verts_y, i32 lhs_verts_size,
     f32* rhs_verts_x, f32* rhs_verts_y, i32 rhs_verts_size,
     f32 lhs_centroid_x, f32 lhs_centroid_y, f32 rhs_centroid_x, f32 rhs_centroid_y, 
@@ -1995,7 +2062,7 @@ bool is_overlapping_polygon(
     *out_depth = F32_MAX;
 
 
-    bool lhs_overlaps_rhs = is_overlapping_one_way_polygon(
+    bool lhs_overlaps_rhs = polygon_overlaps_one_way(
         lhs_verts_x, lhs_verts_y, lhs_verts_size, 
         rhs_verts_x, rhs_verts_y, rhs_verts_size, 
         &found_normal_x, &found_normal_y, &found_depth
@@ -2010,7 +2077,7 @@ bool is_overlapping_polygon(
         return false;
     }
 
-    bool rhs_overlaps_lhs = is_overlapping_one_way_polygon(
+    bool rhs_overlaps_lhs = polygon_overlaps_one_way(
         rhs_verts_x, rhs_verts_y, rhs_verts_size, 
         lhs_verts_x, lhs_verts_y, lhs_verts_size, 
         &found_normal_x, &found_normal_y, &found_depth
@@ -2040,10 +2107,10 @@ bool is_overlapping_polygon(
 
 /*
     remarks:
-    this is an internal function for `find_contact_points_polygon()`
+    this is an internal function for `polygon_find_contact_points()`
     do NOT use this function; instead use said function instead.
 */
-void find_contact_points_one_way_polygon(
+void polygon_find_contact_points_one_way(
     f32* a_verts_x, f32* a_verts_y, i32 a_verts_size, 
     f32* b_verts_x, f32* b_verts_y, i32 b_verts_size, 
     f32 epsilon, f32* out_min_dist_sqrd, f32* out_contact_point_1_x, f32* out_contact_point_1_y, 
@@ -2073,12 +2140,9 @@ void find_contact_points_one_way_polygon(
 
             f32 closest_point_x;
             f32 closest_point_y;
-            f32 dist_sqrd;
 
-            closest_point_with_sqrd_dist_scalar_line_segment(
-                edge_start_x, edge_start_y, edge_end_x, edge_end_y, point_x, point_y, 
-                &closest_point_x, &closest_point_y, &dist_sqrd            
-            );
+            line_segment_closest_point_scalar(edge_start_x, edge_start_y, edge_end_x, edge_end_y, point_x, point_y, &closest_point_x, &closest_point_y);
+            f32 dist_sqrd = vector2_dist_sqrd_scalar(point_x, point_y, closest_point_x, closest_point_y);
 
             if(near_equal_f32(dist_sqrd, *out_min_dist_sqrd, epsilon))
             {
@@ -2117,9 +2181,9 @@ void find_contact_points_one_way_polygon(
     parameters:
     `out_contact_point_count`: can return either 1 or 2.
 */
-void find_contact_points_polygon(
-    f32* a_verts_x, f32* a_verts_y, i32 a_verts_size,
-    f32* b_verts_x, f32* b_verts_y, i32 b_verts_size,
+void polygon_find_contact_points(
+    f32* a_vert_x, f32* a_vert_y, i32 a_verts_length,
+    f32* b_vert_x, f32* b_vert_y, i32 b_verts_length,
     f32 epsilon, f32* out_contact_point_1_x, f32* out_contact_point_1_y, 
     f32* out_contact_point_2_x, f32* out_contact_point_2_y, i32* out_contact_point_count
 ){
@@ -2131,24 +2195,24 @@ void find_contact_points_polygon(
     f32 min_dist_sqrd = F32_MAX;
 
     // polygon a to b.
-    find_contact_points_one_way_polygon(
-        a_verts_x, a_verts_y, a_verts_size, 
-        b_verts_x, b_verts_y, b_verts_size,
+    polygon_find_contact_points_one_way(
+        a_vert_x, a_vert_y, a_verts_length, 
+        b_vert_x, b_vert_y, b_verts_length,
         epsilon, &min_dist_sqrd, out_contact_point_1_x, out_contact_point_1_y, 
         out_contact_point_2_x, out_contact_point_2_y, out_contact_point_count
     );
 
     // polygon b to a.
-    find_contact_points_one_way_polygon(
-        b_verts_x, b_verts_y, b_verts_size,
-        a_verts_x, a_verts_y, a_verts_size, 
+    polygon_find_contact_points_one_way(
+        b_vert_x, b_vert_y, b_verts_length,
+        a_vert_x, a_vert_y, a_verts_length, 
         epsilon, &min_dist_sqrd, out_contact_point_1_x, out_contact_point_1_y, 
         out_contact_point_2_x, out_contact_point_2_y, out_contact_point_count
     );
 }
 
-bool is_circle_overlapping_scalar_polygon(
-    f32* poly_verts_x, f32* poly_verts_y, f32 poly_centroid_x, f32 poly_centroid_y, i32 poly_verts_size,
+bool polygon_overlaps_circle_scalar(
+    f32* poly_vert_x, f32* poly_vert_y, i32 poly_vert_length, f32 poly_centroid_x, f32 poly_centroid_y,
     f32 circle_x, f32 circle_y, f32 circle_radius,
     f32* out_normal_x, f32* out_normal_y, f32* out_depth
 ){
@@ -2167,18 +2231,18 @@ bool is_circle_overlapping_scalar_polygon(
     f32 b_min;
     f32 b_max;
 
-    for(i32 i = 0; i < poly_verts_size; i++){
+    for(i32 i = 0; i < poly_vert_length; i++){
         i32 current_index = i;
         i32 next_index = i+1;
 
         // this is faster than modulo.
-        if(next_index >= poly_verts_size)
+        if(next_index >= poly_vert_length)
             next_index = 0;
 
-        f32 curr_x = poly_verts_x[current_index];
-        f32 next_x = poly_verts_x[next_index];
-        f32 curr_y = poly_verts_y[current_index];
-        f32 next_y = poly_verts_y[next_index];
+        f32 curr_x = poly_vert_x[current_index];
+        f32 next_x = poly_vert_x[next_index];
+        f32 curr_y = poly_vert_y[current_index];
+        f32 next_y = poly_vert_y[next_index];
 
         f32 edge_x = next_x - curr_x; 
         f32 edge_y = next_y - curr_y; 
@@ -2194,8 +2258,8 @@ bool is_circle_overlapping_scalar_polygon(
     
         // project all vertices onto the current edge to find the min and max values
         // of the two rectangles along the edge.
-        project_polygon(poly_verts_x, poly_verts_y, poly_verts_size, axis_x, axis_y, &a_min, &a_max);
-        project_circle_scalar(circle_x, circle_y, circle_radius, axis_x, axis_y, &b_min, &b_max);
+        project_polygon(poly_vert_x, poly_vert_y, poly_vert_length, axis_x, axis_y, &a_min, &a_max);
+        circle_project_scalar(circle_x, circle_y, circle_radius, axis_x, axis_y, &b_min, &b_max);
 
         if(a_min > b_max || b_min > a_max){
             // there is separation.
@@ -2211,9 +2275,9 @@ bool is_circle_overlapping_scalar_polygon(
         }
     }
 
-    i32 closest_point_index = find_closest_vertex_scalar_polygon(circle_x, circle_y, poly_verts_x, poly_verts_y, poly_verts_size);
-    f32 closest_point_x = poly_verts_x[closest_point_index];
-    f32 closest_point_y = poly_verts_y[closest_point_index];
+    i32 closest_point_index = find_closest_vertex_scalar_polygon(circle_x, circle_y, poly_vert_x, poly_vert_y, poly_vert_length);
+    f32 closest_point_x = poly_vert_x[closest_point_index];
+    f32 closest_point_y = poly_vert_y[closest_point_index];
 
     axis_x = closest_point_x - circle_x;
     axis_y = closest_point_y - circle_y;
@@ -2221,8 +2285,8 @@ bool is_circle_overlapping_scalar_polygon(
 
     // project all vertices onto the current edge to find the min and max values
     // of the two rectangles along the edge.
-    project_polygon(poly_verts_x, poly_verts_y, poly_verts_size, axis_x, axis_y, &a_min, &b_min);
-    project_circle_scalar(circle_x, circle_y, circle_radius, axis_x, axis_y, &b_min, &b_max);
+    project_polygon(poly_vert_x, poly_vert_y, poly_vert_length, axis_x, axis_y, &a_min, &b_min);
+    circle_project_scalar(circle_x, circle_y, circle_radius, axis_x, axis_y, &b_min, &b_max);
 
     if(a_min > b_max || b_min > a_max){
         // there is separation.
@@ -2253,9 +2317,52 @@ bool is_circle_overlapping_scalar_polygon(
     return true;
 }
 
-bool is_circle_overlapping_polygon(Polygon polygon, Vector2 polygon_centroid, Circle circle, Vector2* out_normal, f32* out_depth){
-    return is_circle_overlapping_scalar_polygon(
-        polygon.verts_x, polygon.verts_y, polygon_centroid.x, polygon_centroid.y, polygon.verts_size,
+/** 
+    Finds the contact points between a polygon and a point.
+**/ 
+void polygon_find_point_contact_points_scalar(
+    f32* poly_vert_x, f32* poly_vert_y, i32 poly_vert_length, 
+    f32 point_x, f32 point_y,
+    f32* out_contact_point_x, f32* out_contact_point_y 
+){
+    *out_contact_point_x = F32_MAX;
+    *out_contact_point_y = F32_MAX;
+    f32 min_dist_sqrd = F32_MAX;
+
+    f32 closest_point_x;
+    f32 closest_point_y;
+    f32 dist_sqrd;
+
+    // find the closest point for each edge of the rectangle.
+    for(int start_idx = 0; start_idx < poly_vert_length; start_idx++){
+        int end_idx = start_idx + 1;
+        
+        // this is faster than modulo.
+        if(end_idx >= poly_vert_length){
+            end_idx = 0;
+        }
+
+        BOUNDS_CHECK(start_idx, poly_vert_length);
+        BOUNDS_CHECK(end_idx, poly_vert_length);
+        line_segment_closest_point_scalar(
+            poly_vert_x[start_idx], poly_vert_y[start_idx], 
+            poly_vert_x[end_idx], poly_vert_y[end_idx], 
+            point_x, point_y, &closest_point_x, &closest_point_y
+        );
+
+        dist_sqrd = vector2_dist_sqrd_scalar(point_x, point_y, closest_point_x, closest_point_y);
+
+        if(dist_sqrd < min_dist_sqrd){
+            min_dist_sqrd = dist_sqrd;
+            *out_contact_point_x = closest_point_x;
+            *out_contact_point_y = closest_point_y;
+        }
+    } 
+}
+
+bool polygon_overlaps_circle(Polygon polygon, Vector2 polygon_centroid, Circle circle, Vector2* out_normal, f32* out_depth){
+    return polygon_overlaps_circle_scalar(
+        polygon.x, polygon.y, polygon.length, polygon_centroid.x, polygon_centroid.y,
         circle.x, circle.y, circle.radius,
         &(*out_normal).x, &(*out_normal).y, out_depth
     );
@@ -2265,7 +2372,7 @@ bool is_circle_overlapping_polygon(Polygon polygon, Vector2 polygon_centroid, Ci
     finds the contact points between a polygon and a query-point.
 */
 void find_point_contact_points_scalar_polygon(
-    f32* poly_verts_x, f32* poly_verts_y, i32 poly_verts_size,
+    f32* poly_verts_x, f32* poly_verts_y, i32 poly_verts_length,
     f32 point_x, f32 point_y,
     f32* out_contact_point_x, f32* out_contact_point_y
 ){
@@ -2278,16 +2385,18 @@ void find_point_contact_points_scalar_polygon(
     f32 dist_sqrd;
 
     // find the closest poi32 for each edge of the rectangle.
-    for(i32 start_index = 0; start_index < poly_verts_size; start_index++){        
-        i32 next_index = start_index + 1;
+    for(i32 start_idx = 0; start_idx < poly_verts_length; start_idx++){        
+        i32 next_idx = start_idx + 1;
         // this is faster than modulo.
-        if(next_index >= poly_verts_size)
-            next_index = 0;
+        if(next_idx >= poly_verts_length)
+            next_idx = 0;
 
-        closest_point_with_sqrd_dist_scalar_line_segment(
-            poly_verts_x[start_index], poly_verts_y[start_index], poly_verts_x[next_index], poly_verts_y[next_index],
-            point_x, point_y, &closest_point_x, &closest_point_y, &dist_sqrd
+        line_segment_closest_point_scalar(
+            poly_verts_x[start_idx], poly_verts_y[start_idx], poly_verts_x[next_idx], poly_verts_y[next_idx],
+            point_x, point_y, &closest_point_x, &closest_point_y
         );
+        
+        dist_sqrd = vector2_dist_sqrd_scalar(point_x, point_y, closest_point_x, closest_point_y);
 
         if(dist_sqrd < min_dist_sqrd){
             min_dist_sqrd = dist_sqrd;
@@ -2303,4 +2412,34 @@ f32 calc_area_scalar_rectangle(f32 width, f32 height){
 
 f32 calc_area_rectangle(Rectangle rect){
     return calc_area_scalar_rectangle(rect.width, rect.height);
+}
+
+/** 
+    Gets the min and max vectors from a span of vertices.
+**/ 
+void polygon_get_min_max_vertices(f32* vert_x, f32* vert_y, i32 vert_length, f32* out_min_x, f32* out_min_y, f32* out_max_x, f32* out_max_y){
+    *out_min_x = F32_MAX;
+    *out_min_y = F32_MAX;
+    *out_max_x = F32_MIN;
+    *out_max_y = F32_MIN;
+    
+    for(i32 i = 0; i < vert_length; i++){
+        f32 v = vert_x[i];
+        if (v < *out_min_x){
+            *out_min_x = v;
+        }
+        if(v > *out_max_x){
+            *out_max_x = v;
+        }
+    }
+
+    for(i32 i = 0; i < vert_length; i++){
+        f32 v = vert_y[i];
+        if(v < *out_min_y){
+            *out_min_y = v;
+        }
+        if(v > *out_min_y){
+            *out_min_y = v;
+        }
+    }
 }

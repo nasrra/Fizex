@@ -2467,4 +2467,3 @@ void renderer_draw_wire_rect(RendererContext* ctx, Rectangle shape, Colour colou
     renderer_draw_line(ctx, colour, bottom_right, bottom_left, layer, material, renderer_global_wireframe_thickness);
     renderer_draw_line(ctx, colour, bottom_left, top_left, layer, material, renderer_global_wireframe_thickness);
 }
-

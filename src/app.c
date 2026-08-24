@@ -1,14 +1,18 @@
 #include "platform.h"
 
 #include "base_layer/base.h"
-#include "base_layer/base_simd.c"
+#include "base_layer/base_cpu.c"
 #include "base_layer/base_math.c"
+#include "base_layer/base_algorithms.c"
+#include "base_layer/base_structures.c"
 #include "input/input.c"
 #include "renderer/renderer.c"
 #include "renderer/renderer_app_types.c"
+#include "fizx/fizx.c"
 
 typedef struct{
     i32 num;
+    char foo;
 } Person;
 
 DEFINE_QUICKSORT_STRUCT(Person, i32, .num, quicksort_person);
@@ -34,10 +38,10 @@ WindowContext* window_ctx;
 void app_update(MemoryArena* persistent, MemoryArena* transient){
 
     Soa_Aabb soa = {0};
-    init_soa_aabb(&soa, transient, 3);
-    append_soa_aabb(&soa, -1.0f, -1.0f, 2.0f, 2.0f);
-    append_soa_aabb(&soa, -1.0f, -1.0f, 3.0f, 3.0f);
-    append_soa_aabb(&soa, -1.0f, -1.0f, 4.0f, 4.0f);
+    soa_aabb_init(&soa, transient, 3);
+    soa_aabb_push(&soa, -1.0f, -1.0f, 2.0f, 2.0f);
+    soa_aabb_push(&soa, -1.0f, -1.0f, 3.0f, 3.0f);
+    soa_aabb_push(&soa, -1.0f, -1.0f, 4.0f, 4.0f);
 
     f32* nums = (f32[]){2.0f, 1.0f, 9.0f, 11.0f, 16.0f, -33.3f, -120.0f, 99.0f};
     f32* num_0 = &nums[0];
@@ -72,7 +76,7 @@ void app_update(MemoryArena* persistent, MemoryArena* transient){
 
     MEMORY_ARENA_ALLOC_ARRAY(transient, centroids_x, &centroids_x_size, 3);
     MEMORY_ARENA_ALLOC_ARRAY(transient, centroids_y, &centroids_y_size, 3);
-    calculate_centroids_soa_aabb(&soa, centroids_x, centroids_y);
+    soa_aabb_calculate_centroids(&soa, centroids_x, centroids_y);
 
     i32 i_a = rand_i32();
     i32 i_b = rand_i32();
@@ -186,7 +190,6 @@ void app_main(){
     platform_init_transient_memory(MEGABYTE(4));
     MemoryArena* persistent = platform_get_persistent_memory();
     MemoryArena* transient = platform_get_transient_memory();
-    Person person = (Person){.num = 256};
     window_ctx = platform_window_create(1920, 1080);
     
     renderer_ctx = app_renderer_init(persistent, transient, *window_ctx);
@@ -201,6 +204,19 @@ void app_main(){
     transform.scale = (Vector3){.x = 1, .y = 1, .z = 100};
     // renderer_sprite_init(&renderer_ctx, sprite_id, matrix4x4_from_transform(transform), COLOUR_ORANGE, (SpriteRegion){0}, ColourState_Override, 1, SPRITE_MATERIAL_DEBUG, true);
 
+    i32* nums = (i32[]){1,2,3,0};
+    i32 nums_length = 4;
+    i32 nums_count = 3;
+    ARRAY_UNORDERED_INSERT(nums, nums_length, &nums_count, 1, 4);
+    i32 n0 = nums[0];
+    i32 n1 = nums[1];
+    i32 n2 = nums[2];
+    i32 n3 = nums[3];
+
+    f32* foo = (f32[2]){};
+    i32 count = 0;
+    ARRAY_PUSH(foo, 10, &count, 3);
+    
     while(!window_ctx->is_destroyed){
         app_update(persistent, transient);
         app_late_update();

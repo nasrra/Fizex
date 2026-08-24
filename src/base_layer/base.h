@@ -23,8 +23,6 @@
 ========================================*//**/
 
 typedef int8_t bool;
-#define false 0
-#define true 1
 typedef float f32;
 typedef double f64;
 typedef int8_t i8;
@@ -48,11 +46,80 @@ typedef struct{
 } MemoryArena;
 
 typedef u32 GenId;
-void * (*base_panic_pre_abort_funcptr) (char* msg);
+
+typedef struct{
+    GenId* gen_ids;
+    bool* allocated;
+    i32 length;
+    i32* free_slots_stack;
+    i32 free_slots_stack_count;
+    bool is_init;
+} GenIdAllocator;
+
+typedef struct{
+    /**
+        the `node_index` of this node's parent.
+
+        `remarks`
+        invalid when `0`.
+    **/
+    i32 parent;
+    /**
+        
+        the <c>nodeIndex</c> of this node's next sibling.
+
+        `remarks`
+        this value is self-recursive, meaning the next sibling loops back to this node's index.
+    **/
+    i32 next_sibling;
+    /**
+        the `node_index` of this node's previous sibling.
+
+        `remarks`
+        this value is self-recursive, meaning the previous sibling loops back to this node's index.    
+    **/
+    i32 previous_sibling;
+    /**
+        `node_index` of this node's first child.
+
+        `remarks`
+        invalid when `0`.
+    **/
+    i32 first_child;
+    /**
+        this node's index in `IntrusiveList.root_indices`
+        
+        `remarks`
+        invalid when `0`.
+    **/
+    i32 root_dense_index;
+    /**
+        whether or not this node is within the state's tree.
+    **/
+    bool in_tree;
+} IntrusiveListNode;
+
+typedef struct{
+    IntrusiveListNode* node;
+    /**
+        contains a `Nil` element.
+    **/
+    i32* root_index;
+    i32 root_index_count;
+    i32 length;
+    /**
+        Whether or not the ordering of root indices is preserved during root node removal.
+    **/
+    bool preserve_root_order;
+    bool is_init;
+} IntrusiveList;
 
 /*========================================
     defines.
 ========================================*//**/
+
+#define false 0
+#define true 1
 
 /*
     Context Cracking.
@@ -167,11 +234,15 @@ void * (*base_panic_pre_abort_funcptr) (char* msg);
 
 #ifdef NDEBUG
 #   define ASSERT(condition, msg)
-#   define BOUNDS_CHECK(val, size)
+#   define BOUNDS_CHECK(val, length)
+#   define NIL_BOUNDS_CHECK(val, length)
 #else
 #   define ASSERT(condition, msg) (assert(msg && (condition)))
-#   define BOUNDS_CHECK(val, size) do { \
-        ASSERT(val >= 0 && val < size, "Index Out Of Bounds."); \
+#   define BOUNDS_CHECK(val, length) do { \
+        ASSERT(val >= 0 && val < length, "Index Out Of Bounds."); \
+    } while(0)
+#   define NIL_BOUNDS_CHECK(val, length) do { \
+        ASSERT(val > 0 && val < length, "Index Out Of Bounds."); \
     } while(0)
 #endif
 
@@ -217,6 +288,7 @@ void * (*base_panic_pre_abort_funcptr) (char* msg);
 #define F32_EPSILON 1.19209290e-7F
 #define F64_EPSILON 2.2204460492503131e-16
 #define ZERO_MEMORY(ptr, size) memset(ptr, 0, size)
+#define ZERO_STRUCT(ptr) memset(ptr, 0, sizeof(*(ptr)))
 #define COPY_MEMORY(DST, SRC, SIZE_IN_BYTES) memcpy(DST, SRC, SIZE_IN_BYTES)
 /*
     zeroes out an array. 
@@ -231,9 +303,7 @@ void * (*base_panic_pre_abort_funcptr) (char* msg);
 #define PTR_ARRAY_SIZE(ptr, length) (length * sizeof(*(ptr)))
 
 #define ARRAY_ZERO(array, length) ZERO_MEMORY(array, PTR_ARRAY_SIZE(array, length))
-
 #define ARRAY_SIZE(arr) (sizeof(arr)/sizeof(*(arr)))
-
 /**
     example:
 
@@ -248,7 +318,6 @@ void * (*base_panic_pre_abort_funcptr) (char* msg);
     array[*array_count] = value;                                    \
     *array_count += 1;                                              \
 } while (0)
-
 /**
     example:
 
@@ -268,6 +337,57 @@ void * (*base_panic_pre_abort_funcptr) (char* msg);
         *out_value = array[*array_count];                                    \
     }                                                                       \
 } while (0)
+/**
+    `remarks`
+    when removing a value from an array; all elements after the removed slot are shifted towards element zero.
+
+    `example`
+
+    i32* nums = (i32[]){1,2,3,4};
+    i32 nums_length = 4;
+    i32 nums_count = 4;
+    ARRAY_ORDERED_REMOVE_AT(nums, nums_length, &nums_count, 2); // results in {1,2,4,4}
+**/
+#define ARRAY_ORDERED_REMOVE_AT(arr_ptr, arr_length, arr_count, element_index) do {                                                         \
+    BOUNDS_CHECK((element_index), arr_length);                                                                                              \
+    BOUNDS_CHECK((element_index), *(arr_count));                                                                                            \
+    COPY_MEMORY((arr_ptr) + (element_index), (arr_ptr) + (element_index) + 1, sizeof(*arr_ptr) * (*(arr_count) - ((element_index) + 1)));   \
+    *arr_count -= 1;                                                                                                                        \
+} while(0)
+/**
+    `remarks`
+    When removing a value from the buffer; the data of the last element in the buffer is copied into the element that is being removed.
+**/
+#define ARRAY_UNORDERED_REMOVE_AT(arr_ptr, arr_length, arr_count, element_index) do{    \
+    BOUNDS_CHECK((element_index), (arr_length));                                        \
+    BOUNDS_CHECK((element_index), *(arr_count));                                        \
+    *(arr_count) -= 1;                                                                  \
+    (arr_ptr)[(element_index)] = (arr_ptr)[*(arr_count)];                               \
+} while(0)
+/**
+    `remarks`
+    When inserting a value into an element, any data the was previously in that element is 
+    shifted forward - away from element zero - including all elements after the inserted element.
+**/
+#define ARRAY_ORDERED_INSERT(arr_ptr, arr_length, arr_count, element_index, value) do{                                                       \
+    BOUNDS_CHECK((element_index), (arr_length));                                                                                            \
+    BOUNDS_CHECK((element_index), *(arr_count));                                                                                            \
+    BOUNDS_CHECK(*(arr_count), (arr_length));                                                                                               \
+    COPY_MEMORY((arr_ptr) + (element_index) + 1, (arr_ptr) + (element_index), sizeof(*arr_ptr) * (*(arr_count) - ((element_index) - 1)));   \
+    arr_ptr[element_index] = value;                                                                                                         \
+} while(0)
+/**
+`remarks`
+    When inserting a value into an element, any data the was previously in that element is sent forward - away from element zero.
+**/
+#define ARRAY_UNORDERED_INSERT(arr_ptr, arr_length, arr_count, element_index, value) do{    \
+    BOUNDS_CHECK((element_index), (arr_length));                                            \
+    BOUNDS_CHECK((element_index), *(arr_count));                                            \
+    BOUNDS_CHECK(*(arr_count), (arr_length));                                               \
+    arr_ptr[*arr_count] = arr_ptr[element_index];                                           \
+    *arr_count += 1;                                                                        \
+    arr_ptr[element_index] = value;                                                         \
+} while(0)
 
 /*
     Example:
@@ -283,7 +403,6 @@ void * (*base_panic_pre_abort_funcptr) (char* msg);
     PUSH_ARRAY_MEMARENA(&arena, ints, 3).
 */
 #define MEMORY_ARENA_PUSH_ARRAY(arena, data, array_size) do {                                   \
-                                                                                                \
     DEBUG_ASSERT(data != NULL, "attempted to push a nullptr onto a memory arena.");             \
     size_t MEMORY_ARENA_PUSH_ARRAY_size = sizeof(*data) * (array_size);                         \
     size_t MEMORY_ARENA_PUSH_ARRAY_new_stride = (arena)->stride + MEMORY_ARENA_PUSH_ARRAY_size; \
@@ -327,18 +446,18 @@ void * (*base_panic_pre_abort_funcptr) (char* msg);
     i32 datas_size;
     ALLOC_ARRAY_MEMARENA(&arena, datas, &datas_size, 2);
 */
-#define MEMORY_ARENA_ALLOC_ARRAY(arena, out_arr_ptr, out_arr_size, array_size) do {                 \
+#define MEMORY_ARENA_ALLOC_ARRAY(arena, out_arr_ptr, out_arr_length, array_length) do {             \
                                                                                                     \
-    size_t MEMORY_ARENA_ALLOC_ARRAY_size = sizeof(*out_arr_ptr) * (array_size);                     \
+    size_t MEMORY_ARENA_ALLOC_ARRAY_size = sizeof(*out_arr_ptr) * (array_length);                   \
     size_t MEMORY_ARENA_ALLOC_ARRAY_new_stride = (arena)->stride + MEMORY_ARENA_ALLOC_ARRAY_size;   \
     if(MEMORY_ARENA_ALLOC_ARRAY_new_stride <= (arena)->size){                                       \
         (out_arr_ptr) = (void*)((u8*)(arena)->ptr + (arena)->stride);                               \
         (arena)->stride = MEMORY_ARENA_ALLOC_ARRAY_new_stride;                                      \
-        *(out_arr_size) = array_size;                                                               \
+        *(out_arr_length) = array_length;                                                           \
     }                                                                                               \
     else{                                                                                           \
         PANIC(false, "insufficient space to push data onto memory arena.");                         \
-        *(out_arr_size) = 0;                                                                        \
+        *(out_arr_length) = 0;                                                                      \
     }                                                                                               \
 } while(0)
 
@@ -497,6 +616,22 @@ static void FUNCTION_NAME##_dsc(TYPE* array_ptr, i32 array_length){             
     }                                                                           \
 }
 
+#define GEN_ID_ALLOCATOR_MIN_LENGTH 2
+#define GEN_ID_ALLOCATOR_MAX_LENGTH GENID_UNIQUE_INDICES_COUNT
+
+/*========================================
+    globals.
+========================================*//**/
+/*
+    base_rand_seed is lazy init.
+*/
+i32 base_rand_state;
+bool base_rand_initial_state_set;
+void * (*base_panic_pre_abort_funcptr) (char* msg);
+
+/*========================================
+    functions
+========================================*//**/
 
 DEFINE_QUICKSORT(i8,  quicksort_i8)
 DEFINE_QUICKSORT(i16, quicksort_i16)
@@ -508,19 +643,6 @@ DEFINE_QUICKSORT(i32, quicksort_u32)
 DEFINE_QUICKSORT(i64, quicksort_u64)
 DEFINE_QUICKSORT(f32, quicksort_f32)
 DEFINE_QUICKSORT(f64, quicksort_f64)
-
-/*========================================
-    globals.
-========================================*//**/
-/*
-    base_rand_seed is lazy init.
-*/
-i32 base_rand_state;
-bool base_rand_initial_state_set;
-
-/*========================================
-    functions
-========================================*//**/
 
 /*
     sets the global random seed to a new seed.
@@ -572,5 +694,28 @@ i32 gen_id_get_generation(GenId gen_id);
 bool gen_id_equals(GenId a, GenId b); 
 
 void string_init(String* string, MemoryArena* arena, i32 size);
+
+void gen_id_allocator_init(GenIdAllocator* allocator, MemoryArena* arena, i32 length);
+/**
+    Allocates an gen id from a allocator instance.
+
+    `returns`
+    the newly allocated GenId; otherwise (GenId){0} if there are no slots available.
+**/
+GenId gen_id_allocator_alloc(GenIdAllocator* allocator);
+/**
+    Deallocates an gen id from a allocator instance.
+
+    `remarks`
+    stale gen id checks are not enforced; the id will always run through the deallocation procedure.
+**/
+void gen_id_allocator_dealloc_unsafe(GenIdAllocator* allocator, i32 index);
+/**
+    Deallocates an gen id from a allocator instance.
+**/
+bool gen_id_allocator_dealloc(GenIdAllocator* allocator, GenId gen_id);
+bool gen_id_allocator_is_gen_id_invalid(GenIdAllocator* allocator, GenId gen_id);
+
+void intrusive_list_init(IntrusiveList* list, MemoryArena* arena, i32 length, bool preserve_root_order);
 
 #endif

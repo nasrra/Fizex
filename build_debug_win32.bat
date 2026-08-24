@@ -8,4 +8,4 @@
 @REM     - userenv.lib
 @REM
 
-mkdir build & cd src & cl /Zi /W3 /WX /Fo:..\\build/ /Fd:..\\build/ /Fe:..\\build/app.exe app_win32.c app.c base_layer\\base.c user32.lib Gdi32.lib ws2_32.lib ntdll.lib userenv.lib vendors\\webgpu\\wgpu_native.lib
+mkdir build & cd src & cl /Zi /W3 /WX /Fo:..\\build/ /Fd:..\\build/ /Fe:..\\build/app.exe app_win32.c app.c base_layer/base.c user32.lib Gdi32.lib ws2_32.lib ntdll.lib userenv.lib vendors\\webgpu\\wgpu_native.lib

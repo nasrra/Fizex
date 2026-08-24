@@ -499,6 +499,13 @@ bool simd_is_sse_supported(){
 #endif
 }
 
+bool cpu_is_bmi2_supported(){
+    int cpu_info[4];
+    __cpuidex(cpu_info, 7, 0);
+    //EBX bit 8 = BMI2
+    return (cpu_info[1] & (1<<8)) != 0;
+}
+
 /*========================================
     floats
 ========================================*//**/
