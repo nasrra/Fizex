@@ -564,20 +564,21 @@ typedef struct{
 #define ASSERT_DENSITY_IN_RANGE(value) ASSERT(value >= MATERIAL_MIN_DENSITY && value <= MATERIAL_MAX_DENSITY, "density out of bounds.")
 #define ASSERT_RESTITUTION_IN_RANGE(value) ASSERT(value >= MATERIAL_MIN_RESTITUTION && value <= MATERIAL_MAX_RESTITUTION, "restitution out of bounds.")
 
-#define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
-#define COLLISION_DETECTION_RESOLVE_RIGID_COLLISION false
-#define COLLISION_DETECTION_POLY_TO_POLY false
-#define COLLISION_DETECTION_POLY_TO_CIRC false
-#define COLLISION_DETECTION_CIRC_TO_CIRC false
-#define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY null
-#define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY null
+#define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
+#define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION false
+#define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
+#define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+#define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
+#define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC false
+#define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY null
+#define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY null
 
 // add a macro check here to flip owner and other indexes.
 
 #define COLLISION_DETECTION(manifold, info, bodies, body_hiearachy, shape_collisions_to_resolve, rigid_collisions_to_resolve) do {          \
     for(i32 COLLISION_DETECTION_i = 0; COLLISION_DETECTION_i < info.length; COLLISION_DETECTION_i++){                                       \
         i32 COLLISION_DETECTION_owner_leaf_idx = info.owner_leaf_index[COLLISION_DETECTION_i];                                              \
-        i32 COLLISION_DETECTION_other_leaf_idx = info.owner_leaf_index[COLLISION_DETECTION_i];                                              \
+        i32 COLLISION_DETECTION_other_leaf_idx = info.other_leaf_index[COLLISION_DETECTION_i];                                              \
         BOUNDS_CHECK(COLLISION_DETECTION_owner_leaf_idx, bodies.bvh_leaf_index_length);                                                     \
         i32 COLLISION_DETECTION_owner_bvh_idx = bodies.bvh_leaf_index[COLLISION_DETECTION_owner_leaf_idx];                                  \
         i32 COLLISION_DETECTION_other_bvh_idx = bodies.bvh_leaf_index[COLLISION_DETECTION_other_leaf_idx];                                  \
@@ -591,19 +592,19 @@ typedef struct{
                                                                                                                                             \
         IndexPair COLLISION_DETECTION_idx_pair;                                                                                             \
         bool COLLISION_DETECTION_narrow_phase = false;                                                                                      \
-        if(COLLISION_DETECTION_POLY_TO_POLY){                                                                                               \
+        if(COLLISION_DETECTION_CONFIG_POLY_TO_POLY){                                                                                        \
             COLLISION_DETECTION_narrow_phase = collision_detection_polygon_to_polygon(                                                      \
                 manifold, bodies.global_vertex, bodies.centroid,                                                                            \
                 COLLISION_DETECTION_owner_bvh_idx, COLLISION_DETECTION_other_bvh_idx, &COLLISION_DETECTION_idx_pair                         \
             );                                                                                                                              \
         }                                                                                                                                   \
-        else if(COLLISION_DETECTION_POLY_TO_CIRC){                                                                                          \
+        else if(COLLISION_DETECTION_CONFIG_POLY_TO_CIRC){                                                                                   \
             COLLISION_DETECTION_narrow_phase = collision_detection_polygon_to_circle(                                                       \
                 manifold, bodies.global_vertex, bodies.centroid, bodies.global_radius, bodies.global_radius_length,                         \
                 COLLISION_DETECTION_owner_bvh_idx, COLLISION_DETECTION_other_bvh_idx, &COLLISION_DETECTION_idx_pair                         \
             );                                                                                                                              \
         }                                                                                                                                   \
-        else if(COLLISION_DETECTION_CIRC_TO_CIRC){                                                                                          \
+        else if(COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC){                                                                                   \
             COLLISION_DETECTION_narrow_phase = collision_detection_circle_to_circle(                                                        \
                 manifold, bodies.centroid, bodies.global_radius, bodies.global_radius_length,                                               \
                 COLLISION_DETECTION_owner_bvh_idx, COLLISION_DETECTION_other_bvh_idx, &COLLISION_DETECTION_idx_pair                         \
@@ -613,18 +614,24 @@ typedef struct{
             continue;                                                                                                                       \
         }                                                                                                                                   \
                                                                                                                                             \
-        if(COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION){                                                                                   \
+        if(COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC){                                                               \
+            i32 temp = COLLISION_DETECTION_idx_pair.a_to_b;                                                                                 \
+            COLLISION_DETECTION_idx_pair.a_to_b = COLLISION_DETECTION_idx_pair.b_to_a;                                                      \
+            COLLISION_DETECTION_idx_pair.b_to_a = temp;                                                                                     \
+        }                                                                                                                                   \
+                                                                                                                                            \
+        if(COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION){                                                                             \
             categorised_overlaps_array_push(                                                                                                \
                 shape_collisions_to_resolve,                                                                                                \
                 &COLLISION_DETECTION_idx_pair.a_to_b, sizeof(COLLISION_DETECTION_idx_pair.a_to_b),                                          \
-                COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY, COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY                                \
+                COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY, COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY                  \
             );                                                                                                                              \
         }                                                                                                                                   \
-        if(COLLISION_DETECTION_RESOLVE_RIGID_COLLISION){                                                                                   \
+        if(COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION){                                                                             \
             categorised_overlaps_array_push(                                                                                                \
                 rigid_collisions_to_resolve,                                                                                                \
                 &COLLISION_DETECTION_idx_pair.a_to_b, sizeof(COLLISION_DETECTION_idx_pair.a_to_b),                                          \
-                COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY, COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY                                \
+                COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY, COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY                  \
             );                                                                                                                              \
         }                                                                                                                                   \
     }                                                                                                                                       \
@@ -1851,1019 +1858,1043 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
         {
             // dyn_rig_pol_to_dyn_rig_pol
             {            
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_RESOLVE_RIGID_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_RIGID_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_pol_to_dyn_rig_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
-                #undef  COLLISION_DETECTION_RESOLVE_RIGID_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_RIGID_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION false
             }
             // dyn_rig_pol_to_dyn_rig_cir
             {            
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_RESOLVE_RIGID_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_RIGID_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_pol_to_dyn_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
                 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
-                #undef  COLLISION_DETECTION_RESOLVE_RIGID_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_RIGID_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION false
             }
             // dyn_rig_pol_to_kin_rig_pol
             {            
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_RESOLVE_RIGID_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_RIGID_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_pol_to_kin_rig_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
-                #undef  COLLISION_DETECTION_RESOLVE_RIGID_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_RIGID_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION false
             }
             // dyn_rig_pol_to_kin_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_RESOLVE_RIGID_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_RIGID_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_pol_to_kin_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
-                #undef  COLLISION_DETECTION_RESOLVE_RIGID_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_RIGID_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION false
             }
             // dyn_rig_pol_to_tri_rig_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_pol_to_tri_rig_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
             }
             // dyn_rig_pol_to_tri_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_pol_to_tri_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // dyn_rig_pol_to_dyn_col_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_pol_to_dyn_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
             }
             // dyn_rig_pol_to_dyn_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_pol_to_dyn_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
             }
             // dyn_rig_pol_to_kin_col_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_pol_to_kin_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
             }
             // dyn_rig_pol_to_kin_col_cir
             {            
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_pol_to_kin_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
             }
             // dyn_rig_pol_to_tri_col_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_pol_to_tri_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
             }
             // dyn_rig_pol_to_tri_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_pol_to_tri_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // kin_rig_pol_to_dyn_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_RESOLVE_RIGID_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_RIGID_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_pol_to_dyn_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
-                #undef  COLLISION_DETECTION_RESOLVE_RIGID_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_RIGID_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC false
             }
             // kin_rig_pol_to_kin_rig_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_pol_to_kin_rig_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
             }
             // kin_rig_pol_to_kin_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_pol_to_kin_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // kin_rig_pol_to_tri_rig_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_pol_to_tri_rig_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
             }
             // kin_rig_pol_to_tri_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_pol_to_tri_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // kin_rig_pol_to_dyn_col_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_pol_to_dyn_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC false
             }
             // kin_rig_pol_to_dyn_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_pol_to_dyn_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC false
             }
             // kin_rig_pol_to_kin_col_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_pol_to_kin_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
             }
             // kin_rig_pol_to_kin_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_pol_to_kin_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // kin_rig_pol_to_tri_col_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_pol_to_tri_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
             }
             // kin_rig_pol_to_tri_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_pol_to_tri_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // tri_rig_pol_to_dyn_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_rig_pol_to_dyn_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // tri_rig_pol_to_kin_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_rig_pol_to_kin_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // tri_rig_pol_to_tri_rig_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_rig_pol_to_tri_rig_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
             }
             // tri_rig_pol_to_tri_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_rig_pol_to_tri_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // tri_rig_pol_to_dyn_col_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_rig_pol_to_dyn_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
             }
             // tri_rig_pol_to_dyn_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_rig_pol_to_dyn_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // tri_rig_pol_to_kin_col_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_rig_pol_to_kin_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
             }
             // tri_rig_pol_to_kin_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_rig_pol_to_kin_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // tri_rig_pol_to_tri_col_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_rig_pol_to_tri_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
             }
             // tri_rig_pol_to_tri_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_rig_pol_to_tri_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // dyn_col_pol_to_dyn_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_col_pol_to_dyn_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
             }
             // dyn_col_pol_to_kin_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_col_pol_to_kin_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
             }
             // dyn_col_pol_to_tri_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_col_pol_to_tri_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // dyn_col_pol_to_dyn_col_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_col_pol_to_dyn_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
             }
             // dyn_col_pol_to_dyn_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_col_pol_to_dyn_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
             }
             // dyn_col_pol_to_kin_col_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_col_pol_to_kin_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
             }
             // dyn_col_pol_to_kin_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_col_pol_to_kin_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
             }
             // dyn_col_pol_to_tri_col_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_col_pol_to_tri_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
             }
             // dyn_col_pol_to_tri_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_col_pol_to_tri_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // kin_col_pol_to_dyn_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_col_pol_to_dyn_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC false
             }
             // kin_col_pol_to_kin_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_col_pol_to_kin_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // kin_col_pol_to_tri_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_col_pol_to_tri_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // kin_col_pol_to_dyn_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_col_pol_to_dyn_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC false
             }
             // kin_col_pol_to_kin_col_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_col_pol_to_kin_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
             }
             // kin_col_pol_to_kin_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_col_pol_to_kin_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // kin_col_pol_to_tri_col_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_col_pol_to_tri_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
             }
             // kin_col_pol_to_tri_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_col_pol_to_tri_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // tri_col_pol_to_dyn_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_col_pol_to_dyn_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // tri_col_pol_to_kin_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_col_pol_to_kin_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // tri_col_pol_to_tri_rig_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_col_pol_to_tri_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // tri_col_pol_to_dyn_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_col_pol_to_dyn_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // tri_col_pol_to_kin_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_col_pol_to_kin_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // tri_col_pol_to_tri_col_pol
             {
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_col_pol_to_tri_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_POLY
-                #define COLLISION_DETECTION_POLY_TO_POLY false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_POLY
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
             }
             // tri_col_pol_to_tri_col_cir
             {
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_col_pol_to_tri_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_POLY_TO_CIRC
-                #define COLLISION_DETECTION_POLY_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
             }
             // dyn_rig_cir_to_dyn_rig_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_RESOLVE_RIGID_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_RIGID_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_cir_to_dyn_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
-                #undef  COLLISION_DETECTION_RESOLVE_RIGID_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_RIGID_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION false
             }
             // dyn_rig_cir_to_kin_rig_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_RESOLVE_RIGID_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_RIGID_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_cir_to_kin_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
-                #undef  COLLISION_DETECTION_RESOLVE_RIGID_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_RIGID_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION false
             }
             // dyn_rig_cir_to_tri_rig_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_cir_to_tri_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
             }
             // dyn_rig_cir_to_dyn_col_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_cir_to_dyn_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
             }
             // dyn_rig_cir_to_kin_col_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_cir_to_kin_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
             }
             // dyn_rig_cir_to_tri_col_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_rig_cir_to_tri_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
             }
             // kin_rig_cir_to_kin_rig_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_cir_to_kin_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
             }
             // kin_rig_cir_to_tri_rig_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_cir_to_tri_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
             }
             // kin_rig_cir_to_dyn_col_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_cir_to_dyn_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC false
             }
             // kin_rig_cir_to_kin_col_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_cir_to_kin_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
             }
             // kin_rig_cir_to_tri_col_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_cir_to_tri_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
             }
             // tri_rig_cir_to_tri_rig_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_rig_cir_to_tri_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
             }
             // tri_rig_cir_to_dyn_col_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_rig_cir_to_dyn_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
             }
             // tri_rig_cir_to_kin_col_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_rig_cir_to_kin_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
             }
             // tri_rig_cir_to_tri_col_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_rig_cir_to_tri_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
             }
             // dyn_col_cir_to_dyn_col_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_col_cir_to_dyn_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
             }
             // dyn_col_cir_to_kin_col_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION true
-                #undef  COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef  COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY
-                #define COLLISION_DETECTION_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION true
+                #undef  COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
+                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_col_cir_to_kin_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
-                #undef  COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION
-                #define COLLISION_DETECTION_RESOLVE_SHAPE_COLLISION false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
+                #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
             }
             // dyn_col_cir_to_tri_col_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_col_cir_to_tri_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
             }
             // kin_col_cir_to_kin_col_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_col_cir_to_kin_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
             }
             // kin_col_cir_to_tri_col_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_col_cir_to_tri_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
             }
             // tri_col_cir_to_tri_col_cir
             {
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC true
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_col_cir_to_tri_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
-                #undef  COLLISION_DETECTION_CIRC_TO_CIRC
-                #define COLLISION_DETECTION_CIRC_TO_CIRC false
+                #undef  COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC
+                #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
             }
         }
 
@@ -2871,11 +2902,11 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
             resolve shape collisions.
         **/ 
         {
-            f32 depth;
-            f32 displacement_x;
-            f32 displacement_y;
-            i32 owner_idx;
-            i32 other_idx;
+            // f32 depth;
+            // f32 displacement_x;
+            // f32 displacement_y;
+            // i32 owner_idx;
+            // i32 other_idx;
         
             /** 
         {

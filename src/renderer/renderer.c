@@ -1241,7 +1241,11 @@ void renderer_free_texture(Texture* texture){
 }
 
 void renderer_final_render_target_init(Texture* texture, WGPUDevice device, u32 width, u32 height){
-    WGPUTextureFormat format = WGPUTextureFormat_RGBA8UnormSrgb; // this used to be WGPUTextureFormat_BGRA8UnormSrgb.
+    /** 
+        TODO: (nich s)
+        format of the final render target needs to be dynamically set based on the surface window's format.
+    **/ 
+    WGPUTextureFormat format = WGPUTextureFormat_BGRA8UnormSrgb; // this used to be WGPUTextureFormat_RGBA8Unorm.
     WGPUTextureUsage usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_TextureBinding;
     WGPUTextureAspect aspect = WGPUTextureAspect_All;
     renderer_texture_init(texture, device, format, usage, aspect, width, height);
