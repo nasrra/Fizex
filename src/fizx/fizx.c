@@ -763,7 +763,7 @@ inline void fizx_resolve_rigid_collisions(
 
     for(i32 i = 0; i < collision_to_resolve_length; i++){
         i32 collision_idx = collision_to_resolve[i];
-        i32 owner_shape_idx = collision_idx / collision_idx;
+        i32 owner_shape_idx = collision_idx / manifold.collider_stride;
         i32 other_shape_idx = collision_idx % manifold.collider_stride;
 
         BOUNDS_CHECK(owner_shape_idx, body_hierarchy.length);
@@ -822,8 +822,8 @@ inline void fizx_resolve_rigid_collisions(
 
         BOUNDS_CHECK(owner_body_idx, body.rotational_response_length);
         BOUNDS_CHECK(other_body_idx, body.rotational_response_length);
-        bool owner_rotational_response = body.rotational_response[owner_body_idx];
-        bool other_rotational_response = body.rotational_response[other_body_idx];
+        bool owner_rotational_response = body.rotational_response[owner_shape_idx];
+        bool other_rotational_response = body.rotational_response[other_shape_idx];
 
         inverse_normal_x = normal_x * -1.0f;
         inverse_normal_y = normal_y * -1.0f;
@@ -2166,7 +2166,7 @@ void fizx_shape_init_finalise(
 
 void shape_set_rotational_response_unsafe(FIZXState* state, i32 shape_idx, bool enabled){
     BOUNDS_CHECK(shape_idx, state->bodies.rotational_response_length);
-    state->bodies.rotational_inertia[shape_idx] = enabled;
+    state->bodies.rotational_response[shape_idx] = enabled;
 }
 
 bool shape_set_rotational_repsonse(FIZXState* state, GenId shape_gid, bool enabled){
@@ -2655,10 +2655,10 @@ void fizx_bvh_construct_tree(
 
     for(i32 i = 1; i < active_body_count; i++){ // start at 1 to avoid nil.
         BOUNDS_CHECK(i, active_body_length);
-        i32 body_index = active_body[i];
+        i32 body_idx = active_body[i];
 
-        BOUNDS_CHECK(body_index, node_length);
-        IntrusiveListNode* body_node = &node[body_index];
+        BOUNDS_CHECK(body_idx, node_length);
+        IntrusiveListNode* body_node = &node[body_idx];
         i32 first_shape_idx = body_node->first_child;
         if(first_shape_idx == 0){
             continue;
@@ -2675,7 +2675,7 @@ void fizx_bvh_construct_tree(
             IntrusiveListNode* shape_node = &node[shape_idx];
 
             BOUNDS_CHECK(shape_idx, bvh_leaf_padding_length);
-            f32 padding = bvh_leaf_padding[shape_idx];
+            f32 padding = bvh_leaf_padding[body_idx];
 
             BOUNDS_CHECK(shape_idx, aabbs.length);
             min_x = aabbs.min_x[shape_idx] - padding;

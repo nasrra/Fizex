@@ -244,8 +244,8 @@ void app_main(){
     GenId dynamic_body_gid = body_alloc(&fizx_state, transform_to_transform2d(dynamic_body_transform), true);
     GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
 
-    // GenId kinematic_body_gid = body_alloc(&fizx_state, transform_to_transform2d(kinematic_body_transform), false);
-    // GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, kinematic_body_gid, material, true);
+    GenId kinematic_body_gid = body_alloc(&fizx_state, transform_to_transform2d(kinematic_body_transform), false);
+    GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, kinematic_body_gid, material, true);
 
     u128 prev_process_tick_in_mili  = 0;
     f32 previous_time_in_seconds    = 0.0f;

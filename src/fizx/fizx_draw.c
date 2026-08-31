@@ -31,9 +31,9 @@ typedef struct{
 } FIZXDrawInfo;
 
 void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo info, f32 delta_time){
-    /** 
+    /**
         draw global positions.
-    **/ 
+    **/
     if(info.draw_body_global_positions){
         for(i32 i = 1; i < state.body_hierarchy.length; i++){
             i32 body_idx = state.body_hierarchy.root_index[i];
@@ -49,13 +49,13 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
             while(true){
                 BOUNDS_CHECK(shape_idx, state.bodies.global_transform.length);
                 Circle shape = {
-                    .x = state.bodies.global_transform.position.x[shape_idx], 
-                    .y = state.bodies.global_transform.position.y[shape_idx], 
+                    .x = state.bodies.global_transform.position.x[shape_idx],
+                    .y = state.bodies.global_transform.position.y[shape_idx],
                     .radius = 0.1f
                 };
 
                 renderer_draw_wire_circle(renderer, shape, info.colour_global_position, info.z_position, info.sprite_layer, info.material_idx);
-            
+
                 BOUNDS_CHECK(shape_idx, state.body_hierarchy.length);
                 shape_idx = state.body_hierarchy.node[shape_idx].next_sibling;
                 if(shape_idx == first_shape_idx){
@@ -65,9 +65,9 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
         }
     }
 
-    /** 
+    /**
         draw shapes.
-    **/ 
+    **/
     if(info.draw_body_shapes){
         Colour colour;
         f32* poly_vert_x;
@@ -97,7 +97,7 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
                 else if(shape_category_is_trigger(category)){
                     colour = collision_manifold_shape_has_collisions(state.collision_manifold, shape_idx)
                     ? info.colour_active_trigger_shape
-                    : info.colour_passive_trigger_shape; 
+                    : info.colour_passive_trigger_shape;
                 }
                 else{
                     ASSERT(false, "unknown shape category (behaviour).");
@@ -121,7 +121,7 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
                 else{
                     ASSERT(false, "unknown shape category (shape type)");
                 }
-                
+
                 BOUNDS_CHECK(shape_idx, state.body_hierarchy.length);
                 shape_idx = state.body_hierarchy.node[shape_idx].next_sibling;
                 if(shape_idx == first_shape_idx){
@@ -131,12 +131,12 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
         }
     }
 
-    /** 
+    /**
         draw centroids un-rotated.
-    **/ 
+    **/
     if(info.draw_centers_of_mass_unrotated){
         i32 count = state.body_hierarchy.root_index_count;
-        for(i32 i = 1; i < count; i++){ 
+        for(i32 i = 1; i < count; i++){
             i32 body_idx = state.body_hierarchy.root_index[i];
 
             BOUNDS_CHECK(body_idx, state.body_hierarchy.length);
@@ -157,7 +157,7 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
                 };
 
                 renderer_draw_wire_circle(renderer, shape, info.colour_centroid, info.z_position, info.sprite_layer, info.material_idx);
-            
+
                 BOUNDS_CHECK(shape_idx, state.body_hierarchy.length);
                 shape_idx = state.body_hierarchy.node[shape_idx].next_sibling;
 
@@ -170,13 +170,13 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
 
     if(info.draw_linear_velocities){
 
-        /** 
+        /**
             TODO: (nich s)
             check that this works, the C# code was commented out for this one so it might just crash lol.
-        **/ 
+        **/
         i32 count = state.body_hierarchy.root_index_count;
         for(i32 i = 1; i < count; i++){
-            
+
             i32 body_idx = state.body_hierarchy.root_index[i];
 
             BOUNDS_CHECK(body_idx, state.bodies.global_transform.length);
@@ -192,13 +192,13 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
         }
     }
 
-    /** 
+    /**
         draw aabbs.
-    **/ 
+    **/
     if(info.draw_body_aabbs){
         for(i32 i = 1; i < state.body_hierarchy.root_index_count; i++){
             i32 body_idx = state.body_hierarchy.root_index[i];
-            
+
             BOUNDS_CHECK(body_idx, state.body_hierarchy.length);
             IntrusiveListNode* body_node = &state.body_hierarchy.node[body_idx];
             i32 first_shape_idx = body_node->first_child;
@@ -214,7 +214,7 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
                 x[0] = state.bodies.aabb.min_x[shape_idx];
                 x[1] = state.bodies.aabb.max_x[shape_idx];
                 x[2] = x[1];
-                x[3] = x[0]; 
+                x[3] = x[0];
                 f32* y = (f32[4]){};
                 y[0] = state.bodies.aabb.max_y[shape_idx];
                 y[1] = y[0];
@@ -222,7 +222,7 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
                 y[3] = y[2];
 
                 renderer_draw_wire_poly(renderer, x, y, 4, info.colour_aabb, info.z_position, info.sprite_layer, info.material_idx);
-            
+
                 BOUNDS_CHECK(shape_idx, state.body_hierarchy.length);
                 shape_idx = state.body_hierarchy.node[body_idx].next_sibling;
                 if(shape_idx == first_shape_idx){
@@ -232,9 +232,9 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
         }
     }
 
-    /** 
+    /**
         draw bvh branches.
-    **/ 
+    **/
     if(info.draw_bvh_branches){
         for(i32 i = 0; i < state.bvh.branches.count; i++){
             Rectangle shape = {
@@ -247,14 +247,14 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
         }
     }
 
-    /** 
+    /**
         draw bvh leaves.
-    **/ 
+    **/
     if(info.draw_bvh_leaves){
         for(i32 i = 0; i < state.bvh.leaves.count; i++){
             Rectangle shape = {
                 .x = state.bvh.leaves.aabb.min_x[i],
-                .y = state.bvh.leaves.aabb.min_y[i],
+                .y = state.bvh.leaves.aabb.max_y[i],
                 .width = state.bvh.leaves.aabb.max_x[i] - state.bvh.leaves.aabb.min_x[i],
                 .height = state.bvh.leaves.aabb.max_y[i] - state.bvh.leaves.aabb.min_y[i]
             };
@@ -262,9 +262,9 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
         }
     }
 
-    /** 
+    /**
         draw collision information.
-    **/ 
+    **/
     if(info.draw_collision_info){
         f32 contact_point_x;
         f32 contact_point_y;
@@ -296,8 +296,8 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
 
             // get normal data.
             BOUNDS_CHECK(collision_idx, state.collision_manifold.normal.length);
-            normal_x = state.collision_manifold.normal.x[collision_idx]; 
-            normal_y = state.collision_manifold.normal.y[collision_idx]; 
+            normal_x = state.collision_manifold.normal.x[collision_idx];
+            normal_y = state.collision_manifold.normal.y[collision_idx];
 
             // get contact point 1 data.
                 BOUNDS_CHECK(collision_idx, state.collision_manifold.first_contact_point.length);
@@ -314,13 +314,13 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
             shape.y = other_centroid_y;
             shape.radius = 0.1f;
             renderer_draw_wire_circle(renderer, shape, info.colour_collision_other, info.z_position, info.sprite_layer, info.material_idx);
-            
+
             // draw contact point.
             shape.x = contact_point_x;
             shape.y = contact_point_y;
             shape.radius = 0.1f;
             renderer_draw_wire_circle(renderer, shape, info.colour_collision_other, info.z_position, info.sprite_layer, info.material_idx);
-        
+
             // draw normal from contact point.
             normal_start.x = contact_point_x;
             normal_start.y = contact_point_y;
@@ -351,7 +351,7 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
                 normal_end.x = normal_start.x + normal_start.x;
                 normal_end.y = normal_start.y + normal_start.y;
                 normal_end.z = normal_start.z;
-                renderer_draw_line(renderer, info.colour_collision_normal, normal_start, normal_end, info.sprite_layer, info.material_idx, renderer_global_wireframe_thickness);            
+                renderer_draw_line(renderer, info.colour_collision_normal, normal_start, normal_end, info.sprite_layer, info.material_idx, renderer_global_wireframe_thickness);
             }
         }
     }
