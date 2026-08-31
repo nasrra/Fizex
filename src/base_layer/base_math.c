@@ -75,7 +75,7 @@ typedef struct{
 
 typedef struct{
     i32 x;
-    i32 y; 
+    i32 y;
 } Vector2I;
 
 typedef struct {
@@ -88,7 +88,7 @@ typedef struct {
 typedef struct{
     Quaternion rotation;
     Vector3 position;
-    Vector3 scale; 
+    Vector3 scale;
 } Transform;
 
 typedef struct{
@@ -96,10 +96,10 @@ typedef struct{
     Vector2 scale;
     f32 sine;
     f32 cosine;
-    /** 
+    /**
         `remarks`
         this value is in radians.
-    **/ 
+    **/
     f32 rotation;
 } Transform2D;
 
@@ -108,10 +108,10 @@ typedef struct{
     Soa_Vector2 scale;
     f32* sine;
     f32* cosine;
-    /** 
+    /**
         `remarks`
         the stored values are in radians.
-    **/ 
+    **/
     f32* rotation;
     i32 length;
     bool is_init;
@@ -157,13 +157,13 @@ typedef struct{
     /*
         Remarks:
         the size of this array is `POLYGON_RECTANGLE_VERTICES_SIZE`
-    */  
-    f32 vertices_x[4];
+    */
+    f32 x[4];
     /*
         Remarks:
         the size of this array is `POLYGON_RECTANGLE_VERTICES_SIZE`
-    */  
-    f32 vertices_y[4];
+    */
+    f32 y[4];
 } PolygonRectangle;
 
 /*========================================
@@ -184,7 +184,7 @@ typedef struct{
 #define QUATERNION_IDENTITY ((Quaternion){.w = 1.0f})
 #define TRANSFORM_IDENTITY ((Transform){.scale = VECTOR3_ONE, .rotation = QUATERNION_IDENTITY})
 #define TRANSFORM2D_IDENTITY ((Transform2D){.scale = VECTOR2_ONE, .cosine = 1})
-#define POLYGON_RECTANGLE_VERTICES_SIZE (i32)4
+#define POLYGON_RECTANGLE_VERTICES_LENGTH 4
 #define PI 3.1415926535897932384626433f
 #define TAU 6.283185307179586f
 #define ONE_SIXTH 1.0f / 6.0f
@@ -216,6 +216,24 @@ typedef struct{
 /*========================================
     functions
 ========================================*//**/
+
+bool f32_nearly_equal(f32 a, f32 b, f32 epsilon){
+    /**
+        Note: norm-based comparison enurses
+        the epsilon comparison doesnt return false negatives
+        at large floating point values.
+    **/
+    f32 diff = ABS(a - b);
+    return diff <= epsilon;
+}
+
+inline i32 i32_sign(i32 val){
+    return (val > 0.0f) - (val < 0.0f);
+}
+
+inline f32 f32_sign(f32 val){
+    return (f32)(val > 0.0f) - (val < 0.0f);
+}
 
 f32 f32_sin(f32 val){
     return sinf(val);
@@ -257,47 +275,16 @@ f64 f64_atan2(f64 y, f64 x){
     return atan2(y, x);
 }
 
-f32 dot_2d_f32(f32 lhs_x, f32 lhs_y, f32 rhs_x, f32 rhs_y){
-    return (lhs_x * rhs_x) + (lhs_y * rhs_y);   
+f32 vector2_dot_scalar(f32 lhs_x, f32 lhs_y, f32 rhs_x, f32 rhs_y){
+    return (lhs_x * rhs_x) + (lhs_y * rhs_y);
 }
 
-f32 dot_3d_f32(f32 lhs_x, f32 lhs_y, f32 lhs_z, f32 rhs_x, f32 rhs_y, f32 rhs_z){
-    return (lhs_x * rhs_x) + (lhs_y * rhs_y) + (lhs_z * rhs_z);   
+f32 vector3_dot_scalar(f32 lhs_x, f32 lhs_y, f32 lhs_z, f32 rhs_x, f32 rhs_y, f32 rhs_z){
+    return (lhs_x * rhs_x) + (lhs_y * rhs_y) + (lhs_z * rhs_z);
 }
 
-f64 dot_2d_f64(f64 lhs_x, f64 lhs_y, f64 rhs_x, f64 rhs_y){
-    return (lhs_x * rhs_x) + (lhs_y * rhs_y);   
-}
-
-f64 dot_3d_f64(f64 lhs_x, f64 lhs_y, f64 lhs_z, f64 rhs_x, f64 rhs_y, f64 rhs_z){
-    return (lhs_x * rhs_x) + (lhs_y * rhs_y) + (lhs_z * rhs_z);   
-}
-
-f32 dot_vector3(Vector3 lhs, Vector3 rhs){
-    return dot_3d_f32(lhs.x, lhs.y, lhs.z, rhs.x, rhs.y, rhs.z);
-}
-
-// public static Quaternion Normalise(
-//     Quaternion q
-// ){
-//     f32 len = (f32)Sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
-//     return new(){X = q.x / len, Y = q.y / len, Z = q.z / len, W = q.w / len};
-// }
-
-Quaternion normalise_quaternion(Quaternion q){
-    f32 len_sqrd = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
-    
-    // NAN guard.
-    if(len_sqrd==0.0f){
-        return (Quaternion){0};
-    } 
-
-    f32 len = f32_sqrt(len_sqrd);
-    q.x /= len;
-    q.y /= len;
-    q.z /= len;
-    q.w /= len;
-    return q;
+f32 vector3_dot(Vector3 lhs, Vector3 rhs){
+    return vector3_dot_scalar(lhs.x, lhs.y, lhs.z, rhs.x, rhs.y, rhs.z);
 }
 
 Matrix4x4 matrix4x4_mul(Matrix4x4 lhs, Matrix4x4 rhs){
@@ -382,16 +369,34 @@ f32 vector3_len(Vector3 vector){
 
 
 
+void vector2_normalise_scalar(f32 x, f32 y, f32* n_x, f32* n_y){
+    f32 len_sqrd = x * x + y * y;
 
-f32 vector2_dist_sqrd_scalar(f32 from_x, f32 from_y, f32 to_x, f32 to_y){
+    // NAN guard.
+    if(len_sqrd == 0.0f){
+        *n_x = 0;
+        *n_y = 0;
+        return;
+    }
+
+    f32 inv_len = 1.0f / sqrtf(len_sqrd);
+    *n_x = x * inv_len;
+    *n_y = y * inv_len;
+}
+
+inline f32 vector2_cross_scalar(f32 lhs_x, f32 lhs_y, f32 rhs_x, f32 rhs_y){
+    return lhs_x * rhs_y - lhs_y * rhs_x;
+}
+
+inline f32 vector2_dist_sqrd_scalar(f32 from_x, f32 from_y, f32 to_x, f32 to_y){
     f32 dx = from_x - to_x;
-    f32 dy = from_y - to_y; 
+    f32 dy = from_y - to_y;
     return dx * dx + dy * dy;
 }
 
-f32 vector2_dist_scalar(f32 from_x, f32 from_y, f32 to_x, f32 to_y){
+inline f32 vector2_dist_scalar(f32 from_x, f32 from_y, f32 to_x, f32 to_y){
     f32 sqrd = vector2_dist_sqrd_scalar(from_x, from_y, to_x, to_y);
-    
+
     // NAN guard.
     if(sqrd <= 0.0f){
         return 0.0f;
@@ -401,7 +406,7 @@ f32 vector2_dist_scalar(f32 from_x, f32 from_y, f32 to_x, f32 to_y){
 }
 
 void vector2_transform_scalar(
-    f32 x, f32 y, f32 transform_scale_x, f32 transform_scale_y, f32 transform_cos, f32 transform_sin, 
+    f32 x, f32 y, f32 transform_scale_x, f32 transform_scale_y, f32 transform_cos, f32 transform_sin,
     f32 transform_position_x, f32 transform_position_y, f32* out_x, f32* out_y
 ){
     // NOTE:
@@ -410,7 +415,7 @@ void vector2_transform_scalar(
 
     // Scale:
     f32 sx = x * transform_scale_x;
-    f32 sy = y * transform_scale_y; 
+    f32 sy = y * transform_scale_y;
 
     // rotation:
     f32 rx = sx * transform_cos - sy * transform_sin;
@@ -426,7 +431,7 @@ Vector2 vector2_unary(Vector2 val){
     val.y *= -1.0f;
     return val;
 }
-        
+
 Vector2 vector2_add(Vector2 lhs, Vector2 rhs){
     lhs.x += rhs.x;
     lhs.y += rhs.y;
@@ -466,8 +471,8 @@ f32 vector2_dist(Vector2 from, Vector2 to){
 }
 
 Vector2 vector2_transform(Vector2 v, Transform2D t){
-    vector2_transform_scalar(    
-        v.x, v.y, t.scale.x, t.scale.y, t.cosine, t.sine, 
+    vector2_transform_scalar(
+        v.x, v.y, t.scale.x, t.scale.y, t.cosine, t.sine,
         t.position.x, t.position.y, &v.x, &v.y
     );
     return v;
@@ -513,8 +518,8 @@ Vector3 rotate_vector3(Vector3 v, Quaternion q){
     Vector3 q_v;
     q_v.x = q.x;
     q_v.y = q.y;
-    q_v.z = q.z;    
-    
+    q_v.z = q.z;
+
     Vector3 cross1 = cross_vector3(q_v, v);
     Vector3 cross2 = cross_vector3(q_v, cross1);
 
@@ -530,15 +535,6 @@ Vector3 rotate_vector3(Vector3 v, Quaternion q){
 
 bool equal_vector2i(Vector2I lhs, Vector2I rhs){
     return lhs.x == rhs.x && lhs.y == rhs.y;
-}
-
-Quaternion mul_quaternion(Quaternion lhs, Quaternion rhs){
-    Quaternion result;
-    result.x = (lhs.w * rhs.x) + (lhs.x * rhs.w) + (lhs.y * rhs.z) - (lhs.z * rhs.y);
-    result.y = (lhs.w * rhs.y) - (lhs.x * rhs.z) + (lhs.y * rhs.w) + (lhs.z * rhs.x);
-    result.z = (lhs.w * rhs.z) + (lhs.x * rhs.y) - (lhs.y * rhs.x) + (lhs.z * rhs.w);
-    result.w = (lhs.w * rhs.w) - (lhs.x * rhs.x) - (lhs.y * rhs.y) - (lhs.z * rhs.z);
-    return result;
 }
 
 Aabb aabb_vector2_add(Aabb aabb, Vector2 vector){
@@ -558,11 +554,11 @@ Aabb aabb_vector2_sub(Aabb aabb, Vector2 vector){
 }
 
 bool equal_aabb(Aabb a, Aabb b){
-    return 
-    a.min_x == b.min_x 
+    return
+    a.min_x == b.min_x
     && a.min_y == b.min_y
     && a.max_x == b.max_x
-    && a.max_y == b.max_y;   
+    && a.max_y == b.max_y;
 }
 
 /*
@@ -576,7 +572,7 @@ bool equal_aabb(Aabb a, Aabb b){
     `Accuracy`: High for theta < 90 degrees (1.57 radian) per step.
     `Stability`: Includes a renormalization pass to prevent f32ing-poi32 drift
     (scaling/shrinking) over time.
-    
+
     Parameters:
     `sin`: the current sine values.</param>
     `cos`: the current cosing values.</param>
@@ -605,7 +601,7 @@ void rotor_multiply(f32 sine, f32 cosine, f32 theta, f32* new_sine, f32* new_cos
     f32 inv_len = 1 / sqrtf(dot);
 
     // --- NAN PROTECTION ---
-    // Define a tiny epsilon to avoid division by zero.        
+    // Define a tiny epsilon to avoid division by zero.
     if (isnan(inv_len) || 1e-10f > inv_len)
     {
         return;
@@ -619,7 +615,7 @@ void rotor_multiply(f32 sine, f32 cosine, f32 theta, f32* new_sine, f32* new_cos
 /*
     Calculates the sum of all i32egers from <c><paramref name="n"/></c> to 1.
 
-    Remarks: 
+    Remarks:
     `n` should not be larger than 46430.
 */
 i32 calculate_triangular_sum(i32 n){
@@ -627,24 +623,9 @@ i32 calculate_triangular_sum(i32 n){
     return n * (n+1) / 2;
 }
 
-void normalise_2d_f32(f32 x, f32 y, f32* n_x, f32* n_y){
-    f32 len_sqrd = x * x + y * y;
-
-    // NAN guard.
-    if(len_sqrd == 0.0f){
-        *n_x = 0;
-        *n_y = 0;
-        return;
-    }
-    
-    f32 inv_len = 1.0f / sqrtf(len_sqrd);
-    *n_x = x * inv_len;
-    *n_y = y * inv_len;
-}
-
-void normalise_3d_f32(f32 x, f32 y, f32 z, f32* n_x, f32* n_y, f32* n_z){
+void vector3_normalise_scalar(f32 x, f32 y, f32 z, f32* n_x, f32* n_y, f32* n_z){
     f32 len_sqrd = x * x + y * y + z * z;
-    
+
     // NAN guard.
     if(len_sqrd == 0.0f){
         *n_x = 0;
@@ -652,21 +633,21 @@ void normalise_3d_f32(f32 x, f32 y, f32 z, f32* n_x, f32* n_y, f32* n_z){
         *n_z = 0;
         return;
     }
-    
+
     f32 inv_len = 1.0f / sqrtf(len_sqrd);
     *n_x = x * inv_len;
     *n_y = y * inv_len;
     *n_z = z * inv_len;
 }
 
-Vector3 normalise_vector3(Vector3 vector){
+Vector3 vector3_normalise(Vector3 vector){
     Vector3 result = {0};
-    normalise_3d_f32(vector.x, vector.y, vector.z, &result.x, &result.y, &result.z);
+    vector3_normalise_scalar(vector.x, vector.y, vector.z, &result.x, &result.y, &result.z);
     return result;
 }
 
 f32 len_sqrd_f32(f32 point_x, f32 point_y){
-    return dot_2d_f32(point_x, point_y, point_x, point_y);
+    return vector2_dot_scalar(point_x, point_y, point_x, point_y);
 }
 
 f32 dst_sqrd_f32(f32 from_x, f32 from_y, f32 to_x, f32 to_y){
@@ -679,7 +660,7 @@ bool near_equal_f32(f32 a, f32 b, f32 epsilon){
     /*
         Note: norm-based comparison enurses
         the epsilon comparison doesnt return false negatives
-        at large f32ing poi32 values.            
+        at large f32ing poi32 values.
     */
     f32 diff = ABS(a-b);
     // f32 norm = Max(Abs(a),Abs(b));
@@ -698,54 +679,50 @@ void rotate_radians(f32 increment, f32 src_radians, f32* dst_radians, f32* out_s
     *out_cosine = f32_cos(src_radians);
 }
 
-f32 cross_2d_f32(f32 lhs_x, f32 lhs_y, f32 rhs_x, f32 rhs_y){
-    return lhs_x * rhs_y - lhs_y * rhs_x;    
-}
-
 /*
     Computes a Left-Handed View Matrix (Column-Major)
 */
 Matrix4x4 matrix4x4_create_look_at(Vector3 camera_pos, Vector3 look_at_pos, Vector3 world_up_dir){
     // Left-Handed forward: Positive Z goes forward i32o the screen
-    Vector3 forward = normalise_vector3(
+    Vector3 forward = vector3_normalise(
         vector3_sub(look_at_pos, camera_pos)
     );
 
     // find the local space right and up directions of the camera.
     Vector3 right = {0};
     right.x = (world_up_dir.y * forward.z) - (world_up_dir.z * forward.y);
-    right.y = (world_up_dir.z * forward.x) - (world_up_dir.x * forward.z); 
+    right.y = (world_up_dir.z * forward.x) - (world_up_dir.x * forward.z);
     right.z = (world_up_dir.x * forward.y) - (world_up_dir.y * forward.x);
-    right = normalise_vector3(right);
+    right = vector3_normalise(right);
     Vector3 up = {0};
     up.x = (forward.y * right.z) - (forward.z * right.y);
     up.y = (forward.z * right.x) - (forward.x * right.z);
     up.z = (forward.x * right.y) - (forward.y * right.x);
-    up = normalise_vector3(up);
+    up = vector3_normalise(up);
 
     Matrix4x4 result = {0};
     f32* m = result.m;
 
     // Column 0: Right Axis
-    m[0] = right.x; 
-    m[1] = right.y; 
-    m[2] = right.z; 
+    m[0] = right.x;
+    m[1] = right.y;
+    m[2] = right.z;
 
     // Column 1: Up Axis
-    m[4] = up.x; 
-    m[5] = up.y; 
-    m[6] = up.z; 
+    m[4] = up.x;
+    m[5] = up.y;
+    m[6] = up.z;
 
     // Column 2: Forward Axis
-    m[8]  = forward.x; 
-    m[9]  = forward.y; 
-    m[10] = forward.z; 
+    m[8]  = forward.x;
+    m[9]  = forward.y;
+    m[10] = forward.z;
 
     // Column 3: Calculate the translation; how far along the local-space axis the camera is, and move all objects relative to that.
     // note that is accounts for the camera rotation as well.
-    m[12] = -dot_vector3(right, camera_pos);
-    m[13] = -dot_vector3(up, camera_pos);
-    m[14] = -dot_vector3(forward, camera_pos);
+    m[12] = -vector3_dot(right, camera_pos);
+    m[13] = -vector3_dot(up, camera_pos);
+    m[14] = -vector3_dot(forward, camera_pos);
     m[15] = 1.0f;
 
     return result;
@@ -757,9 +734,9 @@ Matrix4x4 matrix4x4_create_look_at(Vector3 camera_pos, Vector3 look_at_pos, Vect
 Matrix4x4 matrix4x4_create_perspective(f32 fov_y_radians, f32 aspect_ratio, f32 z_near, f32 z_far){
     /**
         Calculate half of the vertical line that describes the length from the bottom to the top of out total vertical viewing angle;
-        
+
         Note:
-            think of it like the fovYRadians is how much your eye (or camera lens) sees, 
+            think of it like the fovYRadians is how much your eye (or camera lens) sees,
             the tangent describes the length from the top to bot.
     **/
     f32 tan_half_fov_y = f32_tan(fov_y_radians * 0.5f);
@@ -777,13 +754,13 @@ Matrix4x4 matrix4x4_create_perspective(f32 fov_y_radians, f32 aspect_ratio, f32 
     f32* m = result.m;
 
     /**
-        shrink the x-scaling of objects relative to the vertical viewing area to ensure that they arent 
+        shrink the x-scaling of objects relative to the vertical viewing area to ensure that they arent
         elongated along the x-axis of the window due to window size differences.
     **/
     m[0] = g / aspect_ratio;
-    
+
     /**
-        set the y-scaling of objects to be relative to the vertical view of the camera; 
+        set the y-scaling of objects to be relative to the vertical view of the camera;
         squishing them down along their y-axis to fit them on the window.
     **/
     m[5] = g;
@@ -795,16 +772,16 @@ Matrix4x4 matrix4x4_create_perspective(f32 fov_y_radians, f32 aspect_ratio, f32 
         note that it is also 0-1 for modern graphics APIS (metal, vulkan, directX12) unlike opengl (-1 to 0).
     **/
     m[10] = z_far / (z_far - z_near);
-    // add the world position of an object to its final 'w' value: perspective divsion (final 'w' division). 
+    // add the world position of an object to its final 'w' value: perspective divsion (final 'w' division).
     m[11] = 1.0f;
 
     /**
-        This shears the z-values of objects backward, transforming them i32o window-space coordinates. this "shearing" backwards 
+        This shears the z-values of objects backward, transforming them i32o window-space coordinates. this "shearing" backwards
         is required as perspective projection has a plane that rendering is relative to (zNear) which must be above zero; otherwise
         there would be divide by zero issues. So when perspective division happens, we need to offset/shear the plane back to zero to
-        ensure that our depth values are correct; offseting m[11]'s added value so its relative to the origin (0,0) and not the plane.  
+        ensure that our depth values are correct; offseting m[11]'s added value so its relative to the origin (0,0) and not the plane.
     **/
-    m[14] = -(z_far * z_near) / (z_far - z_near); 
+    m[14] = -(z_far * z_near) / (z_far - z_near);
 
     return result;
 }
@@ -818,8 +795,8 @@ Matrix4x4 rotate_matrix4x4(Matrix4x4 src, f32 radians, Vector3 axis){
     f32 c = f32_cos(radians);
     // how much of the objects orientation is shifted perpendicularly i32o a new direction.
     f32 s = f32_sin(radians);
-    
-    axis = normalise_vector3(axis);
+
+    axis = vector3_normalise(axis);
 
     f32 temp_x = (1.0f - c) * axis.x;
     f32 temp_y = (1.0f - c) * axis.y;
@@ -885,7 +862,7 @@ Matrix4x4 matrix4x4_create_orthographic(f32 lower_x, f32 upper_x, f32 lower_y, f
     // calculate the absolute width, height and depth of the viewing frustrum (box) to display to the screen.
     f32 x_range = upper_x - lower_x;
     f32 y_range = upper_y - lower_y;
-    f32 z_range = z_far - z_near; 
+    f32 z_range = z_far - z_near;
 
     f32* m = result.m;
 
@@ -899,7 +876,7 @@ Matrix4x4 matrix4x4_create_orthographic(f32 lower_x, f32 upper_x, f32 lower_y, f
     **/
     m[0] = 2.0f / x_range;
     m[5] = 2.0f / y_range;
-    m[10] = 1.0f / z_range; 
+    m[10] = 1.0f / z_range;
 
     /**
         if left and right are symmetrical (e.g, -400 to 400) then right + left equals 0 (center of window-space)
@@ -911,7 +888,7 @@ Matrix4x4 matrix4x4_create_orthographic(f32 lower_x, f32 upper_x, f32 lower_y, f
     m[12] = -(upper_x + lower_x) / x_range;
     m[13] = -(upper_y + lower_y) / y_range;
     // note that this is 0-1 for modern graphics APIS (metal, vulkan, directX12) unlike opengl (-1 to 0).
-    m[14] = -z_near / z_range; 
+    m[14] = -z_near / z_range;
 
     // homogenous coordinate value.
     m[15] = 1.0f;
@@ -927,17 +904,17 @@ Matrix4x4 matrix4x4_from_transform(Transform transform){
     f32* m = result.m;
 
     // Pre-calculate squared terms for the quaternion rotation
-    f32 x2 = transform.rotation.x + transform.rotation.x; 
-    f32 y2 = transform.rotation.y + transform.rotation.y; 
+    f32 x2 = transform.rotation.x + transform.rotation.x;
+    f32 y2 = transform.rotation.y + transform.rotation.y;
     f32 z2 = transform.rotation.z + transform.rotation.z;
-    f32 xx = transform.rotation.x * x2; 
-    f32 xy = transform.rotation.x * y2; 
+    f32 xx = transform.rotation.x * x2;
+    f32 xy = transform.rotation.x * y2;
     f32 xz = transform.rotation.x * z2;
-    f32 yy = transform.rotation.y * y2; 
-    f32 yz = transform.rotation.y * z2; 
+    f32 yy = transform.rotation.y * y2;
+    f32 yz = transform.rotation.y * z2;
     f32 zz = transform.rotation.z * z2;
-    f32 wx = transform.rotation.w * x2; 
-    f32 wy = transform.rotation.w * y2; 
+    f32 wx = transform.rotation.w * x2;
+    f32 wy = transform.rotation.w * y2;
     f32 wz = transform.rotation.w * z2;
 
     // --- COLUMN 0 (X-Basis * ScaleX) ---
@@ -967,11 +944,50 @@ Matrix4x4 matrix4x4_from_transform(Transform transform){
     return result;
 }
 
-Quaternion rotate_quaternion(Quaternion q, f32 axis_x, f32 axis_y, f32 axis_z, f32 angle_radians){
+
+
+
+
+
+/**
+    functions: Quaternion
+**/
+/**
+**/
+
+
+
+
+Quaternion quaternion_normalise(Quaternion q){
+    f32 len_sqrd = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
+
+    // NAN guard.
+    if(len_sqrd==0.0f){
+        return (Quaternion){0};
+    }
+
+    f32 len = f32_sqrt(len_sqrd);
+    q.x /= len;
+    q.y /= len;
+    q.z /= len;
+    q.w /= len;
+    return q;
+}
+
+Quaternion quaternion_mul(Quaternion lhs, Quaternion rhs){
+    Quaternion result;
+    result.x = (lhs.w * rhs.x) + (lhs.x * rhs.w) + (lhs.y * rhs.z) - (lhs.z * rhs.y);
+    result.y = (lhs.w * rhs.y) - (lhs.x * rhs.z) + (lhs.y * rhs.w) + (lhs.z * rhs.x);
+    result.z = (lhs.w * rhs.z) + (lhs.x * rhs.y) - (lhs.y * rhs.x) + (lhs.z * rhs.w);
+    result.w = (lhs.w * rhs.w) - (lhs.x * rhs.x) - (lhs.y * rhs.y) - (lhs.z * rhs.z);
+    return result;
+}
+
+Quaternion quaternion_rotate(Quaternion q, f32 axis_x, f32 axis_y, f32 axis_z, f32 angle_radians){
     // 1. Normalize the axis vector to ensure safe rotation math
     f32 length = f32_sqrt(axis_x * axis_x + axis_y * axis_y + axis_z * axis_z);
     if (length < 0.0001f) return q; // Avoid division by zero
-    
+
     axis_x /= length;
     axis_y /= length;
     axis_z /= length;
@@ -995,15 +1011,15 @@ Quaternion rotate_quaternion(Quaternion q, f32 axis_x, f32 axis_y, f32 axis_z, f
 
     // 5. Return the finalized normalized rotation
     Quaternion result = {.x = final_x, .y = final_y, .z = final_z, .w = final_w};
-    result = normalise_quaternion(result);
+    result = quaternion_normalise(result);
     return result;
 }
 
 /*
     Creates a rotation quaternion around a normalised axis vector by a given angle in radians.
 */
-Quaternion create_from_axis_angle_quaternion(Vector3 axis, f32 angle){
-    
+Quaternion quaternion_create_from_axis_angle(Vector3 axis, f32 angle){
+
     // Half angle calculations required by quaternion space
     f32 half_angle = angle * 0.5f;
     f32 sin = f32_sin(half_angle);
@@ -1018,32 +1034,32 @@ Quaternion create_from_axis_angle_quaternion(Vector3 axis, f32 angle){
     return result;
 }
 
-Quaternion get_rotation_between_points(Vector3 point_a, Vector3 point_b){
+Quaternion quaternion_get_rotation_between_points(Vector3 point_a, Vector3 point_b){
     // Get the direction vector target poi32ing from A to B
     Vector3 delta;
-    delta.x = point_b.x - point_a.x; 
-    delta.y = point_b.y - point_a.y; 
+    delta.x = point_b.x - point_a.x;
+    delta.y = point_b.y - point_a.y;
     delta.z = point_b.z - point_a.z;
 
-    Vector3 direction = normalise_vector3(delta);
-    
-    // Define the default local resting axis (e.g., Vector3(0, 1, 0) if poi32ing Up)
-    Vector3 starting_axis = VECTOR3_UP; 
+    Vector3 direction = vector3_normalise(delta);
 
-    f32 dot = dot_vector3(starting_axis, direction);
+    // Define the default local resting axis (e.g., Vector3(0, 1, 0) if poi32ing Up)
+    Vector3 starting_axis = VECTOR3_UP;
+
+    f32 dot = vector3_dot(starting_axis, direction);
 
     // Edge Case Handling: Check if target vectors poi32 directly opposite to prevent a divide-by-zero crash (180 deg)
     if (dot < -0.99999f){
-        
+
         // Pick an arbitrary perpendicular backup axis to rotate around instead
         Vector3 perpendicular = cross_vector3(starting_axis, VECTOR3_RIGHT);
         if (vector3_len_sqrd(perpendicular) < 0.001f){
             perpendicular = cross_vector3(starting_axis, VECTOR3_FORWARD);
         }
-        
-        return create_from_axis_angle_quaternion(normalise_vector3(perpendicular), PI);
+
+        return quaternion_create_from_axis_angle(vector3_normalise(perpendicular), PI);
     }
-    
+
     // Edge Case Handling: Vectors already poi32 in the identical direction
     if (dot > 0.99999f){
         return QUATERNION_IDENTITY;
@@ -1051,14 +1067,14 @@ Quaternion get_rotation_between_points(Vector3 point_a, Vector3 point_b){
 
     // Shortest arc computation mapping directly onto the native components
     Vector3 axis = cross_vector3(starting_axis, direction);
-    
+
     Quaternion result;
     result.x = axis.x;
     result.y = axis.y;
     result.z = axis.z;
     result.w = 1.0f + dot; // W component maps directly to the cosine length offset prior to normalization.
-    result = normalise_quaternion(result);
-    
+    result = quaternion_normalise(result);
+
     return result;
 }
 
@@ -1103,7 +1119,7 @@ void fssoa_vector2_clear_chunk_count(FsSoa_Vector2* soa, i32 chunk_index){
     soa->chunk_count[chunk_index] = 0;
 }
 
-void soa_vector2_init(Soa_Vector2* soa, MemoryArena* arena, i32 length){    
+void soa_vector2_init(Soa_Vector2* soa, MemoryArena* arena, i32 length){
     ASSERT(!soa->is_init, "already init");
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->x, &soa->length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->y, &soa->length, length);
@@ -1158,27 +1174,27 @@ bool soa_transform2d_init(Soa_Transform2D* soa, MemoryArena* arena, i32 length){
 }
 
 void copy_elem_from_soa_transform2d(Soa_Transform2D* soa, Transform2D* dst, i32 index){
-    
+
     BOUNDS_CHECK(index, soa->position.length);
     dst->position.x = soa->position.x[index];
     dst->position.y = soa->position.y[index];
-    
+
     BOUNDS_CHECK(index, soa->scale.length);
     dst->scale.x = soa->scale.x[index];
     dst->scale.y = soa->scale.y[index];
-    
+
     BOUNDS_CHECK(index, soa->length);
     dst->sine = soa->sine[index];
-    
+
     BOUNDS_CHECK(index, soa->length);
     dst->cosine = soa->cosine[index];
 
-    BOUNDS_CHECK(index, soa->length); 
+    BOUNDS_CHECK(index, soa->length);
     dst->rotation = soa->rotation[index];
 }
 
 void insert_scalar_soa_transform2d(
-    Soa_Transform2D* soa, i32 elem_index, f32 pos_x, f32 pos_y, 
+    Soa_Transform2D* soa, i32 elem_index, f32 pos_x, f32 pos_y,
     f32 scale_x, f32 scale_y, f32 sin, f32 cos, f32 rot_radians
 ){
     BOUNDS_CHECK(elem_index, soa->position.length);
@@ -1201,7 +1217,7 @@ void insert_scalar_soa_transform2d(
 
 void insert_soa_transform2d(Soa_Transform2D* soa, Transform2D transform, i32 elem_index){
     insert_scalar_soa_transform2d(
-        soa, elem_index, transform.position.x, transform.position.y, 
+        soa, elem_index, transform.position.x, transform.position.y,
         transform.scale.x, transform.scale.y, transform.sine, transform.cosine, transform.rotation
     );
 }
@@ -1213,27 +1229,27 @@ Transform2D transform2d_rotate(Transform2D transform, f32 radians){
     return transform;
 }
 
-/** 
+/**
     Offsets a transform2d by another.
 
     `remarks`
     `rhs` is applied to `lhs`.
-**/ 
+**/
 void transform2d_transform_scalar(
-    f32 lhs_pos_x, f32 lhs_pos_y, f32 lhs_scale_x, f32 lhs_scale_y, f32 lhs_sin, f32 lhs_cos, f32 lhs_rotation, 
-    f32 rhs_pos_x, f32 rhs_pos_y, f32 rhs_scale_x, f32 rhs_scale_y, f32 rhs_sin, f32 rhs_cos, f32 rhs_rotation, 
-    f32* out_pos_x, f32* out_pos_y, f32* out_scale_x, f32* out_scale_y, f32* out_sin, f32* out_cos, f32* out_rotation 
+    f32 lhs_pos_x, f32 lhs_pos_y, f32 lhs_scale_x, f32 lhs_scale_y, f32 lhs_sin, f32 lhs_cos, f32 lhs_rotation,
+    f32 rhs_pos_x, f32 rhs_pos_y, f32 rhs_scale_x, f32 rhs_scale_y, f32 rhs_sin, f32 rhs_cos, f32 rhs_rotation,
+    f32* out_pos_x, f32* out_pos_y, f32* out_scale_x, f32* out_scale_y, f32* out_sin, f32* out_cos, f32* out_rotation
 ){
     // scale the local offset relative to the world.
     f32 scaled_x = lhs_pos_x * rhs_scale_x;
     f32 scaled_y = lhs_pos_y * rhs_scale_y;
-    
-    /** 
+
+    /**
         rotate the local scaled offset around the parents origin.
             Standard 2D rotation matrix formula:
                 x' = x * cos - y * sin
-                y' = x * sin + y * cos        
-    **/ 
+                y' = x * sin + y * cos
+    **/
     f32 rotated_x = (scaled_x * lhs_cos) - (scaled_y * rhs_sin);
     f32 rotated_y = (scaled_x * rhs_sin) + (scaled_y * lhs_cos);
 
@@ -1245,12 +1261,12 @@ void transform2d_transform_scalar(
     *out_scale_x = lhs_scale_x * rhs_scale_x;
     *out_scale_y = lhs_scale_y * rhs_scale_y;
 
-    /** 
+    /**
         combine the rotation properties.
             Use the trigonometrix identity formulas for combining angles:
                 sin(a + b) = sin(a)cos(b) + cos(a)sin(b)
-                cos(a + b) = cos(a)cos(b) - sin(a)sin(b)        
-    **/ 
+                cos(a + b) = cos(a)cos(b) - sin(a)sin(b)
+    **/
     *out_sin = (lhs_sin * lhs_cos) + (lhs_cos * rhs_sin);
     *out_cos = (lhs_cos * lhs_cos) + (lhs_sin * rhs_sin);
     *out_rotation = lhs_rotation + rhs_rotation;
@@ -1259,9 +1275,9 @@ void transform2d_transform_scalar(
 Transform2D transform2d_transform(Transform2D lhs, Transform2D rhs){
     Transform2D out;
     transform2d_transform_scalar(
-        lhs.position.x, lhs.position.y, lhs.scale.x, lhs.scale.y, lhs.sine, lhs.cosine, lhs.rotation, 
-        rhs.position.x, rhs.position.y, rhs.scale.x, rhs.scale.y, rhs.sine, rhs.cosine, rhs.rotation, 
-        &out.position.x, &out.position.y, &out.scale.x, &out.scale.y, &out.sine, &out.cosine, &out.rotation 
+        lhs.position.x, lhs.position.y, lhs.scale.x, lhs.scale.y, lhs.sine, lhs.cosine, lhs.rotation,
+        rhs.position.x, rhs.position.y, rhs.scale.x, rhs.scale.y, rhs.sine, rhs.cosine, rhs.rotation,
+        &out.position.x, &out.position.y, &out.scale.x, &out.scale.y, &out.sine, &out.cosine, &out.rotation
     );
     return out;
 }
@@ -1272,7 +1288,7 @@ Transform2D transform2d_transform(Transform2D lhs, Transform2D rhs){
 
 
 Transform2D transform_to_transform2d(Transform transform){
-    
+
     // Extract Roll (rotation around Z-axis) from Quaternion
     f32 num1 = (transform.rotation.w * transform.rotation.z) + (transform.rotation.x * transform.rotation.y);
     f32 num2 = (transform.rotation.y * transform.rotation.y) + (transform.rotation.z * transform.rotation.z);
@@ -1290,14 +1306,14 @@ Transform2D transform_to_transform2d(Transform transform){
 }
 
 void transform_scalar_transform2d(
-    f32 lhs_pos_x, f32 lhs_pos_y, f32 lhs_scale_x, f32 lhs_scale_y, f32 lhs_sine, f32 lhs_cosine, f32 lhs_rot_radii, 
-    f32 rhs_pos_x, f32 rhs_pos_y, f32 rhs_scale_x, f32 rhs_scale_y, f32 rhs_sine, f32 rhs_cosine, f32 rhs_rot_radii, 
-    f32* out_pos_x, f32* out_pos_y, f32* out_scale_x, f32* out_scale_y, f32* out_sine, f32* out_cosine, f32* out_rot_radii 
+    f32 lhs_pos_x, f32 lhs_pos_y, f32 lhs_scale_x, f32 lhs_scale_y, f32 lhs_sine, f32 lhs_cosine, f32 lhs_rot_radii,
+    f32 rhs_pos_x, f32 rhs_pos_y, f32 rhs_scale_x, f32 rhs_scale_y, f32 rhs_sine, f32 rhs_cosine, f32 rhs_rot_radii,
+    f32* out_pos_x, f32* out_pos_y, f32* out_scale_x, f32* out_scale_y, f32* out_sine, f32* out_cosine, f32* out_rot_radii
 ){
     // scale the local offset relative to the world.
     f32 sx = lhs_pos_x * rhs_scale_x;
     f32 sy = lhs_pos_y * rhs_scale_y;
-    
+
     // rotate the local scaled offset around the parents origin.
     //      Standard 2D rotation matrix formula:
     //          x' = x * cos - y * sin
@@ -1325,8 +1341,8 @@ void transform_scalar_transform2d(
 Transform2D transform_transform2d(Transform2D lhs, Transform2D rhs){
     Transform2D res;
     transform_scalar_transform2d(
-        lhs.position.x, lhs.position.y, lhs.scale.x, lhs.scale.y, lhs.sine, lhs.cosine, lhs.rotation, 
-        rhs.position.x, rhs.position.y, rhs.scale.x, rhs.scale.y, rhs.sine, rhs.cosine, rhs.rotation, 
+        lhs.position.x, lhs.position.y, lhs.scale.x, lhs.scale.y, lhs.sine, lhs.cosine, lhs.rotation,
+        rhs.position.x, rhs.position.y, rhs.scale.x, rhs.scale.y, rhs.sine, rhs.cosine, rhs.rotation,
         &res.position.x, &res.position.y, &res.scale.x, &res.scale.y, &res.sine, &res.cosine, &res.rotation
     );
     return res;
@@ -1334,7 +1350,7 @@ Transform2D transform_transform2d(Transform2D lhs, Transform2D rhs){
 
 Transform to_transform_transform2d(Transform2D transform2D){
     // Create a 3D Quaternion rotating only around the Z axis
-    Quaternion rotation = create_from_axis_angle_quaternion(VECTOR3_FORWARD, transform2D.rotation);
+    Quaternion rotation = quaternion_create_from_axis_angle(VECTOR3_FORWARD, transform2D.rotation);
     Transform transform;
     transform.position.x = transform2D.position.x;
     transform.position.y = transform2D.position.y;
@@ -1351,24 +1367,24 @@ Transform transform_transform(Transform lhs, Transform rhs){
     // combine scales.
     result.scale = vector3_mul(lhs.scale, rhs.scale);
     // combine rotations (order matters: rhs*lhs means rhs rotates lhs)
-    result.rotation = mul_quaternion(lhs.rotation, rhs.rotation);
+    result.rotation = quaternion_mul(lhs.rotation, rhs.rotation);
     // combine positions (order matters: scale->rotate->translate).
     Vector3 sp = vector3_mul(lhs.position, rhs.scale);
     result.position = rotate_vector3(sp, rhs.rotation);
-    result.position = vector3_add(result.position, rhs.position); 
+    result.position = vector3_add(result.position, rhs.position);
     return result;
 }
 
 void line_segment_closest_point_scalar(
-    f32 line_start_x, f32 line_start_y, f32 line_end_x, f32 line_end_y, 
+    f32 line_start_x, f32 line_start_y, f32 line_end_x, f32 line_end_y,
     f32 query_point_x, f32 query_point_y, f32* out_closest_point_x, f32* out_closest_point_y
 ){
     f32 line_dist_x = line_end_x - line_start_x;
     f32 line_dist_y = line_end_y - line_start_y;
     f32 point_dist_x = query_point_x - line_start_x;
     f32 point_dist_y = query_point_y - line_start_y;
-    
-    f32 projection = dot_2d_f32(point_dist_x, point_dist_y, line_dist_x, line_dist_y);
+
+    f32 projection = vector2_dot_scalar(point_dist_x, point_dist_y, line_dist_x, line_dist_y);
 
     // move the point distance along the line segment.
     f32 delta = projection / len_sqrd_f32(line_dist_x, line_dist_y);
@@ -1415,11 +1431,11 @@ void soa_aabb_insert(Soa_Aabb* soa, i32 elem_index, f32 min_x, f32 min_y, f32 ma
     soa->min_x[elem_index] = min_x;
     soa->min_y[elem_index] = min_y;
     soa->max_x[elem_index] = max_x;
-    soa->max_y[elem_index] = max_y;   
+    soa->max_y[elem_index] = max_y;
 }
 
 bool soa_aabb_push(Soa_Aabb* soa, f32 min_x, f32 min_y, f32 max_x, f32 max_y){
-    
+
     if(soa->count >= soa->length){
         ASSERT(0!=0, "attempted to append to a full soa_aabb");
         return false;
@@ -1435,10 +1451,10 @@ void soa_aabb_reset_count(Soa_Aabb* soa){
 }
 
 void soa_aabb_calculate_centroids(Soa_Aabb* soa, f32* out_x, f32* out_y){
-    
+
     simd_add_f32(soa->max_x, soa->min_x, out_x, soa->length);
     simd_mul_val_f32(out_x, 0.5f, out_x, soa->length);
-    
+
     simd_add_f32(soa->max_y, soa->min_y, out_y, soa->length);
     simd_mul_val_f32(out_y, 0.5f, out_y, soa->length);
 }
@@ -1498,9 +1514,9 @@ bool aabb_overlaps(Aabb a, Aabb b){
 }
 
 bool aabb_overlaps_point_scalar(f32 aabb_min_x, f32 aabb_min_y, f32 aabb_max_x, f32 aabb_max_y, f32 point_x, f32 point_y){
-    return 
+    return
     aabb_min_x <= point_x &&
-    aabb_min_y <= point_y && 
+    aabb_min_y <= point_y &&
     aabb_max_x >= point_x &&
     aabb_max_y >= point_y;
 }
@@ -1524,7 +1540,7 @@ bool aabb_overlaps_line_scalar(
     if(aabb_overlaps_point_scalar(aabb_min_x, aabb_min_y, aabb_max_x, aabb_max_y, closest_point_x, closest_point_y)){
 
         line_segment_closest_point_scalar(line_start_x, line_start_y, line_end_x, line_end_y, aabb_max_x, aabb_max_y, &closest_point_x, &closest_point_y);
-        
+
         if(aabb_overlaps_point_scalar(aabb_min_x, aabb_min_y, aabb_max_x, aabb_max_y, closest_point_x, closest_point_y)){
             return true;
         }
@@ -1562,7 +1578,7 @@ Aabb aabb_combine(Aabb a, Aabb b){
         a.min_x, a.min_y, a.max_x, a.max_y,
         b.min_x, b.min_y, b.max_x, b.max_y,
         &result.min_x, &result.min_y,
-        &result.max_x, &result.max_y    
+        &result.max_x, &result.max_y
     );
     return result;
 }
@@ -1571,10 +1587,10 @@ Aabb aabb_combine(Aabb a, Aabb b){
     finds the closest vertex on a polygon to a given position and returns its index.
 */
 i32 find_closest_vertex_scalar_polygon(f32 query_pos_x, f32 query_pos_y, f32* verts_x, f32* verts_y, i32 verts_size){
-    
+
     i32 result = 0;
     f32 min_dist = F32_MAX;
-    
+
     for(i32 i = 0; i < verts_size; i++){
         f32 distance = vector2_dist_sqrd_scalar(verts_x[i], verts_y[i], query_pos_x, query_pos_y);
 
@@ -1584,7 +1600,7 @@ i32 find_closest_vertex_scalar_polygon(f32 query_pos_x, f32 query_pos_y, f32* ve
         }
     }
 
-    return result; 
+    return result;
 }
 
 /*
@@ -1622,16 +1638,16 @@ void polygon_calc_centroid_scalar(f32* verts_x, f32* verts_y, i32 verts_length, 
         y0 = verts_y[i];
         if (next_in_range){
             x1 = verts_x[next_index];
-            y1 = verts_y[next_index];    
+            y1 = verts_y[next_index];
         }
         else{
             x1 = verts_x[0];
-            y1 = verts_y[0];    
+            y1 = verts_y[0];
         }
 
         // calculate the corss product (signed area of the triangle)
         // this is the "Shoelace" part.
-        cross_prod = cross_2d_f32(x0, y0, x1, y1);
+        cross_prod = vector2_cross_scalar(x0, y0, x1, y1);
 
         area += cross_prod;
         temp_x += (x0 + x1) * cross_prod;
@@ -1641,7 +1657,7 @@ void polygon_calc_centroid_scalar(f32* verts_x, f32* verts_y, i32 verts_length, 
     area *= 0.5f; // final signed area.
 
     if(ABS(area) > F32_EPSILON){
-        inv_area = 1.0f / (area * 6.0f); 
+        inv_area = 1.0f / (area * 6.0f);
         *out_centroid_x = temp_x * inv_area;
         *out_centroid_y = temp_y * inv_area;
     }
@@ -1658,84 +1674,98 @@ Vector2 calc_centroid_polygon(f32* verts_x, f32* verts_y, i32 verts_size){
     return result;
 }
 
-void get_min_max_vertices_scalar_circle(f32 x, f32 y, f32 radius, f32* out_min_x, f32* out_min_y, f32* out_max_x, f32* out_max_y){
+
+
+
+/**====================
+    functions: Circle.
+====================**//**/
+
+
+
+
+void circle_get_min_max_vertices_scalar(f32 x, f32 y, f32 radius, f32* out_min_x, f32* out_min_y, f32* out_max_x, f32* out_max_y){
     *out_min_x = x - radius;
     *out_min_y = y - radius;
     *out_max_x = x + radius;
     *out_max_y = y + radius;
 }
 
-f32 get_area_circle(f32 radius){
+inline f32 circle_get_area_scalar(f32 radius){
     return radius * radius * PI;
 }
 
-void init_from_verts_polygon_rectangle(PolygonRectangle* rect, Vector2 vert0, Vector2 vert1, Vector2 vert2, Vector2 vert3){
-    rect->vertices_x[0] = vert0.x;
-    rect->vertices_y[0] = vert0.y;
-    rect->vertices_x[1] = vert1.x;
-    rect->vertices_y[1] = vert1.y;
-    rect->vertices_x[2] = vert2.x;
-    rect->vertices_y[2] = vert2.y;
-    rect->vertices_x[3] = vert3.x;
-    rect->vertices_y[3] = vert3.y;
+inline f32 circle_get_area(Circle circle){
+    return circle_get_area_scalar(circle.radius);
 }
 
-void init_polygon_rectangle(PolygonRectangle* rect, f32 x, f32 y, f32 width, f32 height){
+void polygon_rectangle_init_from_verts(PolygonRectangle* rect, Vector2 vert0, Vector2 vert1, Vector2 vert2, Vector2 vert3){
+    rect->x[0] = vert0.x;
+    rect->y[0] = vert0.y;
+    rect->x[1] = vert1.x;
+    rect->y[1] = vert1.y;
+    rect->x[2] = vert2.x;
+    rect->y[2] = vert2.y;
+    rect->x[3] = vert3.x;
+    rect->y[3] = vert3.y;
+}
+
+void polygon_rectangle_init(PolygonRectangle* rect, f32 x, f32 y, f32 width, f32 height){
     f32 left = x;
     f32 top = y;
     f32 right = x+width;
     f32 bottom = y-height;
 
     // top left.
-    rect->vertices_x[0] = left;
-    rect->vertices_y[0] = top;
+    rect->x[0] = left;
+    rect->y[0] = top;
     // top right.
-    rect->vertices_x[1] = right;
-    rect->vertices_y[1] = top;
+    rect->x[1] = right;
+    rect->y[1] = top;
     // bottom right.
-    rect->vertices_x[2] = right;
-    rect->vertices_y[2] = bottom;
+    rect->x[2] = right;
+    rect->y[2] = bottom;
     // bottom left.
-    rect->vertices_x[3] = left;
-    rect->vertices_y[3] = bottom;
+    rect->x[3] = left;
+    rect->y[3] = bottom;
 }
 
-PolygonRectangle rectangle_to_polygon_rectangle(Rectangle rect){
+PolygonRectangle polygon_rectangle_from_rectangle(Rectangle rect){
     PolygonRectangle poly;
-    init_polygon_rectangle(&poly, rect.x, rect.y, rect.width, rect.height);
+    polygon_rectangle_init(&poly, rect.x, rect.y, rect.width, rect.height);
     return poly;
 }
 
 PolygonRectangle transform_polygon_rectangle(PolygonRectangle rect, Transform2D transform){
     PolygonRectangle result;
-    
-    Vector2 v0 = {rect.vertices_x[0], rect.vertices_y[0]};
+
+    Vector2 v0 = {rect.x[0], rect.y[0]};
     v0 = vector2_transform(v0, transform);
 
-    Vector2 v1 = {rect.vertices_x[1], rect.vertices_y[1]};
+    Vector2 v1 = {rect.x[1], rect.y[1]};
     v1 = vector2_transform(v1, transform);
 
-    Vector2 v2 = {rect.vertices_x[2], rect.vertices_y[2]};
+    Vector2 v2 = {rect.x[2], rect.y[2]};
     v2 = vector2_transform(v2, transform);
 
-    Vector2 v3 = {rect.vertices_x[3], rect.vertices_y[3]};
+    Vector2 v3 = {rect.x[3], rect.y[3]};
     v3 = vector2_transform(v3, transform);
 
-    init_from_verts_polygon_rectangle(&result, v0, v1, v2, v3);
+    polygon_rectangle_init_from_verts(&result, v0, v1, v2, v3);
     return result;
 }
 
 void polygon_calc_centroid_scalar_rectangle(PolygonRectangle rect, f32* out_centroid_x, f32* out_centroid_y){
-    polygon_calc_centroid_scalar(rect.vertices_x, rect.vertices_y, 4, out_centroid_x, out_centroid_y);
+    polygon_calc_centroid_scalar(rect.x, rect.y, 4, out_centroid_x, out_centroid_y);
 }
 
 Vector2 calc_centroid_polygon_rectangle(PolygonRectangle rect){
-    return calc_centroid_polygon(rect.vertices_x, rect.vertices_y, 4);
+    return calc_centroid_polygon(rect.x, rect.y, 4);
 }
 
 void get_min_max_vectors_scalar_polygon(
-    f32* verts_x, f32* verts_y, i32 verts_size, 
-    f32* out_min_x, f32* out_min_y, f32* out_max_x, f32* out_max_y 
+    f32* verts_x, f32* verts_y, i32 verts_size,
+    f32* out_min_x, f32* out_min_y, f32* out_max_x, f32* out_max_y
 ){
     *out_min_x = F32_MAX;
     *out_min_y = F32_MAX;
@@ -1766,18 +1796,18 @@ void get_min_max_vectors_scalar_polygon(
 Aabb calc_aabb_polygon_rectangle(PolygonRectangle rect){
     Aabb aabb;
     get_min_max_vectors_scalar_polygon(
-        rect.vertices_x, rect.vertices_y, 4, 
+        rect.x, rect.y, 4,
         &aabb.min_x, &aabb.min_y, &aabb.max_x, &aabb.max_y
     );
     return aabb;
 }
 
 f32 get_width_polygon_rectangle(PolygonRectangle rect){
-    return vector2_dist_scalar(rect.vertices_x[0], rect.vertices_y[0], rect.vertices_x[1], rect.vertices_y[1]);
+    return vector2_dist_scalar(rect.x[0], rect.y[0], rect.x[1], rect.y[1]);
 }
 
 f32 get_height_polygon_rectangle(PolygonRectangle rect){
-    return vector2_dist_scalar(rect.vertices_x[0], rect.vertices_y[0], rect.vertices_x[3], rect.vertices_y[3]);
+    return vector2_dist_scalar(rect.x[0], rect.y[0], rect.x[3], rect.y[3]);
 }
 
 
@@ -1797,8 +1827,8 @@ void circle_get_min_max_vertices(f32 x, f32 y, f32 radius, f32* out_min_x, f32* 
 }
 
 bool circle_overlaps_scalar(
-    f32 lhs_x, f32 lhs_y, f32 lhs_radius, 
-    f32 rhs_x, f32 rhs_y, f32 rhs_radius, 
+    f32 lhs_x, f32 lhs_y, f32 lhs_radius,
+    f32 rhs_x, f32 rhs_y, f32 rhs_radius,
     f32* out_normal_x, f32* out_normal_y, f32* out_depth
 ){
     *out_normal_x = INITIAL_NORMAL.x;
@@ -1821,15 +1851,15 @@ bool circle_overlaps_scalar(
     }
 
     f32 dist = f32_sqrt(dist_sqrd);
-    normalise_2d_f32(lhs_x - rhs_x, lhs_y - rhs_y, out_normal_x, out_normal_y);
+    vector2_normalise_scalar(lhs_x - rhs_x, lhs_y - rhs_y, out_normal_x, out_normal_y);
     *out_depth = radius_sum - dist;
-    return true;  
+    return true;
 }
 
 bool circle_overlaps(Circle lhs, Circle rhs, Vector2* out_normal, f32* out_depth){
     return circle_overlaps_scalar(
-        lhs.x, lhs.y, lhs.radius, 
-        rhs.x, rhs.y, rhs.radius, 
+        lhs.x, lhs.y, lhs.radius,
+        rhs.x, rhs.y, rhs.radius,
         &out_normal->x, &out_normal->y, out_depth
     );
 }
@@ -1848,9 +1878,9 @@ void circle_project_scalar(
     f32 vAY = circle_y + dir_and_radius_y;
     f32 vBX = circle_x - dir_and_radius_x;
     f32 vBY = circle_y - dir_and_radius_y;
-    
-    *out_min_circle_edge = dot_2d_f32(vAX, vAY, axis_x, axis_y);
-    *out_max_circle_edge = dot_2d_f32(vBX, vBY, axis_x, axis_y);
+
+    *out_min_circle_edge = vector2_dot_scalar(vAX, vAY, axis_x, axis_y);
+    *out_max_circle_edge = vector2_dot_scalar(vBX, vBY, axis_x, axis_y);
 
     if(*out_min_circle_edge > *out_max_circle_edge)
     {
@@ -1875,12 +1905,12 @@ void circle_calc_contact_points_scalar(f32 a_x, f32 a_y, f32 a_radius, f32 b_x, 
     f32 dist_y = b_y - a_y;
     f32 dir_x;
     f32 dir_y;
-    normalise_2d_f32(dist_x, dist_y, &dir_x, &dir_y);
-    
+    vector2_normalise_scalar(dist_x, dist_y, &dir_x, &dir_y);
+
     // check for Nan in case the two circles are perfectly ontop of one another,
     // as normalising a distance of zero gives a NaN.
     *out_contact_point_x = a_x + (dir_x * a_radius);
-    *out_contact_point_y = a_y + (dir_y * a_radius); 
+    *out_contact_point_y = a_y + (dir_y * a_radius);
 }
 
 /*
@@ -1903,7 +1933,7 @@ Vector2 circle_calc_contact_points(Circle a, Circle b){
     the 'edge' of a polygon is defined as the outer most vertices that are projected onto the axis.
 */
 void project_polygon(
-    f32* verts_x, f32* verts_y, i32 verts_size, 
+    f32* verts_x, f32* verts_y, i32 verts_size,
     f32 axis_x, f32 axis_y,
     f32* out_min_edge, f32* out_max_edge
 ){
@@ -1911,7 +1941,7 @@ void project_polygon(
     *out_max_edge = F32_MIN;
 
     for(i32 i = 0; i < verts_size; i++){
-        f32 projection = dot_2d_f32(verts_x[i], verts_y[i], axis_x, axis_y);
+        f32 projection = vector2_dot_scalar(verts_x[i], verts_y[i], axis_x, axis_y);
 
         if(projection < *out_min_edge){
             *out_min_edge = projection;
@@ -1924,10 +1954,10 @@ void project_polygon(
 
 bool overlaps_point_scalar_polygon(
     f32* verts_x, f32* verts_y, i32 verts_size,
-    f32 point_x, f32 point_y, 
+    f32 point_x, f32 point_y,
     f32* out_normal_x, f32* out_normal_y, f32* out_depth
 ){
-    
+
     *out_depth = F32_MAX;
     *out_normal_x = 0.0f;
     *out_normal_y = 0.0f;
@@ -1949,8 +1979,8 @@ bool overlaps_point_scalar_polygon(
         f32 axis_y = verts_x[next_index] - verts_x[i];
 
         // project using axis.
-        project_polygon(verts_x, verts_y, verts_size, axis_x, axis_y, &min_edge, &max_edge);        
-        f32 point_proj = dot_2d_f32(point_x, point_y, axis_x, axis_y);
+        project_polygon(verts_x, verts_y, verts_size, axis_x, axis_y, &min_edge, &max_edge);
+        f32 point_proj = vector2_dot_scalar(point_x, point_y, axis_x, axis_y);
 
         if(point_proj <= min_edge || point_proj >= max_edge){
             return false; // Separation found.
@@ -2017,7 +2047,7 @@ bool polygon_overlaps_one_way(
         // project using axis.
         project_polygon(a_verts_x, a_verts_y, a_verts_size, axis_x, axis_y, &a_min_edge, &a_max_edge);
         project_polygon(b_verts_x, b_verts_y, b_verts_size, axis_x, axis_y, &b_min_edge, &b_max_edge);
-        
+
         if(a_min_edge >= b_max_edge || b_min_edge >= a_max_edge){
             return false; // Separation found.
         }
@@ -2051,7 +2081,7 @@ bool polygon_overlaps_one_way(
 bool polygon_overlaps(
     f32* lhs_verts_x, f32* lhs_verts_y, i32 lhs_verts_size,
     f32* rhs_verts_x, f32* rhs_verts_y, i32 rhs_verts_size,
-    f32 lhs_centroid_x, f32 lhs_centroid_y, f32 rhs_centroid_x, f32 rhs_centroid_y, 
+    f32 lhs_centroid_x, f32 lhs_centroid_y, f32 rhs_centroid_x, f32 rhs_centroid_y,
     f32* out_normal_x, f32* out_normal_y, f32* out_depth
 ){
     *out_normal_x = INITIAL_NORMAL.x;
@@ -2063,45 +2093,49 @@ bool polygon_overlaps(
 
 
     bool lhs_overlaps_rhs = polygon_overlaps_one_way(
-        lhs_verts_x, lhs_verts_y, lhs_verts_size, 
-        rhs_verts_x, rhs_verts_y, rhs_verts_size, 
+        lhs_verts_x, lhs_verts_y, lhs_verts_size,
+        rhs_verts_x, rhs_verts_y, rhs_verts_size,
         &found_normal_x, &found_normal_y, &found_depth
-    ); 
+    );
 
-    if (lhs_overlaps_rhs && *out_depth > found_depth){
-        *out_depth = found_depth;
-        *out_normal_x = found_normal_x; 
-        *out_normal_y = found_normal_y;
+    if (lhs_overlaps_rhs){
+        if(*out_depth > found_depth){
+            *out_depth = found_depth;
+            *out_normal_x = found_normal_x;
+            *out_normal_y = found_normal_y;
+        }
     }
     else{
         return false;
     }
 
     bool rhs_overlaps_lhs = polygon_overlaps_one_way(
-        rhs_verts_x, rhs_verts_y, rhs_verts_size, 
-        lhs_verts_x, lhs_verts_y, lhs_verts_size, 
+        rhs_verts_x, rhs_verts_y, rhs_verts_size,
+        lhs_verts_x, lhs_verts_y, lhs_verts_size,
         &found_normal_x, &found_normal_y, &found_depth
     );
 
-    if (rhs_overlaps_lhs && *out_depth > found_depth){            
-        *out_depth = found_depth;
-        *out_normal_x = found_normal_x; 
-        *out_normal_y = found_normal_y;
+    if (rhs_overlaps_lhs){
+        if(*out_depth > found_depth){
+            *out_depth = found_depth;
+            *out_normal_x = found_normal_x;
+            *out_normal_y = found_normal_y;
+        }
     }
     else{
         return false;
     }
 
-    // when a new smaller   
+    // when a new smaller
     // depth is found but in relation to rect B, not A.
     // this is so that the resolution code will always push A out of B
-    // and not push the two i32o each other when a smaller depth is found when 
+    // and not push the two i32o each other when a smaller depth is found when
     // looping through rect B.
-    if(dot_2d_f32(rhs_centroid_x - lhs_centroid_x, rhs_centroid_y - lhs_centroid_y, *out_normal_x, *out_normal_y) >= 0){
+    if(vector2_dot_scalar(rhs_centroid_x - lhs_centroid_x, rhs_centroid_y - lhs_centroid_y, *out_normal_x, *out_normal_y) >= 0){
         *out_normal_x *= -1.0f;
         *out_normal_y *= -1.0f;
     }
-    
+
     return true;
 }
 
@@ -2111,9 +2145,9 @@ bool polygon_overlaps(
     do NOT use this function; instead use said function instead.
 */
 void polygon_find_contact_points_one_way(
-    f32* a_verts_x, f32* a_verts_y, i32 a_verts_size, 
-    f32* b_verts_x, f32* b_verts_y, i32 b_verts_size, 
-    f32 epsilon, f32* out_min_dist_sqrd, f32* out_contact_point_1_x, f32* out_contact_point_1_y, 
+    f32* a_verts_x, f32* a_verts_y, i32 a_verts_size,
+    f32* b_verts_x, f32* b_verts_y, i32 b_verts_size,
+    f32 epsilon, f32* out_min_dist_sqrd, f32* out_contact_point_1_x, f32* out_contact_point_1_y,
     f32* out_contact_point_2_x, f32* out_contact_point_2_y, i32* out_contact_point_count
 ){
     for(i32 i = 0; i < a_verts_size; i++)
@@ -2124,7 +2158,7 @@ void polygon_find_contact_points_one_way(
         for(i32 start_index = 0; start_index < b_verts_size; start_index++)
         {
             // find the closest poi32 on polygon b to the vertice on polygon a.
-            
+
             f32 edge_start_x = b_verts_x[start_index];
             f32 edge_start_y = b_verts_y[start_index];
 
@@ -2134,7 +2168,7 @@ void polygon_find_contact_points_one_way(
             if(end_index >= b_verts_size){
                 end_index = 0;
             }
-            
+
             f32 edge_end_x = b_verts_x[end_index];
             f32 edge_end_y = b_verts_y[end_index];
 
@@ -2148,7 +2182,7 @@ void polygon_find_contact_points_one_way(
             {
                 // note: there is a chance that two contact points can be in the same place.
                 // this is caused by when two vertices - one from each polygon - are in contact.
-                // without this 'if check', all the contact information will be wiped out 
+                // without this 'if check', all the contact information will be wiped out
                 // when those two corners hit eachother.
 
                 if(near_equal_f32(closest_point_x, *out_contact_point_1_x, epsilon) == false
@@ -2170,8 +2204,8 @@ void polygon_find_contact_points_one_way(
                 *out_contact_point_1_x = closest_point_x;
                 *out_contact_point_1_y = closest_point_y;
             }
-        } 
-    } 
+        }
+    }
 }
 
 /*
@@ -2184,7 +2218,7 @@ void polygon_find_contact_points_one_way(
 void polygon_find_contact_points(
     f32* a_vert_x, f32* a_vert_y, i32 a_verts_length,
     f32* b_vert_x, f32* b_vert_y, i32 b_verts_length,
-    f32 epsilon, f32* out_contact_point_1_x, f32* out_contact_point_1_y, 
+    f32 epsilon, f32* out_contact_point_1_x, f32* out_contact_point_1_y,
     f32* out_contact_point_2_x, f32* out_contact_point_2_y, i32* out_contact_point_count
 ){
     *out_contact_point_1_x = 0;
@@ -2196,17 +2230,17 @@ void polygon_find_contact_points(
 
     // polygon a to b.
     polygon_find_contact_points_one_way(
-        a_vert_x, a_vert_y, a_verts_length, 
+        a_vert_x, a_vert_y, a_verts_length,
         b_vert_x, b_vert_y, b_verts_length,
-        epsilon, &min_dist_sqrd, out_contact_point_1_x, out_contact_point_1_y, 
+        epsilon, &min_dist_sqrd, out_contact_point_1_x, out_contact_point_1_y,
         out_contact_point_2_x, out_contact_point_2_y, out_contact_point_count
     );
 
     // polygon b to a.
     polygon_find_contact_points_one_way(
         b_vert_x, b_vert_y, b_verts_length,
-        a_vert_x, a_vert_y, a_verts_length, 
-        epsilon, &min_dist_sqrd, out_contact_point_1_x, out_contact_point_1_y, 
+        a_vert_x, a_vert_y, a_verts_length,
+        epsilon, &min_dist_sqrd, out_contact_point_1_x, out_contact_point_1_y,
         out_contact_point_2_x, out_contact_point_2_y, out_contact_point_count
     );
 }
@@ -2244,18 +2278,18 @@ bool polygon_overlaps_circle_scalar(
         f32 curr_y = poly_vert_y[current_index];
         f32 next_y = poly_vert_y[next_index];
 
-        f32 edge_x = next_x - curr_x; 
-        f32 edge_y = next_y - curr_y; 
+        f32 edge_x = next_x - curr_x;
+        f32 edge_y = next_y - curr_y;
 
         // the normal of the edge.
         // note: this only works as vertices are assumed to be in clockwise winding order.
         // change to new Vector2(edge.y, -edge.x); if anti-clockwise.
         axis_x = -edge_y;
         axis_y = edge_x;
-    
+
         // normalize (important for correct depth).
-        normalise_2d_f32(axis_x, axis_y, &axis_x, &axis_y);
-    
+        vector2_normalise_scalar(axis_x, axis_y, &axis_x, &axis_y);
+
         // project all vertices onto the current edge to find the min and max values
         // of the two rectangles along the edge.
         project_polygon(poly_vert_x, poly_vert_y, poly_vert_length, axis_x, axis_y, &a_min, &a_max);
@@ -2281,7 +2315,7 @@ bool polygon_overlaps_circle_scalar(
 
     axis_x = closest_point_x - circle_x;
     axis_y = closest_point_y - circle_y;
-    normalise_2d_f32(axis_x, axis_y, &axis_x, &axis_y);
+    vector2_normalise_scalar(axis_x, axis_y, &axis_x, &axis_y);
 
     // project all vertices onto the current edge to find the min and max values
     // of the two rectangles along the edge.
@@ -2304,12 +2338,12 @@ bool polygon_overlaps_circle_scalar(
     f32 dist_x = circle_x - poly_centroid_x;
     f32 dist_y = circle_y - poly_centroid_y;
 
-    // when a new smaller   
+    // when a new smaller
     // depth is found but in relation to rect B, not A.
     // this is so that the resolution code will always push A out of B
-    // and not push the two i32o each other when a smaller depth is found when 
+    // and not push the two i32o each other when a smaller depth is found when
     // looping through rect B.
-    if(dot_2d_f32(dist_x, dist_x, *out_normal_x,  *out_normal_y) >= 0){
+    if(vector2_dot_scalar(dist_x, dist_x, *out_normal_x,  *out_normal_y) >= 0){
         *out_normal_x *= -1.0f;
         *out_normal_y *= -1.0f;
     }
@@ -2317,13 +2351,13 @@ bool polygon_overlaps_circle_scalar(
     return true;
 }
 
-/** 
+/**
     Finds the contact points between a polygon and a point.
-**/ 
+**/
 void polygon_find_point_contact_points_scalar(
-    f32* poly_vert_x, f32* poly_vert_y, i32 poly_vert_length, 
+    f32* poly_vert_x, f32* poly_vert_y, i32 poly_vert_length,
     f32 point_x, f32 point_y,
-    f32* out_contact_point_x, f32* out_contact_point_y 
+    f32* out_contact_point_x, f32* out_contact_point_y
 ){
     *out_contact_point_x = F32_MAX;
     *out_contact_point_y = F32_MAX;
@@ -2336,7 +2370,7 @@ void polygon_find_point_contact_points_scalar(
     // find the closest point for each edge of the rectangle.
     for(int start_idx = 0; start_idx < poly_vert_length; start_idx++){
         int end_idx = start_idx + 1;
-        
+
         // this is faster than modulo.
         if(end_idx >= poly_vert_length){
             end_idx = 0;
@@ -2345,8 +2379,8 @@ void polygon_find_point_contact_points_scalar(
         BOUNDS_CHECK(start_idx, poly_vert_length);
         BOUNDS_CHECK(end_idx, poly_vert_length);
         line_segment_closest_point_scalar(
-            poly_vert_x[start_idx], poly_vert_y[start_idx], 
-            poly_vert_x[end_idx], poly_vert_y[end_idx], 
+            poly_vert_x[start_idx], poly_vert_y[start_idx],
+            poly_vert_x[end_idx], poly_vert_y[end_idx],
             point_x, point_y, &closest_point_x, &closest_point_y
         );
 
@@ -2357,7 +2391,7 @@ void polygon_find_point_contact_points_scalar(
             *out_contact_point_x = closest_point_x;
             *out_contact_point_y = closest_point_y;
         }
-    } 
+    }
 }
 
 bool polygon_overlaps_circle(Polygon polygon, Vector2 polygon_centroid, Circle circle, Vector2* out_normal, f32* out_depth){
@@ -2377,7 +2411,7 @@ void find_point_contact_points_scalar_polygon(
     f32* out_contact_point_x, f32* out_contact_point_y
 ){
 
-    *out_contact_point_x = F32_MAX;    
+    *out_contact_point_x = F32_MAX;
     *out_contact_point_y = F32_MAX;
     f32 min_dist_sqrd = F32_MAX;
     f32 closest_point_x;
@@ -2385,7 +2419,7 @@ void find_point_contact_points_scalar_polygon(
     f32 dist_sqrd;
 
     // find the closest poi32 for each edge of the rectangle.
-    for(i32 start_idx = 0; start_idx < poly_verts_length; start_idx++){        
+    for(i32 start_idx = 0; start_idx < poly_verts_length; start_idx++){
         i32 next_idx = start_idx + 1;
         // this is faster than modulo.
         if(next_idx >= poly_verts_length)
@@ -2395,7 +2429,7 @@ void find_point_contact_points_scalar_polygon(
             poly_verts_x[start_idx], poly_verts_y[start_idx], poly_verts_x[next_idx], poly_verts_y[next_idx],
             point_x, point_y, &closest_point_x, &closest_point_y
         );
-        
+
         dist_sqrd = vector2_dist_sqrd_scalar(point_x, point_y, closest_point_x, closest_point_y);
 
         if(dist_sqrd < min_dist_sqrd){
@@ -2403,7 +2437,7 @@ void find_point_contact_points_scalar_polygon(
             *out_contact_point_x = closest_point_x;
             *out_contact_point_y = closest_point_y;
         }
-    } 
+    }
 }
 
 f32 calc_area_scalar_rectangle(f32 width, f32 height){
@@ -2414,15 +2448,15 @@ f32 calc_area_rectangle(Rectangle rect){
     return calc_area_scalar_rectangle(rect.width, rect.height);
 }
 
-/** 
+/**
     Gets the min and max vectors from a span of vertices.
-**/ 
+**/
 void polygon_get_min_max_vertices(f32* vert_x, f32* vert_y, i32 vert_length, f32* out_min_x, f32* out_min_y, f32* out_max_x, f32* out_max_y){
     *out_min_x = F32_MAX;
     *out_min_y = F32_MAX;
     *out_max_x = F32_MIN;
     *out_max_y = F32_MIN;
-    
+
     for(i32 i = 0; i < vert_length; i++){
         f32 v = vert_x[i];
         if (v < *out_min_x){

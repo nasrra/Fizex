@@ -51,4 +51,8 @@ bool platform_read_file(String file_path, MemoryArena* arena);
 **/
 void* platform_load_file(String file_path, size_t* out_buffer_size);
 f32 platform_window_calc_aspect_ratio(WindowContext window_ctx);
+u128 platform_get_system_tick();
+u128 platform_get_proccess_tick();
+
+void platform_print_msg(char* msg);
 #endif

@@ -33,6 +33,7 @@ typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
+typedef long long u128;
 
 typedef struct{
     char* chars;
@@ -55,64 +56,6 @@ typedef struct{
     i32 free_slots_stack_count;
     bool is_init;
 } GenIdAllocator;
-
-typedef struct{
-    /**
-        the `node_index` of this node's parent.
-
-        `remarks`
-        invalid when `0`.
-    **/
-    i32 parent;
-    /**
-        
-        the <c>nodeIndex</c> of this node's next sibling.
-
-        `remarks`
-        this value is self-recursive, meaning the next sibling loops back to this node's index.
-    **/
-    i32 next_sibling;
-    /**
-        the `node_index` of this node's previous sibling.
-
-        `remarks`
-        this value is self-recursive, meaning the previous sibling loops back to this node's index.    
-    **/
-    i32 previous_sibling;
-    /**
-        `node_index` of this node's first child.
-
-        `remarks`
-        invalid when `0`.
-    **/
-    i32 first_child;
-    /**
-        this node's index in `IntrusiveList.root_indices`
-        
-        `remarks`
-        invalid when `0`.
-    **/
-    i32 root_dense_index;
-    /**
-        whether or not this node is within the state's tree.
-    **/
-    bool in_tree;
-} IntrusiveListNode;
-
-typedef struct{
-    IntrusiveListNode* node;
-    /**
-        contains a `Nil` element.
-    **/
-    i32* root_index;
-    i32 root_index_count;
-    i32 length;
-    /**
-        Whether or not the ordering of root indices is preserved during root node removal.
-    **/
-    bool preserve_root_order;
-    bool is_init;
-} IntrusiveList;
 
 /*========================================
     defines.
@@ -715,7 +658,5 @@ void gen_id_allocator_dealloc_unsafe(GenIdAllocator* allocator, i32 index);
 **/
 bool gen_id_allocator_dealloc(GenIdAllocator* allocator, GenId gen_id);
 bool gen_id_allocator_is_gen_id_invalid(GenIdAllocator* allocator, GenId gen_id);
-
-void intrusive_list_init(IntrusiveList* list, MemoryArena* arena, i32 length, bool preserve_root_order);
 
 #endif

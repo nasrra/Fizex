@@ -3,7 +3,6 @@
 /*====================
     types.
 ====================*//**/
-
 typedef enum{
     CameraProjectionType_Orthographic,
     CameraProjectionType_Perspective
@@ -11,9 +10,9 @@ typedef enum{
 
 /**
     `remarks`
-    member values shouldn't be directly modified. 
+    member values shouldn't be directly modified.
 **/
-typedef struct{
+typedef struct Camera{
     Matrix4x4 projection;
     Matrix4x4 view;
     Matrix4x4 model;
@@ -67,7 +66,7 @@ typedef struct{
     WGPUTextureView view;
     /*
         `remarks`:
-        This is a copied value from texture creation and wont change the underlying texture extents.    
+        This is a copied value from texture creation and wont change the underlying texture extents.
     */
     WGPUExtent3D extents;
     bool is_init;
@@ -123,7 +122,7 @@ typedef enum{
 
 /*
     The maximum amount of virtual textures a shader can store.
-    
+
     remarks:
     This is because a virtual texture's size is 16 bytes and the default max size of a WebGPU uniform buffer is 64Kib;
     so only 4096 unique texture ids can be stored; which is more than enough for most games.
@@ -186,7 +185,7 @@ typedef enum{
 /*
     WGSL requires that the total size of a struct must be a multiple of its largest member's alignment
 
-    Remember to look at alignments and sizes when changing this: 
+    Remember to look at alignments and sizes when changing this:
     https://www.w3.org/TR/WGSL/#alignment-and-size
 */
 typedef struct{
@@ -195,7 +194,7 @@ typedef struct{
     Colour colour;
     SpriteState state;
     i32 virtual_texture;
-    i32 material; 
+    i32 material;
     i32 colour_state;
     i32 layer;
     i32 _padding_0;
@@ -313,7 +312,7 @@ typedef struct{
     /*
         remarks:
         The order of the textures determines their binding value within the shader.
-        E.g, texture index 0 = @binding(0), texture index 1 = @binding(1), etc ... 
+        E.g, texture index 0 = @binding(0), texture index 1 = @binding(1), etc ...
     */
     ImageTexturesInitInfo* image_textures_init_infos;
     i32 image_textures_init_infos_length;
@@ -321,7 +320,7 @@ typedef struct{
     /*
         remarks:
         The order of the layers determines the order that they are drawn.
-        E.g, layer index 4 will be above layers 3, 2, 1, etc, ... 
+        E.g, layer index 4 will be above layers 3, 2, 1, etc, ...
     */
     SpriteLayerCreateInfo* sprite_layer_create_infos;
     i32 sprite_layer_create_infos_length;
@@ -401,15 +400,17 @@ typedef struct{
     defines
 ====================*//**/
 
-#define COLOUR_RED      (Colour){.r = 1.0f, .a = 1.0f}
-#define COLOUR_GREEN    (Colour){.g = 1.0f, .a = 1.0f}
-#define COLOUR_BLUE     (Colour){.b = 1.0f, .a = 1.0f}
-#define COLOUR_WHITE    (Colour){.r = 1.0f, .g = 1.0f, .b = 1.0f, .a = 1.0f}
-#define COLOUR_ORANGE   (Colour){.r = 0.5f, .g = 0.5f, .a = 1.0f}
-#define COLOUR_YELLOW   (Colour){.r = 1.0f, .g = 1.0f, .a = 1.0f}
-#define COLOUR_PINK     (Colour){.r = 1.0f, .g = 0.25f, .b = 0.25f, .a = 1.0f}
-#define COLOUR_BLACK    (Colour){.a = 1.0f}
-#define COLOUR_PURPLE   (Colour){.r = 0.5f, .b = 0.5f, .a = 1.0f}
+#define COLOUR_RED          (Colour){.r = 1.0f, .a = 1.0f}
+#define COLOUR_GREEN        (Colour){.g = 1.0f, .a = 1.0f}
+#define COLOUR_LIGHT_GREEN  (Colour){.r = 0.5f, .g = 1.0f, .b = 0.5f, .a = 1.0f}
+#define COLOUR_BLUE         (Colour){.b = 1.0f, .a = 1.0f}
+#define COLOUR_LIGHT_BLUE   (Colour){.r = 0.5f, .g = 0.5f, .b = 1.0f, .a = 1.0f}
+#define COLOUR_WHITE        (Colour){.r = 1.0f, .g = 1.0f, .b = 1.0f, .a = 1.0f}
+#define COLOUR_ORANGE       (Colour){.r = 0.5f, .g = 0.5f, .a = 1.0f}
+#define COLOUR_YELLOW       (Colour){.r = 1.0f, .g = 1.0f, .a = 1.0f}
+#define COLOUR_PINK         (Colour){.r = 1.0f, .g = 0.25f, .b = 0.25f, .a = 1.0f}
+#define COLOUR_BLACK        (Colour){.a = 1.0f}
+#define COLOUR_PURPLE       (Colour){.r = 0.5f, .b = 0.5f, .a = 1.0f}
 
 /*
     The amount of entries in @group(0).
@@ -426,7 +427,7 @@ typedef struct{
 
 /*
     The maximum amount of virtual textures a shader can store.
-    
+
     Remarks:
     This is because a virtual texture's size is 16 bytes and the default max size of a WebGPU uniform buffer is 64Kib;
     so only 4096 unique texture ids can be stored; which is more than enough for most games.
@@ -604,10 +605,10 @@ bool renderer_sprite_chain_set_##MEMBER_NAME(RendererContext* ctx, SpriteId spri
 "}\n"
 
 /**
-    Sorts sprites by their Z translation value. Note that this is specically so that transparent objects 
-    are sorted correctly as the depth buffer freaks out with tranparency. However, this will only work when the camera is 
-    facing down Z+ (e.g, camera position: {0,0,-3} and looking at position {0,0,0}). 
-    
+    Sorts sprites by their Z translation value. Note that this is specically so that transparent objects
+    are sorted correctly as the depth buffer freaks out with tranparency. However, this will only work when the camera is
+    facing down Z+ (e.g, camera position: {0,0,-3} and looking at position {0,0,0}).
+
     remarks:
     As the camera is not expected to rotate or move from its fixed position; this is okay.
 **/
@@ -655,7 +656,7 @@ void renderer_font_data_init(FontData* font_data, MemoryArena* arena, i32 glyph_
 }
 
 void renderer_request_adapter_callback(
-    WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView message, 
+    WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView message,
     WGPU_NULLABLE void* user_data_1, WGPU_NULLABLE void* user_data_2
 ){
     WGPUAdapter* out_adapter = (WGPUAdapter*)user_data_1;
@@ -681,7 +682,7 @@ WGPUAdapter renderer_request_adapter(WGPUInstance instance){
 
     wgpuInstanceRequestAdapter(instance, &options, callback_info);
     ASSERT(wgpu_adapter!=NULL, "failed to retrieve adapter.");
-    
+
     return wgpu_adapter;
 }
 
@@ -690,7 +691,7 @@ void renderer_adapter_get_limits(WGPUAdapter adapter, WGPULimits* out_limits){
         reference here whilst looking at this code:
         https://www.w3.org/TR/webgpu/#limits
     */
-    
+
     WGPULimits supported = {0};
     wgpuAdapterGetLimits(adapter, &supported);
     supported.nextInChain = NULL;
@@ -700,7 +701,7 @@ void renderer_adapter_get_limits(WGPUAdapter adapter, WGPULimits* out_limits){
     /**
         undefined means there is no limit.
         limits have to be initialise this way as WebGPU is not ZII      >:( not cool
- 
+
         the default capabilities for a device can be found here:
             https://www.w3.org/TR/webgpu/#limit-default
         note that every adapter is guaranteed to support the default or better:
@@ -748,7 +749,7 @@ void renderer_adapter_get_limits(WGPUAdapter adapter, WGPULimits* out_limits){
     // maximum stride is between two vonsecutivve vertice (to make triangles) in the vertex buffer.
     required.maxVertexBufferArrayStride = (u32)sizeof(Vertex);
     /**
-        These two limits are different because they are 'minimum' limits, they are the only ones we may forward from the adapter's 
+        These two limits are different because they are 'minimum' limits, they are the only ones we may forward from the adapter's
         supported limits as it may cause issuesit they remain undefined (not supported by the adapter).
     **/
     required.minUniformBufferOffsetAlignment = supported.minUniformBufferOffsetAlignment;
@@ -756,7 +757,7 @@ void renderer_adapter_get_limits(WGPUAdapter adapter, WGPULimits* out_limits){
     // note that 4 is the guaranteed standard for WebGPU.
     required.maxBindGroups = 4;
     required.maxUniformBuffersPerShaderStage = 2;
-    // 64Kib as defined as the default uniform buffer size by WebGPU. 
+    // 64Kib as defined as the default uniform buffer size by WebGPU.
     required.maxUniformBufferBindingSize = KILOBYTE(64);
     // 128Mb is defined as the default storage buffer size by WebGPU.
     required.maxStorageBufferBindingSize = MEGABYTE(128);
@@ -765,12 +766,12 @@ void renderer_adapter_get_limits(WGPUAdapter adapter, WGPULimits* out_limits){
     // set the max required width of a texture; in pixels.
     required.maxTextureDimension2D = 4096;
     required.maxTextureArrayLayers = 256;
-    
+
     *out_limits = required;
 }
 
 void renderer_adapter_request_device_callback(
-    WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView message, 
+    WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView message,
     WGPU_NULLABLE void* user_data_1, WGPU_NULLABLE void* user_data_2
 ){
     WGPUDevice* out_device = (WGPUDevice*)user_data_1;
@@ -778,10 +779,10 @@ void renderer_adapter_request_device_callback(
 }
 
 WGPUDevice renderer_request_device(WGPUAdapter adapter){
-    
+
     WGPULimits limits = {0};
     renderer_adapter_get_limits(adapter, &limits);
-    
+
     WGPUAdapterInfo adapter_info = {0};
     wgpuAdapterGetInfo(adapter, &adapter_info);
 
@@ -792,8 +793,8 @@ WGPUDevice renderer_request_device(WGPUAdapter adapter){
     WGPUDevice wgpu_device = {0};
     WGPURequestDeviceCallbackInfo callback_info = {0};
     callback_info.callback = renderer_adapter_request_device_callback;
-    callback_info.userdata1 = &wgpu_device; 
-    
+    callback_info.userdata1 = &wgpu_device;
+
     wgpuAdapterRequestDevice(adapter, &desc, callback_info);
     ASSERT(wgpu_device!=NULL, "Failed to get the gpu device");
 
@@ -823,7 +824,7 @@ void renderer_buffer_init(RenderBuffer* buffer, WGPUDevice device, WGPUBufferUsa
 }
 
 void renderer_texture_array_init(TextureArray* array, WGPUDevice device, MemoryArena* arena, WGPUTextureFormat format, u32 width, u32 height, u32 layer_count){
-    
+
     { // validation steps.
         ASSERT(array->is_init==false, "attempted to init an already init texture array.");
     }
@@ -848,7 +849,7 @@ void renderer_texture_array_init(TextureArray* array, WGPUDevice device, MemoryA
     view_desc.baseMipLevel = 0;
     view_desc.mipLevelCount = 1;
     view_desc.baseArrayLayer = 0;
-    view_desc.arrayLayerCount = layer_count;    
+    view_desc.arrayLayerCount = layer_count;
     view_desc.aspect = WGPUTextureAspect_All;
     array->view = wgpuTextureCreateView(array->texture, &view_desc);
 
@@ -864,7 +865,7 @@ void renderer_texture_array_init(TextureArray* array, WGPUDevice device, MemoryA
 
 void renderer_virtual_texture_manager_init(
     VirtualTextureManager* manager, MemoryArena* arena, WGPUDevice device, ImageTexturesInitInfo* image_infos, i32 image_infos_length,
-    FontTextureInitInfo font_info, i32 max_virtual_textures, i32 file_path_max_chars 
+    FontTextureInitInfo font_info, i32 max_virtual_textures, i32 file_path_max_chars
 ){
     { // validation.
         ASSERT(!manager->is_init, "virtual texture manager is already init.");
@@ -875,7 +876,7 @@ void renderer_virtual_texture_manager_init(
 
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->device_virtual_textures, &manager->device_virtual_textures_length, max_virtual_textures);
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->host_virtual_textures, &manager->host_virtual_textures_length, max_virtual_textures);
-    
+
     // initialise virtual textures.
     WGPUBufferUsage host_usage = WGPUBufferUsage_CopySrc | WGPUBufferUsage_MapWrite;
     WGPUBufferUsage device_usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform;
@@ -903,9 +904,9 @@ void renderer_virtual_texture_manager_init(
     i32 texture_array_count = image_infos_length + VIRTUAL_TEXTURE_MANAGER_FONT_TEXTURE_ARRAY_INDEX + 1;
     i32 write_index = 0;
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->texture_arrays, &manager->texture_arrays_length, texture_array_count);
-    
+
     // init the nil.
-    WGPUTextureFormat nil_texture_format = WGPUTextureFormat_R8Unorm; // the format should be the least taxing on VRAM storage. 
+    WGPUTextureFormat nil_texture_format = WGPUTextureFormat_R8Unorm; // the format should be the least taxing on VRAM storage.
     BOUNDS_CHECK(write_index, manager->texture_arrays_length);
     renderer_texture_array_init(&manager->texture_arrays[write_index], device, arena, nil_texture_format, 1, 1, 1);
 
@@ -918,7 +919,7 @@ void renderer_virtual_texture_manager_init(
     WGPUTextureFormat font_texture_format = WGPUTextureFormat_R8Unorm;
     BOUNDS_CHECK(write_index, manager->texture_arrays_length);
     renderer_texture_array_init(
-        &manager->texture_arrays[write_index], device, arena, font_texture_format, 
+        &manager->texture_arrays[write_index], device, arena, font_texture_format,
         font_info.texture_width, font_info.texture_height, font_info.virtual_textures_length
     );
 
@@ -941,7 +942,7 @@ void renderer_virtual_texture_manager_init(
 }
 
 void renderer_sprite_manager_init(SpriteManager* manager, WGPUDevice device, MemoryArena* arena, SpriteLayerCreateInfo* layer_infos, i32 layer_infos_length){
-    
+
     { // validation step.
         ASSERT(!manager->is_init, "attempted to init an already init sprite manager.");
         ASSERT(layer_infos, "layer_infos is NULL.");
@@ -1011,7 +1012,7 @@ bool renderer_write_to_buffer(RenderBuffer* dst, WGPUDevice device, void* src, u
     map_ctx_info.userdata1 = &map_ctx;
     wgpuBufferMapAsync(dst->host, WGPUMapMode_Write, 0, dst->length_in_bytes, map_ctx_info);
     while(map_ctx.request_ended == false){
-        wgpuQueueSubmit(wgpuDeviceGetQueue(device), 0, NULL);        
+        wgpuQueueSubmit(wgpuDeviceGetQueue(device), 0, NULL);
         /*
             TODO(nich s)
             you may want to sleep the thread here in the case the thread of the cpu decides to melt lol.
@@ -1035,7 +1036,7 @@ bool renderer_write_to_buffer(RenderBuffer* dst, WGPUDevice device, void* src, u
     WGPUCommandBufferDescriptor cmd_buffer_desc = {0};
     WGPUCommandBuffer cmd_buffer = wgpuCommandEncoderFinish(cmd_encoder, &cmd_buffer_desc);
     wgpuQueueSubmit(wgpuDeviceGetQueue(device), 1, &cmd_buffer);
-    
+
     return true;
 }
 
@@ -1045,7 +1046,7 @@ bool renderer_write_to_buffer(RenderBuffer* dst, WGPUDevice device, void* src, u
 **/
 bool renderer_write_to_user_uniform_buffer(RendererContext* ctx, void* buffer_data, u32 data_size_in_bytes){
     ASSERT(ctx->is_init, "renderer context has not been init.");
-    return renderer_write_to_buffer(&ctx->user_uniform_buffer, ctx->device, buffer_data, data_size_in_bytes); 
+    return renderer_write_to_buffer(&ctx->user_uniform_buffer, ctx->device, buffer_data, data_size_in_bytes);
 }
 
 void renderer_vertex_buffer_init(RenderBuffer* buffer, WGPUDevice device){
@@ -1111,7 +1112,7 @@ void renderer_user_uniform_buffer_init(RenderBuffer* buffer, WGPUDevice device, 
     // ensure that the size is a multiple of 16; accounting for the 16 byte padding of WG.
     // uint adjustedSize = (sizeOfUbo + 15) & ~15u;
     WGPUBufferUsage host_usage = WGPUBufferUsage_MapWrite | WGPUBufferUsage_CopySrc;
-    WGPUBufferUsage device_usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform; 
+    WGPUBufferUsage device_usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform;
     renderer_buffer_init(buffer, device, host_usage, device_usage, 1, size_in_bytes);
 }
 
@@ -1133,13 +1134,13 @@ void renderer_window_surface_init(WindowSurface* surface, WGPUInstance instance,
 }
 
 void renderer_configure_window_surface(WindowSurface* surface, WGPUDevice device, WGPUAdapter device_adapter, u32 window_width, u32 window_height){
-    
+
     { // validation.
         ASSERT(surface != NULL, "attempted to configure a nul window surface.");
         ASSERT(surface->is_init, "attempted to configure an uninitialised window surface.");
     }
     wgpuSurfaceUnconfigure(surface->surface);
-    
+
     // get the preferred format of the window surface.
     WGPUSurfaceCapabilities capabilities = {0};
     wgpuSurfaceGetCapabilities(surface->surface, device_adapter, &capabilities);
@@ -1157,13 +1158,13 @@ void renderer_configure_window_surface(WindowSurface* surface, WGPUDevice device
 
         Immediate:
             No off-screen texture is used, the render process directly draws on the surface, which might lead
-            to artifacts (e.g. tearing) but has zero latency. 
+            to artifacts (e.g. tearing) but has zero latency.
         Mailbox:
             There is only one slot in the queue, and when a new frame is rendered, it replacees the one currently
             waiting (whch is discarded without ever being presented).
         Fifo:
             Stands for "first-in, fisrt-out", meaning that the presented texture is always the oldest one like a
-            regular queue. No rendered texture is wasted. 
+            regular queue. No rendered texture is wasted.
     */
     config.presentMode = WGPUPresentMode_Immediate;
     config.alphaMode  = WGPUCompositeAlphaMode_Auto;
@@ -1191,7 +1192,7 @@ void renderer_link_to_window(RendererContext* ctx, WindowContext window_ctx, u32
 #   error OS not set up.
 #endif
     // initialise render specifics.
-    renderer_window_surface_init(&ctx->window_surface, ctx->instance, surface_desc, window_width, window_height);    
+    renderer_window_surface_init(&ctx->window_surface, ctx->instance, surface_desc, window_width, window_height);
     renderer_configure_window_surface(&ctx->window_surface, ctx->device, ctx->adapter, window_width, window_height);
 }
 
@@ -1229,7 +1230,7 @@ void renderer_texture_init(Texture* texture, WGPUDevice device, WGPUTextureForma
 void renderer_depth_texture_init(Texture* texture, WGPUDevice device, u32 width, u32 height){
     WGPUTextureFormat format = WGPUTextureFormat_Depth24Plus;
     WGPUTextureUsage usage = WGPUTextureUsage_RenderAttachment;
-    WGPUTextureAspect aspect = WGPUTextureAspect_DepthOnly; 
+    WGPUTextureAspect aspect = WGPUTextureAspect_DepthOnly;
     renderer_texture_init(texture, device, format, usage, aspect, width, height);
 }
 
@@ -1241,11 +1242,12 @@ void renderer_free_texture(Texture* texture){
 }
 
 void renderer_final_render_target_init(Texture* texture, WGPUDevice device, u32 width, u32 height){
-    /** 
+    /**
         TODO: (nich s)
         format of the final render target needs to be dynamically set based on the surface window's format.
-    **/ 
-    WGPUTextureFormat format = WGPUTextureFormat_BGRA8UnormSrgb; // this used to be WGPUTextureFormat_RGBA8Unorm.
+    **/
+    WGPUTextureFormat format = WGPUTextureFormat_RGBA8UnormSrgb;
+    // WGPUTextureFormat format = WGPUTextureFormat_BGRA8UnormSrgb;
     WGPUTextureUsage usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_TextureBinding;
     WGPUTextureAspect aspect = WGPUTextureAspect_All;
     renderer_texture_init(texture, device, format, usage, aspect, width, height);
@@ -1254,7 +1256,7 @@ void renderer_final_render_target_init(Texture* texture, WGPUDevice device, u32 
 void renderer_sampler_init(WGPUSampler* sampler, WGPUDevice device){
     WGPUSamplerDescriptor desc = {0};
     /*
-        the addressing mode can be specified per axis; note that the axes are called 
+        the addressing mode can be specified per axis; note that the axes are called
         {U,V,W} instead of {X,Y,Z}.
     */
     desc.addressModeU = WGPUAddressMode_Repeat;
@@ -1325,7 +1327,7 @@ void renderer_blit_pipeline_init(BlitPipeline* pipeline, WindowSurface window_su
     /*
         vertex state.
     */
-    WGPUVertexState vertext_state = {    
+    WGPUVertexState vertext_state = {
         .module = shader_module,
         .entryPoint = (WGPUStringView){.data = VERTEX_SHADER_ENTRY_POINT, .length = WGPU_STRLEN},
         .bufferCount = 0,
@@ -1337,7 +1339,7 @@ void renderer_blit_pipeline_init(BlitPipeline* pipeline, WindowSurface window_su
     */
     WGPUBlendState blend_state = {
         // turn off any form of blending as the blit should not carry over any of the previous frames colours.
-        .color.srcFactor = WGPUBlendFactor_One, 
+        .color.srcFactor = WGPUBlendFactor_One,
         .color.operation = WGPUBlendOperation_Add,
         .color.dstFactor = WGPUBlendFactor_Zero,
         .alpha.srcFactor = WGPUBlendFactor_One,
@@ -1347,7 +1349,7 @@ void renderer_blit_pipeline_init(BlitPipeline* pipeline, WindowSurface window_su
     WGPUSurfaceCapabilities capabilities = {0};
     wgpuSurfaceGetCapabilities(window_surface.surface, device_adapter, &capabilities);
     WGPUTextureFormat preferred_format = capabilities.formats[0]; // 0 is guaranteed to be the preferred/optimal format.
-    WGPUColorTargetState colour_target_state = {    
+    WGPUColorTargetState colour_target_state = {
         .format = preferred_format,
         .blend = &blend_state,
         .writeMask = WGPUColorWriteMask_All
@@ -1366,7 +1368,7 @@ void renderer_blit_pipeline_init(BlitPipeline* pipeline, WindowSurface window_su
             bind group.
         */
         WGPUBindGroupLayoutEntry* group_layout_entries = (WGPUBindGroupLayoutEntry[BLIT_PIPELINE_BIND_GROUP_ENTRY_COUNT]){};
-        
+
         BOUNDS_CHECK(BLIT_PIPELINE_SAMPLER_BINDING, BLIT_PIPELINE_BIND_GROUP_ENTRY_COUNT);
         WGPUBindGroupLayoutEntry* sampler_layout_entry = &group_layout_entries[BLIT_PIPELINE_SAMPLER_BINDING];
         *sampler_layout_entry = (WGPUBindGroupLayoutEntry){
@@ -1374,7 +1376,7 @@ void renderer_blit_pipeline_init(BlitPipeline* pipeline, WindowSurface window_su
             .visibility = WGPUShaderStage_Fragment,
             .sampler.type = WGPUSamplerBindingType_NonFiltering
         };
-        
+
         BOUNDS_CHECK(BLIT_PIPELINE_TEXTURE_BINDING, BLIT_PIPELINE_BIND_GROUP_ENTRY_COUNT);
         WGPUBindGroupLayoutEntry* texture_layout_entry = &group_layout_entries[BLIT_PIPELINE_TEXTURE_BINDING];
         *texture_layout_entry = (WGPUBindGroupLayoutEntry){
@@ -1383,14 +1385,14 @@ void renderer_blit_pipeline_init(BlitPipeline* pipeline, WindowSurface window_su
             .texture.sampleType = WGPUTextureSampleType_Float,
             .texture.viewDimension = WGPUTextureViewDimension_2D
         };
-        
+
         WGPUBindGroupLayoutDescriptor group_layout_desc = {
             .entryCount = BLIT_PIPELINE_BIND_GROUP_ENTRY_COUNT,
             .entries = group_layout_entries
         };
-        
+
         pipeline->bind_group_layout = wgpuDeviceCreateBindGroupLayout(device, &group_layout_desc);
-        
+
         WGPUBindGroupLayout* layouts = (WGPUBindGroupLayout[1]){pipeline->bind_group_layout};
         WGPUPipelineLayoutDescriptor pipeline_layout_desc = {0};
         pipeline_layout_desc.bindGroupLayoutCount = 1;
@@ -1420,7 +1422,7 @@ void renderer_blit_pipeline_init(BlitPipeline* pipeline, WindowSurface window_su
         pipeline_desc.depthStencil = NULL;
         pipeline->render_pipeline = wgpuDeviceCreateRenderPipeline(device, &pipeline_desc);
         pipeline->is_init = true;
-    
+
     /*
         cleanup.
     */
@@ -1429,19 +1431,19 @@ void renderer_blit_pipeline_init(BlitPipeline* pipeline, WindowSurface window_su
     wgpuShaderModuleRelease(shader_module);
 }
 
-/*  
+/*
     parameters:
 
-    `texture_arrays_count`: the total amount of texture arrays to store. 
-*/  
+    `texture_arrays_count`: the total amount of texture arrays to store.
+*/
 void renderer_graphics_pipeline_init(
-    GraphicsPipeline* pipeline, MemoryArena* transient, WGPUDevice device, WGPUAdapter device_adapter, 
-    WindowSurface window_surface, VirtualTextureManager virtual_texture_manager, Texture final_render_texture, 
-    String shader_file_path, 
+    GraphicsPipeline* pipeline, MemoryArena* transient, WGPUDevice device, WGPUAdapter device_adapter,
+    WindowSurface window_surface, VirtualTextureManager virtual_texture_manager, Texture final_render_texture,
+    String shader_file_path,
     RenderBuffer user_uniform_buffer, RenderBuffer user_storage_buffer, RenderBuffer sprite_storage_buffer,
     u32 user_uniform_buffer_size_in_bytes, u32 user_storage_buffer_size_in_bytes
 ){
-    
+
     { // validation.
         ASSERT(pipeline->is_init==false, "attempted to init an already init graphics pipeline.");
     }
@@ -1451,11 +1453,11 @@ void renderer_graphics_pipeline_init(
     renderer_sampler_init(&pipeline->non_filter_sampler, device);
 
     /**
-        TODO: (nich s) 
+        TODO: (nich s)
         Load Shader Module.
     **/
     WGPUShaderModule shader_module = renderer_shader_module_load_from_file(shader_file_path, device);
-    
+
     WGPURenderPipelineDescriptor pipeline_desc = {0};
     pipeline_desc.vertex.module = shader_module;
     pipeline_desc.vertex.bufferCount = 0;
@@ -1472,7 +1474,7 @@ void renderer_graphics_pipeline_init(
         fragment state.
     */
     WGPUBlendState blend_state = {
-        /** 
+        /**
             The blending equation can be set independently for the rgb channels and the alpha channel, in general, it takes the following form:
 
                 rgb = Color.SrcFactor * srcRgb [Color.Operation] Color.DstFactor * dstRgb;
@@ -1558,7 +1560,7 @@ void renderer_graphics_pipeline_init(
             vertex buffer layout.
         */
         /*
-            For the 'vertex fetch' stage to transform this raw data from the vertex buffer 
+            For the 'vertex fetch' stage to transform this raw data from the vertex buffer
             into what the vertex shader expects, we need to specify a layout.
         */
         i32 vertex_attribute_count = 2;
@@ -1601,14 +1603,14 @@ void renderer_graphics_pipeline_init(
         /*
             Layouts.
         */
-            
+
             /*
                 Group 0 (buffers).
             */
             WGPUBindGroupLayoutEntry* gle0;
             i32 gle0_length;
             MEMORY_ARENA_ALLOC_ARRAY(transient, gle0, &gle0_length, SHADER_BUFFERS_GROUP_BINDING_COUNT);
-            
+
             // user-defined uniform.
             BOUNDS_CHECK(SHADER_BINDING_USER_UNIFORM, SHADER_BUFFERS_GROUP_BINDING_COUNT);
             gle0[SHADER_BINDING_USER_UNIFORM] = (WGPUBindGroupLayoutEntry){
@@ -1616,8 +1618,8 @@ void renderer_graphics_pipeline_init(
                 .buffer.minBindingSize = 0,
                 .binding = SHADER_BINDING_USER_UNIFORM,
                 .visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment
-            }; 
-            
+            };
+
             // user-defined storage.
             BOUNDS_CHECK(SHADER_BINDING_USER_STORAGE, SHADER_BUFFERS_GROUP_BINDING_COUNT);
             gle0[SHADER_BINDING_USER_STORAGE] = (WGPUBindGroupLayoutEntry){
@@ -1644,17 +1646,17 @@ void renderer_graphics_pipeline_init(
                 .binding = SHADER_BINDING_SPRITE_STORAGE,
                 .visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment
             };
-            
+
             // create bind group layout.
             WGPUBindGroupLayoutDescriptor gld0 = (WGPUBindGroupLayoutDescriptor){
                 .entryCount = SHADER_BUFFERS_GROUP_BINDING_COUNT,
                 .entries = gle0,
             };
             pipeline->bind_group_layout_0 = wgpuDeviceCreateBindGroupLayout(device, &gld0);
-            
-            /*  
+
+            /*
                 Group 1 (texture arrays)
-            */  
+            */
             WGPUBindGroupLayoutEntry* gle1;
             i32 gle1_length;
             MEMORY_ARENA_ALLOC_ARRAY(transient, gle1, &gle1_length, texture_arrays_count);
@@ -1664,23 +1666,23 @@ void renderer_graphics_pipeline_init(
                     .binding = i,
                     .visibility = WGPUShaderStage_Fragment,
                     .texture.sampleType = WGPUTextureSampleType_Float,
-                    .texture.viewDimension = WGPUTextureViewDimension_2DArray 
+                    .texture.viewDimension = WGPUTextureViewDimension_2DArray
                 };
-            } 
+            }
             // bind group layout creation.
             WGPUBindGroupLayoutDescriptor gld1 = (WGPUBindGroupLayoutDescriptor){
                 .entryCount = texture_arrays_count,
                 .entries = gle1
             };
             pipeline->bind_group_layout_1 = wgpuDeviceCreateBindGroupLayout(device, &gld1);
-            
-            /*  
+
+            /*
                 Group 2 (utilities)
-            */  
+            */
             WGPUBindGroupLayoutEntry* gle2;
             i32 gle2_length;
             MEMORY_ARENA_ALLOC_ARRAY(transient, gle2, &gle2_length, SHADER_UTILITIES_GROUP_BINDING_COUNT);
-            
+
             // define the entries
             BOUNDS_CHECK(SHADER_BINDING_NON_FILTER_SAMPLER, SHADER_UTILITIES_GROUP_BINDING_COUNT);
             gle2[SHADER_BINDING_NON_FILTER_SAMPLER] = (WGPUBindGroupLayoutEntry){
@@ -1689,7 +1691,7 @@ void renderer_graphics_pipeline_init(
                 // non filtering as we dont use bilinear interpolation or whater; nearest is best for pixel art.
                 .sampler.type = WGPUSamplerBindingType_NonFiltering
             };
-            
+
             // create the group layout.
             WGPUBindGroupLayoutDescriptor gld2 = {
                 .entryCount = gle2_length,
@@ -1697,22 +1699,22 @@ void renderer_graphics_pipeline_init(
             };
             pipeline->bind_group_layout_2 = wgpuDeviceCreateBindGroupLayout(device, &gld2);
         /*
-            set the layouts; note that ordering matters here, descriptor sets cannot be made without their 
-            respective layouts not being binded to the descriptor before hand. 
+            set the layouts; note that ordering matters here, descriptor sets cannot be made without their
+            respective layouts not being binded to the descriptor before hand.
         */
         layout_desc.bindGroupLayoutCount = 3;
         layout_desc.bindGroupLayouts = (WGPUBindGroupLayout[]){pipeline->bind_group_layout_0, pipeline->bind_group_layout_1, pipeline->bind_group_layout_2};
 
-        /*  
+        /*
             Descriptor Sets.
-        */  
-            /*  
+        */
+            /*
                 Group 0
-            */  
+            */
             WGPUBindGroupEntry* ge0;
             i32 ge0_length;
             MEMORY_ARENA_ALLOC_ARRAY(transient, ge0, &ge0_length, SHADER_BUFFERS_GROUP_BINDING_COUNT);
-            
+
             // user-uniform.
             BOUNDS_CHECK(SHADER_BINDING_USER_UNIFORM, SHADER_BUFFERS_GROUP_BINDING_COUNT);
             ge0[SHADER_BINDING_USER_UNIFORM] = (WGPUBindGroupEntry){
@@ -1720,7 +1722,7 @@ void renderer_graphics_pipeline_init(
                 .buffer = user_uniform_buffer.device,
                 .size = user_uniform_buffer_size_in_bytes
             };
-            
+
             // user-storage
             BOUNDS_CHECK(SHADER_BINDING_USER_STORAGE, SHADER_BUFFERS_GROUP_BINDING_COUNT);
             ge0[SHADER_BINDING_USER_STORAGE] = (WGPUBindGroupEntry){
@@ -1728,7 +1730,7 @@ void renderer_graphics_pipeline_init(
                 .buffer = user_storage_buffer.device,
                 .size = user_storage_buffer_size_in_bytes
             };
-            
+
             // virtual textures uniform.
             BOUNDS_CHECK(SHADER_BINDING_VIRTUAL_TEXTURES_UNIFORM, SHADER_BUFFERS_GROUP_BINDING_COUNT);
             ge0[SHADER_BINDING_VIRTUAL_TEXTURES_UNIFORM] = (WGPUBindGroupEntry){
@@ -1736,7 +1738,7 @@ void renderer_graphics_pipeline_init(
                 .buffer = virtual_texture_manager.device_virtual_texture_buffer.device,
                 .size = virtual_texture_manager.device_virtual_texture_buffer.length_in_bytes
             };
-            
+
             // sprite storage.
             BOUNDS_CHECK(SHADER_BINDING_SPRITE_STORAGE, SHADER_BUFFERS_GROUP_BINDING_COUNT);
             ge0[SHADER_BINDING_SPRITE_STORAGE] = (WGPUBindGroupEntry){
@@ -1744,7 +1746,7 @@ void renderer_graphics_pipeline_init(
                 .buffer = sprite_storage_buffer.device,
                 .size = sprite_storage_buffer.length_in_bytes
             };
-            
+
             // bind group creation.
             WGPUBindGroupDescriptor gd0 = {
                 .layout = pipeline->bind_group_layout_0,
@@ -1753,9 +1755,9 @@ void renderer_graphics_pipeline_init(
             };
             pipeline->bind_group_0 = wgpuDeviceCreateBindGroup(device, &gd0);
 
-            /*  
+            /*
                 Group 1.
-            */  
+            */
             // texture array entries.
             WGPUBindGroupEntry* ge1;
             i32 ge1_length;
@@ -1776,21 +1778,21 @@ void renderer_graphics_pipeline_init(
             };
             pipeline->bind_group_1 = wgpuDeviceCreateBindGroup(device, &gd1);
 
-            /*  
+            /*
                 Group 2.
-            */  
-            // sampler entry 
+            */
+            // sampler entry
             WGPUBindGroupEntry* ge2;
             i32 ge2_length;
             MEMORY_ARENA_ALLOC_ARRAY(transient, ge2, &ge2_length, SHADER_UTILITIES_GROUP_BINDING_COUNT);
-            
+
             // non-filter sampler.
             BOUNDS_CHECK(SHADER_BINDING_NON_FILTER_SAMPLER, SHADER_UTILITIES_GROUP_BINDING_COUNT);
             ge2[SHADER_BINDING_NON_FILTER_SAMPLER] = (WGPUBindGroupEntry){
                 .binding = SHADER_BINDING_NON_FILTER_SAMPLER,
                 .sampler = pipeline->non_filter_sampler,
             };
-            
+
             // bind group creation.
             WGPUBindGroupDescriptor gd2 = {
                 .layout = pipeline->bind_group_layout_2,
@@ -1798,20 +1800,20 @@ void renderer_graphics_pipeline_init(
                 .entries = ge2
             };
             pipeline->bind_group_2 = wgpuDeviceCreateBindGroup(device, &gd2);
-    
+
     // create the pipeline layout.
     pipeline->pipeline_layout = wgpuDeviceCreatePipelineLayout(device, &layout_desc);
     pipeline_desc.layout = pipeline->pipeline_layout;
 
-    /*  
+    /*
         Creation.
-    */  
+    */
     pipeline->render_pipeline = wgpuDeviceCreateRenderPipeline(device, &pipeline_desc);
     pipeline->is_init = true;
 
-    /*  
+    /*
         cleanup.
-    */  
+    */
     wgpuShaderModuleRelease(shader_module);
 }
 
@@ -1844,10 +1846,10 @@ void renderer_update_render_destination_rectangle(RendererContext* ctx){
 SurfaceTexture renderer_get_next_spawn_chain_image_view(RendererContext* ctx){
     ASSERT(ctx->is_init, "attempted to use a non initialised rendering context.");
 
-    /*  
-        Get the texture to draw onto; Note that the 'surface texture' is not really an object, 
+    /*
+        Get the texture to draw onto; Note that the 'surface texture' is not really an object,
         rather a container for the multiple things that this function returns.
-    */  
+    */
     SurfaceTexture surface_texture = {0};
     wgpuSurfaceGetCurrentTexture(ctx->window_surface.surface, &surface_texture.ptr);
     if(surface_texture.ptr.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal && surface_texture.ptr.status != WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal){
@@ -1892,15 +1894,15 @@ SpriteId renderer_sprite_alloc(RendererContext* ctx, i32 layer_index, bool* out_
 
     i32 sprite_index = 0;
     ARRAY_POP(layer->free_sprite_indices, layer->free_sprite_indices_length, &layer->free_sprite_indices_count, &sprite_index);
-    
+
     BOUNDS_CHECK(sprite_index, ctx->sprite_manager.device_sprites_length);
     DeviceSprite* sprite = &ctx->sprite_manager.device_sprites[sprite_index];
     sprite->state = SpriteState_Inactive;
     sprite->layer = layer_index;
-    
+
     BOUNDS_CHECK(sprite_index, ctx->sprite_manager.sprite_generations_length);
     GenId gen_id = gen_id_make(sprite_index, ctx->sprite_manager.sprite_generations[sprite_index]);
-    
+
     *out_success = true;
     return (SpriteId){.gen_id = gen_id, .layer = layer_index};
 }
@@ -1910,9 +1912,9 @@ SpriteId renderer_one_frame_sprite_alloc(RendererContext* ctx, i32 layer, bool* 
     SpriteManager* manager = &ctx->sprite_manager;
     if(*out_success){
         ARRAY_PUSH(
-            manager->one_frame_sprites_stack, 
-            manager->one_frame_sprites_stack_length, 
-            &manager->one_frame_sprites_stack_count, 
+            manager->one_frame_sprites_stack,
+            manager->one_frame_sprites_stack_length,
+            &manager->one_frame_sprites_stack_count,
             sprite_id
         );
     }
@@ -1921,7 +1923,7 @@ SpriteId renderer_one_frame_sprite_alloc(RendererContext* ctx, i32 layer, bool* 
 
 bool renderer_sprite_init(
     RendererContext* ctx, SpriteId sprite_id, Matrix4x4 transform, Colour colour, SpriteRegion region, ColourState colour_state,
-    i32 virtual_texture, i32 material, bool is_active    
+    i32 virtual_texture, i32 material, bool is_active
 ){
     SpriteManager* sprite_manager = &ctx->sprite_manager;
     i32 index = gen_id_get_index(sprite_id.gen_id);
@@ -1949,9 +1951,9 @@ bool renderer_sprite_init(
 }
 
 void renderer_dealloc_sprite_unsafe(RendererContext* ctx, i32 sprite_index, i32 sprite_layer){
-    
+
     SpriteManager* manager = &ctx->sprite_manager;
-    
+
     BOUNDS_CHECK(sprite_layer, manager->sprite_layers_length);
     SpriteLayer* layer = &manager->sprite_layers[sprite_layer];
 
@@ -1960,12 +1962,12 @@ void renderer_dealloc_sprite_unsafe(RendererContext* ctx, i32 sprite_index, i32 
 
     BOUNDS_CHECK(sprite_index, manager->device_sprites_length);
     manager->device_sprites[sprite_index].state = SpriteState_Deallocated;
-   
+
     ARRAY_PUSH(layer->free_sprite_indices, layer->free_sprite_indices_length, &layer->free_sprite_indices_count, sprite_index);
 }
 
 bool renderer_dealloc_sprite(RendererContext* ctx, SpriteId sprite_id){
-    
+
     // validation.
     ASSERT(ctx->is_init == true, "renderer context is not init.");
     ASSERT(ctx->sprite_manager.is_init == true, "renderer sprite manager has not been init.");
@@ -1995,7 +1997,7 @@ bool renderer_dealloc_sprite(RendererContext* ctx, SpriteId sprite_id){
 }
 
 bool renderer_sprite_string_init(
-    RendererContext* ctx, SpriteId sprite_id, String text, Matrix4x4 transform, i32 virtual_texture_index, 
+    RendererContext* ctx, SpriteId sprite_id, String text, Matrix4x4 transform, i32 virtual_texture_index,
     i32 material_index, bool is_active
 ){
     i32 first_index = gen_id_get_index(sprite_id.gen_id);
@@ -2004,7 +2006,7 @@ bool renderer_sprite_string_init(
     BOUNDS_CHECK(virtual_texture_index, ctx->virtual_texture_manager.host_virtual_textures_length);
     HostVirtualTexture* vt = &ctx->virtual_texture_manager.host_virtual_textures[virtual_texture_index];
 
-    
+
     { // validation.
         ASSERT(ctx->sprite_manager.is_init == false, "sprite manager isnt init.");
         ASSERT(material_index > 0, "invalid material index.");
@@ -2037,11 +2039,11 @@ bool renderer_sprite_string_init(
 }
 
 void renderer_renderer_ctx_init(
-    RendererContext* ctx, RendererContextInitInfo info, 
-    MemoryArena* persistent, MemoryArena* transient, 
+    RendererContext* ctx, RendererContextInitInfo info,
+    MemoryArena* persistent, MemoryArena* transient,
     WindowContext window_ctx, u32 window_width, u32 window_height
 ){
-    
+
     ASSERT(ctx->is_init == false, "cannot init an already init renderer ctx");
     WGPUInstanceDescriptor desc = {0};
     ctx->instance = wgpuCreateInstance(&desc);
@@ -2052,8 +2054,8 @@ void renderer_renderer_ctx_init(
 
     // surface configuration must be done at the end of the program.
     renderer_virtual_texture_manager_init(
-        &ctx->virtual_texture_manager, persistent, ctx->device, 
-        info.image_textures_init_infos, info.image_textures_init_infos_length, 
+        &ctx->virtual_texture_manager, persistent, ctx->device,
+        info.image_textures_init_infos, info.image_textures_init_infos_length,
         info.font_textures_init_info, info.max_virtual_textures, info.max_file_path_length
     );
 
@@ -2067,21 +2069,21 @@ void renderer_renderer_ctx_init(
     renderer_depth_texture_init(&ctx->depth_texture, ctx->device, info.final_render_texture_width, info.final_render_texture_height);
     renderer_blit_pipeline_init(&ctx->blit_pipeline, ctx->window_surface, ctx->device, ctx->adapter);
     renderer_graphics_pipeline_init(
-        &ctx->graphics_pipeline, transient, ctx->device, ctx->adapter, ctx->window_surface, 
+        &ctx->graphics_pipeline, transient, ctx->device, ctx->adapter, ctx->window_surface,
         ctx->virtual_texture_manager, ctx->final_render_texture, info.graphics_pipeline_shader_file_path,
         ctx->user_uniform_buffer, ctx->user_storage_buffer, ctx->sprite_manager.sprite_buffer,
         info.max_user_uniform_buffer_size_in_bytes, info.max_user_storage_buffer_size_in_bytes
     );
     ctx->is_init = true;
-    
+
     renderer_update_render_destination_rectangle(ctx);
 }
 
 void renderer_draw_renderer(RendererContext* ctx){
-    
+
     ASSERT(ctx->is_init, "attempted to draw a non-initialised rendering context.");
     SurfaceTexture swapchain_texture = renderer_get_next_spawn_chain_image_view(ctx);
-    
+
     WGPUDevice device = ctx->device;
 
     /**
@@ -2115,7 +2117,7 @@ void renderer_draw_renderer(RendererContext* ctx){
     **/
     i32 ptr_offset = 0;
 
-    
+
     for(i32 i = 0; i < ctx->sprite_manager.sprite_layers_length; i++){
         SpriteLayer* layer = &ctx->sprite_manager.sprite_layers[i];
         DeviceSprite* ptr = ctx->sprite_manager.device_sprites_scratch_space + ptr_offset;
@@ -2123,12 +2125,12 @@ void renderer_draw_renderer(RendererContext* ctx){
         ptr_offset += layer->max_sprites;
     }
     renderer_write_to_buffer(
-        &ctx->sprite_manager.sprite_buffer, 
-        device, 
-        ctx->sprite_manager.device_sprites_scratch_space, 
+        &ctx->sprite_manager.sprite_buffer,
+        device,
+        ctx->sprite_manager.device_sprites_scratch_space,
         sizeof(DeviceSprite) * ctx->sprite_manager.device_sprites_scratch_space_length
     );
-    
+
     /**
         command encoder creation.
     **/
@@ -2151,7 +2153,7 @@ void renderer_draw_renderer(RendererContext* ctx){
             .clearValue = (WGPUColor){.r = 0.01f, .g = 0.01f, .b = 0.01f, .a = 1.0f},
             .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED
         };
-        
+
         /**
             depth attachment.
         **/
@@ -2169,7 +2171,7 @@ void renderer_draw_renderer(RendererContext* ctx){
             .stencilStoreOp = WGPUStoreOp_Store,
             .stencilReadOnly = WGPU_FALSE
         };
-        
+
         /**
             render pass creation and encoding.
         **/
@@ -2255,7 +2257,7 @@ void renderer_draw_renderer(RendererContext* ctx){
         //     renderPass, 0, 0, ctx.FinalRenderTexture.Extents.Width, ctx.FinalRenderTexture.Extents.Height, 0.0f, 1.0f
         // );
         wgpuRenderPassEncoderSetViewport(
-            render_pass, 
+            render_pass,
             ctx->destination_rectangle.x, ctx->destination_rectangle.y,
             (f32)ctx->destination_rectangle.width, (f32)ctx->destination_rectangle.height,
             0.0f, 1.0f
@@ -2278,7 +2280,7 @@ void renderer_draw_renderer(RendererContext* ctx){
     wgpuCommandEncoderRelease(cmd_enc);
     wgpuQueueSubmit(wgpuDeviceGetQueue(device), 1, &cmd_buf);
     wgpuCommandBufferRelease(cmd_buf);
-    
+
     wgpuSurfacePresent(ctx->window_surface.surface);
 
     /**
@@ -2319,7 +2321,7 @@ void renderer_virtual_texture_manager_free_resources(VirtualTextureManager* mana
     for(i32 i = 0; i < manager->texture_arrays_length; i++){
         renderer_texture_array_free_resources(&manager->texture_arrays[i]);
     }
-    renderer_buffer_free_resources(&manager->device_virtual_texture_buffer);    
+    renderer_buffer_free_resources(&manager->device_virtual_texture_buffer);
 }
 
 void renderer_sprite_manager_free_resources(SpriteManager* sprite_manager){
@@ -2354,7 +2356,7 @@ void renderer_context_free_resources(RendererContext* ctx){
     renderer_graphics_pipeline_free_resources(&ctx->graphics_pipeline);
     renderer_virtual_texture_manager_free_resources(&ctx->virtual_texture_manager);
     renderer_window_surface_free_resources(&ctx->window_surface);
-    wgpuInstanceRelease(ctx->instance);   
+    wgpuInstanceRelease(ctx->instance);
 }
 
 void renderer_perspective_camera_init(Camera* camera, Vector3 position, f32 near_z, f32 far_z, f32 fov_in_radians){
@@ -2374,7 +2376,7 @@ void renderer_perspective_camera_init(Camera* camera, Vector3 position, f32 near
 }
 
 void renderer_orthographic_camera_init(Camera* camera, Vector3 position, f32 near_z, f32 far_z, f32 orthographic_size){
-    
+
     { // validation.
         ASSERT(!camera->is_init, "attempted to init an already init camera.");
         ASSERT(near_z >= F32_EPSILON, "camera shouldnt be init with a near_z plane value less than F32_EPSILON");
@@ -2393,7 +2395,7 @@ void renderer_camera_update_projection_matrix(Camera* camera, f32 surface_aspect
     Vector3 look_at_pos = {.x = camera->position.x, .y = camera->position.y, .z = camera->position.z + 0.001f}; // TODO: try F32_EPSILON instead of 0.001f.
     Vector3 world_up_dir = {.y = 1};
 
-    camera->view = matrix4x4_create_look_at(camera->position, look_at_pos, world_up_dir);    
+    camera->view = matrix4x4_create_look_at(camera->position, look_at_pos, world_up_dir);
     camera->model = MATRIX4X4_IDENTITY;
 
     switch(camera->projection_type){
@@ -2412,7 +2414,7 @@ void renderer_camera_update_projection_matrix(Camera* camera, f32 surface_aspect
 void renderer_draw_line(RendererContext* ctx, Colour colour, Vector3 start, Vector3 end, i32 layer, i32 material, f32 thickness){
     ASSERT(ctx->is_init, "renderer context has not been init.");
     Transform transform = {
-        .rotation = get_rotation_between_points(start, end),
+        .rotation = quaternion_get_rotation_between_points(start, end),
         .position = vector3_mul_val(vector3_add(end, start), 0.5f),
         .scale = (Vector3){.x = thickness, .y = vector3_len(vector3_sub(end, start))}
     };
@@ -2431,7 +2433,7 @@ void renderer_draw_wire_circle(RendererContext* ctx, Circle shape, Colour colour
 
     for(i32 i = 0; i < renderer_global_circle_vertice_count; i++){
         // remove the circle position as rotation must be around the origin.
-        f32 rel_x = start_x - shape.x;  
+        f32 rel_x = start_x - shape.x;
         f32 rel_y = start_y - shape.y;
         // add back the circle position with the added rotation.
         f32 end_x = cos * rel_x - sin * rel_y + shape.x;

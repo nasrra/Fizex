@@ -20,9 +20,9 @@ typedef struct{
     i32 index_scratch_space_length;
     /**
         A histogram array.
-        
+
         `remarks`
-        Always 256 elements long.    
+        Always 256 elements long.
     **/
     i32* byte_count;
     i32 byte_count_length;
@@ -34,7 +34,7 @@ typedef struct{
 ====================**//**/
 
 #define MORTON_CODE_EXPAND_BITS_MASK_1 0x00FF00FF
-#define MORTON_CODE_EXPAND_BITS_MASK_2 0x0F0F0F0F  
+#define MORTON_CODE_EXPAND_BITS_MASK_2 0x0F0F0F0F
 #define MORTON_CODE_EXPAND_BITS_MASK_3 0x33333333
 #define MORTON_CODE_EXPAND_BITS_MASK_4 0x55555555
 
@@ -66,7 +66,7 @@ u32 morton_code_expand_bits(u32 value){
         expanded = 00000000 00000000 00010001 00010001
         ----------------------------------------------
 
-        note: bmi2 is used here instead of SIMD morton codes as 
+        note: bmi2 is used here instead of SIMD morton codes as
         bit shifting is the biggest operation here, which is a 'horizontal'
         problem. Bits in the same memory location need to be shifted from right to left.
         SIMD is good for 'vertical' problems, like array to array math, where each 'lane'
@@ -85,12 +85,12 @@ u32 morton_code_expand_bits(u32 value){
 }
 
 /**
-    Calculates the normalization factors required to map a pair of 32-bit values (x,y) 
+    Calculates the normalization factors required to map a pair of 32-bit values (x,y)
     into the 16-bit integer range [0, 65535] for Morton encoding.
-    
+
     `remarks`
     This calculates the scale values used to transform a floating-poi32 value
-    into a discrete 65536 x 65536 grid. This ensures that the bit-interleaving 
+    into a discrete 65536 x 65536 grid. This ensures that the bit-interleaving
     process utilizes the maximum precision available in a 32-bit Morton code.
 
     `parameters`
@@ -103,14 +103,14 @@ void morton_code_calc_scale_factor(f32 range_x, f32 range_y, f32* out_scale_x, f
 
 #if 0
     // calculate the range.
-    float width = maxX - minX; 
+    float width = maxX - minX;
     float height = maxY - minY;
 #endif
 
     // calculate the scales to fit in a 16 bit-range (2^16 - 1 = 65535)
     // this is done as a morton code is two 16-bit numbers interleaved together to form a 32 bit number.
     *out_scale_x = range_x > 0 ? 65535.0f / range_x : 0;
-    *out_scale_y = range_y > 0 ? 65535.0f / range_y : 0; 
+    *out_scale_y = range_y > 0 ? 65535.0f / range_y : 0;
 }
 
 /**
@@ -131,14 +131,14 @@ void morton_code_calc_scale_factor(f32 range_x, f32 range_y, f32* out_scale_x, f
 u32 morton_code_calc_morton_code(f32 x, f32 y, f32 min_x, f32 min_y, f32 scale_x, f32 scale_y){
     /**
         normalise coordinates to [0, 65535] (16 bit range.)
-        this is done as a morton code is two 16-bit numbers interleaved together to form a 32 bit number.    
+        this is done as a morton code is two 16-bit numbers interleaved together to form a 32 bit number.
     **/
     u32 ux = (u32)((x - min_x) * scale_x);
     u32 uy = (u32)((y - min_y) * scale_y);
-    /**    
+    /**
         shift 'y' coordinate bit values to the left; so that the 'x' coordinate bit values dont overwrite it.
         this creates the morton code by interleaving the two 16 bit numbers.
-        
+
         ------------------------------------------------------------------
         Example:
         ------------------------------------------------------------------
@@ -173,12 +173,12 @@ u32 morton_code_calc_morton_code(f32 x, f32 y, f32 min_x, f32 min_y, f32 scale_x
     `length`: the total number of elements to process.
 **/
 void radix_sort_asc(
-    u32* values, i32 values_length, 
-    u32* values_scratch_space, i32 values_scratch_space_length, 
+    u32* values, i32 values_length,
+    u32* values_scratch_space, i32 values_scratch_space_length,
     i32* byte_count, i32 byte_count_length,
     i32 length
 ){
-    
+
     // Use pointers or references to swap which buffer is "source" and "destination"
     u32* src = values;
     i32 src_length = values_length;
@@ -187,7 +187,7 @@ void radix_sort_asc(
 
     /**
         perform the radix sort on the units (LSD approach)
-        Use 8-bit chunks (buckets of 256) for efficiency.    
+        Use 8-bit chunks (buckets of 256) for efficiency.
     **/
     for(i32 shift = 0; shift < 32; shift += 8){
 
@@ -199,16 +199,16 @@ void radix_sort_asc(
                 Shift the target 8-bit chunk (byte) to the far right of the 32-bit integer.
                 'shift' moves in increments of 8 (0, 8, 16, 24) to isolate each byte in the uint.
                 Apply a bit mask of 0xFF (binary 11111111) to zero out everythin except those bottom 8 bits.
-                This results in a 'bucket' index between 0 and 255, matching our count array.                
+                This results in a 'bucket' index between 0 and 255, matching our count array.
             **/
             BOUNDS_CHECK(i, src_length);
             i32 byte_count_index = (i32)((src[i] >> shift) & 0xFF);
-            
+
             BOUNDS_CHECK(byte_count_index, byte_count_length);
             byte_count[byte_count_index]+=1;
         }
 
-        /**        
+        /**
             compute prefix sum (cumulative count) - ascending order.
             this tells us exactly which index each bucket starts at in the temp array.
         **/
@@ -224,22 +224,22 @@ void radix_sort_asc(
         for(i32 i = 0; i < length; i++){
             BOUNDS_CHECK(i, src_length);
             i32 bucket = (int)((src[i] >> shift) & 0xFF);
-            
+
             BOUNDS_CHECK(bucket, byte_count_length);
             i32 byte_count_index = byte_count[bucket]+=1;
 
             BOUNDS_CHECK(byte_count_index, dst_length);
             dst[byte_count_index] = src[i];
         }
- 
+
         /**
             TOGGLE: Swap src and dst for the next pass
             Pass 0: val -> tmp
             Pass 1: tmp -> val
             Pass 2: val -> tmp
             Pass 3: tmp -> val
-            Because we swapped 4 times (a 32-bit u32 is an even number), the final result 
-            is already back in the 'values' System.Span! No CopyTo needed.        
+            Because we swapped 4 times (a 32-bit u32 is an even number), the final result
+            is already back in the 'values' System.Span! No CopyTo needed.
         **/
         u32* swap_ptr = src;
         i32 swap_length = src_length;
@@ -261,7 +261,7 @@ void radix_sort_asc(
     - `indices`
     - `indices_scratch_space`
     - `values`
-    - `values_scratch_space` 
+    - `values_scratch_space`
 
     `parameters`
     `values`: the System.Span of uints to be sorted. Contains the final sorted values.
@@ -290,7 +290,7 @@ void radix_sort_iasc(
     i32* dst_indices = indices_scratch_space;
     i32 dst_indices_length = indices_scratch_space_length;
 
-    /**    
+    /**
         perform the radix sort on the units (LSD approach)
         Use 8-bit chunks (buckets of 256) for efficiency.
     **/
@@ -298,23 +298,23 @@ void radix_sort_iasc(
 
         // reset the frequency of counts for this 8-bit chunk.
         ZERO_MEMORY(byte_count, sizeof(*byte_count) * byte_count_length);
-        
+
         for(i32 i = 0; i < length; i++){
             /**
                 Shift the target 8-bit chunk (byte) to the far right of the 32-bit integer.
                 'shift' moves in increments of 8 (0, 8, 16, 24) to isolate each byte in the uint.
                 Apply a bit mask of 0xFF (binary 11111111) to zero out everything except those bottom 8 bits.
-                This results in a 'bucket' index between 0 and 255, matching our count array.                
+                This results in a 'bucket' index between 0 and 255, matching our count array.
             **/
             BOUNDS_CHECK(i, src_values_length);
             i32 byte_count_index = (i32)((src_values[i] >> shift) & 0xFF);
-            BOUNDS_CHECK(byte_count_index, src_values_length);
+            BOUNDS_CHECK(byte_count_index, byte_count_length);
             byte_count[byte_count_index]++;
         }
 
         /**
             compute prefix sum (cumulative count) - ascending order.
-            this tells us exactly which index each bucket starts at in the temp array.        
+            this tells us exactly which index each bucket starts at in the temp array.
         **/
         i32 start_idx = 0;
         for(i32 i = 0; i < 256; i++){
@@ -335,7 +335,7 @@ void radix_sort_iasc(
             BOUNDS_CHECK(i, src_values_length);
             BOUNDS_CHECK(i, src_indices_length);
             dst_values[swap_index] = src_values[i];
-            dst_indices[swap_index] = src_indices[i];        
+            dst_indices[swap_index] = src_indices[i];
         }
 
         /**
@@ -344,11 +344,11 @@ void radix_sort_iasc(
             Pass 1: tmp -> val
             Pass 2: val -> tmp
             Pass 3: tmp -> val
-            Because we swapped 4 times (a 32-bit u32 is an even number), the final result 
+            Because we swapped 4 times (a 32-bit u32 is an even number), the final result
             is already back in the 'values' System.Span! No CopyTo needed.
-        
+
         **/
-        
+
         u32* swap_values        = src_values;
         i32 swap_values_length  = src_values_length;
         src_values              = dst_values;
@@ -373,7 +373,7 @@ void radix_sort_iasc(
     This implementation processes 32-bit integers in four 8-bit (1 byte) passes .
     The following arrays must have a length at least equal to `length`:
     - `values`
-    - `temp` 
+    - `temp`
 
     `parameters`
     `values`: the System.Span of uints to be sorted. Contains the final sorted values.
@@ -384,7 +384,7 @@ void radix_sort_iasc(
 void radix_sort_dsc(
     u32* values, i32 values_length,
     u32* values_scratch_space, i32 values_scratch_space_length,
-    i32* byte_count, i32 byte_count_length, 
+    i32* byte_count, i32 byte_count_length,
     i32 length
 ){
     // Use pointers or references to swap which buffer is "source" and "destination"
@@ -393,7 +393,7 @@ void radix_sort_dsc(
     u32* dst = values_scratch_space;
     i32 dst_length = values_scratch_space_length;
 
-    /**    
+    /**
         perform the radix sort on the units (LSD approach)
         Use 8-bit chunks (buckets of 256) for efficiency.
     **/
@@ -403,11 +403,11 @@ void radix_sort_dsc(
 
         // count the occurences of each 8-value (0-255).
         for(i32 i = 0; i < length; i++){
-            /**            
+            /**
                 Shift the target 8-bit chunk (byte) to the far right of the 32-bit integer.
                 'shift' moves in increments of 8 (0, 8, 16, 24) to isolate each byte in the uint.
                 Apply a bit mask of 0xFF (binary 11111111) to zero out everythin except those bottom 8 bits.
-                This results in a 'bucket' index between 0 and 255, matching our count array.                
+                This results in a 'bucket' index between 0 and 255, matching our count array.
             **/
             BOUNDS_CHECK(i, src_length);
             i32 byte_count_index = (int)((src[i] >> shift) & 0xFF);
@@ -417,7 +417,7 @@ void radix_sort_dsc(
 
         /**
             compute prefix sum (cumulative count) - descending order.
-            this tells us exactly which index each bucket starts at in the temp array.        
+            this tells us exactly which index each bucket starts at in the temp array.
         **/
         i32 start_index = 0;
         for(i32 i = 255; i >= 0; i--){
@@ -429,9 +429,9 @@ void radix_sort_dsc(
 
         // shuffle from src to dst.
         for(i32 i = 0; i < length; i++){
-        
+
             BOUNDS_CHECK(i, src_length);
-            i32 bucket = (i32)((src[i] >> shift) & 0xFF); 
+            i32 bucket = (i32)((src[i] >> shift) & 0xFF);
             BOUNDS_CHECK(bucket, byte_count_length);
             i32 dst_index = byte_count[bucket]+=1;
             BOUNDS_CHECK(dst_index, dst_length);
@@ -444,8 +444,8 @@ void radix_sort_dsc(
             Pass 1: tmp -> val
             Pass 2: val -> tmp
             Pass 3: tmp -> val
-            Because we swapped 4 times (a 32-bit u32 is an even number), the final result 
-            is already back in the 'values' System.Span! No CopyTo needed.        
+            Because we swapped 4 times (a 32-bit u32 is an even number), the final result
+            is already back in the 'values' System.Span! No CopyTo needed.
         **/
         u32* swap = src;
         i32 swap_length = src_length;
@@ -465,7 +465,7 @@ void radix_sort_dsc(
     - `indices`
     - `tempIndices`
     - `values`
-    - `tempValues` 
+    - `tempValues`
 
     `parameters`
     `values`: the array of uints to be sorted. Contains the final sorted values.
@@ -482,7 +482,7 @@ void radix_sort_idsc(
     i32* indices, i32 indices_length,
     i32* indices_scratch_space, i32 indices_scratch_space_length,
     i32* byte_count, i32 byte_count_length,
-    i32 length 
+    i32 length
 ){
     // Use pointers or references to swap which buffer is "source" and "destination"
     u32* src_values         = values;
@@ -496,7 +496,7 @@ void radix_sort_idsc(
 
     /**
         perform the radix sort on the units (LSD approach)
-        Use 8-bit chunks (buckets of 256) for efficiency.    
+        Use 8-bit chunks (buckets of 256) for efficiency.
     **/
     for (i32 shift = 0; shift < 32; shift += 8){
         // reset the frequency of counts for this 8-bit chunk.
@@ -515,7 +515,7 @@ void radix_sort_idsc(
             BOUNDS_CHECK(byte_count_index, byte_count_length);
             byte_count[byte_count_index] += 1;
 
-            /**            
+            /**
                 compute prefix sum (cumulative count) - ascending order.
                 this tells us exactly which index each bucket starts at in the temp array.
             **/
@@ -532,7 +532,7 @@ void radix_sort_idsc(
                 BOUNDS_CHECK(i, src_values_length);
                 i32 bucket = (int)((src_values[i] >> shift) & 0xFF);
                 BOUNDS_CHECK(bucket, byte_count_length);
-                i32 swap_index = byte_count[bucket] += 1; 
+                i32 swap_index = byte_count[bucket] += 1;
                 BOUNDS_CHECK(swap_index, dst_values_length);
                 BOUNDS_CHECK(swap_index, dst_indices_length);
                 BOUNDS_CHECK(i, src_values_length);
@@ -547,8 +547,8 @@ void radix_sort_idsc(
                 Pass 1: tmp -> val
                 Pass 2: val -> tmp
                 Pass 3: tmp -> val
-                Because we swapped 4 times (a 32-bit u32 is an even number), the final result 
-                is already back in the 'values' array! No CopyTo needed.            
+                Because we swapped 4 times (a 32-bit u32 is an even number), the final result
+                is already back in the 'values' array! No CopyTo needed.
             **/
             u32* swap_values        = src_values;
             i32 swap_values_length  = src_values_length;
@@ -579,9 +579,9 @@ void radix_sort_idsc(
 
 
 void radix_buffer_sort_iasc(
-    RadixSortBuffer* buffer, 
-    u32* value, i32 value_length, 
-    i32* index, i32 index_length, 
+    RadixSortBuffer* buffer,
+    u32* value, i32 value_length,
+    i32* index, i32 index_length,
     i32 length
 ){
     radix_sort_iasc(
@@ -589,7 +589,7 @@ void radix_buffer_sort_iasc(
         buffer->value_scratch_space, buffer->value_scratch_space_length,
         index, index_length,
         buffer->index_scratch_space, buffer->index_scratch_space_length,
-        buffer->byte_count, buffer->byte_count_length, 
+        buffer->byte_count, buffer->byte_count_length,
         length
     );
 }

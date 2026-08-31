@@ -15,6 +15,7 @@
     - GetKeyboardLayout (for internatioal keyboard support).
     - WM_SET_CURSOR (for cursor visibility).
     - Blit speed improvements (BltBit)
+    - swap out of WinMain to have consistent update loop timing.
 */
 
 /*====================
@@ -23,6 +24,7 @@
 
 MemoryArena persistent_memory;
 MemoryArena transient_memory;
+u128 win32_global_process_start_time;
 
 /*====================
     private functions.
@@ -83,21 +85,23 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
 
         }break;
         
-        case WM_PAINT:{
-            PAINTSTRUCT paint;
-            HDC device_ctx = BeginPaint(window, &paint);
+        // case WM_PAINT:{
+        //     PAINTSTRUCT paint;
+        //     HDC device_ctx = BeginPaint(window, &paint);
 
-            /*
-                all painting occurs here...
-            */
+        //     /*
+        //         all painting occurs here...
+        //     */
 
-            LONG x = paint.rcPaint.left;
-            LONG y = paint.rcPaint.top;
-            LONG width = paint.rcPaint.right - paint.rcPaint.left;
-            LONG height = paint.rcPaint.bottom - paint.rcPaint.top;
-            PatBlt(device_ctx, x, y, width, height, BLACKNESS);
-            EndPaint(window, &paint);
-        }break;
+        
+
+        //     LONG x = paint.rcPaint.left;
+        //     LONG y = paint.rcPaint.top;
+        //     LONG width = paint.rcPaint.right - paint.rcPaint.left;
+        //     LONG height = paint.rcPaint.bottom - paint.rcPaint.top;
+        //     PatBlt(device_ctx, x, y, width, height, BLACKNESS);
+        //     EndPaint(window, &paint);
+        // }break;
         
         default:{
             result = DefWindowProc(window, message, w_param, l_param);
@@ -107,7 +111,18 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
     return result;
 }
 
+u128 platform_get_system_tick(){
+    LARGE_INTEGER time;
+    QueryPerformanceCounter(&time);
+    return (u128)time.QuadPart;
+}
+
+u128 platform_get_proccess_tick(){
+    return platform_get_system_tick() - win32_global_process_start_time;
+}
+
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_code){
+    win32_global_process_start_time = platform_get_system_tick();
     app_main();
     return(0);
 }
@@ -221,8 +236,8 @@ void platform_window_update(WindowContext* ctx){
     ASSERT(ctx->win32_hdc != (HDC){0}, "window context doesnt have an init win32 device context handle.");
     ASSERT(ctx->win32_hinstance != (HINSTANCE){0}, "window context doesnt have an init win32 instance handle");
     MSG message;
-    BOOL msg_result = GetMessage(&message, 0, 0, 0); 
-    if(msg_result > 0){
+    while(PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)){
+
         TranslateMessage(&message);
         DispatchMessage(&message);
     }
@@ -356,4 +371,8 @@ void* platform_load_file(String file_path, size_t* out_buffer_size){
 
 f32 platform_window_calc_aspect_ratio(WindowContext ctx){
     return (f32)ctx.width / (f32)ctx.height;
+}
+
+void platform_print_msg(char* msg){
+    OutputDebugStringA(msg);
 }

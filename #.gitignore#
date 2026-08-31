@@ -1,0 +1,4 @@
+
+# ignore the build folder at the root respository level.
+
+/build/

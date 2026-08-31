@@ -1,0 +1,8 @@
+// raddbg 0.9.29 project file
+
+target:
+{
+  executable: "../build/app.exe"
+  working_directory: "../build"
+  enabled: 1
+}
