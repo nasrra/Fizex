@@ -1489,7 +1489,7 @@ void soa_body_transform_shape_vertices(Soa_Body* soa, i32 shape_idx){
         case ShapeType_Rectangle:{
             // set the new min and max vectors.
             BOUNDS_CHECK(shape_idx, soa->aabb.length);
-            polygon_get_min_max_vertices(v_x, v_y, v_length, &soa->aabb.min_x[shape_idx], &soa->aabb.min_y[shape_idx], &soa->aabb.max_x[shape_idx], &soa->aabb.max_x[shape_idx]);
+            polygon_get_min_max_vertices(v_x, v_y, v_length, &soa->aabb.min_x[shape_idx], &soa->aabb.min_y[shape_idx], &soa->aabb.max_x[shape_idx], &soa->aabb.max_y[shape_idx]);
         }break;
         case ShapeType_Circle:{
             BOUNDS_CHECK(shape_idx, soa->aabb.length);
@@ -1766,7 +1766,7 @@ void bodies_calculate_bvh_leaf_padding(
     f32* current_position_y, i32 current_position_y_length,
     f32* previous_position_x, i32 previous_position_x_length,
     f32* previous_position_y, i32 previous_position_y_length,
-    f32* out_bvh_leaf_padding, i32 out_bvh_leaf_padding_length,
+    f32* out_bvh_leaf_padding, i32 bvh_leaf_padding_length,
     i32* active, i32 active_length, i32 active_count,
     f32 delta_time
 ){
@@ -1783,7 +1783,7 @@ void bodies_calculate_bvh_leaf_padding(
         f32 delta_movement = MAX(ABS(delta_movement_x), ABS(delta_movement_y));
         f32 time_factor = 1 + delta_time;
 
-        BOUNDS_CHECK(idx, out_bvh_leaf_padding_length);
+        BOUNDS_CHECK(idx, bvh_leaf_padding_length);
         out_bvh_leaf_padding[idx] = delta_movement * time_factor;
     }
 }

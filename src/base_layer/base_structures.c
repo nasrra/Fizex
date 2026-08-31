@@ -1040,8 +1040,8 @@ void bvh_construct_tree(BoundingVolumeHierarchy* bvh){
     // get the spatial data for morton code calculations.
     f32 min_x = F32_MAX;
     f32 min_y = F32_MAX;
-    f32 max_x = F32_MIN;
-    f32 max_y = F32_MIN;
+    f32 max_x = -F32_MAX;
+    f32 max_y = -F32_MAX;
     for(i32 i = 0; i < bvh->leaves.count; i++){
         f32 cx = bvh->leaves.centroid.x[i];
         f32 cy = bvh->leaves.centroid.y[i];
@@ -1065,7 +1065,7 @@ void bvh_construct_tree(BoundingVolumeHierarchy* bvh){
 
     /**
         TODO: (nich s)
-        this should be done at i32ialisation.
+        this should be done at initialisation.
     **/
     // reset leaf indices.
     for(i32 i = 0; i < bvh->leaves.count; i++){

@@ -1769,8 +1769,8 @@ void get_min_max_vectors_scalar_polygon(
 ){
     *out_min_x = F32_MAX;
     *out_min_y = F32_MAX;
-    *out_max_x = F32_MIN;
-    *out_max_y = F32_MIN;
+    *out_max_x = -F32_MAX;
+    *out_max_y = -F32_MAX;
 
     for(i32 i = 0; i < verts_size; i++){
         f32 v = verts_x[i];
@@ -1938,7 +1938,7 @@ void project_polygon(
     f32* out_min_edge, f32* out_max_edge
 ){
     *out_min_edge = F32_MAX;
-    *out_max_edge = F32_MIN;
+    *out_max_edge = -F32_MAX;
 
     for(i32 i = 0; i < verts_size; i++){
         f32 projection = vector2_dot_scalar(verts_x[i], verts_y[i], axis_x, axis_y);
@@ -2449,13 +2449,13 @@ f32 calc_area_rectangle(Rectangle rect){
 }
 
 /**
-    Gets the min and max vectors from a span of vertices.
+    Gets the min and max vectors from an array of vertices.
 **/
 void polygon_get_min_max_vertices(f32* vert_x, f32* vert_y, i32 vert_length, f32* out_min_x, f32* out_min_y, f32* out_max_x, f32* out_max_y){
     *out_min_x = F32_MAX;
     *out_min_y = F32_MAX;
-    *out_max_x = F32_MIN;
-    *out_max_y = F32_MIN;
+    *out_max_x = -F32_MAX;
+    *out_max_y = -F32_MAX;
 
     for(i32 i = 0; i < vert_length; i++){
         f32 v = vert_x[i];
@@ -2472,8 +2472,8 @@ void polygon_get_min_max_vertices(f32* vert_x, f32* vert_y, i32 vert_length, f32
         if(v < *out_min_y){
             *out_min_y = v;
         }
-        if(v > *out_min_y){
-            *out_min_y = v;
+        if(v > *out_max_y){
+            *out_max_y = v;
         }
     }
 }

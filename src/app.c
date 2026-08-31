@@ -24,6 +24,9 @@ typedef struct{
     defines.
 ====================**//**/
 
+#define WINDOW_WIDTH 1280
+#define WINDOW_HEIGHT 720
+
 DEFINE_QUICKSORT_STRUCT(Person, i32, .num, quicksort_person);
 
 /**
@@ -163,7 +166,7 @@ RendererContext app_renderer_init(MemoryArena* persistent, MemoryArena* transien
         .graphics_pipeline_shader_file_path = (String){.chars = "assets/shader.wgsl", .length = 18}
     };
 
-    renderer_renderer_ctx_init(&renderer_ctx, renderer_init_info, persistent, transient, window_ctx, 1920, 1080);
+    renderer_renderer_ctx_init(&renderer_ctx, renderer_init_info, persistent, transient, window_ctx, WINDOW_WIDTH, WINDOW_HEIGHT);
     return renderer_ctx;
 }
 
@@ -199,7 +202,7 @@ void app_main(){
     platform_init_transient_memory(MEGABYTE(4));
     MemoryArena* persistent = platform_get_persistent_memory();
     MemoryArena* transient = platform_get_transient_memory();
-    window_ctx = platform_window_create(1920, 1080);
+    window_ctx = platform_window_create(WINDOW_WIDTH, WINDOW_HEIGHT);
 
     renderer_orthographic_camera_init(&world_camera, (Vector3){.z = -4.0f}, 0.01f, 100.0f, 12.0f);
     renderer_global_wireframe_thickness = 0.05f;
@@ -215,7 +218,7 @@ void app_main(){
         .colour_aabb                    = COLOUR_LIGHT_BLUE,
         .colour_fallback_shape          = COLOUR_WHITE,
         .colour_inactive_physics_body   = COLOUR_BLACK,
-        .colour_bvh_leaf                = COLOUR_GREEN,
+        .colour_bvh_leaf                = COLOUR_WHITE,
         .colour_bvh_branch              = COLOUR_LIGHT_GREEN,
         .colour_contact_point           = COLOUR_RED,
         .colour_linear_velocity         = COLOUR_WHITE,
@@ -227,9 +230,9 @@ void app_main(){
         .sprite_layer                   = SPRITE_LAYER_WORLD,
         .wireframe_thickness            = 0.005f,
         .material_idx                   = SPRITE_MATERIAL_DEBUG,
-        // .draw_body_shapes               = true,
+        .draw_body_shapes               = true,
         .draw_bvh_leaves = true,
-        .draw_bvh_branches = true
+        .draw_bvh_branches = false
     };
 
     Transform dynamic_body_transform = {.position = {.x = 0.1f, .y = 5.0f}, .scale = VECTOR3_ONE};
