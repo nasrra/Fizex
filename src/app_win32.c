@@ -36,7 +36,7 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
 
     LRESULT result = 0;
     switch(message){
-        
+
         case WM_CREATE:{
             // extract the 'ctx' pointer passed during CreateWindow()
             CREATESTRUCT* create_struct = (CREATESTRUCT*)l_param;
@@ -48,24 +48,24 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
         case WM_SIZE:{
             OutputDebugStringA("WM_SIZE\n");
         }break;
-        
+
         case WM_DESTROY:{
             OutputDebugStringA("WM_DESTROY\n");
         }break;
-        
+
         case WM_CLOSE:{
             OutputDebugStringA("WM_CLOSE\n");
             platform_window_destroy(ctx);
         }break;
-        
+
         case WM_ACTIVATEAPP:{
             OutputDebugStringA("WM_ACTIVATEAPP\n");
             /*
                 TODO(nich s)
-                enter "sleep" state when no longer active.  
+                enter "sleep" state when no longer active.
             */
         }break;
-        
+
         case WM_SYSKEYDOWN:
         case WM_SYSKEYUP:
         case WM_KEYDOWN:
@@ -79,12 +79,12 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
                 OutputDebugStringA("W");
             }
             else if(vk_code == 'A'){
-                OutputDebugStringA("A");                
+                OutputDebugStringA("A");
             }
             OutputDebugStringA("\n");
 
         }break;
-        
+
         // case WM_PAINT:{
         //     PAINTSTRUCT paint;
         //     HDC device_ctx = BeginPaint(window, &paint);
@@ -93,7 +93,7 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
         //         all painting occurs here...
         //     */
 
-        
+
 
         //     LONG x = paint.rcPaint.left;
         //     LONG y = paint.rcPaint.top;
@@ -102,7 +102,7 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
         //     PatBlt(device_ctx, x, y, width, height, BLACKNESS);
         //     EndPaint(window, &paint);
         // }break;
-        
+
         default:{
             result = DefWindowProc(window, message, w_param, l_param);
         }break;
@@ -216,7 +216,7 @@ WindowContext* platform_window_create(i32 width, i32 height){
             ctx
         );
         if(!window_handle){
-            PANIC(false, "failed to create win32 window.");            
+            PANIC(false, "failed to create win32 window.");
         }
     }
     else{
@@ -227,7 +227,7 @@ WindowContext* platform_window_create(i32 width, i32 height){
     ctx->win32_hwnd = window_handle;
     ctx->win32_hdc = GetDC(window_handle);
     ctx->width = width;
-    ctx->height = height;    
+    ctx->height = height;
     return ctx;
 }
 
@@ -236,10 +236,11 @@ void platform_window_update(WindowContext* ctx){
     ASSERT(ctx->win32_hdc != (HDC){0}, "window context doesnt have an init win32 device context handle.");
     ASSERT(ctx->win32_hinstance != (HINSTANCE){0}, "window context doesnt have an init win32 instance handle");
     MSG message;
-    while(PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)){
-
-        TranslateMessage(&message);
-        DispatchMessage(&message);
+    if(PeekMessageA(&message, NULL, 0, 0, PM_NOREMOVE)){
+        while(PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)){
+            TranslateMessage(&message);
+            DispatchMessage(&message);
+        }
     }
 }
 
@@ -300,7 +301,7 @@ bool platform_load_file_into_memory_arena(String file_path, MemoryArena* arena){
             ASSERT(false, "failed to read file contents.");
             return false;
         }
-        bytes_to_read -= (size_t)bytes_read; 
+        bytes_to_read -= (size_t)bytes_read;
     }
     arena->stride += (size_t)bytes_read;
 
@@ -311,7 +312,7 @@ bool platform_load_file_into_memory_arena(String file_path, MemoryArena* arena){
     return true;
 }
 
-void* platform_load_file(String file_path, size_t* out_buffer_size){    
+void* platform_load_file(String file_path, size_t* out_buffer_size){
 
     /**
         convert to null terminated string.
@@ -355,9 +356,9 @@ void* platform_load_file(String file_path, size_t* out_buffer_size){
             return NULL;
         }
         total_bytes_read += (size_t)bytes_read;
-        bytes_to_read -= (size_t)bytes_read; 
+        bytes_to_read -= (size_t)bytes_read;
     }
-    
+
     *out_buffer_size = total_bytes_read;
     u8* u8_buffer = (u8*)buffer;
     u8_buffer[total_bytes_read] = '\0';

@@ -116,7 +116,7 @@ typedef struct{
     make sure to keep this last as windows msvc would always be present regardless of another compiler being used.
     microsoft is awesome :)))
 */
-#elif defined(_MSC_VER) 
+#elif defined(_MSC_VER)
 #   define COMPILER_CL 1
 #   if defined(_WIN32)
 #       define OS_WINDOWS 1
@@ -189,24 +189,24 @@ typedef struct{
     } while(0)
 #endif
 
-/* 
-    Minimum of signed integral types.  
+/*
+    Minimum of signed integral types.
 */
 #define I8_MIN  (-128)
 #define I16_MIN (-32767-1)
 #define I32_MIN (-2147483647-1)
 #define I64_MIN (-__INT64_C(9223372036854775807)-1)
 
-/* 
-    Maximum of signed integral types.  
+/*
+    Maximum of signed integral types.
 */
 #define I8_MAX  (127)
 #define I16_MAX (32767)
 #define I32_MAX (2147483647)
 #define I64_MAX (__INT64_C(9223372036854775807))
 
-/* 
-    Maximum of unsigned integral types.  
+/*
+    Maximum of unsigned integral types.
 */
 #define U8_MAX  (255)
 #define U16_MAX (65535)
@@ -234,7 +234,7 @@ typedef struct{
 #define ZERO_STRUCT(ptr) memset(ptr, 0, sizeof(*(ptr)))
 #define COPY_MEMORY(DST, SRC, SIZE_IN_BYTES) memcpy(DST, SRC, SIZE_IN_BYTES)
 /*
-    zeroes out an array. 
+    zeroes out an array.
 */
 #define GIGABYTE(val) MEGABYTE(val) * 1024
 #define MEGABYTE(val) KILOBYTE(val) * 1024
@@ -309,7 +309,7 @@ typedef struct{
 } while(0)
 /**
     `remarks`
-    When inserting a value into an element, any data the was previously in that element is 
+    When inserting a value into an element, any data the was previously in that element is
     shifted forward - away from element zero - including all elements after the inserted element.
 **/
 #define ARRAY_ORDERED_INSERT(arr_ptr, arr_length, arr_count, element_index, value) do{                                                       \
@@ -423,23 +423,23 @@ typedef struct{
 #define GENID_UNIQUE_GENERATIONS_COUNT (1<<12)
 /*
     the max generation value a gen id can have.
-    
+
     remarks:
     this is because the last 12 bits of a uint are used for the generational value.
 */
 #define GENID_MAX_GENERATION (GENID_UNIQUE_GENERATIONS_COUNT - 1)
 /*
     the total amount of unique index values starting from zero.
-    
+
     remarks:
-    this is because the first 20 bits of a uint are used for a indexing. 
+    this is because the first 20 bits of a uint are used for a indexing.
 */
 #define GENID_UNIQUE_INDICES_COUNT (1<<20)
 /*
     the max index value a genId can have.
-    
+
     remarks:
-    this is because the first 20 bits of a uint are used for a indexing. 
+    this is because the first 20 bits of a uint are used for a indexing.
 */
 #define GENID_MAX_INDEX (GENID_UNIQUE_INDICES_COUNT - 1)
 
@@ -499,7 +499,7 @@ static void FUNCTION_NAME##_dsc(STRUCT_TYPE* array_ptr, i32 array_length){      
     if(high > 0 && high < array_length){                                                    \
         FUNCTION_NAME##_recursion_dsc(array_ptr, 0, array_length-1);                        \
     }                                                                                       \
-}                                                                                           
+}
 
 #define DEFINE_QUICKSORT(TYPE, FUNCTION_NAME)                                   \
                                                                                 \
@@ -591,7 +591,7 @@ DEFINE_QUICKSORT(f64, quicksort_f64)
     sets the global random seed to a new seed.
 
     returns:
-    the newl set seed. 
+    the newl set seed.
 */
 i32 rand_next_seed();
 i32 rand_i32();
@@ -606,9 +606,9 @@ void free_memory_arena(MemoryArena* arena);
 
 /*
     Constructs a GenId.
-    
+
     remarks:
-    - `index` must be between 0 and 1,048,576. 
+    - `index` must be between 0 and 1,048,576.
     - `generation` must be between 0 and 4,096.
 */
 GenId gen_id_make(i32 index, i32 generation);
@@ -632,9 +632,9 @@ i32 gen_id_get_index(GenId gen_id);
 */
 i32 gen_id_get_generation(GenId gen_id);
 /*
-    Checks if two gen ids are equal. 
+    Checks if two gen ids are equal.
 */
-bool gen_id_equals(GenId a, GenId b); 
+bool gen_id_equals(GenId a, GenId b);
 
 void string_init(String* string, MemoryArena* arena, i32 size);
 

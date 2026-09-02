@@ -1,5 +1,9 @@
 #include "platform.h"
 
+#ifdef NDEBUG
+#include <stdio.h>
+#endif
+
 #include "base_layer/base.h"
 #include "base_layer/base_cpu.c"
 #include "base_layer/base_math.c"
@@ -24,8 +28,8 @@ typedef struct{
     defines.
 ====================**//**/
 
-#define WINDOW_WIDTH 1280
-#define WINDOW_HEIGHT 720
+#define WINDOW_WIDTH 1280 / 2
+#define WINDOW_HEIGHT 720 / 2
 
 DEFINE_QUICKSORT_STRUCT(Person, i32, .num, quicksort_person);
 
@@ -56,7 +60,6 @@ MemoryArena renderer_memory;
 ====================**//**/
 
 void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time){
-
     Soa_Aabb soa = {0};
     soa_aabb_init(&soa, transient, 3);
     soa_aabb_push(&soa, -1.0f, -1.0f, 2.0f, 2.0f);
@@ -259,6 +262,8 @@ void app_main(){
         f32 delta_time = (f32)delta_tick_in_mili * 0.0001f;
         prev_process_tick_in_mili = process_tick_in_mili;
 
+        printf("%.5f", delta_time);
+
         // fixed update.
         {
             fixed_update_accumulator += delta_time;
@@ -267,8 +272,8 @@ void app_main(){
             }
 
             while(fixed_update_accumulator >= FIXED_DELTA_TIME){
-                app_fixed_update(delta_time);
-                fizx_state_fixed_update(&fizx_state, delta_time, 16);
+                app_fixed_update(FIXED_DELTA_TIME);
+                fizx_state_fixed_update(&fizx_state, FIXED_DELTA_TIME, 16);
                 fixed_update_accumulator -= FIXED_DELTA_TIME;
             }
         }
@@ -276,7 +281,6 @@ void app_main(){
         // update.
         {
             app_update(persistent, transient, delta_time);
-            platform_print_msg("update\n");
         }
 
         // late update.
@@ -291,6 +295,7 @@ void app_main(){
             platform_window_update(window_ctx);
             transient->stride = 0;
         }
+        platform_output_message("update! \n");
     }
 
     platform_window_context_free(window_ctx);

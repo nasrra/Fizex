@@ -1882,7 +1882,7 @@ void body_integrate_shape_properties_unsafe(FIZXState* state, i32 body_idx){
                     // move centerof mass back into local space.
                     center_of_mass_x -= body_global_pos_x;
                     center_of_mass_y -= body_global_pos_y;
-                    total_inverse_rotational_inertia = 1.0f / total_inverse_rotational_inertia;
+                    total_inverse_rotational_inertia = 1.0f / total_rotational_inertia;
                     break;
                 }
 
@@ -3014,8 +3014,9 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
 
                 if(*mass > 0){
                     BOUNDS_CHECK(body_index, state->bodies.force.length);
-                    *lin_vel_x += state->bodies.force.x[body_index];
-                    *lin_vel_y += state->bodies.force.y[body_index];
+                    f32 mass_factor = *mass * delta_time;
+                    *lin_vel_x += state->bodies.force.x[body_index] / mass_factor;
+                    *lin_vel_y += state->bodies.force.y[body_index] / mass_factor;
                 }
 
                 /**
