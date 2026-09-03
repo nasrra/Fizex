@@ -248,13 +248,13 @@ void app_main(){
     Material material = {.static_friction = 1.0f, .kinetic_friction = 1.0f, .density = 5.0f, .restitution = 0.5f};
 
     GenId dynamic_body_gid = body_alloc(&fizx_state, transform_to_transform2d(dynamic_body_transform), true);
-    // GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
-    GenId dynamic_shape_gid = fizx_circle_rigid_alloc(&fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
+    GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
+    // GenId dynamic_shape_gid = fizx_circle_rigid_alloc(&fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
 
 
     GenId kinematic_body_gid = body_alloc(&fizx_state, transform_to_transform2d(kinematic_body_transform), false);
-    GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, kinematic_body_gid, material, false);
-    // GenId kinematic_shape_gid = fizx_circle_rigid_alloc(&fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, material, kinematic_body_gid, false);
+    // GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, kinematic_body_gid, material, false);
+    GenId kinematic_shape_gid = fizx_circle_rigid_alloc(&fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, material, kinematic_body_gid, false);
 
     u128 prev_process_tick_in_mili  = 0;
     f32 previous_time_in_seconds    = 0.0f;

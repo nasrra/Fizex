@@ -25,24 +25,18 @@ typedef enum{
 typedef enum{
     ShapeCategory_DynRigPolygon,
     ShapeCategory_DynRigCircle,
-    ShapeCategory_DynRigCapsule,
     ShapeCategory_TriRigPolygon,
     ShapeCategory_TriRigCircle,
-    ShapeCategory_TriRigCapsule,
     // note: everything greater than KinematicRigidPolygon
     // is not apart of the rigid body movement step.
     ShapeCategory_KinRigPolygon,
     ShapeCategory_KinRigCircle,
-    ShapeCategory_KinRigCapsule,
     ShapeCategory_DynColPolygon,
     ShapeCategory_DynColCircle,
-    ShapeCategory_DynColCapsule,
     ShapeCategory_TriColPolygon,
     ShapeCategory_TriColCircle,
-    ShapeCategory_TriColCapsule,
     ShapeCategory_KinColPolygon,
     ShapeCategory_KinColCircle,
-    ShapeCategory_KinColCapsule,
     ShapeCategory_Count
 } ShapeCategory;
 
@@ -526,8 +520,6 @@ typedef struct{
     BodyCount polygon_rigid_count;
     BodyCount circle_collider_count;
     BodyCount circle_rigid_count;
-    BodyCount capsule_collider_count;
-    BodyCount capsule_rigid_count;
     bool is_init;
 } FIZXState;
 
@@ -1517,70 +1509,59 @@ void soa_body_transform_shape_vertices(Soa_Body* soa, i32 shape_idx){
 
 inline bool shape_category_is_polygon(i32 category){
     BOUNDS_CHECK(category, ShapeCategory_Count);
-    return category % 3 == 0;
+    return category % 2 == 0;
 }
 
 inline bool shape_category_is_circle(i32 category){
     BOUNDS_CHECK(category, ShapeCategory_Count);
-    return category % 3 == 1;
-}
-
-inline bool shape_category_is_capsule(i32 category){
-    BOUNDS_CHECK(category, ShapeCategory_Count);
-    return category % 3 == 2;
+    return category % 2 == 1;
 }
 
 inline bool shape_category_is_trigger(i32 category){
     BOUNDS_CHECK(category, ShapeCategory_Count);
     return
-    (category >= ShapeCategory_TriRigPolygon && category <= ShapeCategory_TriRigCapsule) ||
-    (category >= ShapeCategory_TriColPolygon && category <= ShapeCategory_TriColCapsule);
+    (category >= ShapeCategory_TriRigPolygon && category <= ShapeCategory_TriRigCircle) ||
+    (category >= ShapeCategory_TriColPolygon && category <= ShapeCategory_TriColCircle);
 }
 
 inline bool shape_category_is_dynamic(i32 category){
     BOUNDS_CHECK(category, ShapeCategory_Count);
     return
-    (category >= ShapeCategory_DynRigPolygon && category <= ShapeCategory_DynRigCapsule) ||
-    (category >= ShapeCategory_DynColPolygon && category <= ShapeCategory_DynColCapsule);
+    (category >= ShapeCategory_DynRigPolygon && category <= ShapeCategory_DynRigCircle) ||
+    (category >= ShapeCategory_DynColPolygon && category <= ShapeCategory_DynColCircle);
 }
 
 inline bool shape_category_is_kinematic(i32 category){
     BOUNDS_CHECK(category, ShapeCategory_Count);
     return
-    (category >= ShapeCategory_KinRigPolygon && category <= ShapeCategory_KinRigCapsule) ||
-    (category >= ShapeCategory_KinColPolygon && category <= ShapeCategory_KinColCapsule);
+    (category >= ShapeCategory_KinRigPolygon && category <= ShapeCategory_KinRigCircle) ||
+    (category >= ShapeCategory_KinColPolygon && category <= ShapeCategory_KinColCircle);
 }
 
 inline bool shape_category_is_rigid(i32 category){
     BOUNDS_CHECK(category, ShapeCategory_Count);
-    return category >= ShapeCategory_DynRigPolygon && category <= ShapeCategory_KinRigCapsule;
+    return category >= ShapeCategory_DynRigPolygon && category <= ShapeCategory_KinRigCircle;
 }
 
 void shape_category_set_to_rigid(i32* category){
     switch(*category){
         case ShapeCategory_DynRigPolygon: {*category = ShapeCategory_DynRigPolygon;} break;
         case ShapeCategory_DynRigCircle: {*category = ShapeCategory_DynRigCircle;} break;
-        case ShapeCategory_DynRigCapsule: {*category = ShapeCategory_DynRigCapsule;} break;
 
         case ShapeCategory_TriRigPolygon: {*category = ShapeCategory_TriRigPolygon;} break;
         case ShapeCategory_TriRigCircle: {*category = ShapeCategory_TriRigCircle;} break;
-        case ShapeCategory_TriRigCapsule: {*category = ShapeCategory_TriRigCapsule;} break;
 
         case ShapeCategory_KinRigPolygon: {*category = ShapeCategory_KinRigPolygon;} break;
         case ShapeCategory_KinRigCircle: {*category = ShapeCategory_KinRigCircle;} break;
-        case ShapeCategory_KinRigCapsule: {*category = ShapeCategory_KinRigCapsule;} break;
 
         case ShapeCategory_DynColPolygon: {*category = ShapeCategory_DynRigPolygon;} break;
         case ShapeCategory_DynColCircle: {*category = ShapeCategory_DynRigCircle;} break;
-        case ShapeCategory_DynColCapsule: {*category = ShapeCategory_DynRigCapsule;} break;
 
         case ShapeCategory_TriColPolygon: {*category = ShapeCategory_TriRigPolygon;} break;
         case ShapeCategory_TriColCircle: {*category = ShapeCategory_TriRigCircle;} break;
-        case ShapeCategory_TriColCapsule: {*category = ShapeCategory_TriRigCapsule;} break;
 
         case ShapeCategory_KinColPolygon: {*category = ShapeCategory_KinRigPolygon;} break;
         case ShapeCategory_KinColCircle: {*category = ShapeCategory_KinRigCircle;} break;
-        case ShapeCategory_KinColCapsule: {*category = ShapeCategory_KinRigCapsule;} break;
 
         default: {ASSERT(false, "unknown category.");} break;
     }
@@ -1590,27 +1571,21 @@ void shape_category_set_to_collider(i32* category){
     switch(*category){
         case ShapeCategory_DynRigPolygon: {*category = ShapeCategory_DynColPolygon;} break;
         case ShapeCategory_DynRigCircle: {*category = ShapeCategory_DynColCircle;} break;
-        case ShapeCategory_DynRigCapsule: {*category = ShapeCategory_DynColCapsule;} break;
 
         case ShapeCategory_TriRigPolygon: {*category = ShapeCategory_TriColPolygon;} break;
         case ShapeCategory_TriRigCircle: {*category = ShapeCategory_TriColCircle;} break;
-        case ShapeCategory_TriRigCapsule: {*category = ShapeCategory_TriColCapsule;} break;
 
         case ShapeCategory_KinRigPolygon: {*category = ShapeCategory_KinColPolygon;} break;
         case ShapeCategory_KinRigCircle: {*category = ShapeCategory_KinColCircle;} break;
-        case ShapeCategory_KinRigCapsule: {*category = ShapeCategory_KinColCapsule;} break;
 
         case ShapeCategory_DynColPolygon: {*category = ShapeCategory_DynColPolygon;} break;
         case ShapeCategory_DynColCircle: {*category = ShapeCategory_DynColCircle;} break;
-        case ShapeCategory_DynColCapsule: {*category = ShapeCategory_DynColCapsule;} break;
 
         case ShapeCategory_TriColPolygon: {*category = ShapeCategory_TriColPolygon;} break;
         case ShapeCategory_TriColCircle: {*category = ShapeCategory_TriColCircle;} break;
-        case ShapeCategory_TriColCapsule: {*category = ShapeCategory_TriColCapsule;} break;
 
         case ShapeCategory_KinColPolygon: {*category = ShapeCategory_KinColPolygon;} break;
         case ShapeCategory_KinColCircle: {*category = ShapeCategory_KinColCircle;} break;
-        case ShapeCategory_KinColCapsule: {*category = ShapeCategory_KinColCapsule;} break;
 
         default: {ASSERT(false, "unknown category.");} break;
     }
@@ -1929,27 +1904,21 @@ void shape_dealloc_unsafe(FIZXState* state, i32 shape_idx, bool recalculate_body
     switch (category){
         case ShapeCategory_DynRigPolygon: {state->polygon_rigid_count.dynamic -= 1;} break;
         case ShapeCategory_DynRigCircle: {state->circle_rigid_count.dynamic -= 1;} break;
-        case ShapeCategory_DynRigCapsule: {state->capsule_rigid_count.dynamic -= 1;} break;
 
         case ShapeCategory_TriRigPolygon: {state->polygon_rigid_count.trigger -= 1;} break;
         case ShapeCategory_TriRigCircle: {state->circle_rigid_count.trigger -= 1;} break;
-        case ShapeCategory_TriRigCapsule: {state->capsule_rigid_count.trigger -= 1;} break;
 
         case ShapeCategory_KinRigPolygon: {state->polygon_rigid_count.kinematic -= 1;} break;
         case ShapeCategory_KinRigCircle: {state->circle_rigid_count.kinematic -= 1;} break;
-        case ShapeCategory_KinRigCapsule: {state->capsule_rigid_count.kinematic -= 1;} break;
 
         case ShapeCategory_DynColPolygon: {state->polygon_collider_count.dynamic -= 1;} break;
         case ShapeCategory_DynColCircle: {state->circle_collider_count.dynamic -= 1;} break;
-        case ShapeCategory_DynColCapsule: {state->capsule_collider_count.dynamic -= 1;} break;
 
         case ShapeCategory_TriColPolygon: {state->polygon_collider_count.trigger -= 1;} break;
         case ShapeCategory_TriColCircle: {state->circle_collider_count.trigger -= 1;} break;
-        case ShapeCategory_TriColCapsule: {state->capsule_collider_count.trigger -= 1;} break;
 
         case ShapeCategory_KinColPolygon: {state->polygon_collider_count.kinematic -= 1;} break;
         case ShapeCategory_KinColCircle: {state->circle_collider_count.kinematic -= 1;} break;
-        case ShapeCategory_KinColCapsule: {state->capsule_collider_count.kinematic -= 1;} break;
 
         default: {ASSERT(false, "unknwon category.");} break;
     }
@@ -2111,27 +2080,21 @@ void fizx_shape_init_prepare(FIZXState* state, ShapeType type, ShapeBehaviour be
     switch(category){
         case ShapeCategory_DynRigPolygon: {state->polygon_rigid_count.dynamic += 1;} break;
         case ShapeCategory_DynRigCircle: {state->circle_rigid_count.dynamic += 1;} break;
-        case ShapeCategory_DynRigCapsule: {state->capsule_rigid_count.dynamic += 1;} break;
 
         case ShapeCategory_TriRigPolygon: {state->polygon_rigid_count.trigger += 1;} break;
         case ShapeCategory_TriRigCircle: {state->circle_rigid_count.trigger += 1;} break;
-        case ShapeCategory_TriRigCapsule: {state->capsule_rigid_count.trigger += 1;} break;
 
         case ShapeCategory_KinRigPolygon: {state->polygon_rigid_count.kinematic += 1;} break;
         case ShapeCategory_KinRigCircle: {state->circle_rigid_count.kinematic += 1;} break;
-        case ShapeCategory_KinRigCapsule: {state->capsule_rigid_count.kinematic += 1;} break;
 
         case ShapeCategory_DynColPolygon: {state->polygon_collider_count.dynamic += 1;} break;
         case ShapeCategory_DynColCircle: {state->circle_collider_count.dynamic += 1;} break;
-        case ShapeCategory_DynColCapsule: {state->capsule_collider_count.dynamic += 1;} break;
 
         case ShapeCategory_TriColPolygon: {state->polygon_collider_count.trigger += 1;} break;
         case ShapeCategory_TriColCircle: {state->circle_collider_count.trigger += 1;} break;
-        case ShapeCategory_TriColCapsule: {state->capsule_collider_count.trigger += 1;} break;
 
         case ShapeCategory_KinColPolygon: {state->polygon_collider_count.kinematic += 1;} break;
         case ShapeCategory_KinColCircle: {state->circle_collider_count.kinematic += 1;} break;
-        case ShapeCategory_KinColCapsule: {state->capsule_collider_count.kinematic += 1;} break;
 
         default: {ASSERT(false, "unknown category.");} break;
     }
