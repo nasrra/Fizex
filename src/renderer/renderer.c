@@ -407,6 +407,7 @@ typedef struct{
 #define COLOUR_LIGHT_BLUE   (Colour){.r = 0.5f, .g = 0.5f, .b = 1.0f, .a = 1.0f}
 #define COLOUR_WHITE        (Colour){.r = 1.0f, .g = 1.0f, .b = 1.0f, .a = 1.0f}
 #define COLOUR_ORANGE       (Colour){.r = 0.5f, .g = 0.5f, .a = 1.0f}
+#define COLOUR_DARK_ORANGE  (Colour){.r = 0.25f, .g = 0.25f, .a = 1.0f}
 #define COLOUR_YELLOW       (Colour){.r = 1.0f, .g = 1.0f, .a = 1.0f}
 #define COLOUR_PINK         (Colour){.r = 1.0f, .g = 0.25f, .b = 0.25f, .a = 1.0f}
 #define COLOUR_BLACK        (Colour){.a = 1.0f}

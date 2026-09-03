@@ -2319,7 +2319,7 @@ bool polygon_overlaps_circle_scalar(
 
     // project all vertices onto the current edge to find the min and max values
     // of the two rectangles along the edge.
-    project_polygon(poly_vert_x, poly_vert_y, poly_vert_length, axis_x, axis_y, &a_min, &b_min);
+    project_polygon(poly_vert_x, poly_vert_y, poly_vert_length, axis_x, axis_y, &a_min, &a_max);
     circle_project_scalar(circle_x, circle_y, circle_radius, axis_x, axis_y, &b_min, &b_max);
 
     if(a_min > b_max || b_min > a_max){

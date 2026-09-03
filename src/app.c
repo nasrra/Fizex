@@ -60,6 +60,7 @@ MemoryArena renderer_memory;
 ====================**//**/
 
 void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time){
+
     Soa_Aabb soa = {0};
     soa_aabb_init(&soa, transient, 3);
     soa_aabb_push(&soa, -1.0f, -1.0f, 2.0f, 2.0f);
@@ -216,7 +217,7 @@ void app_main(){
     FIZXDrawInfo fizx_draw_state = {
         .colour_dynamic_shape           = COLOUR_GREEN,
         .colour_passive_trigger_shape   = COLOUR_LIGHT_BLUE,
-        .colour_kinematic_shape         = COLOUR_ORANGE,
+        .colour_kinematic_shape         = COLOUR_DARK_ORANGE,
         .colour_active_trigger_shape    = COLOUR_RED,
         .colour_aabb                    = COLOUR_LIGHT_BLUE,
         .colour_fallback_shape          = COLOUR_WHITE,
@@ -235,20 +236,25 @@ void app_main(){
         .material_idx                   = SPRITE_MATERIAL_DEBUG,
         .draw_body_shapes               = true,
         .draw_bvh_leaves = true,
-        .draw_bvh_branches = false
+        .draw_bvh_branches = false,
+        .draw_collision_info = true
     };
 
     Transform dynamic_body_transform = {.position = {.x = 0.1f, .y = 5.0f}, .scale = VECTOR3_ONE};
-    Transform kinematic_body_transform = {.scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = quaternion_create_from_axis_angle(VECTOR3_FORWARD, 45.0f)};
+    Transform kinematic_body_transform = {.scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = quaternion_create_from_axis_angle(VECTOR3_FORWARD, 25.0f)};
     Transform shape_transform = {.scale = VECTOR3_ONE};
-    Rectangle shape = {.x = -0.0f, .y = 0.0f, .width = 1.0f, .height = 1.0f};
+    Rectangle shape = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
+    Circle circle = {.x = 0.0f, .y = 0.0f, .radius = 1.0f};
     Material material = {.static_friction = 1.0f, .kinetic_friction = 1.0f, .density = 5.0f, .restitution = 0.5f};
 
     GenId dynamic_body_gid = body_alloc(&fizx_state, transform_to_transform2d(dynamic_body_transform), true);
-    GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
+    // GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
+    GenId dynamic_shape_gid = fizx_circle_rigid_alloc(&fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
+
 
     GenId kinematic_body_gid = body_alloc(&fizx_state, transform_to_transform2d(kinematic_body_transform), false);
-    GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, kinematic_body_gid, material, true);
+    GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, kinematic_body_gid, material, false);
+    // GenId kinematic_shape_gid = fizx_circle_rigid_alloc(&fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, material, kinematic_body_gid, false);
 
     u128 prev_process_tick_in_mili  = 0;
     f32 previous_time_in_seconds    = 0.0f;
@@ -278,6 +284,7 @@ void app_main(){
             }
         }
 
+        fizx_state_draw(fizx_state, &renderer_ctx, fizx_draw_state, delta_time);
         // update.
         {
             app_update(persistent, transient, delta_time);
@@ -290,12 +297,10 @@ void app_main(){
 
         // final update.
         {
-            fizx_state_draw(fizx_state, &renderer_ctx, fizx_draw_state, delta_time);
             renderer_draw_renderer(&renderer_ctx);
             platform_window_update(window_ctx);
             transient->stride = 0;
         }
-        platform_output_message("update! \n");
     }
 
     platform_window_context_free(window_ctx);

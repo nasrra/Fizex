@@ -568,7 +568,8 @@ typedef struct{
 #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
 #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
-#define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC false
+#define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON false
+#define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC false
 #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY null
 #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY null
 
@@ -578,8 +579,16 @@ typedef struct{
 
 #define COLLISION_DETECTION(manifold, info, bodies, body_hierarchy, shape_collisions_to_resolve, rigid_collisions_to_resolve) do {          \
     for(i32 COLLISION_DETECTION_i = 0; COLLISION_DETECTION_i < info.length; COLLISION_DETECTION_i++){                                       \
-        i32 COLLISION_DETECTION_owner_leaf_idx = info.owner_leaf_index[COLLISION_DETECTION_i];                                              \
-        i32 COLLISION_DETECTION_other_leaf_idx = info.other_leaf_index[COLLISION_DETECTION_i];                                              \
+        i32 COLLISION_DETECTION_owner_leaf_idx;                                                                                             \
+        i32 COLLISION_DETECTION_other_leaf_idx;                                                                                             \
+        if(COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON){                                                                         \
+            COLLISION_DETECTION_owner_leaf_idx = info.other_leaf_index[COLLISION_DETECTION_i];                                              \
+            COLLISION_DETECTION_other_leaf_idx = info.owner_leaf_index[COLLISION_DETECTION_i];                                              \
+        }                                                                                                                                   \
+        else{                                                                                                                               \
+            COLLISION_DETECTION_owner_leaf_idx = info.owner_leaf_index[COLLISION_DETECTION_i];                                              \
+            COLLISION_DETECTION_other_leaf_idx = info.other_leaf_index[COLLISION_DETECTION_i];                                              \
+        }                                                                                                                                   \
         BOUNDS_CHECK(COLLISION_DETECTION_owner_leaf_idx, bodies.bvh_leaf_index_length);                                                     \
         i32 COLLISION_DETECTION_owner_bvh_idx = bodies.bvh_leaf_index[COLLISION_DETECTION_owner_leaf_idx];                                  \
         i32 COLLISION_DETECTION_other_bvh_idx = bodies.bvh_leaf_index[COLLISION_DETECTION_other_leaf_idx];                                  \
@@ -615,7 +624,7 @@ typedef struct{
             continue;                                                                                                                       \
         }                                                                                                                                   \
                                                                                                                                             \
-        if(COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC){                                                               \
+        if(COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC){                                                                         \
             i32 temp = COLLISION_DETECTION_idx_pair.a_to_b;                                                                                 \
             COLLISION_DETECTION_idx_pair.a_to_b = COLLISION_DETECTION_idx_pair.b_to_a;                                                      \
             COLLISION_DETECTION_idx_pair.b_to_a = temp;                                                                                     \
@@ -1226,6 +1235,7 @@ i32 collision_manifold_set_data_one_way(
     i32* phase = &manifold->active_phase[idx];
     if(*phase <= 0){
         fixed_stride_array_push(&manifold->active_index, recipient_idx, idx_char_ptr, sizeof(COLLISION_MANIFOLD_ACTIVE_INDEX_TYPE));
+
     }
 
     *phase = 1;
@@ -1320,7 +1330,7 @@ void collision_manifold_complete_step(CollisionManifold* manifold){
     for(i32 chunk_idx = 0; chunk_idx < manifold->active_index.chunk_count_length; chunk_idx++){
         BOUNDS_CHECK(chunk_idx, manifold->active_index.chunk_count_length);
         i32 count = manifold->active_index.chunk_count[chunk_idx];
-        if(count){
+        if(count <= 0){
             continue;
         }
 
@@ -1329,7 +1339,7 @@ void collision_manifold_complete_step(CollisionManifold* manifold){
             // get the active phase of the collision.
             i32 element_idx = fixed_stride_array_get_element_idx(chunk_idx, manifold->collider_stride, chunk_element_idx);
             BOUNDS_CHECK(element_idx, manifold->active_index.data_length);
-            i32 collision_idx = manifold->active_index.data[element_idx];
+            i32 collision_idx = ((COLLISION_MANIFOLD_ACTIVE_INDEX_TYPE*)manifold->active_index.data)[element_idx];
             i32* phase = &manifold->active_phase[collision_idx];
 
             // update the collision state.
@@ -1338,6 +1348,7 @@ void collision_manifold_complete_step(CollisionManifold* manifold){
             BOUNDS_CHECK(collision_idx, manifold->contact_state_length);
             ContactState* current = &manifold->contact_state[collision_idx];
 
+            *phase += 1;
             switch(*phase){
                 case 1:{
                     switch(*current){
@@ -1353,16 +1364,13 @@ void collision_manifold_complete_step(CollisionManifold* manifold){
                 case 3:{
                     *current = ContactState_None;
                 }break;
+                case 4:{
+                    *phase %= 4;
+                    fixed_stride_array_unordered_remove_at(&manifold->active_index, chunk_idx, chunk_element_idx, sizeof(COLLISION_MANIFOLD_ACTIVE_INDEX_TYPE));
+                } break;
                 default:{
                     ASSERT(false, "phase contains unknown state.");
-                };
-            }
-
-            // update the active phase of the collision.
-            *phase += 1;
-            *phase %= 4;
-            if(*phase == 0){
-                fixed_stride_array_unordered_remove_at(&manifold->active_index, chunk_idx, chunk_element_idx, sizeof(COLLISION_MANIFOLD_ACTIVE_INDEX_TYPE));
+                } break;
             }
         }
     }
@@ -2220,7 +2228,7 @@ GenId fizx_circle_collider_alloc(FIZXState* state, GenId body_gid, Circle shape,
     return gid;
 }
 
-GenId fizx_circle_rigid_alloc(FIZXState* state, GenId body_gid, Circle shape, Transform2D local_transform, ShapeBehaviour behaviour, Material material, bool rotational_repsonse){
+GenId fizx_circle_rigid_alloc(FIZXState* state, Circle shape, Transform2D local_transform, ShapeBehaviour behaviour, Material material, GenId body_gid, bool rotational_repsonse){
     if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
         ASSERT(false, "invalid body gid");
         return (GenId){0};
@@ -3006,6 +3014,8 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 f32* mass           = &state->bodies.mass[body_index];
                 BOUNDS_CHECK(body_index, state->bodies.gravity_affected_length);
                 bool gravity_affected = state->bodies.gravity_affected[body_index];
+                BOUNDS_CHECK(body_index, state->bodies.angular_velocity_length);
+                f32 ang_vel = state->bodies.angular_velocity[body_index];
 
                 if(gravity_affected){
                     *lin_vel_x += gravity.x;
@@ -3022,11 +3032,9 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 /**
                     rotate body around center of mass.
                 **/
-                {
-
+                if(ang_vel != 0.0f){
                     // apply rotation.
-                    BOUNDS_CHECK(body_index, state->bodies.angular_velocity_length);
-                    f32 rot_amt = state->bodies.angular_velocity[body_index] * delta_time;
+                    f32 rot_amt = ang_vel * delta_time;
                     rotor_multiply(*body_sine, *body_cosine, rot_amt, body_sine, body_cosine);
                     *body_rotation = f32_atan2(*body_sine, *body_cosine);
 
@@ -3324,8 +3332,10 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
                 #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
                 #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
-                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_pol_to_dyn_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
@@ -3335,8 +3345,11 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
                 #undef  COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION
                 #define COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION false
-                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
-                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON false
+
             }
             // kin_rig_pol_to_kin_rig_pol
             {
@@ -3388,8 +3401,8 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
                 #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
                 #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
-                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_pol_to_dyn_col_pol, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
@@ -3397,8 +3410,8 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_POLY false
                 #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
                 #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
-                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
-                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC false
             }
             // kin_rig_pol_to_dyn_col_cir
             {
@@ -3410,8 +3423,8 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
                 #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
                 #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
-                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_pol_to_dyn_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
@@ -3419,8 +3432,8 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
                 #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
                 #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
-                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
-                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC false
             }
             // kin_rig_pol_to_kin_col_pol
             {
@@ -3572,6 +3585,8 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
                 #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
                 #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_col_pol_to_dyn_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
@@ -3579,6 +3594,9 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
                 #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
                 #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON false
+
             }
             // dyn_col_pol_to_kin_rig_cir
             {
@@ -3590,6 +3608,8 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
                 #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
                 #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_col_pol_to_kin_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
@@ -3597,16 +3617,22 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
                 #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
                 #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON false
             }
             // dyn_col_pol_to_tri_rig_cir
             {
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_dyn_col_pol_to_tri_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON false
             }
             // dyn_col_pol_to_dyn_col_pol
             {
@@ -3710,8 +3736,10 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
                 #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
                 #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
-                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_col_pol_to_dyn_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
@@ -3719,28 +3747,38 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
                 #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
                 #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
-                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
-                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON false
             }
             // kin_col_pol_to_kin_rig_cir
             {
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_col_pol_to_kin_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON false
             }
             // kin_col_pol_to_tri_rig_cir
             {
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_col_pol_to_tri_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON false
             }
             // kin_col_pol_to_dyn_col_cir
             {
@@ -3752,8 +3790,10 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
                 #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
                 #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
-                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_col_pol_to_dyn_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
@@ -3761,8 +3801,10 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
                 #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
                 #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
-                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
-                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON false
             }
             // kin_col_pol_to_kin_col_pol
             {
@@ -3808,51 +3850,71 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
             {
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_col_pol_to_dyn_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON false
             }
             // tri_col_pol_to_kin_rig_cir
             {
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_col_pol_to_kin_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON false
             }
             // tri_col_pol_to_tri_rig_cir
             {
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_col_pol_to_tri_rig_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON false
             }
             // tri_col_pol_to_dyn_col_cir
             {
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_col_pol_to_dyn_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON false
             }
             // tri_col_pol_to_kin_col_cir
             {
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_tri_col_pol_to_kin_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
                 #undef  COLLISION_DETECTION_CONFIG_POLY_TO_CIRC
                 #define COLLISION_DETECTION_CONFIG_POLY_TO_CIRC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_POLYGON false
             }
             // tri_col_pol_to_tri_col_pol
             {
@@ -4004,8 +4066,8 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY CollisionResolutionCategory_Kinematic
                 #undef  COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY
                 #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY CollisionResolutionCategory_Dynamic
-                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
-                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC true
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC true
 
                 COLLISION_DETECTION(&state->collision_manifold, overlaps_kin_rig_cir_to_dyn_col_cir, state->bodies, state->body_hierarchy, &state->sub_step_shape_collisions_to_resolve, &state->sub_step_rigid_collisions_to_resolve);
 
@@ -4013,8 +4075,8 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 #define COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC false
                 #undef  COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION
                 #define COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION false
-                #undef COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC
-                #define COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_BODY_IS_SOLE_DYNAMIC false
+                #undef COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC
+                #define COLLISION_DETECTION_CONFIG_OTHER_SHAPE_IS_SOLE_DYNAMIC false
             }
             // kin_rig_cir_to_kin_col_cir
             {
