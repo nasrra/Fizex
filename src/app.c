@@ -28,8 +28,8 @@ typedef struct{
     defines.
 ====================**//**/
 
-#define WINDOW_WIDTH 1280 / 2
-#define WINDOW_HEIGHT 720 / 2
+#define WINDOW_WIDTH 1280
+#define WINDOW_HEIGHT 720
 
 DEFINE_QUICKSORT_STRUCT(Person, i32, .num, quicksort_person);
 
@@ -58,6 +58,18 @@ MemoryArena renderer_memory;
 /**====================
     functions
 ====================**//**/
+
+void trigger_on_enter_callback(CollisionInfo info, void* user_data){
+    platform_output_message("enter!\n");
+}
+
+void trigger_on_exit_callback(CollisionInfo info, void* user_data){
+    platform_output_message("exit!\n");
+}
+
+void trigger_on_sustain_callback(CollisionInfo info, void* user_data){
+    platform_output_message("sustain!\n");
+}
 
 void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time){
 
@@ -241,7 +253,7 @@ void app_main(){
     };
 
     Transform dynamic_body_transform = {.position = {.x = 0.1f, .y = 5.0f}, .scale = VECTOR3_ONE};
-    Transform kinematic_body_transform = {.scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = quaternion_create_from_axis_angle(VECTOR3_FORWARD, 25.0f)};
+    Transform kinematic_body_transform = {.scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = quaternion_create_from_axis_angle(VECTOR3_FORWARD, 30.0f)};
     Transform shape_transform = {.scale = VECTOR3_ONE};
     Rectangle shape = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
     Circle circle = {.x = 0.0f, .y = 0.0f, .radius = 1.0f};
@@ -251,10 +263,13 @@ void app_main(){
     GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
     // GenId dynamic_shape_gid = fizx_circle_rigid_alloc(&fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
 
-
     GenId kinematic_body_gid = body_alloc(&fizx_state, transform_to_transform2d(kinematic_body_transform), false);
-    // GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, kinematic_body_gid, material, false);
-    GenId kinematic_shape_gid = fizx_circle_rigid_alloc(&fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, material, kinematic_body_gid, false);
+    GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Trigger, kinematic_body_gid, material, false);
+    // GenId kinematic_shape_gid = fizx_circle_rigid_alloc(&fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, material, kinematic_body_gid, false);
+    
+    shape_set_on_enter_callback(&fizx_state, trigger_on_enter_callback, kinematic_shape_gid);
+    shape_set_on_sustain_callback(&fizx_state, trigger_on_sustain_callback, kinematic_shape_gid);
+    shape_set_on_exit_callback(&fizx_state, trigger_on_exit_callback, kinematic_shape_gid);
 
     u128 prev_process_tick_in_mili  = 0;
     f32 previous_time_in_seconds    = 0.0f;
@@ -279,7 +294,7 @@ void app_main(){
 
             while(fixed_update_accumulator >= FIXED_DELTA_TIME){
                 app_fixed_update(FIXED_DELTA_TIME);
-                fizx_state_fixed_update(&fizx_state, FIXED_DELTA_TIME, 16);
+                fizx_state_fixed_update(&fizx_state, NULL, FIXED_DELTA_TIME, 16);
                 fixed_update_accumulator -= FIXED_DELTA_TIME;
             }
         }

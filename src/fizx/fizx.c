@@ -9,6 +9,19 @@
 ====================**//**/
 
 
+typedef struct{
+    f32* normal_x;
+    f32* normal_y;
+    f32* first_contact_point_x;
+    f32* first_contact_point_y;
+    f32* second_contact_point_x;
+    f32* second_contact_point_y;
+    f32* depth;
+    bool* two_contact_points;
+} CollisionInfo;
+
+typedef void (*FIZXCollisionCallback)(CollisionInfo, void*);
+
 typedef enum{
     ShapeBehaviour_Dynamic,
     ShapeBehaviour_Kinematic,
@@ -392,7 +405,16 @@ typedef struct{
     i32* displaced_this_sub_step;
     i32 displaced_this_sub_step_length;
     i32 displaced_this_sub_step_count;
+
+    FIZXCollisionCallback* shape_on_enter_callback;
+    i32 shape_on_enter_callback_length;
+    FIZXCollisionCallback* shape_on_sustain_callback;
+    i32 shape_on_sustain_callback_length;
+    FIZXCollisionCallback* shape_on_exit_callback;
+    i32 shape_on_exit_callback_length;
+
     bool is_init;
+
 } Soa_Body;
 
 typedef struct{
@@ -628,7 +650,6 @@ typedef struct{
                 &COLLISION_DETECTION_idx_pair.a_to_b, sizeof(COLLISION_DETECTION_idx_pair.a_to_b),                                          \
                 COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY, COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY                  \
             );                                                                                                                              \
-            farted();                                                                                                                       \
         }                                                                                                                                   \
         if(COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION){                                                                             \
             categorised_overlap_array_push(                                                                                                 \
@@ -645,9 +666,48 @@ typedef struct{
 
 
 
-void farted(){
-    i32 x = 12;
+
+/**
+    checks whether a gen-id is for a valid shape entity.
+
+    `returns`
+    zero on failure; otherwise the entity_idx.
+**/
+i32 fizx_validate_shape_gen_id(FIZXState* state, GenId gid){
+
+    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, gid)){
+        return 0;
+    }
+    i32 gidx = gen_id_get_index(gid);
+    BOUNDS_CHECK(gidx, state->bodies.entity_type_length);
+    if(state->bodies.entity_type[gidx] != EntityType_Shape){
+        return 0;
+    }
+
+    return gidx;
 }
+
+/**
+    checks whether a gen-id is for a valid shape entity.
+
+    `returns`
+    zero on failure; otherwise the entity_idx.
+**/
+i32 fizx_validate_body_gen_id(FIZXState* state, GenId gid){
+
+    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, gid)){
+        return 0;
+    }
+
+    i32 gidx = gen_id_get_index(gid);
+    BOUNDS_CHECK(gidx, state->bodies.entity_type_length);
+    if(state->bodies.entity_type[gidx] != EntityType_Body){
+        return 0;
+    }
+
+    return gidx;
+}
+
 
 
 /**====================
@@ -1340,10 +1400,9 @@ void collision_manifold_complete_step(CollisionManifold* manifold){
             BOUNDS_CHECK(collision_idx, manifold->contact_state_length);
             ContactState* current = &manifold->contact_state[collision_idx];
 
-            *phase += 1;
             switch(*phase){
                 case 1:{
-                    switch(*current){
+                    switch(*previous){
                         case ContactState_None:{*current = ContactState_Enter;}break;
                         case ContactState_Enter:{*current = ContactState_Sustain;}break;
                         case ContactState_Sustain:{*current = ContactState_Sustain;}break;
@@ -1364,6 +1423,7 @@ void collision_manifold_complete_step(CollisionManifold* manifold){
                     ASSERT(false, "phase contains unknown state.");
                 } break;
             }
+            *phase += 1;
         }
     }
 }
@@ -1601,13 +1661,75 @@ void shape_category_set_to_collider(i32* category){
 
 
 
+bool shape_set_on_enter_callback(FIZXState* state, FIZXCollisionCallback callback, GenId shape_gid){
+    i32 idx = fizx_validate_shape_gen_id(state, shape_gid);
+    if(idx == 0){
+        ASSERT(false, "invalid shape gid");
+        return false;
+    }
+    BOUNDS_CHECK(idx, state->bodies.shape_on_enter_callback_length);
+    state->bodies.shape_on_enter_callback[idx] = callback;
+    return true;
+}
+
+bool shape_set_on_sustain_callback(FIZXState* state, FIZXCollisionCallback callback, GenId shape_gid){
+    i32 idx = fizx_validate_shape_gen_id(state, shape_gid);
+    if(idx == 0){
+        ASSERT(false, "invalid shape gid");
+        return false;
+    }
+    BOUNDS_CHECK(idx, state->bodies.shape_on_sustain_callback_length);
+    state->bodies.shape_on_sustain_callback[idx] = callback;
+    return true;
+}
+
+bool shape_set_on_exit_callback(FIZXState* state, FIZXCollisionCallback callback, GenId shape_gid){
+    i32 idx = fizx_validate_shape_gen_id(state, shape_gid);
+    if(idx == 0){
+        ASSERT(false, "invalid shape gid");
+        return false;
+    }
+    BOUNDS_CHECK(idx, state->bodies.shape_on_exit_callback_length);
+    state->bodies.shape_on_exit_callback[idx] = callback;
+    return true;
+}
+
+bool shape_clear_on_enter_callback(FIZXState* state, FIZXCollisionCallback callback, GenId shape_gid){
+    i32 idx = fizx_validate_shape_gen_id(state, shape_gid);
+    if(idx == 0){
+        ASSERT(false, "invalid shape gid");
+        return false;
+    }
+    BOUNDS_CHECK(idx, state->bodies.shape_on_enter_callback_length);
+    state->bodies.shape_on_enter_callback[idx] = NULL;
+    return true;
+}
+
+bool shape_clear_on_sustain_callback(FIZXState* state, FIZXCollisionCallback callback, GenId shape_gid){
+    i32 idx = fizx_validate_shape_gen_id(state, shape_gid);
+    if(idx == 0){
+        ASSERT(false, "invalid shape gid");
+        return false;
+    }
+    BOUNDS_CHECK(idx, state->bodies.shape_on_sustain_callback_length);
+    state->bodies.shape_on_sustain_callback[idx] = NULL;
+    return true;
+}
+
+bool shape_clear_on_exit_callback(FIZXState* state, FIZXCollisionCallback callback, GenId shape_gid){
+    i32 idx = fizx_validate_shape_gen_id(state, shape_gid);
+    if(idx == 0){
+        ASSERT(false, "invalid shape gid");
+        return false;
+    }
+    BOUNDS_CHECK(idx, state->bodies.shape_on_exit_callback_length);
+    state->bodies.shape_on_exit_callback[idx] = NULL;
+    return true;
+}
+
 inline void shape_set_active_unsafe(FIZXState* state, i32 shape_idx, bool is_active){
     BOUNDS_CHECK(shape_idx, state->bodies.active_length);
     state->bodies.active[shape_idx] = is_active;
-}
-
-void shape_set_active(FIZXState* state, GenId shape){
-
 }
 
 void shape_set_local_transform_unsafe(FIZXState* state, i32 shape_idx, Transform2D transform){
@@ -1672,16 +1794,12 @@ void body_set_local_transform_unsafe(FIZXState* state, i32 body_idx, Transform2D
 }
 
 bool body_set_local_transform(FIZXState* state, GenId body_gid, Transform2D transform){
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
+    i32 idx = fizx_validate_body_gen_id(state, body_gid);
+    if(idx == 0){
+        ASSERT(false, "not a body gid");
         return false;
     }
-    i32 body_idx = gen_id_get_index(body_gid);
-    BOUNDS_CHECK(body_idx, state->bodies.entity_type_length);
-    if(state->bodies.entity_type[body_idx] != EntityType_Body){
-        ASSERT(false, "not a body.");
-        return false;
-    }
-    body_set_local_transform_unsafe(state, body_idx, transform);
+    body_set_local_transform_unsafe(state, idx, transform);
     return true;
 }
 
@@ -1698,16 +1816,12 @@ void body_set_global_transform_unsafe(FIZXState* state, i32 body_idx, Transform2
 }
 
 bool body_set_global_transform(FIZXState* state, GenId body_gid, Transform2D transform){
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
+    i32 idx = fizx_validate_body_gen_id(state, body_gid);
+    if(idx == 0){
+        ASSERT(false, "not a body gid");
         return false;
     }
-    i32 body_idx = gen_id_get_index(body_gid);
-    BOUNDS_CHECK(body_idx, state->bodies.entity_type_length);
-    if(state->bodies.entity_type[body_idx] != EntityType_Body){
-        ASSERT(false, "not a body.");
-        return false;
-    }
-    body_set_global_transform_unsafe(state, body_idx, transform);
+    body_set_global_transform_unsafe(state, idx, transform);
     return true;
 }
 
@@ -1718,19 +1832,15 @@ Vector2 body_get_linear_velocity_unsafe(FIZXState* state, i32 body_idx){
 }
 
 Vector2 body_get_linear_velocity(FIZXState* state, GenId body_gid){
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
+    i32 idx = fizx_validate_body_gen_id(state, body_gid);
+    if(idx == 0){
+        ASSERT(false, "not a body gid");
         return (Vector2){0};
     }
-    i32 body_idx = gen_id_get_index(body_gid);
-    BOUNDS_CHECK(body_idx, state->bodies.entity_type_length);
-    if(state->bodies.entity_type[body_idx] != EntityType_Body){
-        ASSERT(false, "not a body.");
+    if(!body_is_active_unsafe(state, idx)){
         return (Vector2){0};
     }
-    if(!body_is_active_unsafe(state, body_idx)){
-        return (Vector2){0};
-    }
-    return body_get_linear_velocity_unsafe(state, body_idx);
+    return body_get_linear_velocity_unsafe(state, idx);
 }
 
 void body_translate_unsafe(FIZXState* state, f32 displacement_x, f32 displacement_y, i32 body_idx){
@@ -1934,18 +2044,12 @@ void shape_dealloc_unsafe(FIZXState* state, i32 shape_idx, bool recalculate_body
 }
 
 bool shape_dealloc(FIZXState* state, GenId gid, bool recalculate_body_center_of_mass){
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, gid)){
+    i32 idx = fizx_validate_shape_gen_id(state, gid);
+    if(idx == 0){
+        ASSERT(false, "not a shape gid");
         return false;
     }
-
-    i32 gidx = gen_id_get_index(gid);
-    BOUNDS_CHECK(gidx, state->bodies.entity_type_length);
-    if(state->bodies.entity_type[gidx] != EntityType_Shape){
-        ASSERT(false, "attempted to dealloc an entity that isnt a shape.");
-        return false;
-    }
-
-    shape_dealloc_unsafe(state, gidx, recalculate_body_center_of_mass);
+    shape_dealloc_unsafe(state, idx, recalculate_body_center_of_mass);
     return true;
 }
 
@@ -2017,18 +2121,12 @@ void body_dealloc_unsafe(FIZXState* state, i32 body_idx){
 }
 
 bool body_dealloc(FIZXState* state, GenId gid){
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, gid)){
+    i32 idx = fizx_validate_body_gen_id(state, gid);
+    if(idx == 0){
+        ASSERT(false, "invalid gid");
         return false;
     }
-
-    i32 gidx = gen_id_get_index(gid);
-    BOUNDS_CHECK(gidx, state->bodies.entity_type_length);
-    if(state->bodies.entity_type[gidx] != EntityType_Body){
-        ASSERT(false, "attempted to dealloc an entity that isnt a body.");
-        return false;
-    }
-
-    body_dealloc_unsafe(state, gidx);
+    body_dealloc_unsafe(state, idx);
     return true;
 }
 
@@ -2160,19 +2258,19 @@ bool shape_set_rotational_repsonse(FIZXState* state, GenId shape_gid, bool enabl
 **/
 GenId fizx_circle_collider_alloc(FIZXState* state, GenId body_gid, Circle shape, Transform2D transform, ShapeBehaviour behaviour){
 
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
-        ASSERT(false, "invalid body gid");
+    i32 body_idx = fizx_validate_body_gen_id(state, body_gid);
+    if(body_idx == 0){
+        ASSERT(false, "invalid body id");
         return (GenId){0};
     }
 
     GenId gid = gen_id_allocator_alloc(&state->gen_id_allocator);
     if(gid == (GenId){0}){
-        ASSERT(false, "failed");
-        return gid;
+        ASSERT(false, "failed to alloc shape id");
+        return (GenId){0};
     }
 
     i32 shape_idx = gen_id_get_index(gid);
-    i32 body_idx = gen_id_get_index(body_gid);
 
     fizx_shape_init_prepare(state, ShapeType_Circle, behaviour, shape_idx, body_idx, false);
 
@@ -2192,19 +2290,20 @@ GenId fizx_circle_collider_alloc(FIZXState* state, GenId body_gid, Circle shape,
 }
 
 GenId fizx_circle_rigid_alloc(FIZXState* state, Circle shape, Transform2D local_transform, ShapeBehaviour behaviour, Material material, GenId body_gid, bool rotational_repsonse){
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
-        ASSERT(false, "invalid body gid");
+
+    i32 body_idx = fizx_validate_body_gen_id(state, body_gid);
+    if(body_idx == 0){
+        ASSERT(false, "invalid body id");
         return (GenId){0};
     }
 
     GenId gid = gen_id_allocator_alloc(&state->gen_id_allocator);
     if(gid == (GenId){0}){
-        ASSERT(false, "failed");
-        return gid;
+        ASSERT(false, "failed to alloc shape id");
+        return (GenId){0};
     }
 
     i32 shape_idx = gen_id_get_index(gid);
-    i32 body_idx = gen_id_get_index(body_gid);
 
     fizx_shape_init_prepare(state, ShapeType_Circle, behaviour, shape_idx, body_idx, true);
 
@@ -2246,19 +2345,20 @@ GenId fizx_circle_rigid_alloc(FIZXState* state, Circle shape, Transform2D local_
 
 GenId fizx_rectangle_collider_alloc(FIZXState* state, Rectangle shape, Transform2D local_transform, ShapeBehaviour behaviour, GenId body_gid){
 
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
-        ASSERT(false, "invalid body gid");
+    i32 body_idx = fizx_validate_body_gen_id(state, body_gid);
+    if(body_idx == 0){
+        ASSERT(false, "invalid body id");
         return (GenId){0};
     }
 
     GenId gid = gen_id_allocator_alloc(&state->gen_id_allocator);
     if(gid == (GenId){0}){
-        return gid;
+        ASSERT(false, "failed to alloc shape id");
+        return (GenId){0};
     }
+    i32 shape_idx = gen_id_get_index(gid);
 
     PolygonRectangle poly = polygon_rectangle_from_rectangle(shape);
-    i32 shape_idx = gen_id_get_index(gid);
-    i32 body_idx = gen_id_get_index(body_gid);
 
     fizx_shape_init_prepare(state, ShapeType_Rectangle, behaviour, shape_idx, body_idx, false);
 
@@ -2284,19 +2384,20 @@ GenId fizx_rectangle_collider_alloc(FIZXState* state, Rectangle shape, Transform
 
 GenId fizx_rectangle_rigid_alloc(FIZXState* state, Rectangle shape, Transform2D local_transform, ShapeBehaviour behaviour, GenId body_gid, Material material, bool rotational_response){
 
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
-        ASSERT(false, "invalid body gid");
+    i32 body_idx = fizx_validate_body_gen_id(state, body_gid);
+    if(body_idx == 0){
+        ASSERT(false, "invalid body id");
         return (GenId){0};
     }
 
     GenId gid = gen_id_allocator_alloc(&state->gen_id_allocator);
     if(gid == (GenId){0}){
-        return gid;
+        ASSERT(false, "failed to alloc shape id");
+        return (GenId){0};
     }
 
     PolygonRectangle poly = polygon_rectangle_from_rectangle(shape);
     i32 shape_idx = gen_id_get_index(gid);
-    i32 body_idx = gen_id_get_index(body_gid);
 
     fizx_shape_init_prepare(state, ShapeType_Rectangle, behaviour, shape_idx, body_idx, true);
 
@@ -2590,19 +2691,22 @@ bool collision_detection_broad_phase(IntrusiveList body_hierarchy, Soa_Aabb aabb
 
 
 
-void fizx_state_init(FIZXState* state, MemoryArena* arena, i32 max_bodies, i32 vertices_per_body){
+void fizx_state_init(FIZXState* state, MemoryArena* arena, i32 entity_amount, i32 vertices_per_body){
     ASSERT(!state->is_init, "already init");
-    i32 max_collisions = max_bodies * max_bodies;
-    fizx_soa_body_init(&state->bodies, arena, max_bodies, vertices_per_body);
-    gen_id_allocator_init(&state->gen_id_allocator, arena, max_bodies);
-    bvh_init(&state->bvh, arena, max_bodies);
+    i32 max_collisions = entity_amount * entity_amount;
+    fizx_soa_body_init(&state->bodies, arena, entity_amount, vertices_per_body);
+    gen_id_allocator_init(&state->gen_id_allocator, arena, entity_amount);
+    bvh_init(&state->bvh, arena, entity_amount);
     bvh_categorised_leaf_overlaps_init(&state->overlaps_scratch_buffer, arena, ShapeCategory_Count, max_collisions);
-    collision_manifold_init(&state->collision_manifold, arena, max_bodies);
+    collision_manifold_init(&state->collision_manifold, arena, entity_amount);
     categorised_overlap_array_init(&state->sub_step_shape_collisions_to_resolve, arena, CollisionResolutionCategory_Count, max_collisions, sizeof(STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE));
     categorised_overlap_array_init(&state->sub_step_rigid_collisions_to_resolve, arena, CollisionResolutionCategory_Count, max_collisions, sizeof(STATE_SUB_STEP_RIGID_COLLISIONS_TO_RESOLVE_TYPE));
-    intrusive_list_init(&state->body_hierarchy, arena, max_bodies, false);
+    intrusive_list_init(&state->body_hierarchy, arena, entity_amount, false);
     state->gravity_direction = VECTOR2_DOWN;
     state->gravity_force = 9.81f;
+    MEMORY_ARENA_ALLOC_ARRAY(arena, state->bodies.shape_on_enter_callback, &state->bodies.shape_on_enter_callback_length, entity_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, state->bodies.shape_on_sustain_callback, &state->bodies.shape_on_sustain_callback_length, entity_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, state->bodies.shape_on_exit_callback, &state->bodies.shape_on_exit_callback_length, entity_amount);
     state->is_init = true;
 }
 
@@ -2718,7 +2822,7 @@ void fizx_state_transform_all_shape_vertices(FIZXState* state){
     }
 }
 
-void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
+void fizx_state_fixed_update(FIZXState* state, void* collision_callback_user_data, f32 delta_time, i32 sub_steps){
 
     f32* y = &state->bodies.global_transform.position.y[1];
 
@@ -4323,7 +4427,6 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
                 other_shape_is_kinematic
             );
         }
-
     }
 
     collision_manifold_complete_step(&state->collision_manifold);
@@ -4336,4 +4439,77 @@ void fizx_state_fixed_update(FIZXState* state, f32 delta_time, i32 sub_steps){
         resolution wouldn't be applied.
     **/
     fizx_state_transform_all_shape_vertices(state);
+
+    /**
+        execute collision callbacks.
+    **/
+    {
+        i32* active_index = (i32*)state->collision_manifold.active_index.data;
+        CollisionInfo collision_info;
+        // loop through all active bodies.
+        for(i32 i = 0; i < state->body_hierarchy.root_index_count; i++){
+            i32 body_idx = state->body_hierarchy.root_index[i];
+            
+            BOUNDS_CHECK(body_idx, state->body_hierarchy.length);
+            i32 first_shape_idx = state->body_hierarchy.node[body_idx].first_child;
+            i32 shape_idx = first_shape_idx;
+            while(shape_idx != 0){
+            
+                // get the the active collision indices for the body.
+                i32 start = fixed_stride_array_get_element_idx(shape_idx, state->collision_manifold.collider_stride, 0);
+                BOUNDS_CHECK(shape_idx, state->collision_manifold.active_index.data_length / sizeof(i32));
+                i32 collision_count = state->collision_manifold.active_index.chunk_count[shape_idx];
+                i32* collision_idx = active_index + start;
+                
+                for(i32 j = 0; j < collision_count; j++){
+                    i32 cidx = collision_idx[j];
+                    // read the data.
+                    BOUNDS_CHECK(cidx, state->collision_manifold.depth_length);
+                    BOUNDS_CHECK(cidx, state->collision_manifold.normal.length);
+                    BOUNDS_CHECK(cidx, state->collision_manifold.first_contact_point.length);
+                    BOUNDS_CHECK(cidx, state->collision_manifold.second_contact_point.length);
+                    BOUNDS_CHECK(cidx, state->collision_manifold.two_contact_points_length);
+                    collision_info = (CollisionInfo){
+                        .depth                  = &state->collision_manifold.depth[cidx],
+                        .normal_x               = &state->collision_manifold.normal.x[cidx],
+                        .normal_y               = &state->collision_manifold.normal.y[cidx],
+                        .first_contact_point_x  = &state->collision_manifold.first_contact_point.x[cidx],
+                        .first_contact_point_y  = &state->collision_manifold.first_contact_point.y[cidx],
+                        .second_contact_point_x  = &state->collision_manifold.second_contact_point.x[cidx],
+                        .second_contact_point_y  = &state->collision_manifold.second_contact_point.y[cidx],
+                        .two_contact_points     = &state->collision_manifold.two_contact_points[cidx]
+                    };
+                
+                    // pass each collision info to the user callback.
+                    BOUNDS_CHECK(cidx, state->collision_manifold.contact_state_length);
+                    i32 contact_state = state->collision_manifold.contact_state[cidx];
+                    FIZXCollisionCallback callback = NULL;
+                    switch(contact_state){
+                        case ContactState_Enter:{
+                            BOUNDS_CHECK(shape_idx, state->bodies.shape_on_enter_callback_length);
+                            callback = state->bodies.shape_on_enter_callback[shape_idx];
+                        }break;
+                        case ContactState_Exit:{
+                            BOUNDS_CHECK(shape_idx, state->bodies.shape_on_exit_callback_length);
+                            callback = state->bodies.shape_on_exit_callback[shape_idx];
+                        }break;
+                        case ContactState_Sustain:{
+                            BOUNDS_CHECK(shape_idx, state->bodies.shape_on_sustain_callback_length);
+                            callback = state->bodies.shape_on_sustain_callback[shape_idx];
+                        }break;
+                    }
+                    if(callback != NULL){
+                        callback(collision_info, collision_callback_user_data);
+                    }
+                }
+                
+                // go to the next body's shape.
+                BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
+                shape_idx = state->body_hierarchy.node[shape_idx].next_sibling;
+                if(shape_idx == first_shape_idx){
+                    break;
+                }
+            } 
+        }
+    }
 }

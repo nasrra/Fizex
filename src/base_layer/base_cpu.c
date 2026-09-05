@@ -1,5 +1,5 @@
 #if ARCH_X86 || ARCH_X64
-#   include <immintrin.h> 
+#   include <immintrin.h>
 #   if COMPILER_CL
 #       include <intrin.h>
 #   elif COMPILER_GCC || COMPILER_CLANG
@@ -9,7 +9,7 @@
 /*
     (todo):
     fallback for ARM and APPLE SILICON.
-*/  
+*/
 #   error not implemented for cpu architecture.
 #endif
 
@@ -147,13 +147,13 @@ static simd_val_funcptr_u64 simd_mul_val_funcptr_u64 = NULL;
 ========================================*//**/
 
 /*
-    Generates a function to perform an operation 
+    Generates a function to perform an operation
     between two array's elements; using a scalar loop.
 
     Parameters:
     `type`: the type of the `lhs` and `rhs`
     `op_name`: the name of the operator.
-    `op`: the operator to apply to each element in the loop. 
+    `op`: the operator to apply to each element in the loop.
 */
 #define SIMD_IMPL_SCALAR(type, op_name, op) \
 void simd_##op_name##_scalar_##type(const type* lhs, const type* rhs, type* dst, i32 size){ \
@@ -166,11 +166,11 @@ void simd_##op_name##_scalar_##type(const type* lhs, const type* rhs, type* dst,
     Generates a function to perform an operation
     between an array's elements and a value of `type`;
     using a scalar loop.
-    
+
     Parameters:
     `type`: the type of the `lhs` and `rhs`
     `op_name`: the name of the operator.
-    `op`: the operator to apply to each element in the loop. 
+    `op`: the operator to apply to each element in the loop.
 */
 #define SIMD_IMPL_VAL_SCALAR(type, name, operator) \
 void simd_##name##_val_scalar_##type(const type* lhs, const type rhs, type* dst, i32 size){ \
@@ -180,14 +180,14 @@ void simd_##name##_val_scalar_##type(const type* lhs, const type rhs, type* dst,
 }
 
 /*
-    Generates a function to perform an operation 
-    between two array's of floating-point values elements; 
+    Generates a function to perform an operation
+    between two array's of floating-point values elements;
     using the cpu's SSE registers.
 
     Parameters:
     `type`: the type of the `lhs` and `rhs`
     `op_name`: the name of the operator.
-    `op`: the operator to apply to each element in the loop. 
+    `op`: the operator to apply to each element in the loop.
 */
 #define SIMD_IMPL_FLT_SSE(type, vector_type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_SSE4 \
@@ -210,11 +210,11 @@ void simd_##func_name##_sse_##type(const type* lhs, const type* rhs, type* dst, 
     Generates a function to perform an operation
     between an array's elements and a value of `type`;
     using the cpu's SSE registers.
-    
+
     Parameters:
     `type`: the type of the `lhs` and `rhs`
     `op_name`: the name of the operator.
-    `op`: the operator to apply to each element in the loop. 
+    `op`: the operator to apply to each element in the loop.
 */
 #define SIMD_IMPL_VAL_FLT_SSE(type, vector_type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_SSE4 \
@@ -234,14 +234,14 @@ void simd_##func_name##_val_sse_##type(const type* lhs, const type rhs, type* ds
 }
 
 /*
-    Generates a function to perform an operation 
-    between two array's of floating-point values elements; 
+    Generates a function to perform an operation
+    between two array's of floating-point values elements;
     using the cpu's AVX registers.
 
     Parameters:
     `type`: the type of the `lhs` and `rhs`
     `op_name`: the name of the operator.
-    `op`: the operator to apply to each element in the loop. 
+    `op`: the operator to apply to each element in the loop.
 */
 #define SIMD_IMPL_FLT_AVX(type, vector_type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_AVX2 \
@@ -264,11 +264,11 @@ void simd_##func_name##_avx_##type(const type* lhs, const type* rhs, type* dst, 
     Generates a function to perform an operation
     between an array's elements and a value of `type`;
     using the cpu's AVX registers.
-    
+
     Parameters:
     `type`: the type of the `lhs` and `rhs`
     `op_name`: the name of the operator.
-    `op`: the operator to apply to each element in the loop. 
+    `op`: the operator to apply to each element in the loop.
 */
 #define SIMD_IMPL_VAL_FLT_AVX(type, vector_type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_AVX2 \
@@ -288,14 +288,14 @@ void simd_##func_name##_val_avx_##type(const type* lhs, const type rhs, type* ds
 }
 
 /*
-    Generates a function to perform an operation 
-    between two array's of integer values elements; 
+    Generates a function to perform an operation
+    between two array's of integer values elements;
     using the cpu's SSE registers.
 
     Parameters:
     `type`: the type of the `lhs` and `rhs`
     `op_name`: the name of the operator.
-    `op`: the operator to apply to each element in the loop. 
+    `op`: the operator to apply to each element in the loop.
 */
 #define SIMD_IMPL_INT_SSE(type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_SSE4 \
@@ -318,11 +318,11 @@ void simd_##func_name##_sse_##type(const type* lhs, const type* rhs, type* dst, 
     Generates a function to perform an operation
     between an array's elements and a value of `type`;
     using the cpu's SSE registers.
-    
+
     Parameters:
     `type`: the type of the `lhs` and `rhs`
     `op_name`: the name of the operator.
-    `op`: the operator to apply to each element in the loop. 
+    `op`: the operator to apply to each element in the loop.
 */
 #define SIMD_IMPL_VAL_INT_SSE(type, func_name, simd_op_name, scalar_op, simd_precision, set1_suffix) \
 SIMD_ATTR_SSE4 \
@@ -342,14 +342,14 @@ void simd_##func_name##_val_sse_##type(const type* lhs, const type rhs, type* ds
 }
 
 /*
-    Generates a function to perform an operation 
-    between two array's of integer values elements; 
+    Generates a function to perform an operation
+    between two array's of integer values elements;
     using the cpu's AVX registers.
 
     Parameters:
     `type`: the type of the `lhs` and `rhs`
     `op_name`: the name of the operator.
-    `op`: the operator to apply to each element in the loop. 
+    `op`: the operator to apply to each element in the loop.
 */
 #define SIMD_IMPL_INT_AVX(type, func_name, simd_op_name, scalar_op, simd_precision) \
 SIMD_ATTR_AVX2 \
@@ -372,11 +372,11 @@ void simd_##func_name##_avx_##type(const type* lhs, const type* rhs, type* dst, 
     Generates a function to perform an operation
     between an array's elements and a value of `type`;
     using the cpu's AVX registers.
-    
+
     Parameters:
     `type`: the type of the `lhs` and `rhs`
     `op_name`: the name of the operator.
-    `op`: the operator to apply to each element in the loop. 
+    `op`: the operator to apply to each element in the loop.
 */
 #define SIMD_IMPL_VAL_INT_AVX(type, func_name, simd_op_name, scalar_op, simd_precision, set1_suffix) \
 SIMD_ATTR_AVX2 \
@@ -398,13 +398,13 @@ void simd_##func_name##_val_avx_##type(const type* lhs, const type rhs, type* ds
 /*
     Generates a dispatch to perform an operation
     between two array's.
-    
+
     Dynamically choosing between previously generated
     SSE and AVX procedures
 
     Remarks:
     fallsback to scalar loop.
-    
+
     Parameters:
     `type`: the type of the `lhs` and `rhs`
     `name`: the name of the operator.
@@ -428,13 +428,13 @@ void simd_##name##_##type(const type* lhs, const type* rhs, type* dst, i32 size)
 /*
     Generates a dispatch to perform an operation
     between an array's elements and a value of `type`.
-    
+
     Dynamically choosing between previously generated
     SSE and AVX procedures
 
     Remarks:
     fallsback to scalar loop.
-    
+
     Parameters:
     `type`: the type of the `lhs` and `rhs`
     `name`: the name of the operator.
@@ -474,7 +474,7 @@ bool simd_is_avx_supported(){
     /*
         (todo):
         fallback for ARM and APPLE SILICON.
-    */  
+    */
     return false;
 #endif
 }
@@ -494,7 +494,7 @@ bool simd_is_sse_supported(){
     /*
         (todo):
         fallback for ARM and APPLE SILICON.
-    */ 
+    */
     return false;
 #endif
 }
@@ -598,7 +598,7 @@ SIMD_IMPL_VAL_INT_SSE(  i8, sub, sub, -, epi8, )
 SIMD_IMPL_VAL_INT_AVX(  i8, sub, sub, -, epi8, )
 SIMD_IMPL_VAL_DISPATCH( i8, sub)
 /*
-    x64/x86 doesnt have simd div instructions for integers. 
+    x64/x86 doesnt have simd div instructions for integers.
 */
 
 SIMD_IMPL_SCALAR(       i16, add, +)
@@ -626,7 +626,7 @@ SIMD_IMPL_VAL_INT_SSE(  i16, mul, mullo, *, epi16, )
 SIMD_IMPL_VAL_INT_AVX(  i16, mul, mullo, *, epi16, )
 SIMD_IMPL_VAL_DISPATCH( i16, mul)
 /*
-    x64/x86 doesnt have simd div instructions for integers. 
+    x64/x86 doesnt have simd div instructions for integers.
 */
 
 SIMD_IMPL_SCALAR(       i32, add, +)
@@ -654,7 +654,7 @@ SIMD_IMPL_VAL_INT_SSE(  i32, mul, mullo, *, epi32, )
 SIMD_IMPL_VAL_INT_AVX(  i32, mul, mullo, *, epi32, )
 SIMD_IMPL_VAL_DISPATCH( i32, mul)
 /*
-    x64/x86 doesnt have simd div instructions for integers. 
+    x64/x86 doesnt have simd div instructions for integers.
 */
 
 SIMD_IMPL_SCALAR(       i64, add, +)
@@ -674,7 +674,7 @@ SIMD_IMPL_VAL_INT_SSE(  i64, sub, sub, -, epi64, x)
 SIMD_IMPL_VAL_INT_AVX(  i64, sub, sub, -, epi64, x)
 SIMD_IMPL_VAL_DISPATCH( i64, sub)
 /*
-    TODO: implement AVX512 for simd mul instructions. 
+    TODO: implement AVX512 for simd mul instructions.
 */
 
 SIMD_IMPL_SCALAR(       u8, add, +)
@@ -694,7 +694,7 @@ SIMD_IMPL_VAL_INT_SSE(  u8, sub, sub, -, epi8, )
 SIMD_IMPL_VAL_INT_AVX(  u8, sub, sub, -, epi8, )
 SIMD_IMPL_VAL_DISPATCH( u8, sub)
 /*
-    x64/x86 doesnt have simd div instructions for integers. 
+    x64/x86 doesnt have simd div instructions for integers.
 */
 
 SIMD_IMPL_SCALAR(       u16, add, +)
@@ -722,7 +722,7 @@ SIMD_IMPL_VAL_INT_SSE(  u16, mul, mullo, *, epi16, )
 SIMD_IMPL_VAL_INT_AVX(  u16, mul, mullo, *, epi16, )
 SIMD_IMPL_VAL_DISPATCH( u16, mul)
 /*
-    x64/x86 doesnt have simd div instructions for integers. 
+    x64/x86 doesnt have simd div instructions for integers.
 */
 
 SIMD_IMPL_SCALAR(       u32, add, +)
@@ -750,7 +750,7 @@ SIMD_IMPL_VAL_INT_SSE(  u32, mul, mullo, *, epi32, )
 SIMD_IMPL_VAL_INT_AVX(  u32, mul, mullo, *, epi32, )
 SIMD_IMPL_VAL_DISPATCH( u32, mul)
 /*
-    x64/x86 doesnt have simd div instructions for integers. 
+    x64/x86 doesnt have simd div instructions for integers.
 */
 
 SIMD_IMPL_SCALAR(       u64, add, +)
@@ -770,5 +770,5 @@ SIMD_IMPL_VAL_INT_SSE(  u64, sub, sub, -, epi64, x)
 SIMD_IMPL_VAL_INT_AVX(  u64, sub, sub, -, epi64, x)
 SIMD_IMPL_VAL_DISPATCH( u64, sub)
 /*
-    TODO: implement AVX512 for simd mul instructions. 
+    TODO: implement AVX512 for simd mul instructions.
 */
