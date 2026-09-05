@@ -5,6 +5,32 @@
 #include "platform.h"
 #include "base_layer/base.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "vendors/stb/stb_image.h"
+
+/**
+
+STB_IMAGE NOTE:
+
+It is  important to note the differences between Windows and Linux.
+
+STB Image on linux and macos work fine with utf8 file paths as the fopen() function
+was updated at the kernel level to handle ut8's.
+
+However; because microsoft is sooo awesome; you have to use wfopen() to open a file with a UTF8 path.
+So make sure when building the windows DLL to do:
+
+Define this in the header file:
+
+    #define STBI_WINDOWS_UTF8  // <-- CRITICAL FOR WINDOWS UTF-8 SUPPORT
+    #define STB_IMAGE_IMPLEMENTATION
+
+    OR:
+
+        use the build command flag: /DSTBI_WINDOWS_UTF8=1
+**/
+
+
 /*
     TODO(nich s)
 
@@ -376,4 +402,33 @@ f32 platform_window_calc_aspect_ratio(WindowContext ctx){
 
 void platform_print_msg(char* msg){
     OutputDebugStringA(msg);
+}
+
+bool platform_load_image(Image* out_image, String file_path){
+    ASSERT(out_image->pixels == NULL, "image already init.");
+    i32 comp;
+    // 4 channels for RGBA always being output.
+    i32 desired_channels = 4;
+    size_t buffer_size = (file_path.length + 1) * sizeof(char);
+    void* buffer = platform_alloc_memory(buffer_size);
+    ZERO_MEMORY(buffer, buffer_size);
+    COPY_MEMORY(buffer, file_path.chars, file_path.length);
+    char* ptr = stbi_load((char*)buffer, &out_image->width, &out_image->height, &comp, desired_channels);
+    platform_free_memory(buffer);
+    if(ptr == NULL){
+        return false;
+    }
+    out_image->pixels = ptr;
+    return true;
+}
+
+bool platform_free_image(Image* image){
+    if(image->pixels == NULL){
+        return false;
+    }
+    
+    stbi_image_free(image->pixels);
+    // zero out image once free;
+    *image = (Image){0};
+    return true; 
 }

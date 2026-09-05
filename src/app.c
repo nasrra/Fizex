@@ -210,7 +210,6 @@ void app_late_update(f32 delta_time){
 }
 
 void app_main(){
-
     /**
         memory allocation.
     **/
@@ -218,6 +217,12 @@ void app_main(){
     platform_init_transient_memory(MEGABYTE(4));
     MemoryArena* persistent = platform_get_persistent_memory();
     MemoryArena* transient = platform_get_transient_memory();
+
+    Image image;
+    String file_path = (String){.chars = "assets/image.png", .length = 32};
+    platform_load_image(&image, file_path);
+    platform_free_image(&image);
+
     window_ctx = platform_window_create(WINDOW_WIDTH, WINDOW_HEIGHT);
 
     renderer_orthographic_camera_init(&world_camera, (Vector3){.z = -4.0f}, 0.01f, 100.0f, 12.0f);

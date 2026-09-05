@@ -15,6 +15,12 @@ typedef struct{
     bool is_destroyed;
 } WindowContext;
 
+typedef struct{
+    char* pixels;
+    i32 width;
+    i32 height;
+} Image;
+
 void platform_output_message(char* msg);
 void* platform_alloc_memory(size_t size);
 void platform_free_memory(void* memory);
@@ -55,4 +61,8 @@ u128 platform_get_system_tick();
 u128 platform_get_proccess_tick();
 
 void platform_print_msg(char* msg);
+
+bool platform_load_image(Image* out_image, String file_path);
+bool platform_free_image(Image* image);
+
 #endif
