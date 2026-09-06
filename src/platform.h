@@ -16,7 +16,8 @@ typedef struct{
 } WindowContext;
 
 typedef struct{
-    char* pixels;
+    u8* pixel;
+    i32 pixel_length;
     i32 width;
     i32 height;
 } Image;

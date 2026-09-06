@@ -273,14 +273,16 @@ fn fs_main(
     }
 
     // gamma correction.
-    let linear_colour = pow(colour.rgb, vec3f(1)); // was originally 2.2 on Bgra8 display.
+    // was originally 2.2 on BGRA8 display.
+    // was originally 1 on RGBA8 display.
+    let linear_colour = pow(colour.rgb, vec3f(2.2));
     return vec4f(linear_colour, colour.a);   
 }
 
 fn fs_draw_sprite_simple(
     sprite: sprite, pixel_position: vec2i
 ) -> vec4f {
-    
+        
     let virtual_texture = virtual_textures.textures[sprite.virtual_texture_index];
     if(virtual_texture.is_loaded == 0){
         return fail_colour;
@@ -289,6 +291,10 @@ fn fs_draw_sprite_simple(
     switch virtual_texture.binding {
         case 1: {return textureLoad(textures_fonts, pixel_position, virtual_texture.layer_index, 0);}
         case 2: {return textureLoad(textures_512_512, pixel_position, virtual_texture.layer_index, 0);}
+        // case 2: {
+        //     let pos: vec2i = vec2i(209, 96);
+        //     return textureLoad(textures_512_512, pos, virtual_texture.layer_index, 0);
+        // }
         case 3: {return textureLoad(textures_360_162, pixel_position, virtual_texture.layer_index, 0);}
         case 4: {return textureLoad(textures_640_360, pixel_position, virtual_texture.layer_index, 0);}
         case default:{return fail_colour;}

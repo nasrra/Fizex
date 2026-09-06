@@ -84,8 +84,9 @@ typedef struct{
         `remarks`
         this is a stack-array.
     */
-    i32* free_layer_indices_stack;
-    i32 free_layer_indices_stack_length;
+    i32* free_layer_idx_stack;
+    i32 free_layer_idx_stack_count;
+    i32 free_layer_idx_stack_length;
     bool is_init;
 } TextureArray;
 
@@ -145,17 +146,17 @@ typedef struct{
     /*
         remarks:
         - Contains a NIL element.
-        - Elements are vertically associated with `host_virtual_textures`.
+        - Elements are vertically associated with `host_virtual_texture`.
     */
-    DeviceVirtualTexture* device_virtual_textures;
-    i32 device_virtual_textures_length;
+    DeviceVirtualTexture* device_virtual_texture;
+    i32 device_virtual_texture_length;
     /*
         remarks:
         - Contains a NIL element.
-        - Elements are vertically associated with `device_virtual_textures`.
+        - Elements are vertically associated with `device_virtual_texture`.
     */
-    HostVirtualTexture* host_virtual_textures;
-    i32 host_virtual_textures_length;
+    HostVirtualTexture* host_virtual_texture;
+    i32 host_virtual_texture_length;
     TextureArray* texture_arrays;
     i32 texture_arrays_length;
     RenderBuffer device_virtual_texture_buffer;
@@ -163,10 +164,10 @@ typedef struct{
 } VirtualTextureManager;
 
 typedef struct{
-    f32 x;
-    f32 y;
-    f32 height;
-    f32 width;
+    i32 x;
+    i32 y;
+    i32 width;
+    i32 height;
 } SpriteRegion;
 
 typedef struct{
@@ -855,9 +856,9 @@ void renderer_texture_array_init(TextureArray* array, WGPUDevice device, MemoryA
     array->view = wgpuTextureCreateView(array->texture, &view_desc);
 
     // create the free texture indices for all textures.
-    MEMORY_ARENA_ALLOC_ARRAY(arena, array->free_layer_indices_stack, &array->free_layer_indices_stack_length, layer_count);
-    for(i32 i = 0; i < array->free_layer_indices_stack_length; i++){
-        array->free_layer_indices_stack[i] = i;
+    MEMORY_ARENA_ALLOC_ARRAY(arena, array->free_layer_idx_stack, &array->free_layer_idx_stack_length, layer_count);
+    for(i32 i = 0; i < array->free_layer_idx_stack_length; i++){
+        ARRAY_PUSH(array->free_layer_idx_stack, array->free_layer_idx_stack_length, &array->free_layer_idx_stack_count, i);
     }
 
     array->extents = text_desc.size;
@@ -875,24 +876,24 @@ void renderer_virtual_texture_manager_init(
         ASSERT(max_virtual_textures <= DEVICE_VIRTUAL_TEXTURE_MAX_AMOUNT, "max virtual textures exceeds 4096.");
     }
 
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->device_virtual_textures, &manager->device_virtual_textures_length, max_virtual_textures);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->host_virtual_textures, &manager->host_virtual_textures_length, max_virtual_textures);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->device_virtual_texture, &manager->device_virtual_texture_length, max_virtual_textures);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->host_virtual_texture, &manager->host_virtual_texture_length, max_virtual_textures);
 
     // initialise virtual textures.
     WGPUBufferUsage host_usage = WGPUBufferUsage_CopySrc | WGPUBufferUsage_MapWrite;
     WGPUBufferUsage device_usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform;
     renderer_buffer_init(&manager->device_virtual_texture_buffer, device, host_usage, device_usage, max_virtual_textures, sizeof(DeviceVirtualTexture));
-    for(i32 i = 0; i < manager->host_virtual_textures_length; i++){
-        BOUNDS_CHECK(i,manager->host_virtual_textures_length);
-        string_init(&manager->host_virtual_textures[i].file_path, arena, file_path_max_chars);
+    for(i32 i = 0; i < manager->host_virtual_texture_length; i++){
+        BOUNDS_CHECK(i,manager->host_virtual_texture_length);
+        string_init(&manager->host_virtual_texture[i].file_path, arena, file_path_max_chars);
     }
 
     // initialise font virtual textures.
     for(i32 i = 0; i < font_info.virtual_textures_length; i++){
         i32 virtual_texture = font_info.virtual_textures[i];
 
-        BOUNDS_CHECK(virtual_texture, manager->host_virtual_textures_length);
-        HostVirtualTexture* host = &manager->host_virtual_textures[virtual_texture];
+        BOUNDS_CHECK(virtual_texture, manager->host_virtual_texture_length);
+        HostVirtualTexture* host = &manager->host_virtual_texture[virtual_texture];
 
         renderer_font_data_init(&host->font_data, arena, font_info.glyph_count, font_info.base_glyph_index);
         host->texture_type = VirtualTextureType_Font;
@@ -1888,7 +1889,7 @@ SpriteId renderer_sprite_alloc(RendererContext* ctx, i32 layer_index, bool* out_
     BOUNDS_CHECK(layer_index, sprite_manager->sprite_layers_length);
     SpriteLayer* layer = &sprite_manager->sprite_layers[layer_index];
     if(layer->free_sprite_indices_count == 0){
-        ASSERT(0!=0, "memory limit it; cannot allocate more sprites.");
+        ASSERT(0!=0, "memory limit hit; cannot allocate more sprites.");
         *out_success = false;
         return (SpriteId){0};
     }
@@ -2004,8 +2005,8 @@ bool renderer_sprite_string_init(
     i32 first_index = gen_id_get_index(sprite_id.gen_id);
     i32 generation = gen_id_get_generation(sprite_id.gen_id);
 
-    BOUNDS_CHECK(virtual_texture_index, ctx->virtual_texture_manager.host_virtual_textures_length);
-    HostVirtualTexture* vt = &ctx->virtual_texture_manager.host_virtual_textures[virtual_texture_index];
+    BOUNDS_CHECK(virtual_texture_index, ctx->virtual_texture_manager.host_virtual_texture_length);
+    HostVirtualTexture* vt = &ctx->virtual_texture_manager.host_virtual_texture[virtual_texture_index];
 
 
     { // validation.
@@ -2090,7 +2091,7 @@ void renderer_draw_renderer(RendererContext* ctx){
     /**
         uniform preparation.
     **/
-    renderer_write_to_buffer(&ctx->virtual_texture_manager.device_virtual_texture_buffer, ctx->device, ctx->virtual_texture_manager.device_virtual_textures, ctx->virtual_texture_manager.device_virtual_textures_length);
+    renderer_write_to_buffer(&ctx->virtual_texture_manager.device_virtual_texture_buffer, ctx->device, ctx->virtual_texture_manager.device_virtual_texture, ctx->virtual_texture_manager.device_virtual_texture_length);
     /**
         TODO: (nich s)
         This may have to be optimised out later for a compute buffer operation to sort sprites; so that it is faster.
@@ -2422,7 +2423,7 @@ void renderer_draw_line(RendererContext* ctx, Colour colour, Vector3 start, Vect
 
     bool success;
     SpriteId sprite_id = renderer_one_frame_sprite_alloc(ctx, layer, &success);
-    renderer_sprite_init(ctx, sprite_id, matrix4x4_from_transform(transform), colour, (SpriteRegion){0}, ColourState_Override, 1, material, true);
+    renderer_sprite_init(ctx, sprite_id, transform_to_matrix4x4(transform), colour, (SpriteRegion){0}, ColourState_Override, 1, material, true);
 }
 
 void renderer_draw_wire_circle(RendererContext* ctx, Circle shape, Colour colour, f32 position_z, i32 layer, i32 material){
@@ -2474,3 +2475,169 @@ void renderer_draw_wire_rect(RendererContext* ctx, Rectangle shape, Colour colou
     renderer_draw_line(ctx, colour, bottom_right, bottom_left, layer, material, renderer_global_wireframe_thickness);
     renderer_draw_line(ctx, colour, bottom_left, top_left, layer, material, renderer_global_wireframe_thickness);
 }
+
+bool renderer_is_image_virtual_texture(RendererContext* ctx, i32 virtual_texture_idx){
+    BOUNDS_CHECK(virtual_texture_idx, ctx->virtual_texture_manager.host_virtual_texture_length);
+    return ctx->virtual_texture_manager.host_virtual_texture[virtual_texture_idx].texture_type == VirtualTextureType_Image;
+}
+
+bool renderer_is_font_virtual_texture(RendererContext* ctx, i32 virtual_texture_idx){
+    BOUNDS_CHECK(virtual_texture_idx, ctx->virtual_texture_manager.host_virtual_texture_length);
+    return ctx->virtual_texture_manager.host_virtual_texture[virtual_texture_idx].texture_type == VirtualTextureType_Font;
+}
+
+void renderer_write_to_texture_array(
+    TextureArray* array, WGPUDevice device, WGPUTextureFormat format, u32 layer_idx, u8* src_buffer, i32 src_buffer_length
+){
+    // validation.
+    ASSERT(device != (WGPUDevice){0}, "device not init.");
+    ASSERT(array->is_init, "array not init.");
+
+    // define where in the texture to write to.
+    WGPUTexelCopyTextureInfo dst = {
+        .texture = array->texture,
+        .mipLevel = 0,
+        .origin = {.x = 0, .y = 0, .z = layer_idx},
+        .aspect = WGPUTextureAspect_All
+    };
+    
+    // describe the layout of the host pixel buffer.
+    u32 bytes_per_pixel = 0;
+    switch(format){
+        case WGPUTextureFormat_RGBA8Unorm:{
+            bytes_per_pixel = 4;
+        }break;
+        case WGPUTextureFormat_R8Unorm:{
+            bytes_per_pixel = 1;
+        }break;
+        default:{
+            ASSERT(false, "host buffer format has not been implemented.");
+        }break;
+    }
+    WGPUTexelCopyBufferLayout layout = {
+        .offset = 0,
+        .bytesPerRow = array->extents.width * bytes_per_pixel,
+        .rowsPerImage = array->extents.height
+    };
+    
+    // define the region size we are replacing (1 layer at a time)
+    WGPUExtent3D write_size = array->extents;
+    write_size.depthOrArrayLayers = 1;
+    
+    // note that this command is an immediate schedule and dispatch, there is no need to call queue submit.
+        
+    WGPUQueue queue = wgpuDeviceGetQueue(device);
+    wgpuQueueWriteTexture(queue, &dst, src_buffer, (u32)src_buffer_length, &layout, &write_size);
+    wgpuQueueSubmit(queue, 0, NULL);
+}
+
+bool renderer_load_image_texture(RendererContext* ctx, i32 virtual_texture_idx){
+    
+    // validation.
+    ASSERT(ctx->device != (WGPUDevice){0}, "device not init");    
+    ASSERT(ctx->virtual_texture_manager.is_init, "virtual texture manager not init.");
+    if(virtual_texture_idx <= 0){
+        ASSERT(false, "invalid virtual texture idx.");
+        return false;
+    }
+    BOUNDS_CHECK(virtual_texture_idx, ctx->virtual_texture_manager.device_virtual_texture_length);
+    DeviceVirtualTexture* dvt = &ctx->virtual_texture_manager.device_virtual_texture[virtual_texture_idx];
+    if(dvt->is_loaded == 1){
+        ASSERT(false, "virtual texture already loaded.");
+        return false;
+    }        
+    if(!renderer_is_image_virtual_texture(ctx, virtual_texture_idx)){
+        ASSERT(false, "not an image virtual texture.");
+        return false;
+    }
+    
+    BOUNDS_CHECK(virtual_texture_idx, ctx->virtual_texture_manager.host_virtual_texture_length);
+    HostVirtualTexture* hvt = &ctx->virtual_texture_manager.host_virtual_texture[virtual_texture_idx];
+    
+    Image image = (Image){0};
+    if(!platform_load_image(&image, hvt->file_path)){
+        return false;
+    }
+    
+    // validate that the image can be stored.
+    u32 width = (u32)image.width;
+    u32 height = (u32)image.height;
+    i32 texture_array_binding = -1  ;
+    TextureArray* texture_array;
+    for(i32 i = VIRTUAL_TEXTURE_MANAGER_IMAGE_TEXTURE_ARRAY_START_INDEX; i < ctx->virtual_texture_manager.texture_arrays_length; i++){
+        texture_array = &ctx->virtual_texture_manager.texture_arrays[i];
+        if(texture_array->extents.width == width && texture_array->extents.height == height){
+            texture_array_binding = i;
+            break;
+        }
+    }
+    if(texture_array_binding == -1){
+        ASSERT(false, "failed to load image texture; required image resolution storage has not been registered.");
+        platform_free_image(&image);
+        return false;
+    }
+
+    // get the next available slot to load into.
+    if(texture_array->free_layer_idx_stack_count == 0){
+        ASSERT(false, "gpu memory limit hit: cannot load any more images of the desired resolution.");
+        platform_free_image(&image);
+        return false;
+    }
+    
+    dvt->shader_texture_array_binding = texture_array_binding;
+    ARRAY_POP(texture_array->free_layer_idx_stack, texture_array->free_layer_idx_stack_length, &texture_array->free_layer_idx_stack_count, &dvt->texture_array_layer_index);
+    dvt->is_loaded = true;
+    
+    // write the pixel data to the texture array.
+    renderer_write_to_texture_array(texture_array, ctx->device, WGPUTextureFormat_RGBA8Unorm, dvt->texture_array_layer_index, image.pixel, image.pixel_length);
+    platform_free_image(&image);
+    return true;
+}
+
+bool renderer_unload_image_texture(RendererContext* ctx, i32 virtual_texture_idx){
+    // validation steps.
+    ASSERT(ctx->virtual_texture_manager.is_init, "virtual texture manager is not init.");
+    BOUNDS_CHECK(virtual_texture_idx, ctx->virtual_texture_manager.device_virtual_texture_length);
+    DeviceVirtualTexture* dvt = &ctx->virtual_texture_manager.device_virtual_texture[virtual_texture_idx];
+    if(dvt->is_loaded == false){
+        ASSERT(false, "attempted to unload an unloaded image texture.");
+        return false;
+    }
+    if(renderer_is_image_virtual_texture(ctx, virtual_texture_idx) == false){
+        ASSERT(false, "virtual texture is not an image texture; cannot unload.");
+        return false;
+    }
+    
+    // push the freed layer idx back into the texture array for reuse.
+    TextureArray* texture_array = &ctx->virtual_texture_manager.texture_arrays[dvt->shader_texture_array_binding];
+    ARRAY_PUSH(texture_array->free_layer_idx_stack, texture_array->free_layer_idx_stack_length, &texture_array->free_layer_idx_stack_count, dvt->texture_array_layer_index);
+    dvt->is_loaded = 0;
+    return true;
+}
+
+void renderer_virtual_texture_set_file_path(RendererContext* ctx, String file_path, i32 virtual_texture_idx){
+    NIL_BOUNDS_CHECK(virtual_texture_idx, ctx->virtual_texture_manager.host_virtual_texture_length);
+    String* dst = &ctx->virtual_texture_manager.host_virtual_texture[virtual_texture_idx].file_path;
+    string_clear(dst);
+    string_push(dst, file_path);
+}
+
+#if 0
+[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+public static bool SetVirtualTextureFilePath(
+    ref VirtualTextureManager manager, String filePath, int virtualTextureId
+){
+    if(virtualTextureId == 0){
+        Debug.Panic("Web GPU renderer attempted to set the texture path of the Nil virtual texture.");
+        return false;
+    }
+    ref String dst = ref manager.HostVirtualTextures[virtualTextureId].FilePath;
+    if(dst.Count>0){
+        Debug.Assert(false, $"Cannot set file path for virtual texture '{virtualTextureId}' as it has already been set.");
+        return false;
+    }
+    Text.Clear(ref dst);
+    Text.Push(ref dst, filePath);
+    return true;
+}
+#endif

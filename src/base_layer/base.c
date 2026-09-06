@@ -143,6 +143,25 @@ void string_init(String* string, MemoryArena* arena, i32 length){
     MEMORY_ARENA_ALLOC_ARRAY(arena, string->chars, &string->length, length);
 }
 
+void string_clear(String* string){
+    ZERO_MEMORY(string->chars, string->length * sizeof(char));
+    string->count = 0;
+}
+
+void string_push_chars(String* string, char* chars, i32 chars_length){
+    i32 available_space =  (string->length - string->count);
+    ASSERT(available_space >= 0, "string to small to hold characters");
+    available_space = available_space < chars_length ? available_space : chars_length; 
+    for(i32 i = 0; i < available_space; i++){
+        string->chars[string->count + i] = chars[i];
+    }
+    string->count += available_space;
+}
+
+void string_push(String* dst, String src){
+    string_push_chars(dst, src.chars, src.count);
+}
+
 void gen_id_allocator_init(GenIdAllocator* allocator, MemoryArena* arena, i32 length){
     ASSERT(!allocator->is_init, "already initialised.");
     ASSERT(length <= GEN_ID_ALLOCATOR_MAX_LENGTH && length >= GEN_ID_ALLOCATOR_MIN_LENGTH, "length out of bounds");

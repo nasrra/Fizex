@@ -210,6 +210,7 @@ void app_late_update(f32 delta_time){
 }
 
 void app_main(){
+
     /**
         memory allocation.
     **/
@@ -218,17 +219,18 @@ void app_main(){
     MemoryArena* persistent = platform_get_persistent_memory();
     MemoryArena* transient = platform_get_transient_memory();
 
-    Image image;
-    String file_path = (String){.chars = "assets/image.png", .length = 32};
-    platform_load_image(&image, file_path);
-    platform_free_image(&image);
+    String file_path;
+    string_init(&file_path, transient, 16);
+    string_push_chars(&file_path, "assets/image.png", 16);
 
     window_ctx = platform_window_create(WINDOW_WIDTH, WINDOW_HEIGHT);
 
     renderer_orthographic_camera_init(&world_camera, (Vector3){.z = -4.0f}, 0.01f, 100.0f, 12.0f);
     renderer_global_wireframe_thickness = 0.05f;
     renderer_ctx = app_renderer_init(persistent, transient, *window_ctx);
-
+    renderer_virtual_texture_set_file_path(&renderer_ctx, file_path, 3);
+    renderer_load_image_texture(&renderer_ctx, 3);
+    
     FIZXState fizx_state = {0};
     fizx_state_init(&fizx_state, persistent, 5, 4);
     FIZXDrawInfo fizx_draw_state = {
@@ -264,17 +266,26 @@ void app_main(){
     Circle circle = {.x = 0.0f, .y = 0.0f, .radius = 1.0f};
     Material material = {.static_friction = 1.0f, .kinetic_friction = 1.0f, .density = 5.0f, .restitution = 0.5f};
 
-    GenId dynamic_body_gid = body_alloc(&fizx_state, transform_to_transform2d(dynamic_body_transform), true);
-    GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
+
+    // GenId dynamic_body_gid = body_alloc(&fizx_state, transform_to_transform2d(dynamic_body_transform), true);
+    // GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
     // GenId dynamic_shape_gid = fizx_circle_rigid_alloc(&fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
 
-    GenId kinematic_body_gid = body_alloc(&fizx_state, transform_to_transform2d(kinematic_body_transform), false);
-    GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Trigger, kinematic_body_gid, material, false);
+    // GenId kinematic_body_gid = body_alloc(&fizx_state, transform_to_transform2d(kinematic_body_transform), false);
+    // GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Trigger, kinematic_body_gid, material, false);
     // GenId kinematic_shape_gid = fizx_circle_rigid_alloc(&fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, material, kinematic_body_gid, false);
     
-    shape_set_on_enter_callback(&fizx_state, trigger_on_enter_callback, kinematic_shape_gid);
-    shape_set_on_sustain_callback(&fizx_state, trigger_on_sustain_callback, kinematic_shape_gid);
-    shape_set_on_exit_callback(&fizx_state, trigger_on_exit_callback, kinematic_shape_gid);
+    // shape_set_on_enter_callback(&fizx_state, trigger_on_enter_callback, kinematic_shape_gid);
+    // shape_set_on_sustain_callback(&fizx_state, trigger_on_sustain_callback, kinematic_shape_gid);
+    // shape_set_on_exit_callback(&fizx_state, trigger_on_exit_callback, kinematic_shape_gid);
+
+    Transform sprite_transform = {.position = {.x = 0.1f, .y = 0.0f, .z = 12.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 10.0f)};
+    bool success = false;
+    SpriteId sprite = renderer_sprite_alloc(&renderer_ctx, SPRITE_LAYER_WORLD, &success);
+    renderer_sprite_init(
+        &renderer_ctx, sprite, transform_to_matrix4x4(sprite_transform), COLOUR_WHITE, (SpriteRegion){.width = 512, .height = 512}, ColourState_Tint,
+        3, SPRITE_MATERIAL_IMAGE, true
+    );
 
     u128 prev_process_tick_in_mili  = 0;
     f32 previous_time_in_seconds    = 0.0f;

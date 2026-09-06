@@ -38,6 +38,7 @@ typedef long long u128;
 typedef struct{
     char* chars;
     i32 length;
+    i32 count;
 } String;
 
 typedef struct{
@@ -176,15 +177,15 @@ typedef struct{
 #define PANIC(condition, msg) do { if((condition)==true){ABORT(msg);} } while(0)
 
 #ifdef NDEBUG
-#   define ASSERT(condition, msg)
-#   define BOUNDS_CHECK(val, length)
-#   define NIL_BOUNDS_CHECK(val, length)
+#define ASSERT(condition, msg)
+#define BOUNDS_CHECK(val, length)
+#define NIL_BOUNDS_CHECK(val, length)
 #else
-#   define ASSERT(condition, msg) (assert(msg && (condition)))
-#   define BOUNDS_CHECK(val, length) do { \
+#define ASSERT(condition, msg) (assert(msg && (condition)))
+#define BOUNDS_CHECK(val, length) do { \
         ASSERT(val >= 0 && val < length, "Index Out Of Bounds."); \
     } while(0)
-#   define NIL_BOUNDS_CHECK(val, length) do { \
+#define NIL_BOUNDS_CHECK(val, length) do { \
         ASSERT(val > 0 && val < length, "Index Out Of Bounds."); \
     } while(0)
 #endif
@@ -637,6 +638,9 @@ i32 gen_id_get_generation(GenId gen_id);
 bool gen_id_equals(GenId a, GenId b);
 
 void string_init(String* string, MemoryArena* arena, i32 size);
+void string_clear(String* string);
+void string_push_chars(String* string, char* chars, i32 chars_length);
+void string_push(String* dst, String src);
 
 void gen_id_allocator_init(GenIdAllocator* allocator, MemoryArena* arena, i32 length);
 /**

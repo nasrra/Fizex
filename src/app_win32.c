@@ -405,7 +405,7 @@ void platform_print_msg(char* msg){
 }
 
 bool platform_load_image(Image* out_image, String file_path){
-    ASSERT(out_image->pixels == NULL, "image already init.");
+    ASSERT(out_image->pixel == NULL, "image already init.");
     i32 comp;
     // 4 channels for RGBA always being output.
     i32 desired_channels = 4;
@@ -413,21 +413,23 @@ bool platform_load_image(Image* out_image, String file_path){
     void* buffer = platform_alloc_memory(buffer_size);
     ZERO_MEMORY(buffer, buffer_size);
     COPY_MEMORY(buffer, file_path.chars, file_path.length);
-    char* ptr = stbi_load((char*)buffer, &out_image->width, &out_image->height, &comp, desired_channels);
+    u8* ptr = stbi_load((char*)buffer, &out_image->width, &out_image->height, &comp, desired_channels);
     platform_free_memory(buffer);
     if(ptr == NULL){
+        ASSERT(false, "failed to load image.");
         return false;
     }
-    out_image->pixels = ptr;
+    out_image->pixel = ptr;
+    out_image->pixel_length = desired_channels * out_image->width * out_image->height * sizeof(u8);
     return true;
 }
 
 bool platform_free_image(Image* image){
-    if(image->pixels == NULL){
+    if(image->pixel == NULL){
         return false;
     }
     
-    stbi_image_free(image->pixels);
+    stbi_image_free(image->pixel);
     // zero out image once free;
     *image = (Image){0};
     return true; 

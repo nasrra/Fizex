@@ -899,7 +899,7 @@ Matrix4x4 matrix4x4_create_orthographic(f32 lower_x, f32 upper_x, f32 lower_y, f
 /*
     Creates a col-major matrix from a transform.
 */
-Matrix4x4 matrix4x4_from_transform(Transform transform){
+Matrix4x4 transform_to_matrix4x4(Transform transform){
     Matrix4x4 result = {0};
     f32* m = result.m;
 
