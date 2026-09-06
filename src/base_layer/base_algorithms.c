@@ -356,7 +356,6 @@ void radix_sort_iasc(
         dst_values              = swap_values;
         dst_values_length       = swap_values_length;
 
-
         u32* swap_indices       = src_indices;
         i32 swap_indices_length = src_indices_length;
         src_indices             = dst_indices;

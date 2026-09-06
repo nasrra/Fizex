@@ -1287,7 +1287,6 @@ i32 collision_manifold_set_data_one_way(
     i32* phase = &manifold->active_phase[idx];
     if(*phase <= 0){
         fixed_stride_array_push(&manifold->active_index, recipient_idx, idx_char_ptr, sizeof(COLLISION_MANIFOLD_ACTIVE_INDEX_TYPE));
-
     }
 
     *phase = 1;
@@ -1452,6 +1451,15 @@ inline bool collision_manifold_shape_has_collisions(CollisionManifold manifold, 
 
 
 
+
+bool fizx_body_get_transform(FIZXState* state, GenId body_gid, Transform2D* out_transform){
+    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
+        return false;    
+    }
+    i32 idx = gen_id_get_index(body_gid);
+    *out_transform = soa_transform2d_copy_elem(&state->bodies.global_transform, idx);
+    return true;
+}
 
 void fizx_soa_body_init(Soa_Body* soa, MemoryArena* arena, i32 length, i32 vertices_per_body){
     ASSERT(!soa->is_init, "already init");
@@ -2059,7 +2067,7 @@ bool shape_dealloc(FIZXState* state, GenId gid, bool recalculate_body_center_of_
     `returns`:
     A gen-id handle to the allocated body; note that it returns zero when failing to allocate a body.
 **/
-GenId body_alloc(FIZXState* state, Transform2D global_transform, bool gravity_affected){
+GenId fizx_body_alloc(FIZXState* state, Transform2D global_transform, bool gravity_affected){
     GenId gid = gen_id_allocator_alloc(&state->gen_id_allocator);
     ASSERT(gid != (GenId){0}, "memory limit hit");
     i32 body_idx = gen_id_get_index(gid);
@@ -2088,7 +2096,7 @@ GenId body_alloc(FIZXState* state, Transform2D global_transform, bool gravity_af
     `remarks`:
     stale id and entity type checks are not enforced; the `body_idx` will always go through the deallocation procedure.
 **/
-void body_dealloc_unsafe(FIZXState* state, i32 body_idx){
+void fizx_body_dealloc_unsafe(FIZXState* state, i32 body_idx){
     gen_id_allocator_dealloc_unsafe(&state->gen_id_allocator, body_idx);
     /**
         deallocate all shapes.
@@ -2120,13 +2128,13 @@ void body_dealloc_unsafe(FIZXState* state, i32 body_idx){
     body_set_active_unsafe(state, body_idx, false);
 }
 
-bool body_dealloc(FIZXState* state, GenId gid){
+bool fizx_body_dealloc(FIZXState* state, GenId gid){
     i32 idx = fizx_validate_body_gen_id(state, gid);
     if(idx == 0){
         ASSERT(false, "invalid gid");
         return false;
     }
-    body_dealloc_unsafe(state, idx);
+    fizx_body_dealloc_unsafe(state, idx);
     return true;
 }
 
@@ -4457,7 +4465,7 @@ void fizx_state_fixed_update(FIZXState* state, void* collision_callback_user_dat
             
                 // get the the active collision indices for the body.
                 i32 start = fixed_stride_array_get_element_idx(shape_idx, state->collision_manifold.collider_stride, 0);
-                BOUNDS_CHECK(shape_idx, state->collision_manifold.active_index.data_length / sizeof(i32));
+                BOUNDS_CHECK(shape_idx, state->collision_manifold.active_index.chunk_count_length);
                 i32 collision_count = state->collision_manifold.active_index.chunk_count[shape_idx];
                 i32* collision_idx = active_index + start;
                 

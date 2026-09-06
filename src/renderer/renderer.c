@@ -2622,22 +2622,8 @@ void renderer_virtual_texture_set_file_path(RendererContext* ctx, String file_pa
     string_push(dst, file_path);
 }
 
-#if 0
-[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-public static bool SetVirtualTextureFilePath(
-    ref VirtualTextureManager manager, String filePath, int virtualTextureId
-){
-    if(virtualTextureId == 0){
-        Debug.Panic("Web GPU renderer attempted to set the texture path of the Nil virtual texture.");
-        return false;
-    }
-    ref String dst = ref manager.HostVirtualTextures[virtualTextureId].FilePath;
-    if(dst.Count>0){
-        Debug.Assert(false, $"Cannot set file path for virtual texture '{virtualTextureId}' as it has already been set.");
-        return false;
-    }
-    Text.Clear(ref dst);
-    Text.Push(ref dst, filePath);
-    return true;
+bool renderer_sprite_id_equals(SpriteId lhs, SpriteId rhs){
+    return 
+    lhs.gen_id == rhs.gen_id && 
+    lhs.layer == rhs.layer;
 }
-#endif

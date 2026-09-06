@@ -14,6 +14,7 @@
 #include "renderer/renderer_app_types.c"
 #include "fizx/fizx.c"
 #include "fizx/fizx_draw.c"
+#include "gameplay/entity.c"
 
 /**====================
     types.
@@ -28,8 +29,8 @@ typedef struct{
     defines.
 ====================**//**/
 
-#define WINDOW_WIDTH 1280
-#define WINDOW_HEIGHT 720
+#define WINDOW_WIDTH 1920
+#define WINDOW_HEIGHT 1080
 
 DEFINE_QUICKSORT_STRUCT(Person, i32, .num, quicksort_person);
 
@@ -54,6 +55,7 @@ Camera screen_camera;
 WindowContext* window_ctx;
 RendererContext renderer_ctx;
 MemoryArena renderer_memory;
+EntityManager entity_manager;
 
 /**====================
     functions
@@ -72,52 +74,7 @@ void trigger_on_sustain_callback(CollisionInfo info, void* user_data){
 }
 
 void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time){
-
-    Soa_Aabb soa = {0};
-    soa_aabb_init(&soa, transient, 3);
-    soa_aabb_push(&soa, -1.0f, -1.0f, 2.0f, 2.0f);
-    soa_aabb_push(&soa, -1.0f, -1.0f, 3.0f, 3.0f);
-    soa_aabb_push(&soa, -1.0f, -1.0f, 4.0f, 4.0f);
-
-    f32* nums = (f32[]){2.0f, 1.0f, 9.0f, 11.0f, 16.0f, -33.3f, -120.0f, 99.0f};
-    f32* num_0 = &nums[0];
-    f32* num_1 = &nums[1];
-    f32* num_2 = &nums[2];
-    f32* num_3 = &nums[3];
-    f32* num_4 = &nums[4];
-    f32* num_5 = &nums[5];
-    f32* num_6 = &nums[6];
-    f32* num_7 = &nums[7];
-
-    quicksort_f32_dsc(nums, 8);
-    quicksort_f32_asc(nums, 8);
-
-    Person* persons = (Person[]){
-        (Person){.num = 99},
-        (Person){.num = 2},
-        (Person){.num = -32},
-    };
-    Person* person_0 = &persons[0];
-    Person* person_1 = &persons[1];
-    Person* person_2 = &persons[2];
-    quicksort_person_asc(persons, 3);
-    quicksort_person_dsc(persons, 3);
-
-
-    f32* centroids_x;
-    i32 centroids_x_size;
-    f32* centroids_y;
-    i32 centroids_y_size;
-
-    MEMORY_ARENA_ALLOC_ARRAY(transient, centroids_x, &centroids_x_size, 3);
-    MEMORY_ARENA_ALLOC_ARRAY(transient, centroids_y, &centroids_y_size, 3);
-    soa_aabb_calculate_centroids(&soa, centroids_x, centroids_y);
-
-    i32 i_a = rand_i32();
-    i32 i_b = rand_i32();
-    i32 i_c = rand_i32();
-    i32 i_d = rand_i32();
-    i32 i_e = rand_i32();
+    entity_manager_update(&entity_manager, &renderer_ctx, delta_time);
 }
 
 RendererContext app_renderer_init(MemoryArena* persistent, MemoryArena* transient, WindowContext window_ctx){
@@ -160,9 +117,9 @@ RendererContext app_renderer_init(MemoryArena* persistent, MemoryArena* transien
     MEMORY_ARENA_ALLOC_ARRAY(transient, sprite_layer_create_infos, &sprite_layer_create_infos_length, 2);
 
     BOUNDS_CHECK(0, sprite_layer_create_infos_length);
-    sprite_layer_create_infos[0] = (SpriteLayerCreateInfo){.max_sprites = 256};
+    sprite_layer_create_infos[0] = (SpriteLayerCreateInfo){.max_sprites = 512};
     BOUNDS_CHECK(1, sprite_layer_create_infos_length);
-    sprite_layer_create_infos[1] = (SpriteLayerCreateInfo){.max_sprites = 256};
+    sprite_layer_create_infos[1] = (SpriteLayerCreateInfo){.max_sprites = 512};
 
     /**
         context.
@@ -214,29 +171,27 @@ void app_main(){
     /**
         memory allocation.
     **/
-    platform_init_persistent_memory(MEGABYTE(144));
+    platform_init_persistent_memory(MEGABYTE(500));
     platform_init_transient_memory(MEGABYTE(4));
     MemoryArena* persistent = platform_get_persistent_memory();
     MemoryArena* transient = platform_get_transient_memory();
 
-    String file_path;
-    string_init(&file_path, transient, 16);
+    String file_path = {0};
+    string_init(&file_path, transient, 20);
     string_push_chars(&file_path, "assets/image.png", 16);
 
     window_ctx = platform_window_create(WINDOW_WIDTH, WINDOW_HEIGHT);
 
-    renderer_orthographic_camera_init(&world_camera, (Vector3){.z = -4.0f}, 0.01f, 100.0f, 12.0f);
+    renderer_orthographic_camera_init(&world_camera, (Vector3){.z = -4.0f}, 0.01f, 100.0f, 44.0f);
     renderer_global_wireframe_thickness = 0.05f;
     renderer_ctx = app_renderer_init(persistent, transient, *window_ctx);
     renderer_virtual_texture_set_file_path(&renderer_ctx, file_path, 3);
     renderer_load_image_texture(&renderer_ctx, 3);
-    
-    FIZXState fizx_state = {0};
-    fizx_state_init(&fizx_state, persistent, 5, 4);
+
     FIZXDrawInfo fizx_draw_state = {
         .colour_dynamic_shape           = COLOUR_GREEN,
         .colour_passive_trigger_shape   = COLOUR_LIGHT_BLUE,
-        .colour_kinematic_shape         = COLOUR_DARK_ORANGE,
+        .colour_kinematic_shape         = COLOUR_ORANGE,
         .colour_active_trigger_shape    = COLOUR_RED,
         .colour_aabb                    = COLOUR_LIGHT_BLUE,
         .colour_fallback_shape          = COLOUR_WHITE,
@@ -254,36 +209,46 @@ void app_main(){
         .wireframe_thickness            = 0.005f,
         .material_idx                   = SPRITE_MATERIAL_DEBUG,
         .draw_body_shapes               = true,
-        .draw_bvh_leaves = true,
-        .draw_bvh_branches = false,
+        // .draw_bvh_leaves = true,
+        .draw_bvh_branches = true,
         .draw_collision_info = true
     };
 
-    Transform dynamic_body_transform = {.position = {.x = 0.1f, .y = 5.0f}, .scale = VECTOR3_ONE};
-    Transform kinematic_body_transform = {.scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = quaternion_create_from_axis_angle(VECTOR3_FORWARD, 30.0f)};
     Transform shape_transform = {.scale = VECTOR3_ONE};
     Rectangle shape = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
     Circle circle = {.x = 0.0f, .y = 0.0f, .radius = 1.0f};
     Material material = {.static_friction = 1.0f, .kinetic_friction = 1.0f, .density = 5.0f, .restitution = 0.5f};
 
+    i32 entity_amount = 2048;
+    i32 physics_body_amount = 128;
+    entity_manager = (EntityManager){0};
+    entity_manager_init(&entity_manager, persistent, entity_amount, physics_body_amount);
+    GenId e = entity_manager_alloc_entity(&entity_manager);
+    Entity* entity;
+    entity_manager_get_entity(entity_manager, e, &entity);
 
-    // GenId dynamic_body_gid = body_alloc(&fizx_state, transform_to_transform2d(dynamic_body_transform), true);
-    // GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
-    // GenId dynamic_shape_gid = fizx_circle_rigid_alloc(&fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
-
-    // GenId kinematic_body_gid = body_alloc(&fizx_state, transform_to_transform2d(kinematic_body_transform), false);
-    // GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Trigger, kinematic_body_gid, material, false);
-    // GenId kinematic_shape_gid = fizx_circle_rigid_alloc(&fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, material, kinematic_body_gid, false);
+    Transform trigger_body_transform = {.position = {.x = -10.0f, .y = 1.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = quaternion_create_from_axis_angle(VECTOR3_FORWARD, 30.0f)};
+    GenId trigger_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(trigger_body_transform), false);
+    GenId trigger_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Trigger, trigger_body_gid, material, false);
+    // GenId trigger_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, material, trigger_body_gid, false);
+    shape_set_on_enter_callback(&entity_manager.fizx_state, trigger_on_enter_callback, trigger_shape_gid);
+    shape_set_on_sustain_callback(&entity_manager.fizx_state, trigger_on_sustain_callback, trigger_shape_gid);
+    shape_set_on_exit_callback(&entity_manager.fizx_state, trigger_on_exit_callback, trigger_shape_gid);
     
-    // shape_set_on_enter_callback(&fizx_state, trigger_on_enter_callback, kinematic_shape_gid);
-    // shape_set_on_sustain_callback(&fizx_state, trigger_on_sustain_callback, kinematic_shape_gid);
-    // shape_set_on_exit_callback(&fizx_state, trigger_on_exit_callback, kinematic_shape_gid);
-
+    Transform dynamic_body_transform = {.position = {.x = 0.1f, .y = 10.0f}, .scale = VECTOR3_ONE};
+    entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(dynamic_body_transform), true);
+    GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, entity->physics_body_gid, material, true);
+    // GenId dynamic_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
+    
+    Transform kinematic_body_transform = {.position = {.y = -12.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = QUATERNION_IDENTITY};
+    GenId kinematic_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(kinematic_body_transform), false);
+    GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, kinematic_body_gid, material, false);
+    
     Transform sprite_transform = {.position = {.x = 0.1f, .y = 0.0f, .z = 12.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 10.0f)};
     bool success = false;
-    SpriteId sprite = renderer_sprite_alloc(&renderer_ctx, SPRITE_LAYER_WORLD, &success);
+    entity->sprite_id = renderer_sprite_alloc(&renderer_ctx, SPRITE_LAYER_WORLD, &success);
     renderer_sprite_init(
-        &renderer_ctx, sprite, transform_to_matrix4x4(sprite_transform), COLOUR_WHITE, (SpriteRegion){.width = 512, .height = 512}, ColourState_Tint,
+        &renderer_ctx, entity->sprite_id, transform_to_matrix4x4(sprite_transform), COLOUR_WHITE, (SpriteRegion){.width = 512, .height = 512}, ColourState_Tint,
         3, SPRITE_MATERIAL_IMAGE, true
     );
 
@@ -310,12 +275,12 @@ void app_main(){
 
             while(fixed_update_accumulator >= FIXED_DELTA_TIME){
                 app_fixed_update(FIXED_DELTA_TIME);
-                fizx_state_fixed_update(&fizx_state, NULL, FIXED_DELTA_TIME, 16);
+                fizx_state_fixed_update(&entity_manager.fizx_state, NULL, FIXED_DELTA_TIME, 16);
                 fixed_update_accumulator -= FIXED_DELTA_TIME;
             }
         }
 
-        fizx_state_draw(fizx_state, &renderer_ctx, fizx_draw_state, delta_time);
+        fizx_state_draw(entity_manager.fizx_state, &renderer_ctx, fizx_draw_state, delta_time);
         // update.
         {
             app_update(persistent, transient, delta_time);

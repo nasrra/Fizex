@@ -239,7 +239,7 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
         for(i32 i = 0; i < state.bvh.branches.count; i++){
             Rectangle shape = {
                 .x = state.bvh.branches.aabb.min_x[i],
-                .y = state.bvh.branches.aabb.min_y[i],
+                .y = state.bvh.branches.aabb.max_y[i],
                 .width = state.bvh.branches.aabb.max_x[i] - state.bvh.branches.aabb.min_x[i],
                 .height = state.bvh.branches.aabb.max_y[i] - state.bvh.branches.aabb.min_y[i]
             };

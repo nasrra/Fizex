@@ -1173,27 +1173,19 @@ bool soa_transform2d_init(Soa_Transform2D* soa, MemoryArena* arena, i32 length){
     return true;
 }
 
-void copy_elem_from_soa_transform2d(Soa_Transform2D* soa, Transform2D* dst, i32 index){
-
-    BOUNDS_CHECK(index, soa->position.length);
-    dst->position.x = soa->position.x[index];
-    dst->position.y = soa->position.y[index];
-
-    BOUNDS_CHECK(index, soa->scale.length);
-    dst->scale.x = soa->scale.x[index];
-    dst->scale.y = soa->scale.y[index];
-
+Transform2D soa_transform2d_copy_elem(Soa_Transform2D* soa, i32 index){
     BOUNDS_CHECK(index, soa->length);
-    dst->sine = soa->sine[index];
-
-    BOUNDS_CHECK(index, soa->length);
-    dst->cosine = soa->cosine[index];
-
-    BOUNDS_CHECK(index, soa->length);
-    dst->rotation = soa->rotation[index];
+    Transform2D dst = {
+        .position = {.x = soa->position.x[index], .y = soa->position.y[index]},
+        .scale    = {.x = soa->scale.x[index], .y = soa->scale.y[index]},
+        .sine       = soa->sine[index],
+        .cosine     = soa->cosine[index],
+        .rotation   = soa->rotation[index]
+    };
+    return dst;
 }
 
-void insert_scalar_soa_transform2d(
+void soa_transform2d_insert_scalar(
     Soa_Transform2D* soa, i32 elem_index, f32 pos_x, f32 pos_y,
     f32 scale_x, f32 scale_y, f32 sin, f32 cos, f32 rot_radians
 ){
@@ -1215,8 +1207,8 @@ void insert_scalar_soa_transform2d(
     soa->rotation[elem_index] = rot_radians;
 }
 
-void insert_soa_transform2d(Soa_Transform2D* soa, Transform2D transform, i32 elem_index){
-    insert_scalar_soa_transform2d(
+void soa_transform2d_insert(Soa_Transform2D* soa, Transform2D transform, i32 elem_index){
+    soa_transform2d_insert_scalar(
         soa, elem_index, transform.position.x, transform.position.y,
         transform.scale.x, transform.scale.y, transform.sine, transform.cosine, transform.rotation
     );
@@ -1227,6 +1219,16 @@ Transform2D transform2d_rotate(Transform2D transform, f32 radians){
     transform.sine = f32_sin(transform.rotation);
     transform.cosine = f32_cos(transform.rotation);
     return transform;
+}
+
+Transform transform2d_to_transform(Transform2D transform){
+    f32 half = transform.rotation * 0.5f;
+    Transform result =  {
+        .position = {transform.position.x, transform.position.y, 0.0f},
+        .scale = {transform.scale.x, transform.scale.y, 1.0f},
+        .rotation = {.z = f32_sin(half), .w = f32_cos(half)}
+    };
+    return result;
 }
 
 /**
@@ -1281,11 +1283,6 @@ Transform2D transform2d_transform(Transform2D lhs, Transform2D rhs){
     );
     return out;
 }
-
-
-
-
-
 
 Transform2D transform_to_transform2d(Transform transform){
 

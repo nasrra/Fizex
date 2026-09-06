@@ -141,6 +141,7 @@ GenId gen_id_increment_index(GenId gen_id){
 
 void string_init(String* string, MemoryArena* arena, i32 length){
     MEMORY_ARENA_ALLOC_ARRAY(arena, string->chars, &string->length, length);
+    string->count = 0;
 }
 
 void string_clear(String* string){

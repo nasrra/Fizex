@@ -500,6 +500,9 @@ void categorised_overlap_array_build_chunks_decomposed(i32* category_stride, i32
     i32 start_index = 0;
     // the index of the sub category to write the start index to.
     i32 write_index = 0;
+    if(data_length<=0){
+        return;
+    }
     for(i32 category_index = category_amount-1; category_index >= 0; category_index--){
         for(i32 sub_category_index = 0; sub_category_index <= category_index; sub_category_index++){
             // set the start index in the overlap arrays.
@@ -918,7 +921,8 @@ void bvh_construct_branches_recurssive(
     i32* write_index, f32* aabb_min_x, f32* aabb_min_y, f32* aabb_max_x, f32* aabb_max_y
 ){
     // reserve space.
-    i32 branch_index = *write_index+=1;
+    i32 branch_index = *write_index;
+    *write_index += 1;
 
     /**
         leaf.
@@ -930,7 +934,13 @@ void bvh_construct_branches_recurssive(
         i32 left_leaf_index = leaf_index[start];
         i32 right_leaf_index;
         i32 leaf_count;
-
+        
+        *aabb_min_x = leaf_min_x[left_leaf_index];
+        *aabb_min_y = leaf_min_y[left_leaf_index];
+        *aabb_max_x = leaf_max_x[left_leaf_index];
+        *aabb_max_y = leaf_max_y[left_leaf_index];
+        leaf_branch_index[left_leaf_index] = branch_index;
+        
         // combine the sibling leaf if there is one.
         if(length == 2){
 
@@ -943,7 +953,7 @@ void bvh_construct_branches_recurssive(
             BOUNDS_CHECK(right_leaf_index, leaf_max_x_length);
             BOUNDS_CHECK(right_leaf_index, leaf_max_y_length);
             aabb_combine_scalar(
-                *aabb_min_x, *aabb_min_y, *aabb_max_x, *aabb_min_y,
+                *aabb_min_x, *aabb_min_y, *aabb_max_x, *aabb_max_y,
                 leaf_min_x[right_leaf_index], leaf_min_y[right_leaf_index], leaf_max_x[right_leaf_index], leaf_max_y[right_leaf_index],
                 aabb_min_x, aabb_min_y, aabb_max_x, aabb_max_y
             );
@@ -1136,17 +1146,17 @@ void bvh_get_overlaps(BoundingVolumeHierarchy bvh, BvhCategorisedLeafOverlaps* o
         max_x = bvh.leaves.aabb.max_x[owner_leaf_idx];
         max_y = bvh.leaves.aabb.max_y[owner_leaf_idx];
 
-        i32 other_branch_idx = 1;
-        while(other_branch_idx < bvh.branches.count - 1){
+        i32 other_branch_idx = 0;
+        while(other_branch_idx < bvh.branches.count){
 
-            bool overlaps = aabb_overlaps_scalar(
+            bool is_overlapping = aabb_overlaps_scalar(
                 min_x, bvh.leaves.aabb.min_x[other_branch_idx],
                 min_y, bvh.leaves.aabb.min_y[other_branch_idx],
                 max_x, bvh.leaves.aabb.max_x[other_branch_idx],
                 max_y, bvh.leaves.aabb.max_y[other_branch_idx]
             );
 
-            if(!overlaps){
+            if(!is_overlapping){
                 // skip the entire subtree.
                 BOUNDS_CHECK(other_branch_idx, bvh.branches.length);
                 other_branch_idx += bvh.branches.subtree_stride[other_branch_idx];
@@ -1155,48 +1165,21 @@ void bvh_get_overlaps(BoundingVolumeHierarchy bvh, BvhCategorisedLeafOverlaps* o
 
             BOUNDS_CHECK(other_branch_idx, bvh.branches.length);
             i32 leaf_count = bvh.branches.leaf_count[other_branch_idx];
-        }
-
-        BOUNDS_CHECK(other_branch_idx, bvh.branches.length);
-        i32 leaf_count = bvh.branches.leaf_count[other_branch_idx];
-
-        switch(leaf_count){
-            default:{
-                ASSERT(false, "invalid leaf count");
-            }break;
-
-            case 0:{
-                // do nothing...
-            }break;
-
-            case 1:{
-                // left leaf index should always be set to a leaf index for branches with leaf(s) attatched; it is the default leaf to set first.
-                BOUNDS_CHECK(other_branch_idx, bvh.branches.length);
-                other_leaf_idx = bvh.branches.left_leaf_index[other_branch_idx];
-
-                BOUNDS_CHECK(other_leaf_idx, bvh.leaves.length);
-                bool leaf_overlaps_query_area =
-                    aabb_overlaps_scalar(
-                        min_x, bvh.leaves.aabb.min_x[other_leaf_idx],
-                        min_y, bvh.leaves.aabb.min_y[other_leaf_idx],
-                        max_x, bvh.leaves.aabb.max_x[other_leaf_idx],
-                        max_y, bvh.leaves.aabb.max_y[other_leaf_idx]
-                    );
-
-                if(owner_leaf_idx < other_leaf_idx && leaf_overlaps_query_area){
-                    BOUNDS_CHECK(owner_leaf_idx, bvh.leaves.length);
-                    BOUNDS_CHECK(other_leaf_idx, bvh.leaves.length);
-                    bvh_categorised_leaf_overlaps_push(
-                        overlaps, owner_leaf_idx, other_leaf_idx, bvh.leaves.category[owner_leaf_idx], bvh.leaves.category[other_leaf_idx]
-                    );
-                }
-            }break;
-
-            case 2:{
-                { // left leaf.
+    
+            switch(leaf_count){
+                default:{
+                    ASSERT(false, "invalid leaf count");
+                }break;
+    
+                case 0:{
+                    // do nothing...
+                }break;
+    
+                case 1:{
+                    // left leaf index should always be set to a leaf index for branches with leaf(s) attatched; it is the default leaf to set first.
                     BOUNDS_CHECK(other_branch_idx, bvh.branches.length);
                     other_leaf_idx = bvh.branches.left_leaf_index[other_branch_idx];
-
+    
                     BOUNDS_CHECK(other_leaf_idx, bvh.leaves.length);
                     bool leaf_overlaps_query_area =
                         aabb_overlaps_scalar(
@@ -1205,7 +1188,7 @@ void bvh_get_overlaps(BoundingVolumeHierarchy bvh, BvhCategorisedLeafOverlaps* o
                             max_x, bvh.leaves.aabb.max_x[other_leaf_idx],
                             max_y, bvh.leaves.aabb.max_y[other_leaf_idx]
                         );
-
+    
                     if(owner_leaf_idx < other_leaf_idx && leaf_overlaps_query_area){
                         BOUNDS_CHECK(owner_leaf_idx, bvh.leaves.length);
                         BOUNDS_CHECK(other_leaf_idx, bvh.leaves.length);
@@ -1213,32 +1196,56 @@ void bvh_get_overlaps(BoundingVolumeHierarchy bvh, BvhCategorisedLeafOverlaps* o
                             overlaps, owner_leaf_idx, other_leaf_idx, bvh.leaves.category[owner_leaf_idx], bvh.leaves.category[other_leaf_idx]
                         );
                     }
-                }
-                { // right leaf.
-                    BOUNDS_CHECK(other_branch_idx, bvh.branches.length);
-                    other_leaf_idx = bvh.branches.right_leaf_index[other_branch_idx];
-
-                    BOUNDS_CHECK(other_leaf_idx, bvh.leaves.length);
-                    bool leaf_overlaps_query_area =
-                        aabb_overlaps_scalar(
-                            min_x, bvh.leaves.aabb.min_x[other_leaf_idx],
-                            min_y, bvh.leaves.aabb.min_y[other_leaf_idx],
-                            max_x, bvh.leaves.aabb.max_x[other_leaf_idx],
-                            max_y, bvh.leaves.aabb.max_y[other_leaf_idx]
-                        );
-
-                    if(owner_leaf_idx < other_leaf_idx && leaf_overlaps_query_area){
-                        BOUNDS_CHECK(owner_leaf_idx, bvh.leaves.length);
+                }break;
+    
+                case 2:{
+                    { // left leaf.
+                        BOUNDS_CHECK(other_branch_idx, bvh.branches.length);
+                        other_leaf_idx = bvh.branches.left_leaf_index[other_branch_idx];
+    
                         BOUNDS_CHECK(other_leaf_idx, bvh.leaves.length);
-                        bvh_categorised_leaf_overlaps_push(
-                            overlaps, owner_leaf_idx, other_leaf_idx, bvh.leaves.category[owner_leaf_idx], bvh.leaves.category[other_leaf_idx]
-                        );
+                        bool leaf_overlaps_query_area =
+                            aabb_overlaps_scalar(
+                                min_x, bvh.leaves.aabb.min_x[other_leaf_idx],
+                                min_y, bvh.leaves.aabb.min_y[other_leaf_idx],
+                                max_x, bvh.leaves.aabb.max_x[other_leaf_idx],
+                                max_y, bvh.leaves.aabb.max_y[other_leaf_idx]
+                            );
+    
+                        if(owner_leaf_idx < other_leaf_idx && leaf_overlaps_query_area){
+                            BOUNDS_CHECK(owner_leaf_idx, bvh.leaves.length);
+                            BOUNDS_CHECK(other_leaf_idx, bvh.leaves.length);
+                            bvh_categorised_leaf_overlaps_push(
+                                overlaps, owner_leaf_idx, other_leaf_idx, bvh.leaves.category[owner_leaf_idx], bvh.leaves.category[other_leaf_idx]
+                            );
+                        }
                     }
-                }
-            }break;
+                    { // right leaf.
+                        BOUNDS_CHECK(other_branch_idx, bvh.branches.length);
+                        other_leaf_idx = bvh.branches.right_leaf_index[other_branch_idx];
+    
+                        BOUNDS_CHECK(other_leaf_idx, bvh.leaves.length);
+                        bool leaf_overlaps_query_area =
+                            aabb_overlaps_scalar(
+                                min_x, bvh.leaves.aabb.min_x[other_leaf_idx],
+                                min_y, bvh.leaves.aabb.min_y[other_leaf_idx],
+                                max_x, bvh.leaves.aabb.max_x[other_leaf_idx],
+                                max_y, bvh.leaves.aabb.max_y[other_leaf_idx]
+                            );
+    
+                        if(owner_leaf_idx < other_leaf_idx && leaf_overlaps_query_area){
+                            BOUNDS_CHECK(owner_leaf_idx, bvh.leaves.length);
+                            BOUNDS_CHECK(other_leaf_idx, bvh.leaves.length);
+                            bvh_categorised_leaf_overlaps_push(
+                                overlaps, owner_leaf_idx, other_leaf_idx, bvh.leaves.category[owner_leaf_idx], bvh.leaves.category[other_leaf_idx]
+                            );
+                        }
+                    }
+                }break;
+            }
+    
+            other_branch_idx += 1;
         }
-
-        other_branch_idx += 1;
     }
 }
 

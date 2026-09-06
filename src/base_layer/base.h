@@ -174,7 +174,7 @@ typedef struct{
 #   define ABORT(msg) do { abort(); } while(0)
 #endif
 
-#define PANIC(condition, msg) do { if((condition)==true){ABORT(msg);} } while(0)
+#define PANIC(condition, msg) do { if((condition)==false){ABORT(msg);} } while(0)
 
 #ifdef NDEBUG
 #define ASSERT(condition, msg)
