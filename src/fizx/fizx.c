@@ -4392,6 +4392,9 @@ void fizx_state_fixed_update(FIZXState* state, void* collision_callback_user_dat
                 sizeof(STATE_SUB_STEP_RIGID_COLLISIONS_TO_RESOLVE_TYPE), &collision_to_resolve_char_ptr, &collision_to_resolve_length
             );
             collision_to_resolve = (i32*)collision_to_resolve_char_ptr;
+            if(collision_to_resolve_length >= 2){
+                platform_output_message("a");
+            }
             fizx_resolve_rigid_collisions(
                 state->collision_manifold, state->body_hierarchy, state->bodies, collision_to_resolve, collision_to_resolve_length,
                 rigid_collision_resolution_impulse_x_scratch_space,

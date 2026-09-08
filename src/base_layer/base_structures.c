@@ -621,7 +621,7 @@ inline void categorised_overlap_array_clear_counts(CategorisedOverlapArray* arra
 void categorised_overlap_array_push(CategorisedOverlapArray* array, const void* data, size_t data_size, i32 main_category, i32 sub_category){
     i32 element_idx = categorised_overlap_array_get_element_index(main_category, sub_category, array->categories_triangular_sum);
     BOUNDS_CHECK(element_idx, array->sub_category_start_index_length);
-    i32 start_idx = array->sub_category_count[element_idx];
+    i32 start_idx = array->sub_category_start_index[element_idx];
     BOUNDS_CHECK(element_idx, array->sub_category_count_length);
     i32* count = &array->sub_category_count[element_idx];
 
@@ -633,7 +633,7 @@ void categorised_overlap_array_push(CategorisedOverlapArray* array, const void* 
 
     i32 write_index = start_idx + *count;
     BOUNDS_CHECK(write_index, array->data_length);
-    COPY_MEMORY(&array->data[write_index], data, data_size);
+    COPY_MEMORY(&array->data[(size_t)write_index * (size_t)data_size], data, data_size);
     *count += 1;
 }
 
@@ -652,7 +652,7 @@ void categorised_overlap_get_overlaps(CategorisedOverlapArray array, i32 main_ca
     i32 start_idx = array.sub_category_start_index[element_idx];
     BOUNDS_CHECK(element_idx, array.sub_category_count_length);
     *out_data_length = array.sub_category_count[element_idx];
-    *out_data = array.data + (size_of_element * start_idx);
+    *out_data = array.data + ((size_t)size_of_element * (size_t)start_idx);
 }
 
 
@@ -946,7 +946,7 @@ void bvh_construct_branches_recurssive(
 
             i32 index = start+1;
             BOUNDS_CHECK(index, leaf_index_length);
-            right_leaf_index = leaf_index[start+1];
+            right_leaf_index = leaf_index[index];
 
             BOUNDS_CHECK(right_leaf_index, leaf_min_x_length);
             BOUNDS_CHECK(right_leaf_index, leaf_min_y_length);
@@ -1150,10 +1150,10 @@ void bvh_get_overlaps(BoundingVolumeHierarchy bvh, BvhCategorisedLeafOverlaps* o
         while(other_branch_idx < bvh.branches.count){
 
             bool is_overlapping = aabb_overlaps_scalar(
-                min_x, bvh.leaves.aabb.min_x[other_branch_idx],
-                min_y, bvh.leaves.aabb.min_y[other_branch_idx],
-                max_x, bvh.leaves.aabb.max_x[other_branch_idx],
-                max_y, bvh.leaves.aabb.max_y[other_branch_idx]
+                min_x, bvh.branches.aabb.min_x[other_branch_idx],
+                min_y, bvh.branches.aabb.min_y[other_branch_idx],
+                max_x, bvh.branches.aabb.max_x[other_branch_idx],
+                max_y, bvh.branches.aabb.max_y[other_branch_idx]
             );
 
             if(!is_overlapping){

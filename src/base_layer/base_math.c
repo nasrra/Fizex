@@ -2031,8 +2031,8 @@ bool polygon_overlaps_one_way(
     f32 min_axis_y      = F32_MAX;
     f32 a_min_edge      = F32_MAX;
     f32 b_min_edge      = F32_MAX;
-    f32 a_max_edge      = F32_MAX;
-    f32 b_max_edge      = F32_MAX;
+    f32 a_max_edge      = -F32_MAX;
+    f32 b_max_edge      = -F32_MAX;
 
     for(i32 i = 0; i < a_verts_size; i++){
         i32 next_index = (i + 1 == a_verts_size) ? 0 : i + 1;

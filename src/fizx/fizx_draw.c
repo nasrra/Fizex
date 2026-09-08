@@ -326,8 +326,8 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
             normal_start.x = contact_point_x;
             normal_start.y = contact_point_y;
             normal_start.z = info.z_position;
-            normal_end.x = normal_start.x + normal_start.x;
-            normal_end.y = normal_start.y + normal_start.y;
+            normal_end.x = contact_point_x + normal_x;
+            normal_end.y = contact_point_y + normal_y;
             normal_end.z = normal_start.z;
             renderer_draw_line(renderer, info.colour_collision_normal, normal_start, normal_end, info.sprite_layer, info.material_idx, renderer_global_wireframe_thickness);
 
@@ -349,8 +349,8 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
                 normal_start.x = contact_point_x;
                 normal_start.y = contact_point_y;
                 normal_start.z = info.z_position;
-                normal_end.x = normal_start.x + normal_start.x;
-                normal_end.y = normal_start.y + normal_start.y;
+                normal_end.x = contact_point_x + normal_x;
+                normal_end.y = contact_point_y + normal_y;
                 normal_end.z = normal_start.z;
                 renderer_draw_line(renderer, info.colour_collision_normal, normal_start, normal_end, info.sprite_layer, info.material_idx, renderer_global_wireframe_thickness);
             }
