@@ -2475,7 +2475,7 @@ void fizx_bvh_categorised_leaf_overlaps_format(BvhCategorisedLeafOverlaps* overl
             for(i32 w = 0; w < info.length; w++){
                 //get the data about the owner and other.
                 owner_leaf = &info.owner_leaf_index[w];
-                other_leaf = &info.owner_leaf_index[w];
+                other_leaf = &info.other_leaf_index[w];
 
                 BOUNDS_CHECK(*owner_leaf, bvh_leaf_index_length);
                 owner_index = bvh_leaf_index[*owner_leaf];

@@ -284,7 +284,8 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
 
             i32 chunk_element_idx = fixed_stride_array_get_element_idx(i, state.collision_manifold.collider_stride, 0);
             BOUNDS_CHECK(chunk_element_idx, state.collision_manifold.active_index.data_length);
-            i32 collision_idx = state.collision_manifold.active_index.data[chunk_element_idx];
+            i32* active_index = (i32*)state.collision_manifold.active_index.data;
+            i32 collision_idx = active_index[chunk_element_idx];
 
             i32 owner_idx = collision_idx / state.collision_manifold.collider_stride; // int div truncates the remainder, always giving the owner index.
             i32 other_idx = collision_idx % state.collision_manifold.collider_stride;
