@@ -57,6 +57,8 @@ RendererContext renderer_ctx;
 MemoryArena renderer_memory;
 EntityManager entity_manager;
 
+f32 time_scale = 1.0f;
+
 /**====================
     functions
 ====================**//**/
@@ -75,6 +77,20 @@ void trigger_on_sustain_callback(CollisionInfo info, void* user_data){
 
 void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time){
     entity_manager_update(&entity_manager, &renderer_ctx, delta_time);
+    f32 camera_speed = 1.0f * delta_time * world_camera.orthographic_size;
+    bool x = input_is_key_pressed(KEY_RIGHT);
+    if(input_is_key_pressed(KEY_Q))     {world_camera.orthographic_size -= world_camera.orthographic_size * 1.0f * delta_time;}
+    if(input_is_key_pressed(KEY_E))     {world_camera.orthographic_size += world_camera.orthographic_size * 1.0f * delta_time;}
+    if(input_is_key_pressed(KEY_RIGHT)) {world_camera.position.x += camera_speed;}
+    if(input_is_key_pressed(KEY_LEFT))  {world_camera.position.x -= camera_speed;}
+    if(input_is_key_pressed(KEY_UP))    {world_camera.position.y += camera_speed;}
+    if(input_is_key_pressed(KEY_DOWN))  {world_camera.position.y -= camera_speed;}
+    if(input_is_key_pressed(KEY_F)) {
+        time_scale = 0.25f;
+    }
+    else{
+        time_scale = 1.0f;
+    }
 }
 
 RendererContext app_renderer_init(MemoryArena* persistent, MemoryArena* transient, WindowContext window_ctx){
@@ -144,7 +160,7 @@ RendererContext app_renderer_init(MemoryArena* persistent, MemoryArena* transien
 }
 
 void app_fixed_update(f32 delta_time){
-
+    
 }
 
 void app_late_update(f32 delta_time){
@@ -175,16 +191,18 @@ void app_main(){
     platform_init_transient_memory(MEGABYTE(4));
     MemoryArena* persistent = platform_get_persistent_memory();
     MemoryArena* transient = platform_get_transient_memory();
-
-    String file_path = {0};
-    string_init(&file_path, transient, 20);
-    string_push_chars(&file_path, "assets/image.png", 16);
-
+    
     window_ctx = platform_window_create(WINDOW_WIDTH, WINDOW_HEIGHT);
+
+    input_init(persistent);
 
     renderer_orthographic_camera_init(&world_camera, (Vector3){.z = -4.0f}, 0.01f, 100.0f, 22.0f);
     renderer_global_wireframe_thickness = 0.05f;
     renderer_ctx = app_renderer_init(persistent, transient, *window_ctx);
+    
+    String file_path = {0};
+    string_init(&file_path, transient, 20);
+    string_push_chars(&file_path, "assets/image.png", 16);
     renderer_virtual_texture_set_file_path(&renderer_ctx, file_path, 3);
     renderer_load_image_texture(&renderer_ctx, 3);
 
@@ -210,7 +228,7 @@ void app_main(){
         .material_idx                   = SPRITE_MATERIAL_DEBUG,
         .draw_body_shapes               = true,
         // .draw_bvh_leaves = true,
-        .draw_bvh_branches = true,
+        // .draw_bvh_branches = true,
         .draw_collision_info = true
     };
 
@@ -236,7 +254,7 @@ void app_main(){
     GenId kinematic_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(kinematic_body_transform), false);
     GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, kinematic_body_gid, material, false);
     
-    Transform entity_body_transform = {.position = {.x = 2.0f, .y = 11.0f}, .scale = VECTOR3_ONE};
+    Transform entity_body_transform = {.position = {.x = 3.0f, .y = 12.0f}, .scale = VECTOR3_ONE};
     entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(entity_body_transform), true);
     GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, entity->physics_body_gid, material, true);
     // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
@@ -273,8 +291,11 @@ void app_main(){
         f32 delta_time = (f32)delta_tick_in_mili * 0.0001f;
         prev_process_tick_in_mili = process_tick_in_mili;
 
+        delta_time *= time_scale;
+
         printf("%.5f", delta_time);
 
+        platform_window_update(window_ctx);
         // fixed update.
         {
             fixed_update_accumulator += delta_time;
@@ -292,6 +313,7 @@ void app_main(){
         fizx_state_draw(entity_manager.fizx_state, &renderer_ctx, fizx_draw_state, delta_time);
         // update.
         {
+            input_update();
             app_update(persistent, transient, delta_time);
         }
 
@@ -303,7 +325,6 @@ void app_main(){
         // final update.
         {
             renderer_draw_renderer(&renderer_ctx);
-            platform_window_update(window_ctx);
             transient->stride = 0;
         }
     }

@@ -94,21 +94,39 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
 
         case WM_SYSKEYDOWN:
         case WM_SYSKEYUP:
-        case WM_KEYDOWN:
-        case WM_KEYUP:{
-
+        case WM_KEYDOWN:{
             UINT32 vk_code = (UINT32)w_param;
-            int was_down = ((l_param & (1 << 30)) != 0)? 1 : 0;
-            int is_down = ((w_param & (1 << 15)) == 0)? 1 : 0;
-
-            if(vk_code == 'W'){
-                OutputDebugStringA("W");
+            switch(vk_code){
+                case 'A':       {input_set_key_down(KEY_A);}break;
+                case 'D':       {input_set_key_down(KEY_D);}break;
+                case 'E':       {input_set_key_down(KEY_E);}break;
+                case 'F':       {input_set_key_down(KEY_F);}break;
+                case 'Q':       {input_set_key_down(KEY_Q);}break;
+                case 'S':       {input_set_key_down(KEY_S);}break;
+                case 'W':       {input_set_key_down(KEY_W);}break;
+                case VK_RIGHT:  {input_set_key_down(KEY_RIGHT);}break;
+                case VK_LEFT:   {input_set_key_down(KEY_LEFT);}break;
+                case VK_UP:     {input_set_key_down(KEY_UP);}break;
+                case VK_DOWN:   {input_set_key_down(KEY_DOWN);}break;
+            }                    
+        }break;
+        case WM_KEYUP:{
+            UINT32 vk_code = (UINT32)w_param;
+            // int was_down = ((l_param & (1 << 30)) != 0)? 1 : 0;
+            // int is_down = ((w_param & (1 << 15)) == 0)? 1 : 0;
+            switch(vk_code){
+                case 'A':       {input_set_key_up(KEY_A);}break;
+                case 'D':       {input_set_key_up(KEY_D);}break;
+                case 'E':       {input_set_key_up(KEY_E);}break;
+                case 'F':       {input_set_key_up(KEY_F);}break;
+                case 'Q':       {input_set_key_up(KEY_Q);}break;
+                case 'S':       {input_set_key_up(KEY_S);}break;
+                case 'W':       {input_set_key_up(KEY_W);}break;
+                case VK_RIGHT:  {input_set_key_up(KEY_RIGHT);}break;
+                case VK_LEFT:   {input_set_key_up(KEY_LEFT);}break;
+                case VK_UP:     {input_set_key_up(KEY_UP);}break;
+                case VK_DOWN:   {input_set_key_up(KEY_DOWN);}break;
             }
-            else if(vk_code == 'A'){
-                OutputDebugStringA("A");
-            }
-            OutputDebugStringA("\n");
-
         }break;
 
         // case WM_PAINT:{
@@ -118,9 +136,6 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
         //     /*
         //         all painting occurs here...
         //     */
-
-
-
         //     LONG x = paint.rcPaint.left;
         //     LONG y = paint.rcPaint.top;
         //     LONG width = paint.rcPaint.right - paint.rcPaint.left;

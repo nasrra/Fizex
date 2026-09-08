@@ -15,4 +15,5 @@
 @REM  
 
 mkdir build & cd src & cl /Zi /W3 /WX /Fo:..\build\ /Fd:..\build\ /Fe:..\build\app.exe app_win32.c app.c base_layer\base.c user32.lib Gdi32.lib ws2_32.lib ntdll.lib userenv.lib vendors\webgpu\wgpu_native.lib & xcopy /E /I /Y "..\assets" "..\build\assets"
+@REM mkdir build & cd src & cl /O2 /Oi /GL /DNDEBUG /MD /W3 /WX /Fo:..\build\ /Fe:..\build\app.exe app_win32.c app.c base_layer\base.c user32.lib Gdi32.lib ws2_32.lib ntdll.lib userenv.lib vendors\webgpu\wgpu_native.lib /link /LTCG & xcopy /E /I /Y "..\assets" "..\build\assets"
 @REM  & call cd ..\build & app.exe

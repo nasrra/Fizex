@@ -1269,8 +1269,8 @@ void transform2d_transform_scalar(
                 sin(a + b) = sin(a)cos(b) + cos(a)sin(b)
                 cos(a + b) = cos(a)cos(b) - sin(a)sin(b)
     **/
-    *out_sin = (lhs_sin * lhs_cos) + (lhs_cos * rhs_sin);
-    *out_cos = (lhs_cos * lhs_cos) + (lhs_sin * rhs_sin);
+    *out_sin = (lhs_sin * rhs_cos) + (lhs_cos * rhs_sin);
+    *out_cos = (lhs_cos * rhs_cos) + (lhs_sin * rhs_sin);
     *out_rotation = lhs_rotation + rhs_rotation;
 }
 
