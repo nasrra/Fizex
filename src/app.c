@@ -265,7 +265,7 @@ void app_main(){
         .draw_body_shapes               = true,
         // .draw_bvh_leaves = true,
         // .draw_bvh_branches = true,
-        // .draw_collision_info = true
+        .draw_collision_info = true
     };
 
     Transform shape_transform = {.scale = VECTOR3_ONE};
@@ -281,9 +281,9 @@ void app_main(){
     Entity* entity;
     entity_manager_get_entity(entity_manager, e, &entity);
     
-    Transform dynamic_body_transform = {.position = {.y = 4.0f}, .scale = VECTOR3_ONE};
-    GenId dynamic_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(dynamic_body_transform), true);
-    GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
+    // Transform dynamic_body_transform = {.position = {.x = 1.5f, .y = 4.0f}, .scale = VECTOR3_ONE};
+    // GenId dynamic_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(dynamic_body_transform), true);
+    // GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
     // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
     
     Transform kinematic_body_transform = {.position = {.y = -11.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = QUATERNION_IDENTITY};

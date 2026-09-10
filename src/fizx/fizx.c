@@ -436,7 +436,7 @@ typedef struct{
     **/
     bool* two_contact_points;
     i32 two_contact_points_length;
-    /**
+    /**2
         The indices of `active` collision elements separated by `chunk` in the current step.
 
         `remarks`
@@ -1726,11 +1726,6 @@ bool shape_clear_on_exit_callback(FIZXState* state, FIZXCollisionCallback callba
     return true;
 }
 
-inline void shape_set_active_unsafe(FIZXState* state, i32 shape_idx, bool is_active){
-    BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
-    state->body_hierarchy.node[shape_idx].is_active = is_active;
-}
-
 void shape_set_local_transform_unsafe(FIZXState* state, i32 shape_idx, Transform2D transform){
     BOUNDS_CHECK(shape_idx, state->bodies.local_transform.length);
     BOUNDS_CHECK(shape_idx, state->bodies.local_transform.position.length);
@@ -1743,9 +1738,74 @@ void shape_set_local_transform_unsafe(FIZXState* state, i32 shape_idx, Transform
     state->bodies.local_transform.sine[shape_idx] = transform.sine;
 }
 
+void fizx_shape_set_active_unsafe(FIZXState* state, i32 shape_idx, bool is_active){
+
+    // set the shape to inactive within the hierarchy.
+    BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
+    state->body_hierarchy.node[shape_idx].is_active = false;
+    
+    /**
+        TODO:
+        MAKE CLEARING A SHAPE'S COLLISION INFORMATION INTO A FUNCTION.
+    **/
+    // zero out any collisions that were occuring.
+    if(is_active == false){
+        i32* collision_count = &state->collision_manifold.active_index.chunk_count[shape_idx];
+        i32 start_offset = fixed_stride_array_get_element_idx(shape_idx, state->collision_manifold.collider_stride, 0);
+        i32* active_collisions = (i32*)state->collision_manifold.active_index.data;
+        for(i32 i = 0; i < *collision_count; i++){
+            
+            i32 idx = start_offset + i;
+            
+            BOUNDS_CHECK(idx, state->collision_manifold.active_index.data_length);
+            i32 collision_idx = active_collisions[idx];
+            
+            BOUNDS_CHECK(collision_idx, state->collision_manifold.active_phase_length);
+            state->collision_manifold.active_phase[collision_idx] = 0;
+        }
+        ZERO_MEMORY(active_collisions + start_offset, sizeof(i32) * *collision_count);
+        *collision_count = 0;
+    }
+}
+
+bool fizx_shape_set_active(FIZXState* state, GenId body_gid, bool is_active){
+    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
+        return false;
+    }
+    i32 body_idx = gen_id_get_index(body_gid);
+    BOUNDS_CHECK(body_idx, state->bodies.entity_type_length);
+    if(state->bodies.entity_type[body_idx] != EntityType_Shape){
+        ASSERT(false, "not a shape.");
+        return false;
+    }
+    fizx_shape_set_active_unsafe(state, body_idx, is_active);
+    return true;
+}
+
 inline void fizx_body_set_active_unsafe(FIZXState* state, i32 body_idx, bool is_active){
+    
+    // set body inactive.
     BOUNDS_CHECK(body_idx, state->body_hierarchy.length);
-    state->body_hierarchy.node[body_idx].is_active = is_active;
+    IntrusiveListNode* node = &state->body_hierarchy.node[body_idx];
+    node->is_active = is_active; 
+    
+    
+    // set all of the shapes for the body to inactive.
+    i32 first_shape_idx = node->first_child;
+    if(first_shape_idx == 0){
+        return;
+    } 
+    i32 shape_idx = first_shape_idx;
+    while(true){
+        fizx_shape_set_active_unsafe(state, shape_idx, is_active);
+        
+        BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
+        shape_idx = state->body_hierarchy.node[shape_idx].next_sibling;
+        
+        if(shape_idx == first_shape_idx){
+            break;
+        }
+    }
 }
 
 bool fizx_body_set_active(FIZXState* state, GenId body_gid, bool is_active){
@@ -2096,7 +2156,7 @@ void shape_dealloc_unsafe(FIZXState* state, i32 shape_idx, bool recalculate_body
         default: {ASSERT(false, "unknwon category.");} break;
     }
 
-    shape_set_active_unsafe(state, shape_idx, false);
+    fizx_shape_set_active_unsafe(state, shape_idx, false);
     intrusive_list_remove_node(&state->body_hierarchy, shape_idx);
     gen_id_allocator_dealloc_unsafe(&state->gen_id_allocator, shape_idx);
     if(recalculate_body_center_of_mass){
@@ -2242,7 +2302,7 @@ void fizx_shape_init_prepare(FIZXState* state, ShapeType type, ShapeBehaviour be
     state->bodies.previous_step_position.y[shape_idx] = global_pos_y;
 
     // set the new data.
-    shape_set_active_unsafe(state, shape_idx, true);
+    fizx_shape_set_active_unsafe(state, shape_idx, true);
     i32 category = shape_set_category_unsafe(state, type, behaviour, is_rigid, shape_idx);
 
     // increment category counter.
@@ -2781,100 +2841,6 @@ void fizx_state_init(FIZXState* state, MemoryArena* arena, i32 entity_amount, i3
     state->is_init = true;
 }
 
-#if 0
-
-        // reconstruct bvh.
-        fizx_bvh_construct_tree(
-            &state->bvh,
-            state->body_hierarchy.root_index, state->body_hierarchy.root_index_count, state->body_hierarchy.length,
-            state->body_hierarchy.node, state->body_hierarchy.length,
-            state->bodies.aabb, state->bodies.centroid,
-            state->bodies.category, state->bodies.category_length,
-            state->bodies.bvh_leaf_padding, state->bodies.bvh_leaf_padding_length,
-            state->bodies.bvh_leaf_index, state->bodies.bvh_leaf_index_length
-        );
-
-
-
-/**
-    constructs the bvh tree in relation to physics body data.
-
-    `remarks`
-    All arrays must be of equal length and elements should be accessed via a `physics_body_index` integer.
-**/
-void fizx_bvh_construct_tree(
-    BoundingVolumeHierarchy* bvh,
-    i32* active_body, i32 active_body_count, i32 active_body_length,
-    IntrusiveListNode* node, i32 node_length,
-    Soa_Aabb aabbs, Soa_Vector2 centroids,
-    i32* bvh_category, i32 bvh_category_length,
-    f32* bvh_leaf_padding, i32 bvh_leaf_padding_length,
-    i32* bvh_leaf_index, i32 bvh_leaf_index_length
-){
-    // clear previous bvh data.
-    bvh_clear(bvh);
-
-    for(i32 i = 1; i < active_body_count; i++){ // start at 1 to avoid nil.
-        BOUNDS_CHECK(i, active_body_length);
-        i32 body_idx = active_body[i];
-
-        BOUNDS_CHECK(body_idx, node_length);
-        IntrusiveListNode* body_node = &node[body_idx];
-        i32 first_shape_idx = body_node->first_child;
-        if(first_shape_idx == 0){
-            continue;
-        }
-        
-        BOUNDS_CHECK(body_idx, );
-
-
-        f32 min_x;
-        f32 min_y;
-        f32 max_x;
-        f32 max_y;
-        i32 shape_idx = first_shape_idx;
-        while(true){
-
-            BOUNDS_CHECK(shape_idx, node_length);
-            IntrusiveListNode* shape_node = &node[shape_idx];
-
-            BOUNDS_CHECK(shape_idx, bvh_leaf_padding_length);
-            f32 padding = bvh_leaf_padding[body_idx];
-
-            BOUNDS_CHECK(shape_idx, aabbs.length);
-            min_x = aabbs.min_x[shape_idx] - padding;
-            min_y = aabbs.min_y[shape_idx] - padding;
-            max_x = aabbs.max_x[shape_idx] + padding;
-            max_y = aabbs.max_y[shape_idx] + padding;
-
-            { // insert into bvh.
-
-                BOUNDS_CHECK(shape_idx, centroids.length);
-                f32 cx = centroids.x[shape_idx];
-                f32 cy = centroids.y[shape_idx];
-
-                BOUNDS_CHECK(shape_idx, bvh_category_length);
-                i32 category = bvh_category[shape_idx];
-
-                i32 leaf_idx = bvh->leaves.count;
-                soa_bvh_leaf_push(&bvh->leaves, min_x, min_y, max_x, max_y, cx, cy, category);
-
-                BOUNDS_CHECK(leaf_idx, bvh_leaf_index_length);
-                bvh_leaf_index[leaf_idx] = shape_idx;
-            }
-
-            shape_idx = shape_node->next_sibling;
-            if(shape_idx == first_shape_idx){
-                break;
-            }
-        }
-    }
-
-    // construct the bvh with the new data.
-    bvh_construct_tree(bvh);
-}
-#endif
-
 /**
     Transforms `in_use` bodies local-space vertices by their global-space transforms.
 
@@ -3023,7 +2989,10 @@ void fizx_state_fixed_update(FIZXState* state, void* collision_callback_user_dat
             BOUNDS_CHECK(body_idx, state->body_hierarchy.length);
             IntrusiveListNode* body_node = &state->body_hierarchy.node[body_idx];
             i32 first_shape_idx = body_node->first_child;
-            if(first_shape_idx == 0 || body_node->is_active == false){
+            if(first_shape_idx == 0){
+                continue;
+            }
+            if(body_node->is_active == false){
                 continue;
             }
             
