@@ -2659,13 +2659,9 @@ bool renderer_sprite_id_equals(SpriteId lhs, SpriteId rhs){
 
 
 Vector2 renderer_get_mouse_world_position(RendererContext* ctx){
-    i32 x;
-    i32 y;
-    platform_get_mouse_position(&x, &y);
-    Vector2 mouse_position = {
-        .x = (f32)x,
-        .y = (f32)y
-    };
+    Vector2I mouse_position_i;
+    platform_get_mouse_position(&mouse_position_i.x, &mouse_position_i.y);
+    Vector2 mouse_position = {.x = (f32)mouse_position_i.x, .y = (f32)mouse_position_i.y};
     
     Vector2I resolution = {
         .x = ctx->final_render_texture.extents.width, 
@@ -2673,20 +2669,20 @@ Vector2 renderer_get_mouse_world_position(RendererContext* ctx){
     };
     Vector2 render_texture_position = vector2_get_relative_to_destination_rectangle(mouse_position, ctx->destination_rectangle, resolution);
     
-    f32 horizontal_factor = mouse_position.x / resolution.x;
-    f32 vertical_factor = mouse_position.y / resolution.y;
+    f32 mouse_horizontal_factor = mouse_position.x / resolution.x;
+    f32 mouse_vertical_factor = mouse_position.y / resolution.y;
     
     f32 aspect_ratio = (f32)resolution.x / (f32)resolution.y;
     
-    f32 vertical_size = ctx->world_camera.orthographic_size * vertical_factor;
-    f32 horizontal_size = ctx->world_camera.orthographic_size * aspect_ratio * horizontal_factor;
-            
-    f32 n_x = ctx->world_camera.position.x - (ctx->world_camera.orthographic_size * aspect_ratio * 0.5f) + horizontal_size;
-    f32 n_y = ctx->world_camera.position.y - (-(ctx->world_camera.orthographic_size * 0.5f) + vertical_size);
-        
+    f32 camera_space_x = ctx->world_camera.orthographic_size * aspect_ratio;
+    f32 camera_space_y = ctx->world_camera.orthographic_size;
+    
+    f32 mouse_camera_pos_y = camera_space_y * mouse_vertical_factor;
+    f32 mouse_camera_pos_x = camera_space_x * mouse_horizontal_factor;
+                    
     return (Vector2){
-        .x = n_x, 
-        .y = n_y
+        .x = ctx->world_camera.position.x - (camera_space_x * 0.5f) + mouse_camera_pos_x, 
+        .y = ctx->world_camera.position.y - (-(camera_space_y * 0.5f) + mouse_camera_pos_y)
     };
 }
 
