@@ -276,7 +276,7 @@ void app_main(){
     Transform shape_transform = {.scale = VECTOR3_ONE};
     Rectangle shape = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
     Circle circle = {.x = 0.0f, .y = 0.0f, .radius = 1.0f};
-    Material material = {.static_friction = 1.0f, .kinetic_friction = 1.0f, .density = 5.0f, .restitution = 0.5f};
+    Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 5.0f, .restitution = 0.0f};
 
     i32 entity_amount = 2048;
     i32 physics_body_amount = 128;

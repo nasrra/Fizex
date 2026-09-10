@@ -861,12 +861,12 @@ inline void fizx_resolve_rigid_collisions(
 
         BOUNDS_CHECK(owner_body_idx, body.material.length);
         BOUNDS_CHECK(other_body_idx, body.material.length);
-        f32 owner_restitution = body.material.restitution[owner_body_idx];
-        f32 other_restitution = body.material.restitution[other_body_idx];
-        f32 owner_kinetic_friction = body.material.kinetic_friction[owner_body_idx];
-        f32 other_kinetic_friction = body.material.kinetic_friction[other_body_idx];
-        f32 owner_static_friction = body.material.static_friction[owner_body_idx];
-        f32 other_static_friction = body.material.static_friction[other_body_idx];
+        f32 owner_restitution = body.material.restitution[owner_shape_idx];
+        f32 other_restitution = body.material.restitution[other_shape_idx];
+        f32 owner_kinetic_friction = body.material.kinetic_friction[owner_shape_idx];
+        f32 other_kinetic_friction = body.material.kinetic_friction[other_shape_idx];
+        f32 owner_static_friction = body.material.static_friction[owner_shape_idx];
+        f32 other_static_friction = body.material.static_friction[other_shape_idx];
 
         BOUNDS_CHECK(owner_body_idx, body.mass_length);
         BOUNDS_CHECK(other_body_idx, body.mass_length);
@@ -1051,15 +1051,15 @@ inline void fizx_resolve_rigid_collisions(
                 // divide by the contact point count to ensure that impulse is evenly spread across all contact points.
                 impulse_magnitude /= (f32)contact_points_count;
 
-                BOUNDS_CHECK(contact_points_count, COLLISION_MAX_CONTACT_POINTS + 1);
-                impulse_magnitude_scratch_space[contact_points_count] = impulse_magnitude;
+                BOUNDS_CHECK(j, COLLISION_MAX_CONTACT_POINTS + 1);
+                impulse_magnitude_scratch_space[j] = impulse_magnitude;
             }
 
             f32 impulse_force_x;
             f32 impulse_force_y;
 
             for(i32 j = 0; j < contact_points_count; j++){
-                BOUNDS_CHECK(i, COLLISION_MAX_CONTACT_POINTS + 1);
+                BOUNDS_CHECK(j, COLLISION_MAX_CONTACT_POINTS + 1);
                 f32 mag = impulse_magnitude_scratch_space[j];
                 impulse_force_x = -(mag / owner_mass * inverse_normal_x);
                 impulse_force_y = -(mag / owner_mass * inverse_normal_y);
@@ -1138,7 +1138,7 @@ inline void fizx_resolve_rigid_collisions(
                     other_perpendicular_dot_tangent_sqrd * other_inverse_rotational_inertia;
 
                 // Calculate the full friction magnitude to stop all sliding.
-                f32 friction_impulse_magnitude = -vector2_dot_scalar(relative_velocity_x, relative_velocity_y, tangent_x, tangent_y);
+                f32 friction_impulse_magnitude = -vector2_dot_scalar(relative_velocity_x, relative_velocity_y, tangent_x, tangent_y) / denominator;
 
                 // Coulomb's Law.
                 {
@@ -1185,8 +1185,8 @@ inline void fizx_resolve_rigid_collisions(
                     continue;
                 }
 
-                *other_linear_velocity_x += -impulse_x * other_inverse_mass;
-                *other_linear_velocity_y += -impulse_y * other_inverse_mass;
+                *other_linear_velocity_x += impulse_x * other_inverse_mass;
+                *other_linear_velocity_y += impulse_y * other_inverse_mass;
                 if(other_rotational_response){
                     /**
                         cross producting the dist and impulse gives a value indicating
