@@ -343,29 +343,26 @@ void input_update(){
                 switch(*last){
                     case INPUT_STATE_RELEASED:
                     case INPUT_STATE_JUST_RELEASED:{
-                        *last = INPUT_STATE_JUST_PRESSED;
+                        *next = INPUT_STATE_JUST_PRESSED;
                     }break;
                     case INPUT_STATE_PRESSED:
                     case INPUT_STATE_JUST_PRESSED:{
-                    
-                        *last = INPUT_STATE_PRESSED;
+                        *next = INPUT_STATE_PRESSED;
                     }break;
                     default:{
-                    
                         ASSERT(0!=0, "unknown input state");
                     }break;
                 }
             }break;
-            case false:{            
+            case false:{
                 switch(*last){
                     case INPUT_STATE_RELEASED:
                     case INPUT_STATE_JUST_RELEASED:{
-                        *last = INPUT_STATE_RELEASED;
+                        *next = INPUT_STATE_RELEASED;
                     }break;
                     case INPUT_STATE_PRESSED:
                     case INPUT_STATE_JUST_PRESSED:{
-                    
-                        *last = INPUT_STATE_JUST_RELEASED;
+                        *next = INPUT_STATE_JUST_RELEASED;
                     }break;
                     default:{
                         ASSERT(0!=0, "unknown input state");
@@ -389,11 +386,11 @@ void input_update(){
                 switch(*last){
                     case INPUT_STATE_RELEASED:
                     case INPUT_STATE_JUST_RELEASED:{
-                        *last = INPUT_STATE_JUST_PRESSED;
+                        *next = INPUT_STATE_JUST_PRESSED;
                     }break;
                     case INPUT_STATE_PRESSED:
                     case INPUT_STATE_JUST_PRESSED:{
-                        *last = INPUT_STATE_PRESSED;
+                        *next = INPUT_STATE_PRESSED;
                     }break;
                     default:{
                         ASSERT(0!=0, "unknown input state");
@@ -404,11 +401,11 @@ void input_update(){
                 switch(*last){
                     case INPUT_STATE_RELEASED:
                     case INPUT_STATE_JUST_RELEASED:{
-                        *last = INPUT_STATE_RELEASED;
+                        *next = INPUT_STATE_RELEASED;
                     }break;
                     case INPUT_STATE_PRESSED:
                     case INPUT_STATE_JUST_PRESSED:{
-                        *last = INPUT_STATE_JUST_RELEASED;
+                        *next = INPUT_STATE_JUST_RELEASED;
                     }break;
                     default:{
                         ASSERT(0!=0, "unknown input state");

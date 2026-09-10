@@ -9,7 +9,6 @@
 #include "base_layer/base_math.c"
 #include "base_layer/base_algorithms.c"
 #include "base_layer/base_structures.c"
-#include "input/input.c"
 #include "renderer/renderer.c"
 #include "renderer/renderer_app_types.c"
 #include "fizx/fizx.c"
@@ -89,7 +88,13 @@ void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time)
     else{
         time_scale = 1.0f;
     }
-
+    
+    if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)){
+        platform_output_message("click\n");
+    }
+    if(input_is_mouse_button_just_released(MOUSE_BUTTON_LEFT)){
+        platform_output_message("un-click\n");
+    }
 
     Vector2I result;
     platform_get_mouse_position(&result.x, &result.y);
