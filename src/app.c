@@ -85,12 +85,17 @@ void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time)
     if(input_is_key_pressed(KEY_LEFT))  {renderer_ctx.world_camera.position.x -= camera_speed;}
     if(input_is_key_pressed(KEY_UP))    {renderer_ctx.world_camera.position.y += camera_speed;}
     if(input_is_key_pressed(KEY_DOWN))  {renderer_ctx.world_camera.position.y -= camera_speed;}
-    if(input_is_key_pressed(KEY_F)) {
-        time_scale = 0.25f;
+    
+    if(input_is_key_pressed(KEY_SPACE)){
+        time_scale = 0.0f;        
+    }
+    else if(input_is_key_pressed(KEY_F)) {
+        time_scale = 0.1f;
     }
     else{
         time_scale = 1.0f;
     }
+    
 
     for(i32 i = 0; i < entity_manager.entity_length; i++){
         Entity* entity = &entity_manager.entity[i];
@@ -281,9 +286,9 @@ void app_main(){
     Entity* entity;
     entity_manager_get_entity(entity_manager, e, &entity);
     
-    // Transform dynamic_body_transform = {.position = {.x = 1.5f, .y = 4.0f}, .scale = VECTOR3_ONE};
-    // GenId dynamic_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(dynamic_body_transform), true);
-    // GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
+    Transform dynamic_body_transform = {.position = {.x = 1.5f, .y = 4.0f}, .scale = VECTOR3_ONE};
+    GenId dynamic_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(dynamic_body_transform), true);
+    GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
     // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
     
     Transform kinematic_body_transform = {.position = {.y = -11.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = QUATERNION_IDENTITY};

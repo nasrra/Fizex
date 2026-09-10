@@ -1018,7 +1018,7 @@ inline void fizx_resolve_rigid_collisions(
                 if(owner_rotational_response){
                     owner_distance_x = owner_distance_x_scratch_space[j];
                     owner_distance_y = owner_distance_y_scratch_space[j];
-                    *owner_angular_velocity += -vector2_cross_scalar(owner_distance_x, owner_distance_y, impulse_x, impulse_y);
+                    *owner_angular_velocity += -vector2_cross_scalar(owner_distance_x, owner_distance_y, impulse_x, impulse_y) * owner_inverse_rotational_inertia;
                 }
 
                 if(other_shape_is_kinematic){
@@ -1029,7 +1029,7 @@ inline void fizx_resolve_rigid_collisions(
                 if(other_rotational_response){
                     other_distance_x = other_distance_x_scratch_space[j];
                     other_distance_y = other_distance_y_scratch_space[j];
-                    *other_angular_velocity += -vector2_cross_scalar(other_distance_x, other_distance_y, impulse_x, impulse_y);
+                    *other_angular_velocity += vector2_cross_scalar(other_distance_x, other_distance_y, impulse_x, impulse_y) * other_inverse_rotational_inertia;
                 }
             }
         }
@@ -1748,7 +1748,10 @@ void fizx_shape_set_active_unsafe(FIZXState* state, i32 shape_idx, bool is_activ
         TODO:
         MAKE CLEARING A SHAPE'S COLLISION INFORMATION INTO A FUNCTION.
     **/
-    // zero out any collisions that were occuring.
+    /**
+        clear all collision information because stale collision/contact states should not be 
+        brought forward, when re-enabling the shape. 
+    **/
     if(is_active == false){
         i32* collision_count = &state->collision_manifold.active_index.chunk_count[shape_idx];
         i32 start_offset = fixed_stride_array_get_element_idx(shape_idx, state->collision_manifold.collider_stride, 0);
