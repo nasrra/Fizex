@@ -270,7 +270,7 @@ void app_main(){
         .draw_body_shapes               = true,
         // .draw_bvh_leaves = true,
         // .draw_bvh_branches = true,
-        .draw_collision_info = true
+        // .draw_collision_info = true
     };
 
     Transform shape_transform = {.scale = VECTOR3_ONE};
@@ -311,7 +311,7 @@ void app_main(){
     // shape_set_on_sustain_callback(&entity_manager.fizx_state, trigger_on_sustain_callback, trigger_shape_gid);
     // shape_set_on_exit_callback(&entity_manager.fizx_state, trigger_on_exit_callback, trigger_shape_gid);
 
-    Transform kin_body_transform = {.position = {.y = 2.0f}, .scale = {.x = 6.0f, .y = 1.0f}, .rotation = QUATERNION_IDENTITY};
+    Transform kin_body_transform = {.position = {.y = 2.0f}, .scale = {.x = 100.0f, .y = 1.0f}, .rotation = QUATERNION_IDENTITY};
     GenId kin_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(kin_body_transform), false);
     GenId kin_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, kin_body_gid, material, false);
     

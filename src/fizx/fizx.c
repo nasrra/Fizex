@@ -1811,6 +1811,26 @@ inline void fizx_body_set_active_unsafe(FIZXState* state, i32 body_idx, bool is_
     }
 }
 
+void fizx_body_impulse_force_unsafe(FIZXState* state, Vector2 force, i32 body_idx){
+    BOUNDS_CHECK(body_idx, state->bodies.linear_velocity.length);
+    state->bodies.linear_velocity.x[body_idx] += force.x;
+    state->bodies.linear_velocity.y[body_idx] += force.y;
+}
+
+bool fizx_body_impulse_force(FIZXState* state, Vector2 force, GenId body_gid){
+    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
+        return false;
+    }
+    i32 body_idx = gen_id_get_index(body_gid);
+    BOUNDS_CHECK(body_idx, state->bodies.entity_type_length);
+    if(state->bodies.entity_type[body_idx] != EntityType_Body){
+        ASSERT(false, "not a body.");
+        return false;
+    }
+    fizx_body_impulse_force_unsafe(state, force, body_idx);
+    return true;
+}
+
 bool fizx_body_set_active(FIZXState* state, GenId body_gid, bool is_active){
     if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
         return false;
@@ -2007,7 +2027,7 @@ void bodies_calculate_bvh_leaf_padding(
     }
 }
 
-void body_clear_forces_and_velocities_unsafe(FIZXState* state, i32 body_idx){
+void fizx_body_clear_forces_and_velocities_unsafe(FIZXState* state, i32 body_idx){
     BOUNDS_CHECK(body_idx, state->bodies.linear_velocity.length);
     state->bodies.linear_velocity.x[body_idx] = 0;
     state->bodies.linear_velocity.y[body_idx] = 0;
@@ -2016,6 +2036,19 @@ void body_clear_forces_and_velocities_unsafe(FIZXState* state, i32 body_idx){
     BOUNDS_CHECK(body_idx, state->bodies.force.length);
     state->bodies.force.x[body_idx] = 0;
     state->bodies.force.y[body_idx] = 0;
+}
+
+bool fizx_body_clear_forces_and_velocities(FIZXState* state, GenId body_gid){
+    i32 idx = fizx_validate_body_gen_id(state, body_gid);
+    if(idx == 0){
+        ASSERT(false, "not a body gid");
+        return false;
+    }
+    if(!fizx_body_is_active_unsafe(state, idx)){
+        return false;
+    }
+    fizx_body_clear_forces_and_velocities_unsafe(state, idx);
+    return true;
 }
 
 /**
@@ -2206,7 +2239,7 @@ GenId fizx_body_alloc(FIZXState* state, Transform2D global_transform, bool gravi
     state->bodies.inverse_mass[body_idx] = 0;
     state->bodies.entity_type[body_idx] = EntityType_Body;
     state->bodies.gravity_affected[body_idx] = gravity_affected;
-    body_clear_forces_and_velocities_unsafe(state, body_idx);
+    fizx_body_clear_forces_and_velocities_unsafe(state, body_idx);
 
     bool added_root = intrusive_list_add_root(&state->body_hierarchy, body_idx);
     if(!added_root){

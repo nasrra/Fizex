@@ -351,6 +351,13 @@ Vector3 vector3_div(Vector3 lhs, Vector3 rhs){
     return lhs;
 }
 
+Vector3 vector3_div_val(Vector3 lhs, f32 rhs){
+    lhs.x /= rhs;
+    lhs.y /= rhs;
+    lhs.z /= rhs;
+    return lhs;
+}
+
 f32 vector3_len_sqrd(Vector3 vector){
     return (vector.x * vector.x) + (vector.y * vector.y) + (vector.z * vector.z);
 }
@@ -358,6 +365,16 @@ f32 vector3_len_sqrd(Vector3 vector){
 f32 vector3_len(Vector3 vector){
     f32 sqrd = vector3_len_sqrd(vector);
     return sqrd == 0.0f ? 0.0f : f32_sqrt(sqrd);
+}
+
+Vector3 vector3_clamp_to_radius(Vector3 v, f32 radius){
+    f32 sqr_len = vector3_len_sqrd(v);
+    if(sqr_len > radius * radius){
+        f32 len = f32_sqrt(sqr_len);
+        v = vector3_div_val(v, len);        // normalize
+        v = vector3_mul_val(v, radius);     // scale to radius
+    }
+    return v;
 }
 
 
