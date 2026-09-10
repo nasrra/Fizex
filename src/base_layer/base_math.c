@@ -1472,6 +1472,16 @@ void soa_aabb_calculate_centroids(Soa_Aabb* soa, f32* out_x, f32* out_y){
     simd_mul_val_f32(out_y, 0.5f, out_y, soa->length);
 }
 
+
+
+
+/**
+    functions: Aabb.
+**/
+
+
+
+
 f32 aabb_get_height(Aabb aabb){
     return aabb.max_y - aabb.min_y;
 }
@@ -1595,6 +1605,18 @@ Aabb aabb_combine(Aabb a, Aabb b){
     );
     return result;
 }
+
+Aabb aabb_translate(Aabb aabb, Vector2 translation){
+    aabb.min_x += translation.x;
+    aabb.max_x += translation.x;
+    aabb.min_y += translation.y;
+    aabb.max_y += translation.y;
+    return aabb;
+}
+
+
+
+
 
 /*
     finds the closest vertex on a polygon to a given position and returns its index.
@@ -1806,7 +1828,20 @@ void get_min_max_vectors_scalar_polygon(
     }
 }
 
-Aabb calc_aabb_polygon_rectangle(PolygonRectangle rect){
+
+
+
+
+/**
+    functions: PolygonRectangle.
+**/
+
+
+
+
+
+
+Aabb polygon_rectangle_calc_aabb(PolygonRectangle rect){
     Aabb aabb;
     get_min_max_vectors_scalar_polygon(
         rect.x, rect.y, 4,
@@ -1815,11 +1850,11 @@ Aabb calc_aabb_polygon_rectangle(PolygonRectangle rect){
     return aabb;
 }
 
-f32 get_width_polygon_rectangle(PolygonRectangle rect){
+f32 polygon_rectangle_get_width(PolygonRectangle rect){
     return vector2_dist_scalar(rect.x[0], rect.y[0], rect.x[1], rect.y[1]);
 }
 
-f32 get_height_polygon_rectangle(PolygonRectangle rect){
+f32 polygon_rectangle_get_height(PolygonRectangle rect){
     return vector2_dist_scalar(rect.x[0], rect.y[0], rect.x[3], rect.y[3]);
 }
 

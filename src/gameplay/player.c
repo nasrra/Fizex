@@ -1,3 +1,3 @@
 typedef struct{
-    GenId clicked_entity;
+    i32 clicked_entity_idx;
 } PlayerMouseState;

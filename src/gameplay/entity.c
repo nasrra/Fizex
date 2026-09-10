@@ -2,6 +2,9 @@ typedef struct{
     Transform transform;
     SpriteId sprite_id;
     GenId physics_body_gid;
+    Aabb clickable_aabb;
+    bool is_clickable;
+    bool is_physics_body;
 } Entity;
 
 typedef struct{
@@ -65,6 +68,21 @@ void entity_manager_update(EntityManager* manager, RendererContext* renderer_ctx
         
         if(!renderer_sprite_id_equals(entity->sprite_id, (SpriteId){0})){
             renderer_sprite_set_transform(renderer_ctx, entity->sprite_id, transform_to_matrix4x4(entity->transform));
+        }
+    }
+}
+
+void entity_manager_debug_draw(EntityManager manager, RendererContext* renderer, f32 delta_time){
+    for(i32 i = 0; i < manager.entity_length; i++){
+        Entity* entity = &manager.entity[i];
+        if(entity->is_clickable){
+            Rectangle shape = {
+                .x = entity->transform.position.x  + entity->clickable_aabb.min_x,
+                .y = entity->transform.position.y  + entity->clickable_aabb.max_y,
+                .width = entity->clickable_aabb.max_x - entity->clickable_aabb.min_x,
+                .height = entity->clickable_aabb.max_y - entity->clickable_aabb.min_y
+            };            
+            renderer_draw_wire_rect(renderer, shape , COLOUR_WHITE, 0.0f, SPRITE_LAYER_WORLD, SPRITE_MATERIAL_DEBUG);
         }
     }
 }

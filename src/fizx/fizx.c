@@ -1752,12 +1752,12 @@ void shape_set_local_transform_unsafe(FIZXState* state, i32 shape_idx, Transform
     state->bodies.local_transform.sine[shape_idx] = transform.sine;
 }
 
-inline void body_set_active_unsafe(FIZXState* state, i32 body_idx, bool is_active){
+inline void fizx_body_set_active_unsafe(FIZXState* state, i32 body_idx, bool is_active){
     BOUNDS_CHECK(body_idx, state->bodies.active_length);
     state->bodies.active[body_idx] = is_active;
 }
 
-bool body_set_active(FIZXState* state, GenId body_gid, bool is_active){
+bool fizx_body_set_active(FIZXState* state, GenId body_gid, bool is_active){
     if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
         return false;
     }
@@ -1767,16 +1767,16 @@ bool body_set_active(FIZXState* state, GenId body_gid, bool is_active){
         ASSERT(false, "not a body.");
         return false;
     }
-    body_set_active_unsafe(state, body_idx, is_active);
+    fizx_body_set_active_unsafe(state, body_idx, is_active);
     return true;
 }
 
-bool body_is_active_unsafe(FIZXState* state, i32 body_idx){
+bool fizx_fizx_body_is_active_unsafe(FIZXState* state, i32 body_idx){
     BOUNDS_CHECK(body_idx, state->bodies.active_length);
     return state->bodies.active[body_idx];
 }
 
-bool body_is_active(FIZXState* state, GenId body_gid){
+bool fizx_body_is_active(FIZXState* state, GenId body_gid){
     if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
         return false;
     }
@@ -1786,7 +1786,7 @@ bool body_is_active(FIZXState* state, GenId body_gid){
         ASSERT(false, "not a body.");
         return false;
     }
-    return body_is_active_unsafe(state, body_idx);
+    return fizx_fizx_body_is_active_unsafe(state, body_idx);
 }
 
 void body_set_local_transform_unsafe(FIZXState* state, i32 body_idx, Transform2D transform){
@@ -1845,7 +1845,7 @@ Vector2 body_get_linear_velocity(FIZXState* state, GenId body_gid){
         ASSERT(false, "not a body gid");
         return (Vector2){0};
     }
-    if(!body_is_active_unsafe(state, idx)){
+    if(!fizx_fizx_body_is_active_unsafe(state, idx)){
         return (Vector2){0};
     }
     return body_get_linear_velocity_unsafe(state, idx);
@@ -2072,7 +2072,7 @@ GenId fizx_body_alloc(FIZXState* state, Transform2D global_transform, bool gravi
     ASSERT(gid != (GenId){0}, "memory limit hit");
     i32 body_idx = gen_id_get_index(gid);
 
-    body_set_active_unsafe(state, body_idx, true);
+    fizx_body_set_active_unsafe(state, body_idx, true);
     body_set_global_transform_unsafe(state, body_idx, global_transform);
     state->bodies.shape_collision_displacement.x[body_idx] = 0;
     state->bodies.shape_collision_displacement.y[body_idx] = 0;
@@ -2086,7 +2086,7 @@ GenId fizx_body_alloc(FIZXState* state, Transform2D global_transform, bool gravi
     if(!added_root){
         ASSERT(false, "failed to make physics body a root node.");
         gen_id_allocator_dealloc(&state->gen_id_allocator, gid);
-        body_set_active_unsafe(state, body_idx, false);
+        fizx_body_set_active_unsafe(state, body_idx, false);
         return (GenId){0};
     }
     return gid;
@@ -2125,7 +2125,7 @@ void fizx_body_dealloc_unsafe(FIZXState* state, i32 body_idx){
     intrusive_list_remove_node(&state->body_hierarchy, body_idx);
     BOUNDS_CHECK(body_idx, state->bodies.gravity_affected_length);
     state->bodies.gravity_affected[body_idx] = false;
-    body_set_active_unsafe(state, body_idx, false);
+    fizx_body_set_active_unsafe(state, body_idx, false);
 }
 
 bool fizx_body_dealloc(FIZXState* state, GenId gid){

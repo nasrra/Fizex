@@ -14,6 +14,7 @@
 #include "fizx/fizx.c"
 #include "fizx/fizx_draw.c"
 #include "gameplay/entity.c"
+#include "gameplay/player.c"
 
 /**====================
     types.
@@ -53,6 +54,7 @@ WindowContext* window_ctx;
 RendererContext renderer_ctx;
 MemoryArena renderer_memory;
 EntityManager entity_manager;
+PlayerMouseState player_mouse_state;
 
 f32 time_scale = 1.0f;
 
@@ -73,7 +75,11 @@ void trigger_on_sustain_callback(CollisionInfo info, void* user_data){
 }
 
 void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time){
+    
+    Vector2 mouse_world_position = renderer_get_mouse_world_position(&renderer_ctx);
+    
     entity_manager_update(&entity_manager, &renderer_ctx, delta_time);
+    
     f32 camera_speed = 1.0f * delta_time * renderer_ctx.world_camera.orthographic_size;
     bool x = input_is_key_pressed(KEY_RIGHT);
     if(input_is_key_pressed(KEY_Q))     {renderer_ctx.world_camera.orthographic_size -= renderer_ctx.world_camera.orthographic_size * 1.0f * delta_time;}
@@ -90,10 +96,24 @@ void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time)
     }
     
     if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)){
-        platform_output_message("click\n");
+        for(i32 e_idx = 0; e_idx < entity_manager.entity_length; e_idx++){
+            Entity* entity = &entity_manager.entity[e_idx];
+            Aabb world_aabb = aabb_translate(entity->clickable_aabb, vector3_to_vector2(entity->transform.position));
+            if(aabb_overlaps_point(world_aabb, mouse_world_position)){
+                platform_output_message("clicked entity\n");
+                if(entity->is_physics_body){
+                    fizx_body_set_active(&entity_manager.fizx_state, entity->physics_body_gid, false);
+                }
+                player_mouse_state.clicked_entity_idx = e_idx;
+            }
+        }
     }
     if(input_is_mouse_button_just_released(MOUSE_BUTTON_LEFT)){
-        platform_output_message("un-click\n");
+        if(player_mouse_state.clicked_entity_idx > 0){
+            Entity* entity = &entity_manager.entity[player_mouse_state.clicked_entity_idx];
+            fizx_body_set_active(&entity_manager.fizx_state, entity->physics_body_gid, true);
+            player_mouse_state.clicked_entity_idx = 0;
+        }
     }
 
     Vector2I result;
@@ -250,7 +270,7 @@ void app_main(){
         .draw_body_shapes               = true,
         // .draw_bvh_leaves = true,
         // .draw_bvh_branches = true,
-        .draw_collision_info = true
+        // .draw_collision_info = true
     };
 
     Transform shape_transform = {.scale = VECTOR3_ONE};
@@ -266,7 +286,7 @@ void app_main(){
     Entity* entity;
     entity_manager_get_entity(entity_manager, e, &entity);
     
-    Transform dynamic_body_transform = {.position = {.y = 7.0f}, .scale = VECTOR3_ONE};
+    Transform dynamic_body_transform = {.position = {.y = 4.0f}, .scale = VECTOR3_ONE};
     GenId dynamic_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(dynamic_body_transform), true);
     GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
     // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
@@ -275,9 +295,12 @@ void app_main(){
     GenId kinematic_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(kinematic_body_transform), false);
     GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, kinematic_body_gid, material, false);
     
-    Transform entity_body_transform = {.position = {.x = 3.0f, .y = 12.0f}, .scale = VECTOR3_ONE};
+    Transform entity_body_transform = {.position = {.x = 1.5f, .y = 12.0f}, .scale = VECTOR3_ONE};
+    entity->is_physics_body = true;
     entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(entity_body_transform), true);
     GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, entity->physics_body_gid, material, true);
+    entity->is_clickable = true;
+    entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
     // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
     
     // Transform trigger_body_transform = {.position = {.y = 0.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = quaternion_create_from_axis_angle(VECTOR3_FORWARD, 30.0f)};
@@ -331,7 +354,6 @@ void app_main(){
             }
         }
 
-        fizx_state_draw(entity_manager.fizx_state, &renderer_ctx, fizx_draw_state, delta_time);
         // update.
         {
             input_update();
@@ -342,15 +364,11 @@ void app_main(){
         {
             app_late_update(delta_time);
         }
-
-        Vector2 mouse_pos = renderer_get_mouse_world_position(&renderer_ctx);
-        Transform t = TRANSFORM_IDENTITY;
-        t.position.x = mouse_pos.x;
-        t.position.y = mouse_pos.y;
-        renderer_sprite_set_transform(&renderer_ctx, entity_manager.entity[1].sprite_id, transform_to_matrix4x4(t));
     
         // final update.
         {
+            fizx_state_draw(entity_manager.fizx_state, &renderer_ctx, fizx_draw_state, delta_time);
+            entity_manager_debug_draw(entity_manager, &renderer_ctx, delta_time);
             renderer_draw_renderer(&renderer_ctx);
             transient->stride = 0;
         }
