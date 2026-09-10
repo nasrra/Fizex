@@ -43,6 +43,10 @@ typedef struct{
         whether or not this node is within the state's tree.
     **/
     bool in_tree;
+    /**
+        whether or not this node is active within the tree.
+    **/
+    bool is_active;
 } IntrusiveListNode;
 
 typedef struct{
@@ -1366,6 +1370,7 @@ bool intrusive_list_add_root(IntrusiveList* list, i32 node_index){
     node->next_sibling = node_index;
     node->previous_sibling = node_index;
     node->in_tree = true;
+    node->is_active = true;
     ARRAY_PUSH(list->root_index, list->length, &list->root_index_count, node_index);
 
     return true;
@@ -1433,6 +1438,7 @@ bool intrusive_list_add_branch(IntrusiveList* list, i32 node_index, i32 parent_i
     }
 
     node->in_tree = true;
+    node->is_active = true;
     return true;
 }
 
@@ -1603,7 +1609,7 @@ bool intrusive_list_remove_node(IntrusiveList* list, i32 node_index){
     }
 
     End:
-    ZERO_STRUCT(node);
+    *node = (IntrusiveListNode){0};
     return true;
 }
 
@@ -1618,7 +1624,7 @@ void intrusive_list_remove_node_and_children_update_node_recursive(
     IntrusiveListNode* node = &nodes[node_index];
     i32 first_child_index = node->first_child;
     i32 next_index = node->next_sibling;
-    ZERO_STRUCT(node);
+    *node = (IntrusiveListNode){0};
 
     if(first_child_index != 0){
         intrusive_list_remove_node_and_children_update_node_recursive(nodes, nodes_length, node_index, first_child_index, first_child_index);
@@ -1706,7 +1712,7 @@ bool intrusive_list_remove_node_and_children(IntrusiveList* list, i32 node_index
     }
 
     // deallocate.
-    ZERO_STRUCT(node);
+    *node = (IntrusiveListNode){0};
     return true;
 }
 

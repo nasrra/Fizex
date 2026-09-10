@@ -374,14 +374,6 @@ typedef struct{
     EntityType* entity_type;
     i32 entity_type_length;
     /**
-        Whether or not an entity is active.
-
-        `remarks`
-        Elements are accessed via `body_index`.
-    **/
-    bool* active;
-    i32 active_length;
-    /**
         Whether or not a body is gravity affected.
 
         `remarks`
@@ -1491,7 +1483,6 @@ void fizx_soa_body_init(Soa_Body* soa, MemoryArena* arena, i32 length, i32 verti
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->shape_type, &soa->shape_type_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->rotational_response, &soa->rotational_response_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->entity_type, &soa->entity_type_length, length);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->active, &soa->active_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->gravity_affected, &soa->gravity_affected_length, length);
 }
 
@@ -1736,8 +1727,8 @@ bool shape_clear_on_exit_callback(FIZXState* state, FIZXCollisionCallback callba
 }
 
 inline void shape_set_active_unsafe(FIZXState* state, i32 shape_idx, bool is_active){
-    BOUNDS_CHECK(shape_idx, state->bodies.active_length);
-    state->bodies.active[shape_idx] = is_active;
+    BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
+    state->body_hierarchy.node[shape_idx].is_active = is_active;
 }
 
 void shape_set_local_transform_unsafe(FIZXState* state, i32 shape_idx, Transform2D transform){
@@ -1753,8 +1744,8 @@ void shape_set_local_transform_unsafe(FIZXState* state, i32 shape_idx, Transform
 }
 
 inline void fizx_body_set_active_unsafe(FIZXState* state, i32 body_idx, bool is_active){
-    BOUNDS_CHECK(body_idx, state->bodies.active_length);
-    state->bodies.active[body_idx] = is_active;
+    BOUNDS_CHECK(body_idx, state->body_hierarchy.length);
+    state->body_hierarchy.node[body_idx].is_active = is_active;
 }
 
 bool fizx_body_set_active(FIZXState* state, GenId body_gid, bool is_active){
@@ -1771,9 +1762,9 @@ bool fizx_body_set_active(FIZXState* state, GenId body_gid, bool is_active){
     return true;
 }
 
-bool fizx_fizx_body_is_active_unsafe(FIZXState* state, i32 body_idx){
-    BOUNDS_CHECK(body_idx, state->bodies.active_length);
-    return state->bodies.active[body_idx];
+bool fizx_body_is_active_unsafe(FIZXState* state, i32 body_idx){
+    BOUNDS_CHECK(body_idx, state->body_hierarchy.length);
+    return state->body_hierarchy.node[body_idx].is_active;
 }
 
 bool fizx_body_is_active(FIZXState* state, GenId body_gid){
@@ -1786,7 +1777,7 @@ bool fizx_body_is_active(FIZXState* state, GenId body_gid){
         ASSERT(false, "not a body.");
         return false;
     }
-    return fizx_fizx_body_is_active_unsafe(state, body_idx);
+    return fizx_body_is_active_unsafe(state, body_idx);
 }
 
 void body_set_local_transform_unsafe(FIZXState* state, i32 body_idx, Transform2D transform){
@@ -1845,7 +1836,7 @@ Vector2 body_get_linear_velocity(FIZXState* state, GenId body_gid){
         ASSERT(false, "not a body gid");
         return (Vector2){0};
     }
-    if(!fizx_fizx_body_is_active_unsafe(state, idx)){
+    if(!fizx_body_is_active_unsafe(state, idx)){
         return (Vector2){0};
     }
     return body_get_linear_velocity_unsafe(state, idx);
@@ -2718,6 +2709,21 @@ void fizx_state_init(FIZXState* state, MemoryArena* arena, i32 entity_amount, i3
     state->is_init = true;
 }
 
+#if 0
+
+        // reconstruct bvh.
+        fizx_bvh_construct_tree(
+            &state->bvh,
+            state->body_hierarchy.root_index, state->body_hierarchy.root_index_count, state->body_hierarchy.length,
+            state->body_hierarchy.node, state->body_hierarchy.length,
+            state->bodies.aabb, state->bodies.centroid,
+            state->bodies.category, state->bodies.category_length,
+            state->bodies.bvh_leaf_padding, state->bodies.bvh_leaf_padding_length,
+            state->bodies.bvh_leaf_index, state->bodies.bvh_leaf_index_length
+        );
+
+
+
 /**
     constructs the bvh tree in relation to physics body data.
 
@@ -2746,6 +2752,9 @@ void fizx_bvh_construct_tree(
         if(first_shape_idx == 0){
             continue;
         }
+        
+        BOUNDS_CHECK(body_idx, );
+
 
         f32 min_x;
         f32 min_y;
@@ -2792,6 +2801,7 @@ void fizx_bvh_construct_tree(
     // construct the bvh with the new data.
     bvh_construct_tree(bvh);
 }
+#endif
 
 /**
     Transforms `in_use` bodies local-space vertices by their global-space transforms.
@@ -2931,16 +2941,65 @@ void fizx_state_fixed_update(FIZXState* state, void* collision_callback_user_dat
             bvh_categorised_leaf_overlaps_build_chunks(&state->overlaps_scratch_buffer);
         }
 
-        // reconstruct bvh.
-        fizx_bvh_construct_tree(
-            &state->bvh,
-            state->body_hierarchy.root_index, state->body_hierarchy.root_index_count, state->body_hierarchy.length,
-            state->body_hierarchy.node, state->body_hierarchy.length,
-            state->bodies.aabb, state->bodies.centroid,
-            state->bodies.category, state->bodies.category_length,
-            state->bodies.bvh_leaf_padding, state->bodies.bvh_leaf_padding_length,
-            state->bodies.bvh_leaf_index, state->bodies.bvh_leaf_index_length
-        );
+        // clear previous bvh data.
+        bvh_clear(&state->bvh);
+    
+        for(i32 i = 1; i < state->body_hierarchy.root_index_count; i++){ // start at 1 to avoid nil.
+            BOUNDS_CHECK(i, state->body_hierarchy.length);
+            i32 body_idx = state->body_hierarchy.root_index[i];
+    
+            BOUNDS_CHECK(body_idx, state->body_hierarchy.length);
+            IntrusiveListNode* body_node = &state->body_hierarchy.node[body_idx];
+            i32 first_shape_idx = body_node->first_child;
+            if(first_shape_idx == 0 || body_node->is_active == false){
+                continue;
+            }
+            
+                        
+            f32 min_x;
+            f32 min_y;
+            f32 max_x;
+            f32 max_y;
+            i32 shape_idx = first_shape_idx;
+            while(true){
+    
+                BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
+                IntrusiveListNode* shape_node = &state->body_hierarchy.node[shape_idx];
+    
+                BOUNDS_CHECK(shape_idx, state->bodies.bvh_leaf_padding_length);
+                f32 padding = state->bodies.bvh_leaf_padding[body_idx];
+    
+                BOUNDS_CHECK(shape_idx, state->bodies.aabb.length);
+                min_x = state->bodies.aabb.min_x[shape_idx] - padding;
+                min_y = state->bodies.aabb.min_y[shape_idx] - padding;
+                max_x = state->bodies.aabb.max_x[shape_idx] + padding;
+                max_y = state->bodies.aabb.max_y[shape_idx] + padding;
+    
+                { // insert into bvh.
+    
+                    BOUNDS_CHECK(shape_idx, state->bodies.centroid.length);
+                    f32 cx = state->bodies.centroid.x[shape_idx];
+                    f32 cy = state->bodies.centroid.y[shape_idx];
+    
+                    BOUNDS_CHECK(shape_idx, state->bodies.category_length);
+                    i32 category = state->bodies.category[shape_idx];
+    
+                    i32 leaf_idx = state->bvh.leaves.count;
+                    soa_bvh_leaf_push(&state->bvh.leaves, min_x, min_y, max_x, max_y, cx, cy, category);
+    
+                    BOUNDS_CHECK(leaf_idx, state->bodies.bvh_leaf_index_length);
+                    state->bodies.bvh_leaf_index[leaf_idx] = shape_idx;
+                }
+    
+                shape_idx = shape_node->next_sibling;
+                if(shape_idx == first_shape_idx){
+                    break;
+                }
+            }
+        }
+    
+        // construct the bvh with the new data.
+        bvh_construct_tree(&state->bvh);
 
         bvh_get_overlaps(state->bvh, &state->overlaps_scratch_buffer);
         fizx_bvh_categorised_leaf_overlaps_format(&state->overlaps_scratch_buffer, state->bodies.bvh_leaf_index, state->bodies.bvh_leaf_index_length, state->bodies.category, state->bodies.category_length);
@@ -3073,6 +3132,10 @@ void fizx_state_fixed_update(FIZXState* state, void* collision_callback_user_dat
 
                 BOUNDS_CHECK(i, state->body_hierarchy.length);
                 i32 body_index = state->body_hierarchy.root_index[i];
+                BOUNDS_CHECK(body_index, state->body_hierarchy.length);
+                if(state->body_hierarchy.node[body_index].is_active == false){
+                    continue;
+                }
 
                 BOUNDS_CHECK(body_index, state->bodies.global_transform.length);
                 f32* body_pos_x     = &state->bodies.global_transform.position.x[body_index];

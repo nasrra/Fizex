@@ -237,7 +237,7 @@ void app_main(){
 
     input_init(persistent);
 
-    renderer_orthographic_camera_init(&renderer_ctx.world_camera, (Vector3){.z = -4.0f}, 0.01f, 100.0f, 22.0f);
+    renderer_orthographic_camera_init(&renderer_ctx.world_camera, (Vector3){.y = 5.0f, .z = -4.0f}, 0.01f, 100.0f, 22.0f);
     renderer_global_wireframe_thickness = 0.05f;
     renderer_ctx = app_renderer_init(persistent, transient, *window_ctx);
     
@@ -254,7 +254,7 @@ void app_main(){
         .colour_active_trigger_shape    = COLOUR_RED,
         .colour_aabb                    = COLOUR_LIGHT_BLUE,
         .colour_fallback_shape          = COLOUR_WHITE,
-        .colour_inactive_physics_body   = COLOUR_BLACK,
+        .colour_inactive_entity         = COLOUR_BLACK,
         .colour_bvh_leaf                = COLOUR_WHITE,
         .colour_bvh_branch              = COLOUR_LIGHT_GREEN,
         .colour_contact_point           = COLOUR_RED,

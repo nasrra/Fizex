@@ -6,7 +6,7 @@ typedef struct{
     Colour colour_active_trigger_shape;
     Colour colour_aabb;
     Colour colour_fallback_shape;
-    Colour colour_inactive_physics_body;
+    Colour colour_inactive_entity;
     Colour colour_bvh_leaf;
     Colour colour_bvh_branch;
     Colour colour_contact_point;
@@ -85,10 +85,14 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
             i32 shape_idx = first_shape_idx;
             while(true){
                 BOUNDS_CHECK(shape_idx, state.bodies.category_length);
+                
                 i32 category = state.bodies.category[shape_idx];
 
                 // determine shape behaviour.
-                if(shape_category_is_dynamic(category)){
+                if(!body_node->is_active){
+                    colour = info.colour_inactive_entity;
+                }
+                else if(shape_category_is_dynamic(category)){
                     colour = info.colour_dynamic_shape;
                 }
                 else if(shape_category_is_kinematic(category)){
