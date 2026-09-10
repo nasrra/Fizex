@@ -882,4 +882,10 @@ bool input_is_mouse_button_just_released(MouseButton button);
 void input_update();
 void input_init(MemoryArena* arena);
 
+input_mouse_get_position_relative(
+    f32 dst_rect_x, f32 dst_rect_y, f32 dst_rect_width, f32 dst_rect_height, 
+    i32 dst_resolution_width, i32 dst_resolution_height,
+    i32* out_mouse_x, i32* out_mouse_y
+);
+
 #endif

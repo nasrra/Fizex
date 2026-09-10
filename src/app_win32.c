@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <windows.h>
+#include <windowsx.h>
 #include "app.h"
 #include "stdint.h"
 #include "platform.h"
@@ -51,6 +52,9 @@ Define this in the header file:
 MemoryArena persistent_memory;
 MemoryArena transient_memory;
 u128 win32_global_process_start_time;
+i32 mouse_x;
+i32 mouse_y;
+
 
 /*====================
     private functions.
@@ -91,7 +95,10 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
                 enter "sleep" state when no longer active.
             */
         }break;
-
+        case WM_MOUSEMOVE:{
+            mouse_x = GET_X_LPARAM(l_param);
+            mouse_y = GET_Y_LPARAM(l_param);
+        };
         case WM_SYSKEYDOWN:
         case WM_SYSKEYUP:
         case WM_KEYDOWN:{
@@ -242,6 +249,17 @@ WindowContext* platform_window_create(i32 width, i32 height){
     };
 
     if(RegisterClass(&window_class)){
+        RECT window_rect = {0, 0, width, height};
+        DWORD window_style = WS_OVERLAPPEDWINDOW;
+        /**
+            expands window_rect to the size needed so the *client area* ends up being `width` x `height`.
+            this is done because the specified resolution used for creating a window includes the toolbar and borders
+            to be within the requested size. 
+        **/
+        AdjustWindowRectEx(&window_rect, window_style, FALSE, 0);
+        i32 adjusted_width = window_rect.right - window_rect.left;
+        i32 adjusted_height = window_rect.bottom - window_rect.top;
+    
         window_handle = CreateWindowEx(
             0,
             class_name,
@@ -249,8 +267,8 @@ WindowContext* platform_window_create(i32 width, i32 height){
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
-            width,
-            height,
+            adjusted_width,
+            adjusted_height,
             NULL,
             0,
             instance,
@@ -448,4 +466,9 @@ bool platform_free_image(Image* image){
     // zero out image once free;
     *image = (Image){0};
     return true; 
+}
+
+void platform_get_mouse_position(int* out_x, int* out_y){
+    *out_x = mouse_x;
+    *out_y = mouse_y;
 }

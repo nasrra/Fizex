@@ -26,13 +26,6 @@ typedef struct Camera{
 } Camera;
 
 typedef struct{
-    f32 x;
-    f32 y;
-    u32 width;
-    u32 height;
-} DestinationRectangle;
-
-typedef struct{
     WGPUSurfaceTexture ptr;
     WGPUTextureView view;
     WGPUExtent3D extents;
@@ -393,7 +386,9 @@ typedef struct{
     /*
         the destination rectangle for renderering the final render texture onto the back-buffer.
     */
-    DestinationRectangle destination_rectangle;
+    Rectangle destination_rectangle;
+    Camera world_camera;
+    Camera screen_camera;
     bool is_init;
 } RendererContext;
 
@@ -1819,19 +1814,19 @@ void renderer_graphics_pipeline_init(
     wgpuShaderModuleRelease(shader_module);
 }
 
-DestinationRectangle renderer_calculate_destination_rectangle(u32 src_width, u32 src_height, u32 dst_width, u32 dst_height){
+Rectangle renderer_calculate_destination_rectangle(u32 src_width, u32 src_height, u32 dst_width, u32 dst_height){
     f32 back_buffer_aspect_ratio = (f32)dst_width / (f32)dst_height;
     f32 render_target_aspect_ratio = (f32)src_width / (f32)src_height;
     // scale the image to fit into the window'sback buffer.
-    DestinationRectangle rect = {.width = dst_width, .height = dst_height};
+    Rectangle rect = {.width = (f32)dst_width, .height = (f32)dst_height};
     // stretch image (render target) width to fit on the window's back buffer.
     if(back_buffer_aspect_ratio > render_target_aspect_ratio){
-        rect.width = (u32)((f32)rect.height * render_target_aspect_ratio);
+        rect.width = (f32)rect.height * render_target_aspect_ratio;
         rect.x = ((float)dst_width - rect.width) * 0.5f;
     }
     // shrink image (render target) height to fit on the window's back buffer.
     else if (back_buffer_aspect_ratio < render_target_aspect_ratio){
-        rect.height = (u32)((f32)rect.width / render_target_aspect_ratio);
+        rect.height = (f32)rect.width / render_target_aspect_ratio;
         rect.y = ((float)dst_height - rect.height) * 0.5f;
     }
     return rect;
@@ -2361,6 +2356,13 @@ void renderer_context_free_resources(RendererContext* ctx){
     wgpuInstanceRelease(ctx->instance);
 }
 
+
+#if 0
+/**
+    this is the code for a perspective camera,
+    but it is commented out as presently the project doesnt need
+    and probably wont ever support a perspsective camera. 
+**/
 void renderer_perspective_camera_init(Camera* camera, Vector3 position, f32 near_z, f32 far_z, f32 fov_in_radians){
 
     { // validation.
@@ -2376,6 +2378,7 @@ void renderer_perspective_camera_init(Camera* camera, Vector3 position, f32 near
     camera->projection_type = CameraProjectionType_Perspective;
     camera->is_init = true;
 }
+#endif
 
 void renderer_orthographic_camera_init(Camera* camera, Vector3 position, f32 near_z, f32 far_z, f32 orthographic_size){
 
@@ -2627,3 +2630,84 @@ bool renderer_sprite_id_equals(SpriteId lhs, SpriteId rhs){
     lhs.gen_id == rhs.gen_id && 
     lhs.layer == rhs.layer;
 }
+
+// Vector2 renderer_get_mouse_world_position(RendererContext* ctx){
+//     i32 x;
+//     i32 y;
+//     platform_get_mouse_position(&x, &y);
+//     Vector2 mouse_position = {
+//         .x = (f32)x,
+//         .y = (f32)y
+//     };
+    
+//     Vector2I resolution = {
+//         .x = ctx->final_render_texture.extents.width, 
+//         .y = ctx->final_render_texture.extents.height
+//     };
+//     Vector2 render_texture_position = vector2_get_relative_to_destination_rectangle(mouse_position, ctx->destination_rectangle, resolution);
+    
+//     // offset by half the output resolution as the world camera (0,0) is at the center of the screen.
+//     f32 offset_x = ctx->final_render_texture.extents.width * 0.5f;
+//     f32 offset_y = ctx->final_render_texture.extents.height * 0.5f;
+    
+//     return (Vector2){
+//         .x = ((render_texture_position.x - offset_x) / ctx->world_camera.orthographic_size) + ctx->world_camera.position.x, 
+//         .y = -(((render_texture_position.y - offset_y) / ctx->world_camera.orthographic_size) + ctx->world_camera.position.y)
+//     };
+// }
+
+
+
+Vector2 renderer_get_mouse_world_position(RendererContext* ctx){
+    i32 x;
+    i32 y;
+    platform_get_mouse_position(&x, &y);
+    Vector2 mouse_position = {
+        .x = (f32)x,
+        .y = (f32)y
+    };
+    
+    Vector2I resolution = {
+        .x = ctx->final_render_texture.extents.width, 
+        .y = ctx->final_render_texture.extents.height
+    };
+    Vector2 render_texture_position = vector2_get_relative_to_destination_rectangle(mouse_position, ctx->destination_rectangle, resolution);
+    
+    f32 horizontal_factor = mouse_position.x / resolution.x;
+    f32 vertical_factor = mouse_position.y / resolution.y;
+    
+    f32 aspect_ratio = (f32)resolution.x / (f32)resolution.y;
+    
+    f32 vertical_size = ctx->world_camera.orthographic_size * vertical_factor;
+    f32 horizontal_size = ctx->world_camera.orthographic_size * aspect_ratio * horizontal_factor;
+            
+    f32 n_x = ctx->world_camera.position.x - (ctx->world_camera.orthographic_size * aspect_ratio * 0.5f) + horizontal_size;
+    f32 n_y = ctx->world_camera.position.y - (-(ctx->world_camera.orthographic_size * 0.5f) + vertical_size);
+        
+    return (Vector2){
+        .x = n_x, 
+        .y = n_y
+    };
+}
+
+#if 0
+    /// <summary>
+    ///     Gets the mouse position in world-space.
+    /// </summary>
+    /// <param name="app">the monogame app instance.</param>
+    /// <param name="mouse">the mouse data.</param>
+    /// <returns>the position of the mouse in world-space.</returns>
+    public static Howl.Math.Vector2 GetMouseWorldPosition(MonoGameApp app, IMouse mouse)
+    {
+        ref readonly Camera camera = ref CameraSystem.MainCamera;
+        Howl.Math.Vector2Int renderTargetPosition = mouse.GetPositionRelative(app.DestinationRectangle, app.OutputResolution);
+        
+        // offset by half the output resolution as the world camera (0,0) is at the center of the screen.
+        Howl.Math.Vector2 offset = new Howl.Math.Vector2(app.OutputResolution.X * 0.5f, app.OutputResolution.Y * 0.5f);
+        
+        return new Howl.Math.Vector2( 
+            ((renderTargetPosition.X - offset.X) * camera.Zoom) + camera.Position.X,
+            ((renderTargetPosition.Y - offset.Y) * camera.Zoom) - camera.Position.Y
+        ).InvertY(); // invert y as world space in monogame is Y+ is down; where as howl engine is y+ is up.
+    }
+#endif

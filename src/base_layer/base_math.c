@@ -369,6 +369,22 @@ f32 vector3_len(Vector3 vector){
 
 
 
+Vector2 vector2_get_relative_to_destination_rectangle(Vector2 vector, Rectangle dst_rect, Vector2I dst_resolution){
+    // get the distance from the destination rect to the mouse position. 
+    vector.x = vector.x - dst_rect.x;
+    vector.y = vector.y - dst_rect.y;
+    
+    // normalise the value between zero and one, to find
+    // how far into the destination rect the mouse is.
+    vector.x /= dst_rect.width;
+    vector.y /= dst_rect.height;
+    
+    // bring into the destination resolution coordinate space.
+    vector.x *= (f32)dst_resolution.x;
+    vector.y *= (f32)dst_resolution.y;
+    return vector;
+}
+
 void vector2_normalise_scalar(f32 x, f32 y, f32* n_x, f32* n_y){
     f32 len_sqrd = x * x + y * y;
 

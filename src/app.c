@@ -50,8 +50,6 @@ DEFINE_QUICKSORT_STRUCT(Person, i32, .num, quicksort_person);
     globals
 ====================**//**/
 
-Camera world_camera;
-Camera screen_camera;
 WindowContext* window_ctx;
 RendererContext renderer_ctx;
 MemoryArena renderer_memory;
@@ -77,20 +75,24 @@ void trigger_on_sustain_callback(CollisionInfo info, void* user_data){
 
 void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time){
     entity_manager_update(&entity_manager, &renderer_ctx, delta_time);
-    f32 camera_speed = 1.0f * delta_time * world_camera.orthographic_size;
+    f32 camera_speed = 1.0f * delta_time * renderer_ctx.world_camera.orthographic_size;
     bool x = input_is_key_pressed(KEY_RIGHT);
-    if(input_is_key_pressed(KEY_Q))     {world_camera.orthographic_size -= world_camera.orthographic_size * 1.0f * delta_time;}
-    if(input_is_key_pressed(KEY_E))     {world_camera.orthographic_size += world_camera.orthographic_size * 1.0f * delta_time;}
-    if(input_is_key_pressed(KEY_RIGHT)) {world_camera.position.x += camera_speed;}
-    if(input_is_key_pressed(KEY_LEFT))  {world_camera.position.x -= camera_speed;}
-    if(input_is_key_pressed(KEY_UP))    {world_camera.position.y += camera_speed;}
-    if(input_is_key_pressed(KEY_DOWN))  {world_camera.position.y -= camera_speed;}
+    if(input_is_key_pressed(KEY_Q))     {renderer_ctx.world_camera.orthographic_size -= renderer_ctx.world_camera.orthographic_size * 1.0f * delta_time;}
+    if(input_is_key_pressed(KEY_E))     {renderer_ctx.world_camera.orthographic_size += renderer_ctx.world_camera.orthographic_size * 1.0f * delta_time;}
+    if(input_is_key_pressed(KEY_RIGHT)) {renderer_ctx.world_camera.position.x += camera_speed;}
+    if(input_is_key_pressed(KEY_LEFT))  {renderer_ctx.world_camera.position.x -= camera_speed;}
+    if(input_is_key_pressed(KEY_UP))    {renderer_ctx.world_camera.position.y += camera_speed;}
+    if(input_is_key_pressed(KEY_DOWN))  {renderer_ctx.world_camera.position.y -= camera_speed;}
     if(input_is_key_pressed(KEY_F)) {
         time_scale = 0.25f;
     }
     else{
         time_scale = 1.0f;
     }
+
+
+    Vector2I result;
+    platform_get_mouse_position(&result.x, &result.y);
 }
 
 RendererContext app_renderer_init(MemoryArena* persistent, MemoryArena* transient, WindowContext window_ctx){
@@ -170,13 +172,27 @@ void app_late_update(f32 delta_time){
         this might have to be swapped for the final render target resolution, maybe idk.
     **/
     f32 aspect_ratio = platform_window_calc_aspect_ratio(*window_ctx);
-    renderer_camera_update_projection_matrix(&world_camera, aspect_ratio);
+    renderer_camera_update_projection_matrix(&renderer_ctx.world_camera, aspect_ratio);
 
     Ubo ubo = {
-        .world_camera_matrix = matrix4x4_mul(matrix4x4_mul(world_camera.projection, world_camera.view), world_camera.model),
-        .screen_camera_matrix = matrix4x4_mul(matrix4x4_mul(world_camera.projection, world_camera.view), world_camera.model),
-        .world_camera_far_z = world_camera.far_z,
-        .world_camera_near_z = world_camera.near_z,
+        .world_camera_matrix = 
+            matrix4x4_mul(
+                matrix4x4_mul(
+                    renderer_ctx.world_camera.projection, 
+                    renderer_ctx.world_camera.view
+                ), 
+            renderer_ctx.world_camera.model
+        ),
+        .screen_camera_matrix = 
+            matrix4x4_mul(
+                matrix4x4_mul(
+                    renderer_ctx.world_camera.projection, 
+                    renderer_ctx.world_camera.view
+                ), 
+            renderer_ctx.world_camera.model
+        ),
+        .world_camera_far_z = renderer_ctx.world_camera.far_z,
+        .world_camera_near_z = renderer_ctx.world_camera.near_z,
     };
 
     renderer_write_to_user_uniform_buffer(&renderer_ctx, &ubo, sizeof(Ubo));
@@ -196,7 +212,7 @@ void app_main(){
 
     input_init(persistent);
 
-    renderer_orthographic_camera_init(&world_camera, (Vector3){.z = -4.0f}, 0.01f, 100.0f, 22.0f);
+    renderer_orthographic_camera_init(&renderer_ctx.world_camera, (Vector3){.z = -4.0f}, 0.01f, 100.0f, 22.0f);
     renderer_global_wireframe_thickness = 0.05f;
     renderer_ctx = app_renderer_init(persistent, transient, *window_ctx);
     
@@ -250,7 +266,7 @@ void app_main(){
     GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
     // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
     
-    Transform kinematic_body_transform = {.position = {.y = -8.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = QUATERNION_IDENTITY};
+    Transform kinematic_body_transform = {.position = {.y = -11.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = QUATERNION_IDENTITY};
     GenId kinematic_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(kinematic_body_transform), false);
     GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, kinematic_body_gid, material, false);
     
@@ -322,6 +338,12 @@ void app_main(){
             app_late_update(delta_time);
         }
 
+        Vector2 mouse_pos = renderer_get_mouse_world_position(&renderer_ctx);
+        Transform t = TRANSFORM_IDENTITY;
+        t.position.x = mouse_pos.x;
+        t.position.y = mouse_pos.y;
+        renderer_sprite_set_transform(&renderer_ctx, entity_manager.entity[1].sprite_id, transform_to_matrix4x4(t));
+    
         // final update.
         {
             renderer_draw_renderer(&renderer_ctx);

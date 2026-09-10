@@ -66,4 +66,6 @@ void platform_print_msg(char* msg);
 bool platform_load_image(Image* out_image, String file_path);
 bool platform_free_image(Image* image);
 
+void platform_get_mouse_position(int* out_x, int* out_y);
+
 #endif
