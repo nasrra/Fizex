@@ -55,23 +55,6 @@ bool entity_manager_get_entity(EntityManager manager, GenId entity_gid, Entity**
     return true;
 }
 
-void entity_manager_update(EntityManager* manager, RendererContext* renderer_ctx, f32 delta_time){
-    for(i32 i = 0; i < manager->entity_length; i++){
-        Entity* entity = &manager->entity[i];       
-        
-        if(entity->physics_body_gid != 0){
-            Transform2D transform2d;
-            if(fizx_body_get_transform(&manager->fizx_state, entity->physics_body_gid, &transform2d)){
-                entity->transform = transform2d_to_transform(transform2d);
-            }
-        }
-        
-        if(!renderer_sprite_id_equals(entity->sprite_id, (SpriteId){0})){
-            renderer_sprite_set_transform(renderer_ctx, entity->sprite_id, transform_to_matrix4x4(entity->transform));
-        }
-    }
-}
-
 void entity_manager_debug_draw(EntityManager manager, RendererContext* renderer, f32 delta_time){
     for(i32 i = 0; i < manager.entity_length; i++){
         Entity* entity = &manager.entity[i];

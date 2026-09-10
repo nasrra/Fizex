@@ -1803,15 +1803,40 @@ bool body_set_local_transform(FIZXState* state, GenId body_gid, Transform2D tran
 }
 
 void body_set_global_transform_unsafe(FIZXState* state, i32 body_idx, Transform2D transform){
+    // set the body transform.    
     BOUNDS_CHECK(body_idx, state->bodies.global_transform.length);
-    BOUNDS_CHECK(body_idx, state->bodies.global_transform.position.length);
-    BOUNDS_CHECK(body_idx, state->bodies.global_transform.scale.length);
     state->bodies.global_transform.position.x[body_idx] = transform.position.x;
     state->bodies.global_transform.position.y[body_idx] = transform.position.y;
     state->bodies.global_transform.scale.x[body_idx] = transform.scale.x;
     state->bodies.global_transform.scale.y[body_idx] = transform.scale.y;
     state->bodies.global_transform.cosine[body_idx] = transform.cosine;
     state->bodies.global_transform.sine[body_idx] = transform.sine;
+
+    // set its shape(s) transform(s).
+    BOUNDS_CHECK(body_idx, state->body_hierarchy.length);
+    IntrusiveListNode* node = &state->body_hierarchy.node[body_idx];
+    i32 first_shape_idx = node->first_child;
+    if(first_shape_idx == 0){
+        return;
+    }
+    i32 shape_idx = first_shape_idx;
+    
+    while(true){
+        BOUNDS_CHECK(shape_idx, state->bodies.global_transform.length);
+        BOUNDS_CHECK(shape_idx, state->bodies.local_transform.length);
+        state->bodies.global_transform.position.x[shape_idx]    = state->bodies.local_transform.position.x[shape_idx] + transform.position.x;
+        state->bodies.global_transform.position.y[shape_idx]    = state->bodies.local_transform.position.y[shape_idx] + transform.position.y;
+        state->bodies.global_transform.scale.x[shape_idx]       = state->bodies.local_transform.scale.x[shape_idx] + transform.scale.x;
+        state->bodies.global_transform.scale.y[shape_idx]       = state->bodies.local_transform.scale.y[shape_idx] + transform.scale.y;
+        state->bodies.global_transform.cosine[shape_idx]        = state->bodies.local_transform.cosine[shape_idx] + transform.cosine;
+        state->bodies.global_transform.sine[shape_idx]          = state->bodies.local_transform.sine[shape_idx] + transform.sine;
+    
+        BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
+        shape_idx = state->body_hierarchy.node[shape_idx].next_sibling;
+        if(shape_idx == first_shape_idx){
+            break;
+        }
+    }
 }
 
 bool body_set_global_transform(FIZXState* state, GenId body_gid, Transform2D transform){
@@ -1821,6 +1846,45 @@ bool body_set_global_transform(FIZXState* state, GenId body_gid, Transform2D tra
         return false;
     }
     body_set_global_transform_unsafe(state, idx, transform);
+    return true;
+}
+
+void body_set_global_position_unsafe(FIZXState* state, i32 body_idx, Vector2 position){
+    // set the body transform.    
+    BOUNDS_CHECK(body_idx, state->bodies.global_transform.length);
+    state->bodies.global_transform.position.x[body_idx] = position.x;
+    state->bodies.global_transform.position.y[body_idx] = position.y;
+
+    // set its shape(s) transform(s).
+    BOUNDS_CHECK(body_idx, state->body_hierarchy.length);
+    IntrusiveListNode* node = &state->body_hierarchy.node[body_idx];
+    i32 first_shape_idx = node->first_child;
+    if(first_shape_idx == 0){
+        return;
+    }
+    i32 shape_idx = first_shape_idx;
+    
+    while(true){
+        BOUNDS_CHECK(shape_idx, state->bodies.global_transform.length);
+        BOUNDS_CHECK(shape_idx, state->bodies.local_transform.length);
+        state->bodies.global_transform.position.x[shape_idx]    = state->bodies.local_transform.position.x[shape_idx] + position.x;
+        state->bodies.global_transform.position.y[shape_idx]    = state->bodies.local_transform.position.y[shape_idx] + position.y;
+    
+        BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
+        shape_idx = state->body_hierarchy.node[shape_idx].next_sibling;
+        if(shape_idx == first_shape_idx){
+            break;
+        }
+    }
+}
+
+bool fizx_body_set_global_position(FIZXState* state, GenId body_gid, Vector2 position){
+    i32 idx = fizx_validate_body_gen_id(state, body_gid);
+    if(idx == 0){
+        ASSERT(false, "not a body gid");
+        return false;
+    }
+    body_set_global_position_unsafe(state, idx, position);
     return true;
 }
 
@@ -2064,7 +2128,15 @@ GenId fizx_body_alloc(FIZXState* state, Transform2D global_transform, bool gravi
     i32 body_idx = gen_id_get_index(gid);
 
     fizx_body_set_active_unsafe(state, body_idx, true);
-    body_set_global_transform_unsafe(state, body_idx, global_transform);
+    BOUNDS_CHECK(body_idx, state->bodies.global_transform.length);
+    BOUNDS_CHECK(body_idx, state->bodies.global_transform.position.length);
+    BOUNDS_CHECK(body_idx, state->bodies.global_transform.scale.length);
+    state->bodies.global_transform.position.x[body_idx] = global_transform.position.x;
+    state->bodies.global_transform.position.y[body_idx] = global_transform.position.y;
+    state->bodies.global_transform.scale.x[body_idx] = global_transform.scale.x;
+    state->bodies.global_transform.scale.y[body_idx] = global_transform.scale.y;
+    state->bodies.global_transform.cosine[body_idx] = global_transform.cosine;
+    state->bodies.global_transform.sine[body_idx] = global_transform.sine;
     state->bodies.shape_collision_displacement.x[body_idx] = 0;
     state->bodies.shape_collision_displacement.y[body_idx] = 0;
     state->bodies.mass[body_idx] = 0;

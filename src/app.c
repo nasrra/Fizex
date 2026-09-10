@@ -54,7 +54,6 @@ WindowContext* window_ctx;
 RendererContext renderer_ctx;
 MemoryArena renderer_memory;
 EntityManager entity_manager;
-PlayerMouseState player_mouse_state;
 
 f32 time_scale = 1.0f;
 
@@ -77,9 +76,7 @@ void trigger_on_sustain_callback(CollisionInfo info, void* user_data){
 void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time){
     
     Vector2 mouse_world_position = renderer_get_mouse_world_position(&renderer_ctx);
-    
-    entity_manager_update(&entity_manager, &renderer_ctx, delta_time);
-    
+        
     f32 camera_speed = 1.0f * delta_time * renderer_ctx.world_camera.orthographic_size;
     bool x = input_is_key_pressed(KEY_RIGHT);
     if(input_is_key_pressed(KEY_Q))     {renderer_ctx.world_camera.orthographic_size -= renderer_ctx.world_camera.orthographic_size * 1.0f * delta_time;}
@@ -94,28 +91,26 @@ void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time)
     else{
         time_scale = 1.0f;
     }
-    
-    if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)){
-        for(i32 e_idx = 0; e_idx < entity_manager.entity_length; e_idx++){
-            Entity* entity = &entity_manager.entity[e_idx];
-            Aabb world_aabb = aabb_translate(entity->clickable_aabb, vector3_to_vector2(entity->transform.position));
-            if(aabb_overlaps_point(world_aabb, mouse_world_position)){
-                platform_output_message("clicked entity\n");
-                if(entity->is_physics_body){
-                    fizx_body_set_active(&entity_manager.fizx_state, entity->physics_body_gid, false);
-                }
-                player_mouse_state.clicked_entity_idx = e_idx;
+
+    for(i32 i = 0; i < entity_manager.entity_length; i++){
+        Entity* entity = &entity_manager.entity[i];
+        if(entity->physics_body_gid != 0){
+            Transform2D transform2d;
+            if(fizx_body_get_transform(&entity_manager.fizx_state, entity->physics_body_gid, &transform2d)){
+                entity->transform = transform2d_to_transform(transform2d);
             }
         }
     }
-    if(input_is_mouse_button_just_released(MOUSE_BUTTON_LEFT)){
-        if(player_mouse_state.clicked_entity_idx > 0){
-            Entity* entity = &entity_manager.entity[player_mouse_state.clicked_entity_idx];
-            fizx_body_set_active(&entity_manager.fizx_state, entity->physics_body_gid, true);
-            player_mouse_state.clicked_entity_idx = 0;
+
+    player_update(&entity_manager, mouse_world_position, delta_time);
+
+    for(i32 i = 0; i < entity_manager.entity_length; i++){
+        Entity* entity = &entity_manager.entity[i];
+        if(!renderer_sprite_id_equals(entity->sprite_id, (SpriteId){0})){
+            renderer_sprite_set_transform(&renderer_ctx, entity->sprite_id, transform_to_matrix4x4(entity->transform));
         }
     }
-
+    
     Vector2I result;
     platform_get_mouse_position(&result.x, &result.y);
 }
