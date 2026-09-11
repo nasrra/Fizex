@@ -11,7 +11,7 @@ typedef struct{
     Entity* entity;
     i32 entity_length;
     GenIdAllocator gen_id_allocator;
-    FIZXState fizx_state;
+    FIZX_State fizx_state;
     bool is_init;
 } EntityManager;
 

@@ -61,15 +61,15 @@ f32 time_scale = 1.0f;
     functions
 ====================**//**/
 
-void trigger_on_enter_callback(CollisionInfo info, void* user_data){
+void trigger_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
     platform_output_message("enter!\n");
 }
 
-void trigger_on_exit_callback(CollisionInfo info, void* user_data){
+void trigger_on_exit_callback(FIZX_CollisionInfo info, void* user_data){
     platform_output_message("exit!\n");
 }
 
-void trigger_on_sustain_callback(CollisionInfo info, void* user_data){
+void trigger_on_sustain_callback(FIZX_CollisionInfo info, void* user_data){
     platform_output_message("sustain!\n");
 }
 
@@ -276,7 +276,7 @@ void app_main(){
     Transform shape_transform = {.scale = VECTOR3_ONE};
     Rectangle shape = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
     Circle circle = {.x = 0.0f, .y = 0.0f, .radius = 1.0f};
-    Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 5.0f, .restitution = 0.0f};
+    FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 5.0f, .restitution = 0.0f};
 
     i32 entity_amount = 2048;
     i32 physics_body_amount = 128;
@@ -288,32 +288,32 @@ void app_main(){
     
     Transform dynamic_body_transform = {.position = {.x = 1.5f, .y = 4.0f}, .scale = VECTOR3_ONE};
     GenId dynamic_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(dynamic_body_transform), true);
-    GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
-    // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
+    GenId dynamic_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, dynamic_body_gid, material, true);
+    // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
     
     Transform kinematic_body_transform = {.position = {.y = -11.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = QUATERNION_IDENTITY};
     GenId kinematic_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(kinematic_body_transform), false);
-    GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, kinematic_body_gid, material, false);
+    GenId kinematic_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Kinematic, kinematic_body_gid, material, false);
     
     Transform entity_body_transform = {.position = {.x = 1.5f, .y = 12.0f}, .scale = VECTOR3_ONE};
     entity->is_physics_body = true;
     entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(entity_body_transform), true);
-    GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, entity->physics_body_gid, material, true);
+    GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, entity->physics_body_gid, material, true);
     entity->is_clickable = true;
     entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
-    // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
+    // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
     
     // Transform trigger_body_transform = {.position = {.y = 0.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = quaternion_create_from_axis_angle(VECTOR3_FORWARD, 30.0f)};
     // GenId trigger_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(trigger_body_transform), false);
-    // GenId trigger_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Trigger, trigger_body_gid, material, false);
-    // // GenId trigger_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, material, trigger_body_gid, false);
+    // GenId trigger_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Trigger, trigger_body_gid, material, false);
+    // // GenId trigger_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Kinematic, material, trigger_body_gid, false);
     // shape_set_on_enter_callback(&entity_manager.fizx_state, trigger_on_enter_callback, trigger_shape_gid);
     // shape_set_on_sustain_callback(&entity_manager.fizx_state, trigger_on_sustain_callback, trigger_shape_gid);
     // shape_set_on_exit_callback(&entity_manager.fizx_state, trigger_on_exit_callback, trigger_shape_gid);
 
     Transform kin_body_transform = {.position = {.y = 2.0f}, .scale = {.x = 100.0f, .y = 1.0f}, .rotation = QUATERNION_IDENTITY};
     GenId kin_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(kin_body_transform), false);
-    GenId kin_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), ShapeBehaviour_Kinematic, kin_body_gid, material, false);
+    GenId kin_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Kinematic, kin_body_gid, material, false);
     
     Transform sprite_transform = {.position = {.x = 0.1f, .y = 0.0f, .z = 12.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 10.0f)};
     bool success = false;

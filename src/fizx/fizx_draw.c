@@ -30,7 +30,7 @@ typedef struct{
     bool draw_centers_of_mass_unrotated;
 } FIZXDrawInfo;
 
-void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo info, f32 delta_time){
+void fizx_state_draw(FIZX_State state, RendererContext* renderer, FIZXDrawInfo info, f32 delta_time){
     /**
         draw global positions.
     **/
@@ -47,10 +47,10 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
             i32 shape_idx = first_shape_idx;
 
             while(true){
-                BOUNDS_CHECK(shape_idx, state.bodies.global_transform.length);
+                BOUNDS_CHECK(shape_idx, state.entities.global_transform.length);
                 Circle shape = {
-                    .x = state.bodies.global_transform.position.x[shape_idx],
-                    .y = state.bodies.global_transform.position.y[shape_idx],
+                    .x = state.entities.global_transform.position.x[shape_idx],
+                    .y = state.entities.global_transform.position.y[shape_idx],
                     .radius = 0.1f
                 };
 
@@ -84,21 +84,21 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
 
             i32 shape_idx = first_shape_idx;
             while(true){
-                BOUNDS_CHECK(shape_idx, state.bodies.category_length);
+                BOUNDS_CHECK(shape_idx, state.entities.category_length);
                 
-                i32 category = state.bodies.category[shape_idx];
+                i32 category = state.entities.category[shape_idx];
 
                 // determine shape behaviour.
                 if(!body_node->is_active){
                     colour = info.colour_inactive_entity;
                 }
-                else if(shape_category_is_dynamic(category)){
+                else if(fizx_shape_category_is_dynamic(category)){
                     colour = info.colour_dynamic_shape;
                 }
-                else if(shape_category_is_kinematic(category)){
+                else if(fizx_shape_category_is_kinematic(category)){
                     colour = info.colour_kinematic_shape;
                 }
-                else if(shape_category_is_trigger(category)){
+                else if(fizx_shape_category_is_trigger(category)){
                     colour = collision_manifold_shape_has_collisions(state.collision_manifold, shape_idx)
                     ? info.colour_active_trigger_shape
                     : info.colour_passive_trigger_shape;
@@ -108,17 +108,17 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
                 }
 
                 // draw in accordance with the shape.
-                if(shape_category_is_polygon(category)){
-                    soa_body_get_vertices_unsafe(state.bodies.global_vertex, shape_idx, &poly_vert_x, &poly_vert_y, &poly_vert_length);
+                if(fizx_shape_category_is_polygon(category)){
+                    fizx_shape_get_vertices_unsafe(state.entities.global_vertex, shape_idx, &poly_vert_x, &poly_vert_y, &poly_vert_length);
                     renderer_draw_wire_poly(renderer, poly_vert_x, poly_vert_y, poly_vert_length, colour, info.z_position, info.sprite_layer, info.material_idx);
                 }
-                else if(shape_category_is_circle(category)){
-                    BOUNDS_CHECK(shape_idx, state.bodies.centroid.length);
-                    BOUNDS_CHECK(shape_idx, state.bodies.global_radius_length);
+                else if(fizx_shape_category_is_circle(category)){
+                    BOUNDS_CHECK(shape_idx, state.entities.centroid.length);
+                    BOUNDS_CHECK(shape_idx, state.entities.global_radius_length);
                     Circle shape = {
-                        .x = state.bodies.centroid.x[shape_idx],
-                        .y = state.bodies.centroid.y[shape_idx],
-                        .radius = state.bodies.global_radius[shape_idx]
+                        .x = state.entities.centroid.x[shape_idx],
+                        .y = state.entities.centroid.y[shape_idx],
+                        .radius = state.entities.global_radius[shape_idx]
                     };
                     renderer_draw_wire_circle(renderer, shape, colour, info.z_position, info.sprite_layer, info.material_idx);
                 }
@@ -153,10 +153,10 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
 
             i32 shape_idx = first_shape_idx;
             while(true){
-                BOUNDS_CHECK(shape_idx, state.bodies.centroid.length);
+                BOUNDS_CHECK(shape_idx, state.entities.centroid.length);
                 Circle shape = {
-                    .x = state.bodies.centroid.x[shape_idx],
-                    .y = state.bodies.centroid.y[shape_idx],
+                    .x = state.entities.centroid.x[shape_idx],
+                    .y = state.entities.centroid.y[shape_idx],
                     .radius = 0.1f
                 };
 
@@ -183,12 +183,12 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
 
             i32 body_idx = state.body_hierarchy.root_index[i];
 
-            BOUNDS_CHECK(body_idx, state.bodies.global_transform.length);
-            f32 start_x = state.bodies.global_transform.position.x[body_idx];
-            f32 start_y = state.bodies.global_transform.position.y[body_idx];
-            BOUNDS_CHECK(body_idx, state.bodies.linear_velocity.length);
-            f32 end_x = start_x + state.bodies.linear_velocity.x[body_idx];
-            f32 end_y = start_y + state.bodies.linear_velocity.y[body_idx];
+            BOUNDS_CHECK(body_idx, state.entities.global_transform.length);
+            f32 start_x = state.entities.global_transform.position.x[body_idx];
+            f32 start_y = state.entities.global_transform.position.y[body_idx];
+            BOUNDS_CHECK(body_idx, state.entities.linear_velocity.length);
+            f32 end_x = start_x + state.entities.linear_velocity.x[body_idx];
+            f32 end_y = start_y + state.entities.linear_velocity.y[body_idx];
 
             Vector3 start = {.x = start_x, .y = start_y, .z = info.z_position};
             Vector3 end = {.x = end_x, .y = end_y, .z = info.z_position};
@@ -213,16 +213,16 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
             i32 shape_idx = first_shape_idx;
             while(true){
                 i32 vert_length = 4;
-                BOUNDS_CHECK(shape_idx, state.bodies.aabb.length);
+                BOUNDS_CHECK(shape_idx, state.entities.aabb.length);
                 f32* x = (f32[4]){};
-                x[0] = state.bodies.aabb.min_x[shape_idx];
-                x[1] = state.bodies.aabb.max_x[shape_idx];
+                x[0] = state.entities.aabb.min_x[shape_idx];
+                x[1] = state.entities.aabb.max_x[shape_idx];
                 x[2] = x[1];
                 x[3] = x[0];
                 f32* y = (f32[4]){};
-                y[0] = state.bodies.aabb.max_y[shape_idx];
+                y[0] = state.entities.aabb.max_y[shape_idx];
                 y[1] = y[0];
-                y[2] = state.bodies.aabb.min_y[shape_idx];
+                y[2] = state.entities.aabb.min_y[shape_idx];
                 y[3] = y[2];
 
                 renderer_draw_wire_poly(renderer, x, y, 4, info.colour_aabb, info.z_position, info.sprite_layer, info.material_idx);
@@ -365,11 +365,11 @@ void fizx_state_draw(FIZXState state, RendererContext* renderer, FIZXDrawInfo in
         for(i32 i = 1; i < state.body_hierarchy.root_index_count; i++){
             i32 body_idx = state.body_hierarchy.root_index[i];
 
-            BOUNDS_CHECK(body_idx, state.bodies.global_transform.length);
-            BOUNDS_CHECK(body_idx, state.bodies.local_center_of_mass.length);
+            BOUNDS_CHECK(body_idx, state.entities.global_transform.length);
+            BOUNDS_CHECK(body_idx, state.entities.local_center_of_mass.length);
             Circle shape = {
-                .x = state.bodies.global_transform.position.x[body_idx] + state.bodies.local_center_of_mass.x[body_idx],
-                .y = state.bodies.global_transform.position.y[body_idx] + state.bodies.local_center_of_mass.y[body_idx],
+                .x = state.entities.global_transform.position.x[body_idx] + state.entities.local_center_of_mass.x[body_idx],
+                .y = state.entities.global_transform.position.y[body_idx] + state.entities.local_center_of_mass.y[body_idx],
                 .radius = 0.1f
             };
 
