@@ -91,14 +91,13 @@ void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time)
     else{
         time_scale = 1.0f;
     }
-    
 
     for(i32 i = 0; i < entity_manager.entity_length; i++){
         Entity* entity = &entity_manager.entity[i];
         if(entity->physics_body_gid != 0){
             Transform2D transform2d;
             if(fizx_body_get_transform(&entity_manager.fizx_state, entity->physics_body_gid, &transform2d)){
-                entity->transform = transform2d_to_transform3d(transform2d);
+                entity->transform = transform2d;
             }
         }
     }
@@ -108,9 +107,7 @@ void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time)
     for(i32 i = 0; i < entity_manager.entity_length; i++){
         Entity* entity = &entity_manager.entity[i];
         if(!gfx_sprite_id_equals(entity->sprite_id, (GFX_SpriteId){0})){
-            f32 z = entity->transform.position.z;
-            gfx_sprite_set_transform(&gfx_state, entity->sprite_id, transform3d_to_matrix4x4(entity->transform));
-            entity->transform.position.z = z;
+            gfx_sprite_set_transform(&gfx_state, entity->sprite_id, entity->transform, entity->sprite_depth);
         }
     }
     
@@ -323,16 +320,20 @@ void app_main(){
     GenId sling_shot_gid = entity_manager_alloc_entity(&entity_manager);
     entity_manager_get_entity(entity_manager, sling_shot_gid, &entity);
     {
-        entity->transform = (Transform3D){.position = {.y = 2.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 3.0f)};
-        Transform3D sprite_transform = {.position = {.z = 200.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 1000.0f)};
+        entity->transform = TRANSFORM2D_IDENTITY;
+        entity->transform.scale = vector2_mul_val(entity->transform.scale, 3.0f);
+        entity->transform.position = (Vector2){.y = 2.0f};
+        entity->sprite_depth = 10.0f;
+        Transform2D sprite_transform = TRANSFORM2D_IDENTITY;
+        sprite_transform.scale = vector2_mul_val(sprite_transform.scale, 10.0f);
         bool success = false;
         entity->sprite_id = gfx_sprite_alloc(&gfx_state, SPRITE_LAYER_WORLD, &success);
         gfx_sprite_init(
-            &gfx_state, entity->sprite_id, transform3d_to_matrix4x4(sprite_transform), GFX_COLOUR_WHITE, (GFX_SpriteRegion){.width = 16, .height = 16}, GFX_ColourState_Tint,
+            &gfx_state, entity->sprite_id, transform2d_to_matrix4x4(sprite_transform), GFX_COLOUR_WHITE, (GFX_SpriteRegion){.width = 16, .height = 16}, GFX_ColourState_Tint,
             4, SPRITE_MATERIAL_IMAGE, true
         );
     
-        entity_spawn_bird(&entity_manager, &gfx_state, vector3_add(entity->transform.position, (Vector3){.y = 0.5f}));
+        entity_spawn_bird(&entity_manager, &gfx_state, vector2_add(entity->transform.position, (Vector2){.y = 0.5f}));
     }
 
     u128 prev_process_tick_in_mili  = 0;

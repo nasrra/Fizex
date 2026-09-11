@@ -508,34 +508,34 @@ typedef struct{
 #define GFX_VERTEX_SHADER_ENTRY_POINT "vs_main"
 #define GFX_FRAGMENT_SHADER_ENTRY_POINT "fs_main"
 
-#define GFX_DEFINE_SPRITE_SETTER_FUNCTION(MEMBER_NAME, MEMBER_TYPE)                                             \
+#define GFX_DEFINE_SPRITE_SETTER_FUNCTION(FUNCTION_SUFFIX, MEMBER_NAME, MEMBER_TYPE)                            \
                                                                                                                 \
-void gfx_sprite_set_##MEMBER_NAME##_unsafe(GFX_State* ctx, i32 sprite_index, MEMBER_TYPE MEMBER_NAME){          \
+void gfx_sprite_set_##FUNCTION_SUFFIX##_unsafe(GFX_State* ctx, i32 sprite_index, MEMBER_TYPE MEMBER_NAME){      \
     GFX_SpriteManager* sprite_manager = &ctx->sprite_manager;                                                   \
     BOUNDS_CHECK(sprite_index, sprite_manager->device_sprites_length);                                          \
     sprite_manager->device_sprites[sprite_index].##MEMBER_NAME = MEMBER_NAME;                                   \
 }                                                                                                               \
                                                                                                                 \
-bool gfx_sprite_set_##MEMBER_NAME(GFX_State* ctx, GFX_SpriteId sprite_id, MEMBER_TYPE MEMBER_NAME){             \
+bool gfx_sprite_set_##FUNCTION_SUFFIX(GFX_State* ctx, GFX_SpriteId sprite_id, MEMBER_TYPE MEMBER_NAME){         \
     i32 index = gen_id_get_index(sprite_id.gen_id);                                                             \
     i32 generation = gen_id_get_generation(sprite_id.gen_id);                                                   \
     BOUNDS_CHECK(index, ctx->sprite_manager.sprite_generations_length);                                         \
     if(ctx->sprite_manager.sprite_generations[index] != generation){                                            \
         return false;                                                                                           \
     }                                                                                                           \
-    gfx_sprite_set_##MEMBER_NAME##_unsafe(ctx, index, MEMBER_NAME);                                             \
+    gfx_sprite_set_##FUNCTION_SUFFIX##_unsafe(ctx, index, MEMBER_NAME);                                         \
     return true;                                                                                                \
 }
 
-#define GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(MEMBER_NAME, MEMBER_TYPE)                                           \
+#define GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(FUNCTION_SUFFIX, MEMBER_NAME, MEMBER_TYPE)                          \
                                                                                                                     \
-void gfx_sprite_chain_set_##MEMBER_NAME##_unsafe(GFX_State* ctx, i32 sprite_index, MEMBER_TYPE MEMBER_NAME){        \
+void gfx_sprite_chain_set_##FUNCTION_SUFFIX##_unsafe(GFX_State* ctx, i32 sprite_index, MEMBER_TYPE MEMBER_NAME){    \
     i32 first_index = sprite_index;                                                                                 \
     i32 index = first_index;                                                                                        \
     while(true){                                                                                                    \
         BOUNDS_CHECK(index, ctx->sprite_manager.host_sprites_length);                                               \
         GFX_HostSprite* host = &ctx->sprite_manager.host_sprites[index];                                            \
-        gfx_sprite_set_##MEMBER_NAME##_unsafe(ctx, index, MEMBER_NAME);                                             \
+        gfx_sprite_set_##FUNCTION_SUFFIX##_unsafe(ctx, index, MEMBER_NAME);                                         \
         index = host->next_in_chain;                                                                                \
         if(index == first_index){                                                                                   \
             break;                                                                                                  \
@@ -543,7 +543,7 @@ void gfx_sprite_chain_set_##MEMBER_NAME##_unsafe(GFX_State* ctx, i32 sprite_inde
     }                                                                                                               \
 }                                                                                                                   \
                                                                                                                     \
-bool gfx_sprite_chain_set_##MEMBER_NAME(GFX_State* ctx, GFX_SpriteId sprite_id, MEMBER_TYPE MEMBER_NAME){           \
+bool gfx_sprite_chain_set_##FUNCTION_SUFFIX(GFX_State* ctx, GFX_SpriteId sprite_id, MEMBER_TYPE MEMBER_NAME){       \
     i32 first_index = gen_id_get_index(sprite_id.gen_id);                                                           \
     i32 generation = gen_id_get_generation(sprite_id.gen_id);                                                       \
                                                                                                                     \
@@ -555,13 +555,13 @@ bool gfx_sprite_chain_set_##MEMBER_NAME(GFX_State* ctx, GFX_SpriteId sprite_id, 
             return false;                                                                                           \
         }                                                                                                           \
         BOUNDS_CHECK(first_index, ctx->sprite_manager.host_sprites_length);                                         \
-        if(gfx_sprite_is_chain_sprite(ctx->sprite_manager.host_sprites[first_index]) == true){                 \
+        if(gfx_sprite_is_chain_sprite(ctx->sprite_manager.host_sprites[first_index]) == true){                      \
             ASSERT(false, "sprite is not within a sprite-chain.");                                                  \
             return false;                                                                                           \
         }                                                                                                           \
     }                                                                                                               \
                                                                                                                     \
-    gfx_sprite_set_##MEMBER_NAME##_unsafe(ctx, first_index, MEMBER_NAME);                                           \
+    gfx_sprite_set_##FUNCTION_SUFFIX##_unsafe(ctx, first_index, MEMBER_NAME);                                       \
     return true;                                                                                                    \
 }
 
@@ -630,20 +630,28 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
     return gfx_sprite_is_chain_sprite(sprite) && sprite.is_first_in_chain;
 }
 
-GFX_DEFINE_SPRITE_SETTER_FUNCTION(transform, Matrix4x4);
-GFX_DEFINE_SPRITE_SETTER_FUNCTION(material, i32);
-GFX_DEFINE_SPRITE_SETTER_FUNCTION(region, GFX_SpriteRegion);
-GFX_DEFINE_SPRITE_SETTER_FUNCTION(virtual_texture, i32);
-GFX_DEFINE_SPRITE_SETTER_FUNCTION(state, GFX_SpriteState);
-GFX_DEFINE_SPRITE_SETTER_FUNCTION(colour, GFX_Colour);
-GFX_DEFINE_SPRITE_SETTER_FUNCTION(colour_state, GFX_ColourState);
-GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(transform, Matrix4x4);
-GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(material, i32);
-GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(region, GFX_SpriteRegion);
-GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(virtual_texture, i32);
-GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(state, GFX_SpriteState);
-GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(colour, GFX_Colour);
-GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(colour_state, GFX_ColourState);
+GFX_DEFINE_SPRITE_SETTER_FUNCTION(transform_matrix, transform, Matrix4x4);
+GFX_DEFINE_SPRITE_SETTER_FUNCTION(material, material, i32);
+GFX_DEFINE_SPRITE_SETTER_FUNCTION(region, region, GFX_SpriteRegion);
+GFX_DEFINE_SPRITE_SETTER_FUNCTION(virtual_texture, virtual_texture, i32);
+GFX_DEFINE_SPRITE_SETTER_FUNCTION(state, state, GFX_SpriteState);
+GFX_DEFINE_SPRITE_SETTER_FUNCTION(colour, colour, GFX_Colour);
+GFX_DEFINE_SPRITE_SETTER_FUNCTION(colour_state, colour_state, GFX_ColourState);
+GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(transform_matrix, transform, Matrix4x4);
+GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(material, material, i32);
+GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(region, region, GFX_SpriteRegion);
+GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(virtual_texture, virtual_texture, i32);
+GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(state, state, GFX_SpriteState);
+GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(colour, colour, GFX_Colour);
+GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(colour_state, colour_state, GFX_ColourState);
+
+void gfx_sprite_set_transform_unsafe(GFX_State* ctx, i32 sprite_idx, Transform2D transform, f32 depth){
+    gfx_sprite_set_transform_matrix_unsafe(ctx, sprite_idx, transform2d_to_matrix4x4_depth(transform, depth));
+}
+
+bool gfx_sprite_set_transform(GFX_State* ctx, GFX_SpriteId sprite_id, Transform2D transform, f32 depth){
+    return gfx_sprite_set_transform_matrix(ctx, sprite_id, transform2d_to_matrix4x4_depth(transform, depth));
+}
 
 void gfx_font_data_init(GFX_FontData* font_data, MemoryArena* arena, i32 glyph_count, u32 base_glyph_index){
     ASSERT(glyph_count > 1, "font data should be init with a glyph count greater than one to account for the Nil element.");
@@ -1935,7 +1943,7 @@ bool gfx_sprite_init(
         return false;
     }
 
-    gfx_sprite_set_transform_unsafe(ctx, index, transform);
+    gfx_sprite_set_transform_matrix_unsafe(ctx, index, transform);
     gfx_sprite_set_material_unsafe(ctx, index, material);
     gfx_sprite_set_region_unsafe(ctx, index, region);
     gfx_sprite_set_virtual_texture_unsafe(ctx, index, virtual_texture);
@@ -2027,7 +2035,7 @@ bool gfx_sprite_string_init(
             virtual_texture -> text -> transform.
     **/
     gfx_sprite_chain_set_virtual_texture_unsafe(ctx, first_index, virtual_texture_index);
-    gfx_sprite_chain_set_transform_unsafe(ctx, first_index, transform);
+    gfx_sprite_chain_set_transform_matrix_unsafe(ctx, first_index, transform);
     gfx_sprite_chain_set_state_unsafe(ctx, first_index, is_active ? GFX_SpriteState_Active : GFX_SpriteState_Inactive);
     gfx_sprite_chain_set_material_unsafe(ctx, first_index, material_index);
 

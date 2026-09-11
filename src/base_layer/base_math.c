@@ -182,7 +182,7 @@ typedef struct{
 #define VECTOR3_MAX ((Vector3){f32_MAX, f32_MAX, f32_MAX})
 #define VECTOR3_ONE ((Vector3){1.0f, 1.0f, 1.0f})
 #define QUATERNION_IDENTITY ((Quaternion){.w = 1.0f})
-#define TRANSFORM_IDENTITY ((Transform){.scale = VECTOR3_ONE, .rotation = QUATERNION_IDENTITY})
+#define TRANSFORM3D_IDENTITY ((Transform){.scale = VECTOR3_ONE, .rotation = QUATERNION_IDENTITY})
 #define TRANSFORM2D_IDENTITY ((Transform2D){.scale = VECTOR2_ONE, .cosine = 1})
 #define POLYGON_RECTANGLE_VERTICES_LENGTH 4
 #define PI 3.1415926535897932384626433f
@@ -505,6 +505,12 @@ Vector2 vector2_div(Vector2 lhs, Vector2 rhs){
     return lhs;
 }
 
+Vector2 vector2_div_val(Vector2 lhs, f32 rhs){
+    lhs.x /= rhs;
+    lhs.y /= rhs;
+    return lhs;
+}
+
 f32 vector2_dist_sqrd(Vector2 from, Vector2 to){
     return vector2_dist_sqrd_scalar(from.x, from.y, to.x, to.y);
 }
@@ -533,6 +539,17 @@ f32 vector2_get_angle_between_points(Vector2 start, Vector2 end){
 Vector3 vector2_to_vector3(Vector2 v){
     return (Vector3){v.x, v.y, 0.0f};
 }
+
+Vector2 vector2_clamp_to_radius(Vector2 v, f32 radius){
+    f32 sqr_len = vector2_len_sqrd(v);
+    if(sqr_len > radius * radius){
+        f32 len = f32_sqrt(sqr_len);
+        v = vector2_div_val(v, len);        // normalize
+        v = vector2_mul_val(v, radius);     // scale to radius
+    }
+    return v;
+}
+
 
 
 
@@ -1245,8 +1262,7 @@ void soa_vector2_reset_count(Soa_Vector2* soa){
 
 
 
-Matrix4x4 transform2d_to_matrix4x4(Transform2D transform){
-    
+inline Matrix4x4 transform2d_to_matrix4x4_depth(Transform2D transform, f32 depth){
     Matrix4x4 result = {0};
     f32* m = result.m;
 
@@ -1274,10 +1290,14 @@ Matrix4x4 transform2d_to_matrix4x4(Transform2D transform){
     // COLUMN 3 (Translation)
     m[12] = transform.position.x;
     m[13] = transform.position.y;
-    m[14] = 0.0f;
+    m[14] = depth;
     m[15] = 1.0f;
 
     return result;
+}
+
+Matrix4x4 transform2d_to_matrix4x4(Transform2D transform){
+    return transform2d_to_matrix4x4_depth(transform, 0.0f);    
 }
 
 bool soa_transform2d_init(Soa_Transform2D* soa, MemoryArena* arena, i32 length){
