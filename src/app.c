@@ -9,8 +9,8 @@
 #include "base_layer/base_math.c"
 #include "base_layer/base_algorithms.c"
 #include "base_layer/base_structures.c"
-#include "renderer/renderer.c"
-#include "renderer/renderer_app_types.c"
+#include "renderer/gfx.c"
+#include "renderer/gfx_app_types.c"
 #include "fizx/fizx.c"
 #include "fizx/fizx_draw.c"
 #include "gameplay/entity.c"
@@ -44,8 +44,8 @@ typedef struct{
 ====================**//**/
 
 WindowContext* window_ctx;
-RendererContext renderer_ctx;
-MemoryArena renderer_memory;
+GFX_State gfx_state;
+MemoryArena gfx_memory;
 EntityManager entity_manager;
 
 f32 time_scale = 1.0f;
@@ -71,16 +71,16 @@ void enemy_body_on_exit_callback(FIZX_CollisionInfo info, void* user_data){
 
 void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time){
     
-    Vector2 mouse_world_position = renderer_get_mouse_world_position(&renderer_ctx);
+    Vector2 mouse_world_position = gfx_get_mouse_world_position(&gfx_state);
         
-    f32 camera_speed = 1.0f * delta_time * renderer_ctx.world_camera.orthographic_size;
+    f32 camera_speed = 1.0f * delta_time * gfx_state.world_camera.orthographic_size;
     bool x = input_is_key_pressed(KEY_RIGHT);
-    if(input_is_key_pressed(KEY_Q))     {renderer_ctx.world_camera.orthographic_size -= renderer_ctx.world_camera.orthographic_size * 1.0f * delta_time;}
-    if(input_is_key_pressed(KEY_E))     {renderer_ctx.world_camera.orthographic_size += renderer_ctx.world_camera.orthographic_size * 1.0f * delta_time;}
-    if(input_is_key_pressed(KEY_RIGHT)) {renderer_ctx.world_camera.position.x += camera_speed;}
-    if(input_is_key_pressed(KEY_LEFT))  {renderer_ctx.world_camera.position.x -= camera_speed;}
-    if(input_is_key_pressed(KEY_UP))    {renderer_ctx.world_camera.position.y += camera_speed;}
-    if(input_is_key_pressed(KEY_DOWN))  {renderer_ctx.world_camera.position.y -= camera_speed;}
+    if(input_is_key_pressed(KEY_Q))     {gfx_state.world_camera.orthographic_size -= gfx_state.world_camera.orthographic_size * 1.0f * delta_time;}
+    if(input_is_key_pressed(KEY_E))     {gfx_state.world_camera.orthographic_size += gfx_state.world_camera.orthographic_size * 1.0f * delta_time;}
+    if(input_is_key_pressed(KEY_RIGHT)) {gfx_state.world_camera.position.x += camera_speed;}
+    if(input_is_key_pressed(KEY_LEFT))  {gfx_state.world_camera.position.x -= camera_speed;}
+    if(input_is_key_pressed(KEY_UP))    {gfx_state.world_camera.position.y += camera_speed;}
+    if(input_is_key_pressed(KEY_DOWN))  {gfx_state.world_camera.position.y -= camera_speed;}
     
     if(input_is_key_pressed(KEY_SPACE)){
         time_scale = 0.0f;        
@@ -107,9 +107,9 @@ void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time)
 
     for(i32 i = 0; i < entity_manager.entity_length; i++){
         Entity* entity = &entity_manager.entity[i];
-        if(!renderer_sprite_id_equals(entity->sprite_id, (SpriteId){0})){
+        if(!gfx_sprite_id_equals(entity->sprite_id, (GFX_SpriteId){0})){
             f32 z = entity->transform.position.z;
-            renderer_sprite_set_transform(&renderer_ctx, entity->sprite_id, transform_to_matrix4x4(entity->transform));
+            gfx_sprite_set_transform(&gfx_state, entity->sprite_id, transform_to_matrix4x4(entity->transform));
             entity->transform.position.z = z;
         }
     }
@@ -118,14 +118,14 @@ void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time)
     platform_get_mouse_position(&result.x, &result.y);
 }
 
-RendererContext app_renderer_init(MemoryArena* persistent, MemoryArena* transient, WindowContext window_ctx){
+GFX_State app_gfx_init(MemoryArena* persistent, MemoryArena* transient, WindowContext window_ctx){
 
-    memory_arena_partition(persistent, &renderer_memory, MEGABYTE(2));
+    memory_arena_partition(persistent, &gfx_memory, MEGABYTE(2));
 
     /**
         font textures.
     **/
-    FontTextureInitInfo font_texture_init_info ={
+    GFX_FontTextureInitInfo font_texture_init_info ={
         .base_glyph_index = 32,
         .glyph_count = 128,
         .texture_height = 512,
@@ -139,36 +139,36 @@ RendererContext app_renderer_init(MemoryArena* persistent, MemoryArena* transien
     /**
         image textures.
     **/
-    ImageTexturesInitInfo* image_textures_init_info;
+    GFX_ImageTexturesInitInfo* image_textures_init_info;
     i32 image_textures_init_info_length;
     MEMORY_ARENA_ALLOC_ARRAY(transient, image_textures_init_info, &image_textures_init_info_length, 4);
 
     BOUNDS_CHECK(0, image_textures_init_info_length);
-    image_textures_init_info[0] = (ImageTexturesInitInfo){.width = 512, .height = 512, .max_textures = 16};
+    image_textures_init_info[0] = (GFX_ImageTexturesInitInfo){.width = 512, .height = 512, .max_textures = 16};
     BOUNDS_CHECK(1, image_textures_init_info_length);
-    image_textures_init_info[1] = (ImageTexturesInitInfo){.width = 360, .height = 162, .max_textures = 2};
+    image_textures_init_info[1] = (GFX_ImageTexturesInitInfo){.width = 360, .height = 162, .max_textures = 2};
     BOUNDS_CHECK(2, image_textures_init_info_length);
-    image_textures_init_info[2] = (ImageTexturesInitInfo){.width = 640, .height = 360, .max_textures = 2};
+    image_textures_init_info[2] = (GFX_ImageTexturesInitInfo){.width = 640, .height = 360, .max_textures = 2};
     BOUNDS_CHECK(3, image_textures_init_info_length);
-    image_textures_init_info[3] = (ImageTexturesInitInfo){.width = 16, .height = 16, .max_textures = 24};
+    image_textures_init_info[3] = (GFX_ImageTexturesInitInfo){.width = 16, .height = 16, .max_textures = 24};
 
 
     /**
         sprite layers.
     **/
-    SpriteLayerCreateInfo* sprite_layer_create_infos;
+    GFX_SpriteLayerCreateInfo* sprite_layer_create_infos;
     i32 sprite_layer_create_infos_length;
     MEMORY_ARENA_ALLOC_ARRAY(transient, sprite_layer_create_infos, &sprite_layer_create_infos_length, 2);
 
     BOUNDS_CHECK(0, sprite_layer_create_infos_length);
-    sprite_layer_create_infos[0] = (SpriteLayerCreateInfo){.max_sprites = 512};
+    sprite_layer_create_infos[0] = (GFX_SpriteLayerCreateInfo){.max_sprites = 512};
     BOUNDS_CHECK(1, sprite_layer_create_infos_length);
-    sprite_layer_create_infos[1] = (SpriteLayerCreateInfo){.max_sprites = 512};
+    sprite_layer_create_infos[1] = (GFX_SpriteLayerCreateInfo){.max_sprites = 512};
 
     /**
         context.
     **/
-    RendererContextInitInfo renderer_init_info = {
+    GFX_StateInitInfo gfx_init_info = {
         .max_file_path_length = 256,
         .max_user_uniform_buffer_size_in_bytes = sizeof(Ubo),
         .max_user_storage_buffer_size_in_bytes = 4, // this should be 4 when not used for some reason idk.
@@ -183,8 +183,8 @@ RendererContext app_renderer_init(MemoryArena* persistent, MemoryArena* transien
         .graphics_pipeline_shader_file_path = (String){.chars = "assets/shader.wgsl", .length = 18}
     };
 
-    renderer_renderer_ctx_init(&renderer_ctx, renderer_init_info, persistent, transient, window_ctx, WINDOW_WIDTH, WINDOW_HEIGHT);
-    return renderer_ctx;
+    gfx_state_init(&gfx_state, gfx_init_info, persistent, transient, window_ctx, WINDOW_WIDTH, WINDOW_HEIGHT);
+    return gfx_state;
 }
 
 void app_fixed_update(f32 delta_time){
@@ -198,30 +198,30 @@ void app_late_update(f32 delta_time){
         this might have to be swapped for the final render target resolution, maybe idk.
     **/
     f32 aspect_ratio = platform_window_calc_aspect_ratio(*window_ctx);
-    renderer_camera_update_projection_matrix(&renderer_ctx.world_camera, aspect_ratio);
+    gfx_camera_update_projection_matrix(&gfx_state.world_camera, aspect_ratio);
 
     Ubo ubo = {
         .world_camera_matrix = 
             matrix4x4_mul(
                 matrix4x4_mul(
-                    renderer_ctx.world_camera.projection, 
-                    renderer_ctx.world_camera.view
+                    gfx_state.world_camera.projection, 
+                    gfx_state.world_camera.view
                 ), 
-            renderer_ctx.world_camera.model
+            gfx_state.world_camera.model
         ),
         .screen_camera_matrix = 
             matrix4x4_mul(
                 matrix4x4_mul(
-                    renderer_ctx.world_camera.projection, 
-                    renderer_ctx.world_camera.view
+                    gfx_state.world_camera.projection, 
+                    gfx_state.world_camera.view
                 ), 
-            renderer_ctx.world_camera.model
+            gfx_state.world_camera.model
         ),
-        .world_camera_far_z = renderer_ctx.world_camera.far_z,
-        .world_camera_near_z = renderer_ctx.world_camera.near_z,
+        .world_camera_far_z = gfx_state.world_camera.far_z,
+        .world_camera_near_z = gfx_state.world_camera.near_z,
     };
 
-    renderer_write_to_user_uniform_buffer(&renderer_ctx, &ubo, sizeof(Ubo));
+    gfx_write_to_user_uniform_buffer(&gfx_state, &ubo, sizeof(Ubo));
 }
 
 void app_main(){
@@ -238,40 +238,40 @@ void app_main(){
 
     input_init(persistent);
 
-    renderer_orthographic_camera_init(&renderer_ctx.world_camera, (Vector3){.y = 5.0f, .z = -4.0f}, 0.01f, 100.0f, 22.0f);
-    renderer_global_wireframe_thickness = 0.05f;
-    renderer_ctx = app_renderer_init(persistent, transient, *window_ctx);
+    gfx_orthographic_camera_init(&gfx_state.world_camera, (Vector3){.y = 5.0f, .z = -4.0f}, 0.01f, 100.0f, 22.0f);
+    gfx_global_wireframe_thickness = 0.05f;
+    gfx_state = app_gfx_init(persistent, transient, *window_ctx);
     
     String file_path = {0};
     string_init(&file_path, transient, 32);
 
     string_push_chars(&file_path, "assets/image.png", 16);
-    renderer_virtual_texture_set_file_path(&renderer_ctx, file_path, 3);
-    renderer_load_image_texture(&renderer_ctx, 3);
+    gfx_virtual_texture_set_file_path(&gfx_state, file_path, 3);
+    gfx_load_image_texture(&gfx_state, 3);
     
     string_clear(&file_path);
     
     string_push_chars(&file_path, "assets/sling_shot.png", 21);
-    renderer_virtual_texture_set_file_path(&renderer_ctx, file_path, 4);
-    renderer_load_image_texture(&renderer_ctx, 4);
+    gfx_virtual_texture_set_file_path(&gfx_state, file_path, 4);
+    gfx_load_image_texture(&gfx_state, 4);
 
     FIZX_DrawInfo fizx_draw_state = {
-        .colour_dynamic_shape           = COLOUR_GREEN,
-        .colour_passive_trigger_shape   = COLOUR_LIGHT_BLUE,
-        .colour_kinematic_shape         = COLOUR_ORANGE,
-        .colour_active_trigger_shape    = COLOUR_RED,
-        .colour_aabb                    = COLOUR_LIGHT_BLUE,
-        .colour_fallback_shape          = COLOUR_WHITE,
-        .colour_inactive_entity         = COLOUR_BLACK,
-        .colour_bvh_leaf                = COLOUR_WHITE,
-        .colour_bvh_branch              = COLOUR_LIGHT_GREEN,
-        .colour_contact_point           = COLOUR_RED,
-        .colour_linear_velocity         = COLOUR_WHITE,
-        .colour_global_position         = COLOUR_WHITE,
-        .colour_centroid                = COLOUR_YELLOW,
-        .colour_collision_other         = COLOUR_BLUE,
-        .colour_collision_normal        = COLOUR_LIGHT_BLUE,
-        .colour_center_of_mass          = COLOUR_ORANGE,
+        .colour_dynamic_shape           = GFX_COLOUR_GREEN,
+        .colour_passive_trigger_shape   = GFX_COLOUR_LIGHT_BLUE,
+        .colour_kinematic_shape         = GFX_COLOUR_ORANGE,
+        .colour_active_trigger_shape    = GFX_COLOUR_RED,
+        .colour_aabb                    = GFX_COLOUR_LIGHT_BLUE,
+        .colour_fallback_shape          = GFX_COLOUR_WHITE,
+        .colour_inactive_entity         = GFX_COLOUR_BLACK,
+        .colour_bvh_leaf                = GFX_COLOUR_WHITE,
+        .colour_bvh_branch              = GFX_COLOUR_LIGHT_GREEN,
+        .colour_contact_point           = GFX_COLOUR_RED,
+        .colour_linear_velocity         = GFX_COLOUR_WHITE,
+        .colour_global_position         = GFX_COLOUR_WHITE,
+        .colour_centroid                = GFX_COLOUR_YELLOW,
+        .colour_collision_other         = GFX_COLOUR_BLUE,
+        .colour_collision_normal        = GFX_COLOUR_LIGHT_BLUE,
+        .colour_center_of_mass          = GFX_COLOUR_ORANGE,
         .sprite_layer                   = SPRITE_LAYER_WORLD,
         .wireframe_thickness            = 0.005f,
         .material_idx                   = SPRITE_MATERIAL_DEBUG,
@@ -326,13 +326,13 @@ void app_main(){
         entity->transform = (Transform){.position = {.y = 2.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 3.0f)};
         Transform sprite_transform = {.position = {.z = 200.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 1000.0f)};
         bool success = false;
-        entity->sprite_id = renderer_sprite_alloc(&renderer_ctx, SPRITE_LAYER_WORLD, &success);
-        renderer_sprite_init(
-            &renderer_ctx, entity->sprite_id, transform_to_matrix4x4(sprite_transform), COLOUR_WHITE, (SpriteRegion){.width = 16, .height = 16}, ColourState_Tint,
+        entity->sprite_id = gfx_sprite_alloc(&gfx_state, SPRITE_LAYER_WORLD, &success);
+        gfx_sprite_init(
+            &gfx_state, entity->sprite_id, transform_to_matrix4x4(sprite_transform), GFX_COLOUR_WHITE, (GFX_SpriteRegion){.width = 16, .height = 16}, GFX_ColourState_Tint,
             4, SPRITE_MATERIAL_IMAGE, true
         );
     
-        entity_spawn_bird(&entity_manager, &renderer_ctx, vector3_add(entity->transform.position, (Vector3){.y = 0.5f}));
+        entity_spawn_bird(&entity_manager, &gfx_state, vector3_add(entity->transform.position, (Vector3){.y = 0.5f}));
     }
 
     u128 prev_process_tick_in_mili  = 0;
@@ -380,9 +380,9 @@ void app_main(){
     
         // final update.
         {
-            fizx_state_draw(entity_manager.fizx_state, &renderer_ctx, fizx_draw_state, delta_time);
-            entity_manager_debug_draw(entity_manager, &renderer_ctx, delta_time);
-            renderer_draw_renderer(&renderer_ctx);
+            fizx_state_draw(entity_manager.fizx_state, &gfx_state, fizx_draw_state, delta_time);
+            entity_manager_debug_draw(entity_manager, &gfx_state, delta_time);
+            gfx_state_draw(&gfx_state);
             transient->stride = 0;
         }
     }

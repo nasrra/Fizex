@@ -1,6 +1,6 @@
 typedef struct{
     Transform transform;
-    SpriteId sprite_id;
+    GFX_SpriteId sprite_id;
     GenId physics_body_gid;
     Aabb clickable_aabb;
     i32 health;
@@ -62,7 +62,7 @@ bool entity_manager_get_entity(EntityManager manager, GenId entity_gid, Entity**
     return true;
 }
 
-void entity_manager_debug_draw(EntityManager manager, RendererContext* renderer, f32 delta_time){
+void entity_manager_debug_draw(EntityManager manager, GFX_State* gfx, f32 delta_time){
     for(i32 i = 0; i < manager.entity_length; i++){
         Entity* entity = &manager.entity[i];
         if(entity->is_clickable){
@@ -72,7 +72,7 @@ void entity_manager_debug_draw(EntityManager manager, RendererContext* renderer,
                 .width = entity->clickable_aabb.max_x - entity->clickable_aabb.min_x,
                 .height = entity->clickable_aabb.max_y - entity->clickable_aabb.min_y
             };            
-            renderer_draw_wire_rect(renderer, shape , COLOUR_WHITE, 0.0f, SPRITE_LAYER_WORLD, SPRITE_MATERIAL_DEBUG);
+            gfx_draw_wire_rect(gfx, shape , GFX_COLOUR_WHITE, 0.0f, SPRITE_LAYER_WORLD, SPRITE_MATERIAL_DEBUG);
         }
     }
 }
@@ -90,7 +90,7 @@ void entity_deplete_health(EntityManager* manager, GenId entity_gid, i32 amount)
     }
 }
 
-void entity_spawn_bird(EntityManager* entity_manager, RendererContext* renderer_ctx, Vector3 position){
+void entity_spawn_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Vector3 position){
     // clickable entity (angry bird).
     GenId player_gid = entity_manager_alloc_entity(entity_manager);
     Entity* entity;
@@ -111,9 +111,9 @@ void entity_spawn_bird(EntityManager* entity_manager, RendererContext* renderer_
    
         Transform sprite_transform = {.position = {.x = 0.1f, .y = 0.0f, .z = 0.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 10.0f)};
         bool success = false;
-        entity->sprite_id = renderer_sprite_alloc(renderer_ctx, SPRITE_LAYER_WORLD, &success);
-        renderer_sprite_init(
-            renderer_ctx, entity->sprite_id, transform_to_matrix4x4(sprite_transform), COLOUR_WHITE, (SpriteRegion){.width = 512, .height = 512}, ColourState_Tint,
+        entity->sprite_id = gfx_sprite_alloc(gfx_ctx, SPRITE_LAYER_WORLD, &success);
+        gfx_sprite_init(
+            gfx_ctx, entity->sprite_id, transform_to_matrix4x4(sprite_transform), GFX_COLOUR_WHITE, (GFX_SpriteRegion){.width = 512, .height = 512}, GFX_ColourState_Tint,
             3, SPRITE_MATERIAL_IMAGE, true
         );
     }
