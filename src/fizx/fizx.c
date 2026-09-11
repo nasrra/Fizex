@@ -1,6 +1,7 @@
 /**
     TODO: (nich s)
     - add entity type checks to body and shape functions.
+    - deallocating bodies COULD fail at collidsion detection bvh indexing.
 **/
 
 
@@ -8,20 +9,25 @@
     types.
 ====================**//**/
 
-
 typedef struct{
-    f32* normal_x;
-    f32* normal_y;
-    f32* first_contact_point_x;
-    f32* first_contact_point_y;
-    f32* second_contact_point_x;
-    f32* second_contact_point_y;
-    f32* depth;
+    
+    f32 normal_x;
+    f32 normal_y;
+    f32 first_contact_point_x;
+    f32 first_contact_point_y;
+    f32 second_contact_point_x;
+    f32 second_contact_point_y;
+    f32 depth;
+    
+    i32 source_layer;
     i32 source_entity_idx;
     void* source_user_data;
+    
+    i32 target_layer;
     i32 target_entity_idx;
     void* target_user_data;
-    bool* two_contact_points;
+    
+    bool two_contact_points;
 } FIZX_CollisionInfo;
 
 typedef void (*FIZX_CollisionCallback)(FIZX_CollisionInfo, void*);
@@ -388,6 +394,26 @@ typedef struct{
     char* user_data;
     i32 user_data_length;
     i32 user_data_element_size;
+    
+    /*
+        the layer that the entity is on.
+    
+        `remarks`
+        where a bit is `1`, the entity IS on that layer.
+        where a bit is `0`, the entity IS NOT on that layer.
+    */
+    i32* layer;
+    i32 layer_length;
+    
+    /*
+        the layers that the entity will collide with.
+    
+        `remarks`
+        where a bit is `1`, the entity CAN collide with the layer.
+        where a bit is `0`, the entity CANNOT collider with the layer.
+    */
+    i32* mask;
+    i32 mask_length;
 
     FIZX_CollisionCallback* shape_on_enter_callback;
     i32 shape_on_enter_callback_length;
@@ -396,7 +422,6 @@ typedef struct{
     FIZX_CollisionCallback* shape_on_exit_callback;
     i32 shape_on_exit_callback_length;
     bool is_init;
-
 } FIZX_Soa_Entity;
 
 typedef struct{
@@ -1380,7 +1405,7 @@ void collision_manifold_complete_step(FIZX_CollisionManifold* manifold){
             continue;
         }
 
-        for(i32 chunk_element_idx = 0; chunk_element_idx < count; chunk_element_idx++){
+        for(i32 chunk_element_idx = count - 1; chunk_element_idx >= 0; chunk_element_idx--){
 
             // get the active phase of the collision.
             i32 element_idx = fixed_stride_array_get_element_idx(chunk_idx, manifold->collider_stride, chunk_element_idx);
@@ -1396,6 +1421,7 @@ void collision_manifold_complete_step(FIZX_CollisionManifold* manifold){
 
             switch(*phase){
                 case 1:{
+                    *phase += 1;
                     switch(*previous){
                         case FIZX_ContactState_None:{*current = FIZX_ContactState_Enter;}break;
                         case FIZX_ContactState_Enter:{*current = FIZX_ContactState_Sustain;}break;
@@ -1404,9 +1430,11 @@ void collision_manifold_complete_step(FIZX_CollisionManifold* manifold){
                     }
                 }break;
                 case 2:{
+                    *phase += 1;
                     *current = FIZX_ContactState_Exit;
                 }break;
                 case 3:{
+                    *phase += 1;
                     *current = FIZX_ContactState_None;
                 }break;
                 case 4:{
@@ -1417,7 +1445,6 @@ void collision_manifold_complete_step(FIZX_CollisionManifold* manifold){
                     ASSERT(false, "phase contains unknown state.");
                 } break;
             }
-            *phase += 1;
         }
     }
 }
@@ -1445,7 +1472,10 @@ inline bool collision_manifold_shape_has_collisions(FIZX_CollisionManifold manif
 ====================**//**/
 
 
-
+i32 fizx_entity_get_layer(FIZX_State* state, i32 entity_idx){
+    BOUNDS_CHECK(entity_idx, state->entities.layer_length);
+    return state->entities.layer[entity_idx];
+}
 
 bool fizx_body_get_transform(FIZX_State* state, GenId body_gid, Transform2D* out_transform){
     if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
@@ -1495,6 +1525,8 @@ void fizx_soa_entity_init(FIZX_Soa_Entity* soa, MemoryArena* arena, i32 length, 
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->shape_on_sustain_callback, &soa->shape_on_sustain_callback_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->shape_on_exit_callback, &soa->shape_on_exit_callback_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->user_data, &soa->user_data_length, user_data_size * length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->layer, &soa->layer_length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->mask, &soa->mask_length, length);
     soa->user_data_element_size = user_data_size;
 }
 
@@ -2336,7 +2368,7 @@ i32 fizx_shape_set_category_unsafe(FIZX_State* state, FIZX_ShapeType shape_type,
     return *category;
 }
 
-void fizx_shape_init_prepare(FIZX_State* state, FIZX_ShapeType type, FIZX_ShapeBehaviour behaviour, i32 shape_idx, i32 body_idx, bool is_rigid, void* user_data){
+inline void fizx_shape_init_prepare(FIZX_State* state, FIZX_ShapeType type, FIZX_ShapeBehaviour behaviour, i32 shape_idx, i32 body_idx, bool is_rigid, void* user_data, i32 layer){
     state->entities.entity_type[shape_idx];
     // clear any garbage data from previous allocations.
     fssoa_vector2_clear_chunk_count(&state->entities.base_vertex, shape_idx);
@@ -2345,9 +2377,13 @@ void fizx_shape_init_prepare(FIZX_State* state, FIZX_ShapeType type, FIZX_ShapeB
     BOUNDS_CHECK(shape_idx, state->entities.global_transform.position.length);
     f32 global_pos_x = state->entities.global_transform.position.x[shape_idx];
     f32 global_pos_y = state->entities.global_transform.position.y[shape_idx];
+    
     BOUNDS_CHECK(shape_idx, state->entities.previous_step_position.length);
     state->entities.previous_step_position.x[shape_idx] = global_pos_x;
     state->entities.previous_step_position.y[shape_idx] = global_pos_y;
+
+    BOUNDS_CHECK(shape_idx, state->entities.layer_length);
+    state->entities.layer[shape_idx] = layer;
     
     i32 user_data_idx = state->entities.user_data_element_size * shape_idx;
     BOUNDS_CHECK(user_data_idx, state->entities.user_data_length);
@@ -2439,7 +2475,7 @@ bool fizx_shape_set_rotational_response(FIZX_State* state, GenId shape_gid, bool
     `returns`:
     the gen-id to the allocate shape collider; otherwise zero upon failure.
 **/
-GenId fizx_circle_collider_alloc(FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, void* user_data, Circle shape){
+GenId fizx_circle_collider_alloc(FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, void* user_data, i32 layer, Circle shape){
 
     i32 body_idx = fizx_validate_body_gen_id(state, body_gid);
     if(body_idx == 0){
@@ -2455,7 +2491,7 @@ GenId fizx_circle_collider_alloc(FIZX_State* state, GenId body_gid, Transform2D 
 
     i32 shape_idx = gen_id_get_index(gid);
 
-    fizx_shape_init_prepare(state, FIZX_ShapeType_Circle, behaviour, shape_idx, body_idx, false, user_data);
+    fizx_shape_init_prepare(state, FIZX_ShapeType_Circle, behaviour, shape_idx, body_idx, false, user_data, layer);
 
     // set specific data.
     {
@@ -2472,7 +2508,7 @@ GenId fizx_circle_collider_alloc(FIZX_State* state, GenId body_gid, Transform2D 
     return gid;
 }
 
-GenId fizx_circle_rigid_alloc(FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, void* user_data, Circle shape, FIZX_Material material, bool rotational_repsonse){
+GenId fizx_circle_rigid_alloc(FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, void* user_data, i32 layer, Circle shape, FIZX_Material material, bool rotational_repsonse){
 
     i32 body_idx = fizx_validate_body_gen_id(state, body_gid);
     if(body_idx == 0){
@@ -2488,7 +2524,7 @@ GenId fizx_circle_rigid_alloc(FIZX_State* state, GenId body_gid, Transform2D loc
 
     i32 shape_idx = gen_id_get_index(gid);
 
-    fizx_shape_init_prepare(state, FIZX_ShapeType_Circle, behaviour, shape_idx, body_idx, true, user_data);
+    fizx_shape_init_prepare(state, FIZX_ShapeType_Circle, behaviour, shape_idx, body_idx, true, user_data, layer);
 
     { // set specific data.
         fizx_shape_set_rotational_response_unsafe(state, shape_idx, rotational_repsonse);
@@ -2526,7 +2562,7 @@ GenId fizx_circle_rigid_alloc(FIZX_State* state, GenId body_gid, Transform2D loc
     return gid;
 }
 
-GenId fizx_rectangle_collider_alloc(FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, void* user_data, Rectangle shape){
+GenId fizx_rectangle_collider_alloc(FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, void* user_data, i32 layer, Rectangle shape){
 
     i32 body_idx = fizx_validate_body_gen_id(state, body_gid);
     if(body_idx == 0){
@@ -2543,7 +2579,7 @@ GenId fizx_rectangle_collider_alloc(FIZX_State* state, GenId body_gid, Transform
 
     PolygonRectangle poly = polygon_rectangle_from_rectangle(shape);
 
-    fizx_shape_init_prepare(state, FIZX_ShapeType_Rectangle, behaviour, shape_idx, body_idx, false, user_data);
+    fizx_shape_init_prepare(state, FIZX_ShapeType_Rectangle, behaviour, shape_idx, body_idx, false, user_data, layer);
 
     // set specific data.
     {
@@ -2565,7 +2601,7 @@ GenId fizx_rectangle_collider_alloc(FIZX_State* state, GenId body_gid, Transform
     return gid;
 }
 
-GenId fizx_rectangle_rigid_alloc(FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, void* user_data, Rectangle shape, FIZX_Material material, bool rotational_response){
+GenId fizx_rectangle_rigid_alloc(FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, void* user_data, i32 layer, Rectangle shape, FIZX_Material material, bool rotational_response){
 
     i32 body_idx = fizx_validate_body_gen_id(state, body_gid);
     if(body_idx == 0){
@@ -2582,7 +2618,7 @@ GenId fizx_rectangle_rigid_alloc(FIZX_State* state, GenId body_gid, Transform2D 
     PolygonRectangle poly = polygon_rectangle_from_rectangle(shape);
     i32 shape_idx = gen_id_get_index(gid);
 
-    fizx_shape_init_prepare(state, FIZX_ShapeType_Rectangle, behaviour, shape_idx, body_idx, true, user_data);
+    fizx_shape_init_prepare(state, FIZX_ShapeType_Rectangle, behaviour, shape_idx, body_idx, true, user_data, layer);
 
     // set specific data.
     {
@@ -2890,7 +2926,10 @@ bool fizx_collision_detection_circle_to_circle(
     return true;
 }
 
-bool fizx_collision_detection_broad_phase(IntrusiveList body_hierarchy, Soa_Aabb aabb, i32 a_shape_idx, i32 b_shape_idx){
+bool fizx_collision_detection_broad_phase(
+    IntrusiveList body_hierarchy, 
+    Soa_Aabb aabb, 
+    i32 a_shape_idx, i32 b_shape_idx){
     // skip if the two shapes are apart of the same body.
     BOUNDS_CHECK(a_shape_idx, body_hierarchy.length);
     BOUNDS_CHECK(b_shape_idx, body_hierarchy.length);
@@ -4682,20 +4721,24 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                     BOUNDS_CHECK(cidx, state->collision_manifold.first_contact_point.length);
                     BOUNDS_CHECK(cidx, state->collision_manifold.second_contact_point.length);
                     BOUNDS_CHECK(cidx, state->collision_manifold.two_contact_points_length);
+                    BOUNDS_CHECK(target_entity_idx, state->entities.layer_length);
+                    BOUNDS_CHECK(source_entity_idx, state->entities.layer_length);
                     collision_info = (FIZX_CollisionInfo){
-                        .depth                      = &state->collision_manifold.depth[cidx],
-                        .normal_x                   = &state->collision_manifold.normal.x[cidx],
-                        .normal_y                   = &state->collision_manifold.normal.y[cidx],
-                        .first_contact_point_x      = &state->collision_manifold.first_contact_point.x[cidx],
-                        .first_contact_point_y      = &state->collision_manifold.first_contact_point.y[cidx],
-                        .second_contact_point_x     = &state->collision_manifold.second_contact_point.x[cidx],
-                        .second_contact_point_y     = &state->collision_manifold.second_contact_point.y[cidx],
+                        .depth                      = state->collision_manifold.depth[cidx],
+                        .normal_x                   = state->collision_manifold.normal.x[cidx],
+                        .normal_y                   = state->collision_manifold.normal.y[cidx],
+                        .first_contact_point_x      = state->collision_manifold.first_contact_point.x[cidx],
+                        .first_contact_point_y      = state->collision_manifold.first_contact_point.y[cidx],
+                        .second_contact_point_x     = state->collision_manifold.second_contact_point.x[cidx],
+                        .second_contact_point_y     = state->collision_manifold.second_contact_point.y[cidx],
                         .source_user_data           = state->collision_manifold.source_user_data[cidx],
                         .target_user_data           = state->collision_manifold.target_user_data[cidx],
-                        .two_contact_points         = &state->collision_manifold.two_contact_points[cidx],
+                        .two_contact_points         = state->collision_manifold.two_contact_points[cidx],
                         // see `collision_manifold_set_data_one_way` to know why and how this works.
                         .target_entity_idx = target_entity_idx,
-                        .source_entity_idx = source_entity_idx 
+                        .source_entity_idx = source_entity_idx,
+                        .target_layer = state->entities.layer[target_entity_idx],
+                        .source_layer = state->entities.layer[source_entity_idx]
                     };
                 
                     // pass each collision info to the user callback.

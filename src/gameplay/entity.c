@@ -3,6 +3,8 @@ typedef struct{
     SpriteId sprite_id;
     GenId physics_body_gid;
     Aabb clickable_aabb;
+    i32 health;
+    bool is_health;
     bool is_clickable;
     bool is_physics_body;
 } Entity;
@@ -14,6 +16,11 @@ typedef struct{
     FIZX_State fizx_state;
     bool is_init;
 } EntityManager;
+
+#define PHYSICS_LAYER_ALL I32_MAX
+#define PHYSICS_LAYER_PLAYER (1 << 1) 
+#define PHYSICS_LAYER_ENEMY (1 << 2) 
+#define PHYSICS_LAYER_ENVIRONMENT (1 << 3) 
 
 void entity_manager_init(EntityManager* manager, MemoryArena* arena, i32 entity_amount, i32 physics_body_amount){
     ASSERT(!manager->is_init, "already init.");

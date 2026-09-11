@@ -50,18 +50,18 @@ f32 time_scale = 1.0f;
     functions
 ====================**//**/
 
-void on_enter_callback(FIZX_CollisionInfo info, void* user_data){
-    GenId* target = (GenId*)info.target_user_data;
-    GenId* source = (GenId*)info.source_user_data;
-    platform_output_message("enter!\n");
+void enemy_body_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
+    if((info.source_layer & PHYSICS_LAYER_PLAYER) != 0){
+        platform_output_message("hit player\n");
+    }
+    // platform_output_message("hit\n");
 }
 
-void on_exit_callback(FIZX_CollisionInfo info, void* user_data){
-    platform_output_message("exit!\n");
-}
-
-void on_sustain_callback(FIZX_CollisionInfo info, void* user_data){
-    platform_output_message("sustain!\n");
+void enemy_body_on_exit_callback(FIZX_CollisionInfo info, void* user_data){
+    if((info.source_layer & PHYSICS_LAYER_PLAYER) != 0){
+        platform_output_message("exit player\n");
+    }
+    // platform_output_message("exit\n");
 }
 
 void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time){
@@ -265,45 +265,74 @@ void app_main(){
     };
 
     Transform shape_transform = {.scale = VECTOR3_ONE};
-    Rectangle shape = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
     Circle circle = {.x = 0.0f, .y = 0.0f, .radius = 1.0f};
+    Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
     FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 5.0f, .restitution = 0.0f};
 
     i32 entity_amount = 2048;
     i32 physics_body_amount = 128;
     entity_manager = (EntityManager){0};
     entity_manager_init(&entity_manager, persistent, entity_amount, physics_body_amount);
-    GenId e = entity_manager_alloc_entity(&entity_manager);
     Entity* entity;
-    entity_manager_get_entity(entity_manager, e, &entity);
     
-    Transform entity_body_transform = {.position = {.x = 1.5f, .y = 12.0f}, .scale = VECTOR3_ONE};
-    entity->is_physics_body = true;
-    entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(entity_body_transform), true);
-    GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, entity->physics_body_gid, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, &entity->physics_body_gid, shape, material, true);
-    entity->is_clickable = true;
-    entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
+    // clickable entity (angry bird).
+    GenId player_gid = entity_manager_alloc_entity(&entity_manager);
+    entity_manager_get_entity(entity_manager, player_gid, &entity);    
+    {
+        Transform entity_transform = {.position = {.x = 1.5f, .y = 5.0f}, .scale = VECTOR3_ONE};
+        entity->is_physics_body = true;
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(entity_transform), true);
+        GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, entity->physics_body_gid, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, &player_gid, PHYSICS_LAYER_PLAYER, square, material, true);
+    
+        entity->is_clickable = true;
+        entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
+   
+        Transform sprite_transform = {.position = {.x = 0.1f, .y = 0.0f, .z = 12.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 10.0f)};
+        bool success = false;
+        entity->sprite_id = renderer_sprite_alloc(&renderer_ctx, SPRITE_LAYER_WORLD, &success);
+        renderer_sprite_init(
+            &renderer_ctx, entity->sprite_id, transform_to_matrix4x4(sprite_transform), COLOUR_WHITE, (SpriteRegion){.width = 512, .height = 512}, ColourState_Tint,
+            3, SPRITE_MATERIAL_IMAGE, true
+        );
+    }
+    
     // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
     
-    Transform other_body_transform = {.position = {.y = 0.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = quaternion_create_from_axis_angle(VECTOR3_FORWARD, 30.0f)};
-    GenId other_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(other_body_transform), false);
-    GenId other_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, other_body_gid, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Trigger, &other_body_gid, shape, material, false);
-    // GenId other_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Kinematic, material, other_body_gid, false);
-    fizx_shape_set_on_enter_callback(&entity_manager.fizx_state, on_enter_callback, other_shape_gid);
-    fizx_shape_set_on_sustain_callback(&entity_manager.fizx_state, on_sustain_callback, other_shape_gid);
-    fizx_shape_set_on_exit_callback(&entity_manager.fizx_state, on_exit_callback, other_shape_gid);
+    // floor entity.
+    GenId floor_gid = entity_manager_alloc_entity(&entity_manager);
+    entity_manager_get_entity(entity_manager, floor_gid, &entity);
+    {
+        Transform entity_transform = {.scale = {.x = 100.0f, .y = 1.0f}};
+        entity->is_physics_body = true;
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(entity_transform), false);
+        GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, entity->physics_body_gid, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Kinematic, &floor_gid, PHYSICS_LAYER_ENVIRONMENT, square, material, true);
+    }
+        
+    // another dyanimc entity (piggy).
+    GenId enemy_gid = entity_manager_alloc_entity(&entity_manager);
+    entity_manager_get_entity(entity_manager, enemy_gid, &entity);
+    {
+        Transform entity_transform = {.position = {.x = -1.5f, .y = 5.0f}, .scale = VECTOR3_ONE};
+        entity->is_physics_body = true;
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(entity_transform), true);
+        GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, entity->physics_body_gid, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, &enemy_gid, PHYSICS_LAYER_ENEMY, square, material, true);
+    
+        fizx_shape_set_on_enter_callback(&entity_manager.fizx_state, enemy_body_on_enter_callback, entity_shape_gid);
+        fizx_shape_set_on_exit_callback(&entity_manager.fizx_state, enemy_body_on_exit_callback, entity_shape_gid);
+    }
+    
+    // Transform other_body_transform = {.position = {.y = 0.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = quaternion_create_from_axis_angle(VECTOR3_FORWARD, 30.0f)};
+    // GenId other_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(other_body_transform), false);
+    // GenId other_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, other_body_gid, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Trigger, &other_body_gid, shape, material, false);
+    // // GenId other_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Kinematic, material, other_body_gid, false);
+    // fizx_shape_set_on_enter_callback(&entity_manager.fizx_state, on_enter_callback, other_shape_gid);
+    // fizx_shape_set_on_sustain_callback(&entity_manager.fizx_state, on_sustain_callback, other_shape_gid);
+    // fizx_shape_set_on_exit_callback(&entity_manager.fizx_state, on_exit_callback, other_shape_gid);
 
     // Transform kin_body_transform = {.position = {.y = 2.0f}, .scale = {.x = 100.0f, .y = 1.0f}, .rotation = QUATERNION_IDENTITY};
     // GenId kin_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(kin_body_transform), false);
     // GenId kin_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Kinematic, kin_body_gid, material, false);
     
-    Transform sprite_transform = {.position = {.x = 0.1f, .y = 0.0f, .z = 12.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 10.0f)};
-    bool success = false;
-    entity->sprite_id = renderer_sprite_alloc(&renderer_ctx, SPRITE_LAYER_WORLD, &success);
-    renderer_sprite_init(
-        &renderer_ctx, entity->sprite_id, transform_to_matrix4x4(sprite_transform), COLOUR_WHITE, (SpriteRegion){.width = 512, .height = 512}, ColourState_Tint,
-        3, SPRITE_MATERIAL_IMAGE, true
-    );
 
     u128 prev_process_tick_in_mili  = 0;
     f32 previous_time_in_seconds    = 0.0f;
