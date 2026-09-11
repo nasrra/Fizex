@@ -19,7 +19,7 @@ void entity_manager_init(EntityManager* manager, MemoryArena* arena, i32 entity_
     ASSERT(!manager->is_init, "already init.");
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->entity, &manager->entity_length, entity_amount);
     gen_id_allocator_init(&manager->gen_id_allocator, arena, physics_body_amount);
-    fizx_state_init(&manager->fizx_state, arena, entity_amount, 4);
+    fizx_state_init(&manager->fizx_state, arena, entity_amount, 4, sizeof(GenId));
     manager->is_init = true;
 }
 

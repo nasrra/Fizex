@@ -28,9 +28,9 @@ typedef struct{
     bool draw_collision_info;
     bool draw_linear_velocities;
     bool draw_centers_of_mass_unrotated;
-} FIZXDrawInfo;
+} FIZX_DrawInfo;
 
-void fizx_state_draw(FIZX_State state, RendererContext* renderer, FIZXDrawInfo info, f32 delta_time){
+void fizx_state_draw(FIZX_State state, RendererContext* renderer, FIZX_DrawInfo info, f32 delta_time){
     /**
         draw global positions.
     **/
@@ -274,8 +274,6 @@ void fizx_state_draw(FIZX_State state, RendererContext* renderer, FIZXDrawInfo i
         f32 contact_point_y;
         f32 normal_x;
         f32 normal_y;
-        f32 other_centroid_x;
-        f32 other_centroid_y;
         Vector3 normal_start;
         Vector3 normal_end;
         Circle shape;
@@ -308,17 +306,6 @@ void fizx_state_draw(FIZX_State state, RendererContext* renderer, FIZXDrawInfo i
                 BOUNDS_CHECK(collision_idx, state.collision_manifold.first_contact_point.length);
             contact_point_x = state.collision_manifold.first_contact_point.x[collision_idx];
             contact_point_y = state.collision_manifold.first_contact_point.y[collision_idx];
-
-            // get centroid data.
-            BOUNDS_CHECK(collision_idx, state.collision_manifold.collider_centroid.length);
-            other_centroid_x = state.collision_manifold.collider_centroid.x[collision_idx];
-            other_centroid_y = state.collision_manifold.collider_centroid.y[collision_idx];
-
-            // draw centroid.
-            shape.x = other_centroid_x;
-            shape.y = other_centroid_y;
-            shape.radius = 0.1f;
-            renderer_draw_wire_circle(renderer, shape, info.colour_collision_other, info.z_position, info.sprite_layer, info.material_idx);
 
             // draw contact point.
             shape.x = contact_point_x;
