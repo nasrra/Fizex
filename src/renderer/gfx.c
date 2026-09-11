@@ -2415,9 +2415,9 @@ void gfx_camera_update_projection_matrix(GFX_Camera* camera, f32 surface_aspect_
     }
 }
 
-void gfx_draw_line(GFX_State* ctx, GFX_Colour colour, Vector3 start, Vector3 end, i32 layer, i32 material, f32 thickness){
+void gfx_draw_line_3d(GFX_State* ctx, GFX_Colour colour, Vector3 start, Vector3 end, i32 layer, i32 material, f32 thickness){
     ASSERT(ctx->is_init, "renderer context has not been init.");
-    Transform transform = {
+    Transform3D transform = {
         .rotation = quaternion_get_rotation_between_points(start, end),
         .position = vector3_mul_val(vector3_add(end, start), 0.5f),
         .scale = (Vector3){.x = thickness, .y = vector3_len(vector3_sub(end, start))}
@@ -2425,7 +2425,20 @@ void gfx_draw_line(GFX_State* ctx, GFX_Colour colour, Vector3 start, Vector3 end
 
     bool success;
     GFX_SpriteId sprite_id = gfx_one_frame_sprite_alloc(ctx, layer, &success);
-    gfx_sprite_init(ctx, sprite_id, transform_to_matrix4x4(transform), colour, (GFX_SpriteRegion){0}, GFX_ColourState_Override, 1, material, true);
+    gfx_sprite_init(ctx, sprite_id, transform3d_to_matrix4x4(transform), colour, (GFX_SpriteRegion){0}, GFX_ColourState_Override, 1, material, true);
+}
+
+void gfx_draw_line_2d(GFX_State* ctx, GFX_Colour colour, Vector2 start, Vector2 end, i32 layer, i32 material, f32 thickness){
+    ASSERT(ctx->is_init, "renderer context has not been init.");
+    Transform2D transform = {
+        .rotation = vector2_get_angle_between_points(start, end),
+        .position = vector2_mul_val(vector2_add(end, start), 0.5f),
+        .scale = (Vector2){.x = thickness, .y = vector2_len(vector2_sub(end, start))}
+    };
+
+    bool success;
+    GFX_SpriteId sprite_id = gfx_one_frame_sprite_alloc(ctx, layer, &success);
+    gfx_sprite_init(ctx, sprite_id, transform2d_to_matrix4x4(transform), colour, (GFX_SpriteRegion){0}, GFX_ColourState_Override, 1, material, true);
 }
 
 void gfx_draw_wire_circle(GFX_State* ctx, Circle shape, GFX_Colour colour, f32 position_z, i32 layer, i32 material){
@@ -2444,7 +2457,7 @@ void gfx_draw_wire_circle(GFX_State* ctx, Circle shape, GFX_Colour colour, f32 p
         f32 end_y = sin * rel_x + cos * rel_y + shape.y;
         Vector3 start = {.x = start_x, .y = start_y, .z = position_z};
         Vector3 end = {.x = end_x, .y = end_y, .z = position_z};
-        gfx_draw_line(ctx, colour, start, end, layer, material, gfx_global_wireframe_thickness);
+        gfx_draw_line_3d(ctx, colour, start, end, layer, material, gfx_global_wireframe_thickness);
         // iterate around the circle.
         start_x = end_x;
         start_y = end_y;
@@ -2457,7 +2470,7 @@ void gfx_draw_wire_poly(GFX_State* ctx, f32* vertices_x, f32* vertices_y, i32 ve
         next_index = (start_index + 1) % vertices_length;
         Vector3 start = {.x = vertices_x[start_index], .y = vertices_y[start_index], .z = position_z};
         Vector3 end = {.x = vertices_x[next_index], .y = vertices_y[next_index], .z = position_z};
-        gfx_draw_line(ctx, colour, start, end, layer, material, gfx_global_wireframe_thickness);
+        gfx_draw_line_3d(ctx, colour, start, end, layer, material, gfx_global_wireframe_thickness);
     }
 }
 
@@ -2472,10 +2485,10 @@ void gfx_draw_wire_rect(GFX_State* ctx, Rectangle shape, GFX_Colour colour, f32 
     Vector3 bottom_left = {.x = left_x, .y = bottom_y, .z = position_z};
     Vector3 bottom_right = {.x = right_x, .y = bottom_y, .z = position_z};
 
-    gfx_draw_line(ctx, colour, top_left, top_right, layer, material, gfx_global_wireframe_thickness);
-    gfx_draw_line(ctx, colour, top_right, bottom_right, layer, material, gfx_global_wireframe_thickness);
-    gfx_draw_line(ctx, colour, bottom_right, bottom_left, layer, material, gfx_global_wireframe_thickness);
-    gfx_draw_line(ctx, colour, bottom_left, top_left, layer, material, gfx_global_wireframe_thickness);
+    gfx_draw_line_3d(ctx, colour, top_left, top_right, layer, material, gfx_global_wireframe_thickness);
+    gfx_draw_line_3d(ctx, colour, top_right, bottom_right, layer, material, gfx_global_wireframe_thickness);
+    gfx_draw_line_3d(ctx, colour, bottom_right, bottom_left, layer, material, gfx_global_wireframe_thickness);
+    gfx_draw_line_3d(ctx, colour, bottom_left, top_left, layer, material, gfx_global_wireframe_thickness);
 }
 
 bool gfx_is_image_virtual_texture(GFX_State* ctx, i32 virtual_texture_idx){

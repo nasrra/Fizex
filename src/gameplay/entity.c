@@ -1,5 +1,5 @@
 typedef struct{
-    Transform transform;
+    Transform3D transform;
     GFX_SpriteId sprite_id;
     GenId physics_body_gid;
     Aabb clickable_aabb;
@@ -96,24 +96,24 @@ void entity_spawn_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Vector
     Entity* entity;
     entity_manager_get_entity(*entity_manager, player_gid, &entity);    
     {
-        Transform entity_transform = {.position = position, .scale = VECTOR3_ONE};
+        Transform3D entity_transform = {.position = position, .scale = VECTOR3_ONE};
         entity->is_physics_body = true;
         
         Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
         FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 5.0f, .restitution = 0.0f};
-        Transform shape_transform = {.scale = VECTOR3_ONE};
-        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, transform_to_transform2d(entity_transform), true);
-        GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, &player_gid, PHYSICS_LAYER_PLAYER, square, material, true);
+        Transform3D shape_transform = {.scale = VECTOR3_ONE};
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, transform3d_to_transform2d(entity_transform), true);
+        GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, transform3d_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, &player_gid, PHYSICS_LAYER_PLAYER, square, material, true);
         fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, false);
     
         entity->is_clickable = true;
         entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
    
-        Transform sprite_transform = {.position = {.x = 0.1f, .y = 0.0f, .z = 0.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 10.0f)};
+        Transform3D sprite_transform = {.position = {.x = 0.1f, .y = 0.0f, .z = 0.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 10.0f)};
         bool success = false;
         entity->sprite_id = gfx_sprite_alloc(gfx_ctx, SPRITE_LAYER_WORLD, &success);
         gfx_sprite_init(
-            gfx_ctx, entity->sprite_id, transform_to_matrix4x4(sprite_transform), GFX_COLOUR_WHITE, (GFX_SpriteRegion){.width = 512, .height = 512}, GFX_ColourState_Tint,
+            gfx_ctx, entity->sprite_id, transform3d_to_matrix4x4(sprite_transform), GFX_COLOUR_WHITE, (GFX_SpriteRegion){.width = 512, .height = 512}, GFX_ColourState_Tint,
             3, SPRITE_MATERIAL_IMAGE, true
         );
     }

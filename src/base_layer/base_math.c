@@ -89,7 +89,7 @@ typedef struct{
     Quaternion rotation;
     Vector3 position;
     Vector3 scale;
-} Transform;
+} Transform3D;
 
 typedef struct{
     Vector2 position;
@@ -386,6 +386,16 @@ Vector3 vector3_clamp_to_radius(Vector3 v, f32 radius){
 
 
 
+
+f32 vector2_len_sqrd(Vector2 vector){
+    return (vector.x * vector.x) + (vector.y * vector.y);
+}
+
+f32 vector2_len(Vector2 vector){
+    f32 sqrd = vector2_len_sqrd(vector);
+    return sqrd == 0.0f ? 0.0f : f32_sqrt(sqrd);
+}
+
 Vector2 vector2_get_relative_to_destination_rectangle(Vector2 vector, Rectangle dst_rect, Vector2I dst_resolution){
     // get the distance from the destination rect to the mouse position. 
     vector.x = vector.x - dst_rect.x;
@@ -511,9 +521,26 @@ Vector2 vector2_transform(Vector2 v, Transform2D t){
     return v;
 }
 
-Vector2 vector3_to_vector2(Vector3 v){
-    return (Vector2){v.x, v.y};
+/*
+    `returns`
+    the angle between the two points in `radians`.
+*/
+f32 vector2_get_angle_between_points(Vector2 start, Vector2 end){
+    Vector2 delta = vector2_sub(end, start);
+    return atan2f(delta.y, delta.x);
 }
+
+Vector3 vector2_to_vector3(Vector2 v){
+    return (Vector3){v.x, v.y, 0.0f};
+}
+
+
+
+
+/*
+    functions: Vector2I
+*/
+
 
 
 
@@ -532,8 +559,13 @@ Vector2I vector2_subi(Vector2I lhs, Vector2I rhs){
 
 
 
-Vector3 vector2_to_vector3(Vector2 v){
-    return (Vector3){v.x, v.y, 0.0f};
+
+
+
+
+
+Vector2 vector3_to_vector2(Vector3 v){
+    return (Vector2){v.x, v.y};
 }
 
 Vector3 cross_vector3(Vector3 a, Vector3 b){
@@ -929,63 +961,11 @@ Matrix4x4 matrix4x4_create_orthographic(f32 lower_x, f32 upper_x, f32 lower_y, f
     return result;
 }
 
-/*
-    Creates a col-major matrix from a transform.
-*/
-Matrix4x4 transform_to_matrix4x4(Transform transform){
-    Matrix4x4 result = {0};
-    f32* m = result.m;
-
-    // Pre-calculate squared terms for the quaternion rotation
-    f32 x2 = transform.rotation.x + transform.rotation.x;
-    f32 y2 = transform.rotation.y + transform.rotation.y;
-    f32 z2 = transform.rotation.z + transform.rotation.z;
-    f32 xx = transform.rotation.x * x2;
-    f32 xy = transform.rotation.x * y2;
-    f32 xz = transform.rotation.x * z2;
-    f32 yy = transform.rotation.y * y2;
-    f32 yz = transform.rotation.y * z2;
-    f32 zz = transform.rotation.z * z2;
-    f32 wx = transform.rotation.w * x2;
-    f32 wy = transform.rotation.w * y2;
-    f32 wz = transform.rotation.w * z2;
-
-    // --- COLUMN 0 (X-Basis * ScaleX) ---
-    m[0] = (1.0f - (yy + zz)) * transform.scale.x;
-    m[1] = (xy + wz) * transform.scale.x;
-    m[2] = (xz - wy) * transform.scale.x;
-    m[3] = 0.0f;
-
-    // --- COLUMN 1 (Y-Basis * ScaleY) ---
-    m[4] = (xy - wz) * transform.scale.y;
-    m[5] = (1.0f - (xx + zz)) * transform.scale.y;
-    m[6] = (yz + wx) * transform.scale.y;
-    m[7] = 0.0f;
-
-    // --- COLUMN 2 (Z-Basis * ScaleZ) ---
-    m[8] = (xz + wy) * transform.scale.z;
-    m[9] = (yz - wx) * transform.scale.z;
-    m[10] = (1.0f - (xx + yy)) * transform.scale.z;
-    m[11] = 0.0f;
-
-    // --- COLUMN 3 (Translation) ---
-    m[12] = transform.position.x;
-    m[13] = transform.position.y;
-    m[14] = transform.position.z;
-    m[15] = 1.0f;
-
-    return result;
-}
-
-
-
 
 
 
 /**
     functions: Quaternion
-**/
-/**
 **/
 
 
@@ -1111,6 +1091,80 @@ Quaternion quaternion_get_rotation_between_points(Vector3 point_a, Vector3 point
     return result;
 }
 
+
+
+
+/*
+    functions: Transform3D
+*/
+
+
+
+
+Transform3D transform3d_transform(Transform3D lhs, Transform3D rhs){
+    Transform3D result;
+    // combine scales.
+    result.scale = vector3_mul(lhs.scale, rhs.scale);
+    // combine rotations (order matters: rhs*lhs means rhs rotates lhs)
+    result.rotation = quaternion_mul(lhs.rotation, rhs.rotation);
+    // combine positions (order matters: scale->rotate->translate).
+    Vector3 sp = vector3_mul(lhs.position, rhs.scale);
+    result.position = rotate_vector3(sp, rhs.rotation);
+    result.position = vector3_add(result.position, rhs.position);
+    return result;
+}
+
+/*
+    Creates a col-major matrix from a transform.
+*/
+Matrix4x4 transform3d_to_matrix4x4(Transform3D transform){
+    Matrix4x4 result = {0};
+    f32* m = result.m;
+
+    // Pre-calculate squared terms for the quaternion rotation
+    f32 x2 = transform.rotation.x + transform.rotation.x;
+    f32 y2 = transform.rotation.y + transform.rotation.y;
+    f32 z2 = transform.rotation.z + transform.rotation.z;
+    f32 xx = transform.rotation.x * x2;
+    f32 xy = transform.rotation.x * y2;
+    f32 xz = transform.rotation.x * z2;
+    f32 yy = transform.rotation.y * y2;
+    f32 yz = transform.rotation.y * z2;
+    f32 zz = transform.rotation.z * z2;
+    f32 wx = transform.rotation.w * x2;
+    f32 wy = transform.rotation.w * y2;
+    f32 wz = transform.rotation.w * z2;
+
+    // --- COLUMN 0 (X-Basis * ScaleX) ---
+    m[0] = (1.0f - (yy + zz)) * transform.scale.x;
+    m[1] = (xy + wz) * transform.scale.x;
+    m[2] = (xz - wy) * transform.scale.x;
+    m[3] = 0.0f;
+
+    // --- COLUMN 1 (Y-Basis * ScaleY) ---
+    m[4] = (xy - wz) * transform.scale.y;
+    m[5] = (1.0f - (xx + zz)) * transform.scale.y;
+    m[6] = (yz + wx) * transform.scale.y;
+    m[7] = 0.0f;
+
+    // --- COLUMN 2 (Z-Basis * ScaleZ) ---
+    m[8] = (xz + wy) * transform.scale.z;
+    m[9] = (yz - wx) * transform.scale.z;
+    m[10] = (1.0f - (xx + yy)) * transform.scale.z;
+    m[11] = 0.0f;
+
+    // --- COLUMN 3 (Translation) ---
+    m[12] = transform.position.x;
+    m[13] = transform.position.y;
+    m[14] = transform.position.z;
+    m[15] = 1.0f;
+
+    return result;
+}
+
+
+
+
 bool fssoa_vector2_init(FsSoa_Vector2* soa, MemoryArena* arena, i32 chunk_stride, i32 chunk_length){
     if(soa->is_init){
         ASSERT(!soa->is_init, "attempted to init an already init FsSoa_Vector2.");
@@ -1191,6 +1245,41 @@ void soa_vector2_reset_count(Soa_Vector2* soa){
 
 
 
+Matrix4x4 transform2d_to_matrix4x4(Transform2D transform){
+    
+    Matrix4x4 result = {0};
+    f32* m = result.m;
+
+    f32 c = transform.cosine;
+    f32 s = transform.sine;
+
+    //COLUMN 0 (X-Basis * ScaleX)
+    m[0] = c * transform.scale.x;
+    m[1] = s * transform.scale.x;
+    m[2] = 0.0f;
+    m[3] = 0.0f;
+
+    // COLUMN 1 (Y-Basis * ScaleY)
+    m[4] = -s * transform.scale.y;
+    m[5] = c * transform.scale.y;
+    m[6] = 0.0f;
+    m[7] = 0.0f;
+
+    // COLUMN 2 (Z-Basis * ScaleZ)
+    m[8] = 0.0f;
+    m[9] = 0.0f;
+    m[10] = 1.0f;
+    m[11] = 0.0f;
+
+    // COLUMN 3 (Translation)
+    m[12] = transform.position.x;
+    m[13] = transform.position.y;
+    m[14] = 0.0f;
+    m[15] = 1.0f;
+
+    return result;
+}
+
 bool soa_transform2d_init(Soa_Transform2D* soa, MemoryArena* arena, i32 length){
     if(soa->is_init){
         ASSERT(0!=0, "attempted to init already init soa_transform2d.");
@@ -1254,9 +1343,9 @@ Transform2D transform2d_rotate(Transform2D transform, f32 radians){
     return transform;
 }
 
-Transform transform2d_to_transform(Transform2D transform){
+Transform3D transform2d_to_transform3d(Transform2D transform){
     f32 half = transform.rotation * 0.5f;
-    Transform result =  {
+    Transform3D result =  {
         .position = {transform.position.x, transform.position.y, 0.0f},
         .scale = {transform.scale.x, transform.scale.y, 1.0f},
         .rotation = {.z = f32_sin(half), .w = f32_cos(half)}
@@ -1317,7 +1406,7 @@ Transform2D transform2d_transform(Transform2D lhs, Transform2D rhs){
     return out;
 }
 
-Transform2D transform_to_transform2d(Transform transform){
+Transform2D transform3d_to_transform2d(Transform3D transform){
 
     // Extract Roll (rotation around Z-axis) from Quaternion
     f32 num1 = (transform.rotation.w * transform.rotation.z) + (transform.rotation.x * transform.rotation.y);
@@ -1376,33 +1465,6 @@ Transform2D transform_transform2d(Transform2D lhs, Transform2D rhs){
         &res.position.x, &res.position.y, &res.scale.x, &res.scale.y, &res.sine, &res.cosine, &res.rotation
     );
     return res;
-}
-
-Transform to_transform_transform2d(Transform2D transform2D){
-    // Create a 3D Quaternion rotating only around the Z axis
-    Quaternion rotation = quaternion_create_from_axis_angle(VECTOR3_FORWARD, transform2D.rotation);
-    Transform transform;
-    transform.position.x = transform2D.position.x;
-    transform.position.y = transform2D.position.y;
-    transform.position.z = 0;
-    transform.scale.x = transform2D.scale.x;
-    transform.scale.y = transform2D.scale.y;
-    transform.scale.z = 0;
-    transform.rotation = rotation;
-    return transform;
-}
-
-Transform transform_transform(Transform lhs, Transform rhs){
-    Transform result;
-    // combine scales.
-    result.scale = vector3_mul(lhs.scale, rhs.scale);
-    // combine rotations (order matters: rhs*lhs means rhs rotates lhs)
-    result.rotation = quaternion_mul(lhs.rotation, rhs.rotation);
-    // combine positions (order matters: scale->rotate->translate).
-    Vector3 sp = vector3_mul(lhs.position, rhs.scale);
-    result.position = rotate_vector3(sp, rhs.rotation);
-    result.position = vector3_add(result.position, rhs.position);
-    return result;
 }
 
 void line_segment_closest_point_scalar(

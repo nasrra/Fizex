@@ -192,7 +192,7 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
 
             Vector3 start = {.x = start_x, .y = start_y, .z = info.z_position};
             Vector3 end = {.x = end_x, .y = end_y, .z = info.z_position};
-            gfx_draw_line(gfx, info.colour_linear_velocity, start, end, info.sprite_layer, info.material_idx, gfx_global_wireframe_thickness);
+            gfx_draw_line_3d(gfx, info.colour_linear_velocity, start, end, info.sprite_layer, info.material_idx, gfx_global_wireframe_thickness);
         }
     }
 
@@ -320,7 +320,7 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
             normal_end.x = contact_point_x + normal_x;
             normal_end.y = contact_point_y + normal_y;
             normal_end.z = normal_start.z;
-            gfx_draw_line(gfx, info.colour_collision_normal, normal_start, normal_end, info.sprite_layer, info.material_idx, gfx_global_wireframe_thickness);
+            gfx_draw_line_3d(gfx, info.colour_collision_normal, normal_start, normal_end, info.sprite_layer, info.material_idx, gfx_global_wireframe_thickness);
 
             // draw second contact point if there is one.
             BOUNDS_CHECK(collision_idx, state.collision_manifold.two_contact_points_length);
@@ -343,7 +343,7 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                 normal_end.x = contact_point_x + normal_x;
                 normal_end.y = contact_point_y + normal_y;
                 normal_end.z = normal_start.z;
-                gfx_draw_line(gfx, info.colour_collision_normal, normal_start, normal_end, info.sprite_layer, info.material_idx, gfx_global_wireframe_thickness);
+                gfx_draw_line_3d(gfx, info.colour_collision_normal, normal_start, normal_end, info.sprite_layer, info.material_idx, gfx_global_wireframe_thickness);
             }
         }
     }
