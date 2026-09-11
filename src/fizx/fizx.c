@@ -17,7 +17,9 @@ typedef struct{
     f32* second_contact_point_x;
     f32* second_contact_point_y;
     f32* depth;
+    i32 source_entity_idx;
     void* source_user_data;
+    i32 target_entity_idx;
     void* target_user_data;
     bool* two_contact_points;
 } FIZX_CollisionInfo;
@@ -4666,9 +4668,14 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                 BOUNDS_CHECK(shape_idx, state->collision_manifold.active_index.chunk_count_length);
                 i32 collision_count = state->collision_manifold.active_index.chunk_count[shape_idx];
                 i32* collision_idx = active_index + start;
-                
+
                 for(i32 j = 0; j < collision_count; j++){
+                    
                     i32 cidx = collision_idx[j];
+                    // see `collision_manifold_set_data_one_way` to know why and how this works.
+                    i32 target_entity_idx = cidx / state->collision_manifold.collider_stride;
+                    i32 source_entity_idx = cidx % state->collision_manifold.collider_stride;
+                    
                     // read the data.
                     BOUNDS_CHECK(cidx, state->collision_manifold.depth_length);
                     BOUNDS_CHECK(cidx, state->collision_manifold.normal.length);
@@ -4685,7 +4692,10 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                         .second_contact_point_y     = &state->collision_manifold.second_contact_point.y[cidx],
                         .source_user_data           = state->collision_manifold.source_user_data[cidx],
                         .target_user_data           = state->collision_manifold.target_user_data[cidx],
-                        .two_contact_points         = &state->collision_manifold.two_contact_points[cidx]
+                        .two_contact_points         = &state->collision_manifold.two_contact_points[cidx],
+                        // see `collision_manifold_set_data_one_way` to know why and how this works.
+                        .target_entity_idx = target_entity_idx,
+                        .source_entity_idx = source_entity_idx 
                     };
                 
                     // pass each collision info to the user callback.
