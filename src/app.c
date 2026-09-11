@@ -35,6 +35,10 @@
 **/
 #define DELTA_TIME_ACCUMULATOR_SLOW_DOWN 0.0333147881012903f
 
+typedef struct{
+    EntityManager* entity_manager;    
+} CollisionCallbackContext;
+
 /**====================
     globals
 ====================**//**/
@@ -51,17 +55,18 @@ f32 time_scale = 1.0f;
 ====================**//**/
 
 void enemy_body_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
+    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
+    GenId* enemy_gid = (GenId*)info.target_user_data; 
+    
     if((info.source_layer & PHYSICS_LAYER_PLAYER) != 0){
-        platform_output_message("hit player\n");
-    }
-    // platform_output_message("hit\n");
+        entity_deplete_health(ctx->entity_manager, *enemy_gid, 1);
+    }    
 }
 
 void enemy_body_on_exit_callback(FIZX_CollisionInfo info, void* user_data){
     if((info.source_layer & PHYSICS_LAYER_PLAYER) != 0){
         platform_output_message("exit player\n");
     }
-    // platform_output_message("exit\n");
 }
 
 void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time){
@@ -103,7 +108,9 @@ void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time)
     for(i32 i = 0; i < entity_manager.entity_length; i++){
         Entity* entity = &entity_manager.entity[i];
         if(!renderer_sprite_id_equals(entity->sprite_id, (SpriteId){0})){
+            f32 z = entity->transform.position.z;
             renderer_sprite_set_transform(&renderer_ctx, entity->sprite_id, transform_to_matrix4x4(entity->transform));
+            entity->transform.position.z = z;
         }
     }
     
@@ -134,7 +141,7 @@ RendererContext app_renderer_init(MemoryArena* persistent, MemoryArena* transien
     **/
     ImageTexturesInitInfo* image_textures_init_info;
     i32 image_textures_init_info_length;
-    MEMORY_ARENA_ALLOC_ARRAY(transient, image_textures_init_info, &image_textures_init_info_length, 3);
+    MEMORY_ARENA_ALLOC_ARRAY(transient, image_textures_init_info, &image_textures_init_info_length, 4);
 
     BOUNDS_CHECK(0, image_textures_init_info_length);
     image_textures_init_info[0] = (ImageTexturesInitInfo){.width = 512, .height = 512, .max_textures = 16};
@@ -142,6 +149,9 @@ RendererContext app_renderer_init(MemoryArena* persistent, MemoryArena* transien
     image_textures_init_info[1] = (ImageTexturesInitInfo){.width = 360, .height = 162, .max_textures = 2};
     BOUNDS_CHECK(2, image_textures_init_info_length);
     image_textures_init_info[2] = (ImageTexturesInitInfo){.width = 640, .height = 360, .max_textures = 2};
+    BOUNDS_CHECK(3, image_textures_init_info_length);
+    image_textures_init_info[3] = (ImageTexturesInitInfo){.width = 16, .height = 16, .max_textures = 24};
+
 
     /**
         sprite layers.
@@ -233,10 +243,17 @@ void app_main(){
     renderer_ctx = app_renderer_init(persistent, transient, *window_ctx);
     
     String file_path = {0};
-    string_init(&file_path, transient, 20);
+    string_init(&file_path, transient, 32);
+
     string_push_chars(&file_path, "assets/image.png", 16);
     renderer_virtual_texture_set_file_path(&renderer_ctx, file_path, 3);
     renderer_load_image_texture(&renderer_ctx, 3);
+    
+    string_clear(&file_path);
+    
+    string_push_chars(&file_path, "assets/sling_shot.png", 21);
+    renderer_virtual_texture_set_file_path(&renderer_ctx, file_path, 4);
+    renderer_load_image_texture(&renderer_ctx, 4);
 
     FIZX_DrawInfo fizx_draw_state = {
         .colour_dynamic_shape           = COLOUR_GREEN,
@@ -274,28 +291,7 @@ void app_main(){
     entity_manager = (EntityManager){0};
     entity_manager_init(&entity_manager, persistent, entity_amount, physics_body_amount);
     Entity* entity;
-    
-    // clickable entity (angry bird).
-    GenId player_gid = entity_manager_alloc_entity(&entity_manager);
-    entity_manager_get_entity(entity_manager, player_gid, &entity);    
-    {
-        Transform entity_transform = {.position = {.x = 1.5f, .y = 5.0f}, .scale = VECTOR3_ONE};
-        entity->is_physics_body = true;
-        entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(entity_transform), true);
-        GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, entity->physics_body_gid, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, &player_gid, PHYSICS_LAYER_PLAYER, square, material, true);
-    
-        entity->is_clickable = true;
-        entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
-   
-        Transform sprite_transform = {.position = {.x = 0.1f, .y = 0.0f, .z = 12.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 10.0f)};
-        bool success = false;
-        entity->sprite_id = renderer_sprite_alloc(&renderer_ctx, SPRITE_LAYER_WORLD, &success);
-        renderer_sprite_init(
-            &renderer_ctx, entity->sprite_id, transform_to_matrix4x4(sprite_transform), COLOUR_WHITE, (SpriteRegion){.width = 512, .height = 512}, ColourState_Tint,
-            3, SPRITE_MATERIAL_IMAGE, true
-        );
-    }
-    
+        
     // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
     
     // floor entity.
@@ -317,22 +313,27 @@ void app_main(){
         entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(entity_transform), true);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, entity->physics_body_gid, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, &enemy_gid, PHYSICS_LAYER_ENEMY, square, material, true);
     
+        entity->is_health = true;
+        entity->health = 2;
+    
         fizx_shape_set_on_enter_callback(&entity_manager.fizx_state, enemy_body_on_enter_callback, entity_shape_gid);
         fizx_shape_set_on_exit_callback(&entity_manager.fizx_state, enemy_body_on_exit_callback, entity_shape_gid);
     }
     
-    // Transform other_body_transform = {.position = {.y = 0.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 3.0f), .rotation = quaternion_create_from_axis_angle(VECTOR3_FORWARD, 30.0f)};
-    // GenId other_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(other_body_transform), false);
-    // GenId other_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, other_body_gid, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Trigger, &other_body_gid, shape, material, false);
-    // // GenId other_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Kinematic, material, other_body_gid, false);
-    // fizx_shape_set_on_enter_callback(&entity_manager.fizx_state, on_enter_callback, other_shape_gid);
-    // fizx_shape_set_on_sustain_callback(&entity_manager.fizx_state, on_sustain_callback, other_shape_gid);
-    // fizx_shape_set_on_exit_callback(&entity_manager.fizx_state, on_exit_callback, other_shape_gid);
-
-    // Transform kin_body_transform = {.position = {.y = 2.0f}, .scale = {.x = 100.0f, .y = 1.0f}, .rotation = QUATERNION_IDENTITY};
-    // GenId kin_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform_to_transform2d(kin_body_transform), false);
-    // GenId kin_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, shape, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Kinematic, kin_body_gid, material, false);
+    GenId sling_shot_gid = entity_manager_alloc_entity(&entity_manager);
+    entity_manager_get_entity(entity_manager, sling_shot_gid, &entity);
+    {
+        entity->transform = (Transform){.position = {.y = 2.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 3.0f)};
+        Transform sprite_transform = {.position = {.z = 200.0f}, .scale = vector3_mul_val(VECTOR3_ONE, 1000.0f)};
+        bool success = false;
+        entity->sprite_id = renderer_sprite_alloc(&renderer_ctx, SPRITE_LAYER_WORLD, &success);
+        renderer_sprite_init(
+            &renderer_ctx, entity->sprite_id, transform_to_matrix4x4(sprite_transform), COLOUR_WHITE, (SpriteRegion){.width = 16, .height = 16}, ColourState_Tint,
+            4, SPRITE_MATERIAL_IMAGE, true
+        );
     
+        entity_spawn_bird(&entity_manager, &renderer_ctx, vector3_add(entity->transform.position, (Vector3){.y = 0.5f}));
+    }
 
     u128 prev_process_tick_in_mili  = 0;
     f32 previous_time_in_seconds    = 0.0f;
@@ -360,7 +361,8 @@ void app_main(){
 
             while(fixed_update_accumulator >= FIXED_DELTA_TIME){
                 app_fixed_update(FIXED_DELTA_TIME);
-                fizx_state_fixed_update(&entity_manager.fizx_state, NULL, FIXED_DELTA_TIME, 16);
+                CollisionCallbackContext collision_callback_ctx = {.entity_manager = &entity_manager}; 
+                fizx_state_fixed_update(&entity_manager.fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME, 16);
                 fixed_update_accumulator -= FIXED_DELTA_TIME;
             }
         }

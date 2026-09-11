@@ -2631,33 +2631,6 @@ bool renderer_sprite_id_equals(SpriteId lhs, SpriteId rhs){
     lhs.layer == rhs.layer;
 }
 
-// Vector2 renderer_get_mouse_world_position(RendererContext* ctx){
-//     i32 x;
-//     i32 y;
-//     platform_get_mouse_position(&x, &y);
-//     Vector2 mouse_position = {
-//         .x = (f32)x,
-//         .y = (f32)y
-//     };
-    
-//     Vector2I resolution = {
-//         .x = ctx->final_render_texture.extents.width, 
-//         .y = ctx->final_render_texture.extents.height
-//     };
-//     Vector2 render_texture_position = vector2_get_relative_to_destination_rectangle(mouse_position, ctx->destination_rectangle, resolution);
-    
-//     // offset by half the output resolution as the world camera (0,0) is at the center of the screen.
-//     f32 offset_x = ctx->final_render_texture.extents.width * 0.5f;
-//     f32 offset_y = ctx->final_render_texture.extents.height * 0.5f;
-    
-//     return (Vector2){
-//         .x = ((render_texture_position.x - offset_x) / ctx->world_camera.orthographic_size) + ctx->world_camera.position.x, 
-//         .y = -(((render_texture_position.y - offset_y) / ctx->world_camera.orthographic_size) + ctx->world_camera.position.y)
-//     };
-// }
-
-
-
 Vector2 renderer_get_mouse_world_position(RendererContext* ctx){
     Vector2I mouse_position_i;
     platform_get_mouse_position(&mouse_position_i.x, &mouse_position_i.y);
@@ -2685,25 +2658,3 @@ Vector2 renderer_get_mouse_world_position(RendererContext* ctx){
         .y = ctx->world_camera.position.y - (-(camera_space_y * 0.5f) + mouse_camera_pos_y)
     };
 }
-
-#if 0
-    /// <summary>
-    ///     Gets the mouse position in world-space.
-    /// </summary>
-    /// <param name="app">the monogame app instance.</param>
-    /// <param name="mouse">the mouse data.</param>
-    /// <returns>the position of the mouse in world-space.</returns>
-    public static Howl.Math.Vector2 GetMouseWorldPosition(MonoGameApp app, IMouse mouse)
-    {
-        ref readonly Camera camera = ref CameraSystem.MainCamera;
-        Howl.Math.Vector2Int renderTargetPosition = mouse.GetPositionRelative(app.DestinationRectangle, app.OutputResolution);
-        
-        // offset by half the output resolution as the world camera (0,0) is at the center of the screen.
-        Howl.Math.Vector2 offset = new Howl.Math.Vector2(app.OutputResolution.X * 0.5f, app.OutputResolution.Y * 0.5f);
-        
-        return new Howl.Math.Vector2( 
-            ((renderTargetPosition.X - offset.X) * camera.Zoom) + camera.Position.X,
-            ((renderTargetPosition.Y - offset.Y) * camera.Zoom) - camera.Position.Y
-        ).InvertY(); // invert y as world space in monogame is Y+ is down; where as howl engine is y+ is up.
-    }
-#endif

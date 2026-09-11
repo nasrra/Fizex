@@ -2314,7 +2314,7 @@ void fizx_body_dealloc_unsafe(FIZX_State* state, i32 body_idx){
     if(last_shape_idx != 0){
         i32 shape_idx = last_shape_idx;
         i32 previous_shape_idx = 0;
-        while(true){
+        while(shape_idx != 0){
             if(shape_idx == previous_shape_idx){
                 break;
             }
