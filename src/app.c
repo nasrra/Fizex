@@ -1,9 +1,5 @@
 #include "platform.h"
 
-#ifdef NDEBUG
-#include <stdio.h>
-#endif
-
 #include "base_layer/base.h"
 #include "base_layer/base_cpu.c"
 #include "base_layer/base_math.c"
@@ -223,6 +219,8 @@ void app_late_update(f32 delta_time){
 
 void app_main(){
 
+
+
     /**
         memory allocation.
     **/
@@ -230,7 +228,7 @@ void app_main(){
     platform_init_transient_memory(MEGABYTE(4));
     MemoryArena* persistent = platform_get_persistent_memory();
     MemoryArena* transient = platform_get_transient_memory();
-    
+        
     window_ctx = platform_window_create(WINDOW_WIDTH, WINDOW_HEIGHT);
 
     input_init(persistent);
@@ -247,11 +245,10 @@ void app_main(){
     gfx_load_image_texture(&gfx_state, 3);
     
     string_clear(&file_path);
-    
     string_push_chars(&file_path, "assets/sling_shot.png", 21);
     gfx_virtual_texture_set_file_path(&gfx_state, file_path, 4);
     gfx_load_image_texture(&gfx_state, 4);
-
+    
     FIZX_DrawInfo fizx_draw_state = {
         .colour_dynamic_shape           = GFX_COLOUR_GREEN,
         .colour_passive_trigger_shape   = GFX_COLOUR_LIGHT_BLUE,
@@ -333,8 +330,21 @@ void app_main(){
             4, SPRITE_MATERIAL_IMAGE, true
         );
     
-        entity_spawn_bird(&entity_manager, &gfx_state, vector2_add(entity->transform.position, (Vector2){.y = 0.5f}));
+        Transform2D bird_transform = TRANSFORM2D_IDENTITY;
+        bird_transform.position = vector2_add(entity->transform.position, (Vector2){.y = 0.5f});
+        bird_transform.scale = VECTOR2_ONE; 
+    
+        entity_spawn_bird(&entity_manager, &gfx_state, bird_transform);
     }
+
+    string_clear(&file_path);
+    string_push_chars(&file_path, "assets/lvl.scsv", 15);
+    load_lvl(&entity_manager, &gfx_state, file_path);
+
+    string_clear(&file_path);
+    string_push_chars(&file_path, "assets/other_lvl.scsv", 21);
+    char* data =  "1;1.0;1.0;12.0;12.0;3.3;\n";
+    platform_write_file(file_path, data, sizeof(*data) * 25);
 
     u128 prev_process_tick_in_mili  = 0;
     f32 previous_time_in_seconds    = 0.0f;

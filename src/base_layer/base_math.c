@@ -1262,6 +1262,17 @@ void soa_vector2_reset_count(Soa_Vector2* soa){
 
 
 
+
+Transform2D transform2d_make(Vector2 position, Vector2 scale, f32 rotation){
+    return (Transform2D){
+        .position = position,
+        .scale = scale,
+        .rotation = rotation,
+        .sine = f32_sin(rotation),
+        .cosine = f32_cos(rotation)
+    };    
+}
+
 inline Matrix4x4 transform2d_to_matrix4x4_depth(Transform2D transform, f32 depth){
     Matrix4x4 result = {0};
     f32* m = result.m;

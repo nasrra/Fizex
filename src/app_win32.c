@@ -435,6 +435,45 @@ void* platform_load_file(String file_path, size_t* out_buffer_size){
     return buffer;
 }
 
+i32 platform_write_file(String file_path, void* data, size_t data_size){
+    /**
+        convert to null terminated string.
+    **/
+    char* null_terminated_file_path;
+    i32 null_terminated_file_path_length;
+    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.length+1);
+    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
+    null_terminated_file_path[null_terminated_file_path_length] = '\0';
+    
+    HANDLE h = CreateFileA(
+        null_terminated_file_path,
+        GENERIC_WRITE,              // we want to write.
+        0,                          // no sharing while we write.
+        NULL,                       // default security attributes.
+        CREATE_ALWAYS,              // overwrite if it exists, create if it doesnt.
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+    );
+    
+    if(h == INVALID_HANDLE_VALUE){
+        ASSERT(false, "failed to open/create file to write to.");
+        return 0;
+    }
+    
+    DWORD bytes_written = 0;
+    BOOL ok = WriteFile(
+        h,
+        data,
+        (DWORD)data_size,
+        &bytes_written,
+        NULL // no overlapped I/O.
+    );
+    
+    CloseHandle(h);
+    
+    return ok && (bytes_written == data_size);
+}
+
 f32 platform_window_calc_aspect_ratio(WindowContext ctx){
     return (f32)ctx.width / (f32)ctx.height;
 }

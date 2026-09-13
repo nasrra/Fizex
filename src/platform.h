@@ -1,7 +1,10 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+#define _CRT_SECURE_NO_WARNINGS
+#include <stdio.h>
 #include "base_layer/base.h"
+
 
 /**
     A handle to a application window; including additional meta-data.
@@ -57,6 +60,7 @@ bool platform_read_file(String file_path, MemoryArena* arena);
     a pointer to the loaded data; otherwise NULL in the case of a file read failure.
 **/
 void* platform_load_file(String file_path, size_t* out_buffer_size);
+i32 platform_write_file(String file_path, void* data, size_t data_size);
 f32 platform_window_calc_aspect_ratio(WindowContext window_ctx);
 u128 platform_get_system_tick();
 u128 platform_get_proccess_tick();

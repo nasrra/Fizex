@@ -1,3 +1,4 @@
+
 typedef struct{
     Transform2D transform;
     GFX_SpriteId sprite_id;
@@ -91,15 +92,13 @@ void entity_deplete_health(EntityManager* manager, GenId entity_gid, i32 amount)
     }
 }
 
-void entity_spawn_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Vector2 position){
+void entity_spawn_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Transform2D transform){
     // clickable entity (angry bird).
     GenId player_gid = entity_manager_alloc_entity(entity_manager);
     Entity* entity;
     entity_manager_get_entity(*entity_manager, player_gid, &entity);    
     {
-        entity->transform = TRANSFORM2D_IDENTITY;
-        entity->transform.position = position;
-        entity->transform.scale = vector2_mul_val(entity->transform.scale, 1.0f); 
+        entity->transform = transform;
         entity->is_physics_body = true;
         
         Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
@@ -123,4 +122,51 @@ void entity_spawn_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Vector
             3, SPRITE_MATERIAL_IMAGE, true
         );
     }
+}
+
+
+void load_lvl(EntityManager* entity_manager, GFX_State* gfx, String file_path){
+    /*
+        .scsv are .csv files that are separated with ';' instead of ','
+        
+        a level file is as follows:
+        
+        entity_id ; entity_position_x ; entity_position_y ; entity_scale_x ; entity_scale_y ; entity_rotation_radians ; 
+    */
+    
+    size_t buffer_size;
+    void* raw_file = platform_load_file(file_path, &buffer_size);
+    char* file_data = (char*)raw_file;
+ 
+    Vector2 entity_position;
+    Vector2 entity_scale;
+    f32 entity_rotation;
+    i32 entity_id;
+    
+    i32 lines_read = 1;
+    i32 bytes_consumed = 0;
+
+    while(true){
+        lines_read = sscanf(
+            file_data, 
+            "%i;%f;%f;%f;%f;%f;%n", 
+            &entity_id, 
+            &entity_position.x,
+            &entity_position.y,
+            &entity_scale.x,
+            &entity_scale.y,
+            &entity_rotation,
+            &bytes_consumed
+        );
+        
+        if(lines_read == 6){
+            Transform2D transform = transform2d_make(entity_position, entity_scale, entity_rotation);
+            entity_spawn_bird(entity_manager, gfx, transform);
+            file_data += bytes_consumed;
+        }
+        else{
+            break;
+        }
+    }
+    platform_free_memory(raw_file);
 }
