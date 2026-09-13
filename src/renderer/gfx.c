@@ -163,6 +163,7 @@ typedef struct{
     i32 height;
 } GFX_SpriteRegion;
 
+// all values are within a range of 0-1.
 typedef struct{
     f32 r;
     f32 g;
@@ -979,7 +980,7 @@ void gfx_sprite_manager_init(GFX_SpriteManager* manager, WGPUDevice device, Memo
 
         layer->max_sprites = create_info->max_sprites;
         MEMORY_ARENA_ALLOC_ARRAY(arena, layer->free_sprite_indices, &layer->free_sprite_indices_length, layer->max_sprites);
-
+#if 0
         // push the free indices.
         if(i == 0){
             i32 j = i == 0 ? 1 : 0; // exclude the Nil sprite.
@@ -987,6 +988,13 @@ void gfx_sprite_manager_init(GFX_SpriteManager* manager, WGPUDevice device, Memo
                 ARRAY_PUSH(layer->free_sprite_indices, layer->free_sprite_indices_length, &layer->free_sprite_indices_count, free_index);
                 free_index++;
             }
+        }
+#endif
+
+
+        for(i32 j = 1; j < layer->max_sprites; j++){
+            ARRAY_PUSH(layer->free_sprite_indices, layer->free_sprite_indices_length, &layer->free_sprite_indices_count, free_index);
+            free_index++;
         }
 
         manager->is_init = true;
@@ -1100,12 +1108,12 @@ void gfx_index_buffer_init(GFX_RenderBuffer* buffer, MemoryArena* transient, WGP
     MEMORY_ARENA_ALLOC_ARRAY(transient, indices, &indices_length, total_indices);
 
     for(int i = 0; i < total_vertices; i+=4){
-        ARRAY_PUSH(indices, total_indices, &indices_count, i);
-        ARRAY_PUSH(indices, total_indices, &indices_count, i+1);
-        ARRAY_PUSH(indices, total_indices, &indices_count, i+2);
-        ARRAY_PUSH(indices, total_indices, &indices_count, i+2);
-        ARRAY_PUSH(indices, total_indices, &indices_count, i+3);
-        ARRAY_PUSH(indices, total_indices, &indices_count, i);
+        ARRAY_PUSH(indices, total_indices, &indices_count, 0);
+        ARRAY_PUSH(indices, total_indices, &indices_count, 1);
+        ARRAY_PUSH(indices, total_indices, &indices_count, 2);
+        ARRAY_PUSH(indices, total_indices, &indices_count, 2);
+        ARRAY_PUSH(indices, total_indices, &indices_count, 3);
+        ARRAY_PUSH(indices, total_indices, &indices_count, 0);
     }
 
     gfx_write_to_buffer(buffer, device, indices, sizeof(u32) * total_indices);
@@ -2479,6 +2487,27 @@ void gfx_draw_wire_poly(GFX_State* ctx, f32* vertices_x, f32* vertices_y, i32 ve
         Vector2 end = {.x = vertices_x[next_index], .y = vertices_y[next_index]};
         gfx_draw_line_2d(ctx, colour, start, end, position_z, layer, material, gfx_global_wireframe_thickness);
     }
+}
+
+void gfx_draw_fill_rect(GFX_State* ctx, Rectangle shape, GFX_Colour colour, f32 position_z, i32 layer, i32 material){
+    Transform2D transform = transform2d_make(
+        (Vector2){.x = shape.x, .y = shape.y},
+        (Vector2){.x = shape.width, .y = shape.height},
+        0.0f
+    );
+    bool success;
+    GFX_SpriteId sprite_id = gfx_one_frame_sprite_alloc(ctx, layer, &success);
+    gfx_sprite_init(
+        ctx, 
+        sprite_id, 
+        transform2d_to_matrix4x4_depth(transform, position_z), 
+        colour, 
+        (GFX_SpriteRegion){0}, 
+        GFX_ColourState_Override, 
+        1, 
+        material, 
+        true
+    );
 }
 
 void gfx_draw_wire_rect(GFX_State* ctx, Rectangle shape, GFX_Colour colour, f32 position_z, i32 layer, i32 material){

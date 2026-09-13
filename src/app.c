@@ -7,6 +7,7 @@
 #include "base_layer/base_structures.c"
 #include "renderer/gfx.c"
 #include "renderer/gfx_app_types.c"
+#include "renderer/gfx-clay.c"
 #include "fizx/fizx.c"
 #include "fizx/fizx_draw.c"
 #include "gameplay/entity.c"
@@ -69,14 +70,14 @@ void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time)
     
     Vector2 mouse_world_position = gfx_get_mouse_world_position(&gfx_state);
         
-    f32 camera_speed = 1.0f * delta_time * gfx_state.world_camera.orthographic_size;
+    f32 camera_speed = 1.0f * delta_time * gfx_state.screen_camera.orthographic_size;
     bool x = input_is_key_pressed(KEY_RIGHT);
-    if(input_is_key_pressed(KEY_Q))     {gfx_state.world_camera.orthographic_size -= gfx_state.world_camera.orthographic_size * 1.0f * delta_time;}
-    if(input_is_key_pressed(KEY_E))     {gfx_state.world_camera.orthographic_size += gfx_state.world_camera.orthographic_size * 1.0f * delta_time;}
-    if(input_is_key_pressed(KEY_RIGHT)) {gfx_state.world_camera.position.x += camera_speed;}
-    if(input_is_key_pressed(KEY_LEFT))  {gfx_state.world_camera.position.x -= camera_speed;}
-    if(input_is_key_pressed(KEY_UP))    {gfx_state.world_camera.position.y += camera_speed;}
-    if(input_is_key_pressed(KEY_DOWN))  {gfx_state.world_camera.position.y -= camera_speed;}
+    if(input_is_key_pressed(KEY_Q))     {gfx_state.screen_camera.orthographic_size -= gfx_state.screen_camera.orthographic_size * 1.0f * delta_time;}
+    if(input_is_key_pressed(KEY_E))     {gfx_state.screen_camera.orthographic_size += gfx_state.screen_camera.orthographic_size * 1.0f * delta_time;}
+    if(input_is_key_pressed(KEY_RIGHT)) {gfx_state.screen_camera.position.x += camera_speed;}
+    if(input_is_key_pressed(KEY_LEFT))  {gfx_state.screen_camera.position.x -= camera_speed;}
+    if(input_is_key_pressed(KEY_UP))    {gfx_state.screen_camera.position.y += camera_speed;}
+    if(input_is_key_pressed(KEY_DOWN))  {gfx_state.screen_camera.position.y -= camera_speed;}
     
     if(input_is_key_pressed(KEY_SPACE)){
         time_scale = 0.0f;        
@@ -192,6 +193,7 @@ void app_late_update(f32 delta_time){
     **/
     f32 aspect_ratio = platform_window_calc_aspect_ratio(*window_ctx);
     gfx_camera_update_projection_matrix(&gfx_state.world_camera, aspect_ratio);
+    gfx_camera_update_projection_matrix(&gfx_state.screen_camera, aspect_ratio);
 
     Ubo ubo = {
         .world_camera_matrix = 
@@ -205,10 +207,10 @@ void app_late_update(f32 delta_time){
         .screen_camera_matrix = 
             matrix4x4_mul(
                 matrix4x4_mul(
-                    gfx_state.world_camera.projection, 
-                    gfx_state.world_camera.view
+                    gfx_state.screen_camera.projection, 
+                    gfx_state.screen_camera.view
                 ), 
-            gfx_state.world_camera.model
+            gfx_state.screen_camera.model
         ),
         .world_camera_far_z = gfx_state.world_camera.far_z,
         .world_camera_near_z = gfx_state.world_camera.near_z,
@@ -228,12 +230,15 @@ void app_main(){
     platform_init_transient_memory(MEGABYTE(4));
     MemoryArena* persistent = platform_get_persistent_memory();
     MemoryArena* transient = platform_get_transient_memory();
-        
+    
+    gfxclay_init(MEGABYTE(8), WINDOW_WIDTH, WINDOW_HEIGHT);
+    
     window_ctx = platform_window_create(WINDOW_WIDTH, WINDOW_HEIGHT);
 
     input_init(persistent);
 
     gfx_orthographic_camera_init(&gfx_state.world_camera, (Vector3){.y = 5.0f, .z = -4.0f}, 0.01f, 100.0f, 22.0f);
+    gfx_orthographic_camera_init(&gfx_state.screen_camera, (Vector3){0}, 0.01f, 1028.0f, 1080.0f);
     gfx_global_wireframe_thickness = 0.05f;
     gfx_state = app_gfx_init(persistent, transient, *window_ctx);
     
@@ -393,6 +398,9 @@ void app_main(){
         {
             fizx_state_draw(entity_manager.fizx_state, &gfx_state, fizx_draw_state, delta_time);
             entity_manager_debug_draw(entity_manager, &gfx_state, delta_time);
+            // gfxclay_update(&gfx_state, (Vector2I){.x = WINDOW_WIDTH, .y = WINDOW_HEIGHT},  (Vector2I){0}, delta_time, false);
+            Rectangle rect = {.x = 0.0f, .y = 0.0f, .width = 1920.0f, .height = 1080.0f};
+            gfx_draw_fill_rect(&gfx_state, rect, GFX_COLOUR_GREEN, 1.0f, SPRITE_LAYER_UI, SPRITE_MATERIAL_DEBUG);
             gfx_state_draw(&gfx_state);
             transient->stride = 0;
         }
