@@ -90,7 +90,7 @@ void gfxclay_test_layout(){
         .backgroundColor = { 10, 10, 20, 128},
     }){
         CLAY(CLAY_ID("ChildA"), {
-            .backgroundColor = {255.0f,255.0f,255.0f,255.0f},
+            .backgroundColor = {255.0f,255.0f,255.0f,128.0f},
             .layout = {
                 .sizing = {
                     .width = CLAY_SIZING_GROW(0),

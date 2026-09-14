@@ -237,8 +237,8 @@ void app_main(){
 
     input_init(persistent);
 
-    gfx_orthographic_camera_init(&gfx_state.world_camera, (Vector3){.y = 5.0f, .z = -4.0f}, 0.01f, 100.0f, 22.0f);
-    gfx_orthographic_camera_init(&gfx_state.screen_camera, (Vector3){0}, 0.01f, 1028.0f, 1080.0f);
+    gfx_orthographic_camera_init(&gfx_state.world_camera, GFX_CoordinateSpace_Cartesian, (Vector3){.y = 5.0f, .z = -4.0f}, 0.01f, 100.0f, 22.0f);
+    gfx_orthographic_camera_init(&gfx_state.screen_camera, GFX_CoordinateSpace_Rasterised, (Vector3){0}, 0.01f, 1028.0f, 1080.0f);
     gfx_global_wireframe_thickness = 0.05f;
     gfx_state = app_gfx_init(persistent, transient, *window_ctx);
 

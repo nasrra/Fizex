@@ -10,9 +10,14 @@ typedef enum{
 } GFX_SpriteOrigin;
 
 typedef enum{
-    GFX_CameraProjectionType_Orthographic,
-    GFX_CameraProjectionType_Perspective
-} GFX_CameraProjectionType;
+    GFX_ProjectionType_Orthographic,
+    GFX_ProjectionType_Perspective
+} GFX_ProjectionType;
+
+typedef enum{
+    GFX_CoordinateSpace_Cartesian,
+    GFX_CoordinateSpace_Rasterised
+} GFX_CoordinateSpace;
 
 /**
     `remarks`
@@ -27,7 +32,8 @@ typedef struct GFX_Camera{
     f32 perspective_fov;
     f32 far_z;
     f32 near_z;
-    GFX_CameraProjectionType projection_type;
+    GFX_ProjectionType projection_type;
+    GFX_CoordinateSpace coordinate_space;
     bool is_init;
 } GFX_Camera;
 
@@ -2394,14 +2400,14 @@ void gfx_context_free_resources(GFX_State* ctx){
     wgpuInstanceRelease(ctx->instance);
 }
 
-
-#if 0
 /**
     this is the code for a perspective camera,
     but it is commented out as presently the project doesnt need
     and probably wont ever support a perspsective camera.
 **/
-void gfx_perspective_camera_init(GFX_Camera* camera, Vector3 position, f32 near_z, f32 far_z, f32 fov_in_radians){
+void gfx_perspective_camera_init(
+    GFX_Camera* camera, Vector3 position, f32 near_z, f32 far_z, f32 fov_in_radians
+){
 
     { // validation.
         ASSERT(!camera->is_init, "attempted to init an already init camera.");
@@ -2413,12 +2419,15 @@ void gfx_perspective_camera_init(GFX_Camera* camera, Vector3 position, f32 near_
     camera->near_z = CLAMP(near_z, F32_EPSILON, F32_MAX);
     camera->far_z = CLAMP(far_z, near_z, F32_MAX);
     camera->perspective_fov = fov_in_radians;
-    camera->projection_type = GFX_CameraProjectionType_Perspective;
+    camera->projection_type = GFX_ProjectionType_Perspective;
+    camera->coordinate_space = GFX_CoordinateSpace_Cartesian;
     camera->is_init = true;
 }
-#endif
 
-void gfx_orthographic_camera_init(GFX_Camera* camera, Vector3 position, f32 near_z, f32 far_z, f32 orthographic_size){
+void gfx_orthographic_camera_init(
+    GFX_Camera* camera, GFX_CoordinateSpace coordinate_space,
+    Vector3 position, f32 near_z, f32 far_z, f32 orthographic_size
+){
 
     { // validation.
         ASSERT(!camera->is_init, "attempted to init an already init camera.");
@@ -2430,7 +2439,8 @@ void gfx_orthographic_camera_init(GFX_Camera* camera, Vector3 position, f32 near
     camera->near_z = CLAMP(near_z, F32_EPSILON, F32_MAX);
     camera->far_z = CLAMP(far_z, near_z, F32_MAX);
     camera->orthographic_size = orthographic_size;
-    camera->projection_type = GFX_CameraProjectionType_Orthographic;
+    camera->projection_type = GFX_ProjectionType_Orthographic;
+    camera->coordinate_space = coordinate_space;
     camera->is_init = true;
 }
 
@@ -2442,14 +2452,26 @@ void gfx_camera_update_projection_matrix(GFX_Camera* camera, f32 surface_aspect_
     camera->model = MATRIX4X4_IDENTITY;
 
     switch(camera->projection_type){
-        case GFX_CameraProjectionType_Perspective:{
+        case GFX_ProjectionType_Perspective:{
+            ASSERT(camera->coordinate_space == GFX_CoordinateSpace_Cartesian, "perspective cameras should only be in Cartesian coordinate space.");
             camera->projection = matrix4x4_create_perspective(camera->perspective_fov, surface_aspect_ratio, camera->near_z, camera->far_z);
         }break;
-        case GFX_CameraProjectionType_Orthographic:{
-            // Compute half-width and half-height in world units based on virtual resolution
-            f32 half_height = camera->orthographic_size * 0.5f;
-            f32 half_width = half_height * surface_aspect_ratio;
-            camera->projection = matrix4x4_create_orthographic(-half_width, half_width, -half_height, half_height, camera->near_z, camera->far_z);
+        case GFX_ProjectionType_Orthographic:{
+            switch(camera->coordinate_space){
+                case GFX_CoordinateSpace_Cartesian:{
+                    // Compute half-width and half-height in world units based on virtual resolution
+                    f32 half_height = camera->orthographic_size * 0.5f;
+                    f32 half_width = half_height * surface_aspect_ratio;
+                    camera->projection = matrix4x4_create_orthographic(-half_width, half_width, -half_height, half_height, camera->near_z, camera->far_z);
+                }break;
+                case GFX_CoordinateSpace_Rasterised:{
+                    // Compute half-width and half-height in world units based on virtual resolution
+                    f32 height = camera->orthographic_size;
+                    f32 width = height * surface_aspect_ratio;
+                    // note that height is reversed; this is because GFX wgpu implementation treats +Y as up, not down.
+                    camera->projection = matrix4x4_create_orthographic(0.0f, width, -height, 0.0f, camera->near_z, camera->far_z);
+                }break;
+            }
         }break;
     }
 }

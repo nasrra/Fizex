@@ -85,7 +85,7 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
             i32 shape_idx = first_shape_idx;
             while(true){
                 BOUNDS_CHECK(shape_idx, state.entities.category_length);
-                
+
                 i32 category = state.entities.category[shape_idx];
 
                 // determine shape behaviour.
