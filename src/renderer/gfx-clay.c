@@ -49,8 +49,8 @@ void SidebarItemComponent() {
 void gfxclay_init(size_t clay_arena_size, i32 screen_height, i32 screen_width){
     Clay_Arena arena = Clay_CreateArenaWithCapacityAndMemory(clay_arena_size, platform_alloc_memory(clay_arena_size));
     Clay_Initialize(
-        arena, 
-        (Clay_Dimensions){(f32)screen_width, (f32)screen_height}, 
+        arena,
+        (Clay_Dimensions){(f32)screen_width, (f32)screen_height},
         (Clay_ErrorHandler){gfxclay_handle_errors}
     );
 }
@@ -73,8 +73,8 @@ Rectangle gfxclay_clay_to_rectangle(Clay_BoundingBox box){
     return(Rectangle){
         .x = box.x,
         .y = -box.y,
-        .width = box.width - box.x,
-        .height = box.height - box.y
+        .width = box.width,
+        .height = box.height
     };
 }
 
@@ -121,8 +121,7 @@ void gfxclay_update(GFX_State* gfx_state, Vector2I screen_resolution, Vector2I m
             case CLAY_RENDER_COMMAND_TYPE_RECTANGLE: {
                 GFX_Colour colour = gfxclay_clay_to_gfx_colour(renderCommand->renderData.rectangle.backgroundColor);
                 Rectangle rect = gfxclay_clay_to_rectangle(renderCommand->boundingBox);
-                gfx_draw_fill_rect(gfx_state, rect, colour, (f32)i+1, SPRITE_LAYER_UI, SPRITE_MATERIAL_DEBUG);
-
+                gfx_draw_fill_rect(gfx_state, rect, colour, GFX_SpriteOrigin_TopLeft, (f32)i+1, SPRITE_LAYER_UI, SPRITE_MATERIAL_DEBUG);
             }break;
             default:{
                 ASSERT(false, "attempted to use unimplemented clay feature!");

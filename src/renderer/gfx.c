@@ -3,6 +3,12 @@
 /*====================
     types.
 ====================*//**/
+
+typedef enum{
+    GFX_SpriteOrigin_Center,
+    GFX_SpriteOrigin_TopLeft
+} GFX_SpriteOrigin;
+
 typedef enum{
     GFX_CameraProjectionType_Orthographic,
     GFX_CameraProjectionType_Perspective
@@ -187,13 +193,12 @@ typedef struct{
     Matrix4x4 transform;
     GFX_SpriteRegion region;
     GFX_Colour colour;
+    Vector2 vertex_offset;
     GFX_SpriteState state;
     i32 virtual_texture;
     i32 material;
     i32 colour_state;
     i32 layer;
-    i32 _padding_0;
-    i32 _padding_1;
     i32 _padding_2;
 } GFX_DeviceSprite;
 
@@ -632,19 +637,28 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
 }
 
 GFX_DEFINE_SPRITE_SETTER_FUNCTION(transform_matrix, transform, Matrix4x4);
-GFX_DEFINE_SPRITE_SETTER_FUNCTION(material, material, i32);
-GFX_DEFINE_SPRITE_SETTER_FUNCTION(region, region, GFX_SpriteRegion);
-GFX_DEFINE_SPRITE_SETTER_FUNCTION(virtual_texture, virtual_texture, i32);
-GFX_DEFINE_SPRITE_SETTER_FUNCTION(state, state, GFX_SpriteState);
-GFX_DEFINE_SPRITE_SETTER_FUNCTION(colour, colour, GFX_Colour);
-GFX_DEFINE_SPRITE_SETTER_FUNCTION(colour_state, colour_state, GFX_ColourState);
 GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(transform_matrix, transform, Matrix4x4);
+
+GFX_DEFINE_SPRITE_SETTER_FUNCTION(material, material, i32);
 GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(material, material, i32);
+
+GFX_DEFINE_SPRITE_SETTER_FUNCTION(region, region, GFX_SpriteRegion);
 GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(region, region, GFX_SpriteRegion);
+
+GFX_DEFINE_SPRITE_SETTER_FUNCTION(virtual_texture, virtual_texture, i32);
 GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(virtual_texture, virtual_texture, i32);
+
+GFX_DEFINE_SPRITE_SETTER_FUNCTION(state, state, GFX_SpriteState);
 GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(state, state, GFX_SpriteState);
+
+GFX_DEFINE_SPRITE_SETTER_FUNCTION(colour, colour, GFX_Colour);
 GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(colour, colour, GFX_Colour);
+
+GFX_DEFINE_SPRITE_SETTER_FUNCTION(colour_state, colour_state, GFX_ColourState);
 GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(colour_state, colour_state, GFX_ColourState);
+
+GFX_DEFINE_SPRITE_SETTER_FUNCTION(vertex_offset, vertex_offset, Vector2);
+GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(vertex_offset, vertex_offset, Vector2);
 
 void gfx_sprite_set_transform_unsafe(GFX_State* ctx, i32 sprite_idx, Transform2D transform, f32 depth){
     gfx_sprite_set_transform_matrix_unsafe(ctx, sprite_idx, transform2d_to_matrix4x4_depth(transform, depth));
@@ -1258,8 +1272,8 @@ void gfx_final_render_target_init(GFX_Texture* texture, WGPUDevice device, u32 w
         TODO: (nich s)
         format of the final render target needs to be dynamically set based on the surface window's format.
     **/
-    WGPUTextureFormat format = WGPUTextureFormat_RGBA8UnormSrgb;
-    // WGPUTextureFormat format = WGPUTextureFormat_BGRA8UnormSrgb;
+    // WGPUTextureFormat format = WGPUTextureFormat_RGBA8UnormSrgb;
+    WGPUTextureFormat format = WGPUTextureFormat_BGRA8UnormSrgb;
     WGPUTextureUsage usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_TextureBinding;
     WGPUTextureAspect aspect = WGPUTextureAspect_All;
     gfx_texture_init(texture, device, format, usage, aspect, width, height);
@@ -1934,30 +1948,39 @@ GFX_SpriteId gfx_one_frame_sprite_alloc(GFX_State* ctx, i32 layer, bool* out_suc
 }
 
 bool gfx_sprite_init(
-    GFX_State* ctx, GFX_SpriteId sprite_id, Matrix4x4 transform, GFX_Colour colour, GFX_SpriteRegion region, GFX_ColourState colour_state,
+    GFX_State* ctx, GFX_SpriteId sprite_id, Matrix4x4 transform, GFX_Colour colour,
+    GFX_SpriteRegion region, GFX_ColourState colour_state, GFX_SpriteOrigin origin,
     i32 virtual_texture, i32 material, bool is_active
 ){
     GFX_SpriteManager* sprite_manager = &ctx->sprite_manager;
-    i32 index = gen_id_get_index(sprite_id.gen_id);
+    i32 idx = gen_id_get_index(sprite_id.gen_id);
     i32 gen = gen_id_get_generation(sprite_id.gen_id);
 
     ASSERT(sprite_manager->is_init == true, "sprite manager has not been init.");
-    ASSERT(index > 0, "invalid sprite id.");
+    ASSERT(idx > 0, "invalid sprite id.");
     ASSERT(virtual_texture > 0, "invalid virtual texture index.");
     ASSERT(material > 0, "invalid material index.");
 
-    BOUNDS_CHECK(index, sprite_manager->sprite_generations_length);
-    if(gen != ctx->sprite_manager.sprite_generations[index]){
+    BOUNDS_CHECK(idx, sprite_manager->sprite_generations_length);
+    if(gen != ctx->sprite_manager.sprite_generations[idx]){
         return false;
     }
 
-    gfx_sprite_set_transform_matrix_unsafe(ctx, index, transform);
-    gfx_sprite_set_material_unsafe(ctx, index, material);
-    gfx_sprite_set_region_unsafe(ctx, index, region);
-    gfx_sprite_set_virtual_texture_unsafe(ctx, index, virtual_texture);
-    gfx_sprite_set_state_unsafe(ctx, index, is_active ? GFX_SpriteState_Active : GFX_SpriteState_Inactive);
-    gfx_sprite_set_colour_unsafe(ctx, index, colour);
-    gfx_sprite_set_colour_state_unsafe(ctx, index, colour_state);
+    gfx_sprite_set_transform_matrix_unsafe(ctx, idx, transform);
+    gfx_sprite_set_material_unsafe(ctx, idx, material);
+    gfx_sprite_set_region_unsafe(ctx, idx, region);
+    gfx_sprite_set_virtual_texture_unsafe(ctx, idx, virtual_texture);
+    gfx_sprite_set_state_unsafe(ctx, idx, is_active ? GFX_SpriteState_Active : GFX_SpriteState_Inactive);
+    gfx_sprite_set_colour_unsafe(ctx, idx, colour);
+    gfx_sprite_set_colour_state_unsafe(ctx, idx, colour_state);
+    switch(origin){
+        case GFX_SpriteOrigin_Center:{
+            gfx_sprite_set_vertex_offset_unsafe(ctx, idx, (Vector2){0});
+        }break;
+        case GFX_SpriteOrigin_TopLeft:{
+            gfx_sprite_set_vertex_offset_unsafe(ctx, idx, (Vector2){.x = 0.5f, .y = -0.5f});
+        }break;
+    }
 
     return true;
 }
@@ -2376,7 +2399,7 @@ void gfx_context_free_resources(GFX_State* ctx){
 /**
     this is the code for a perspective camera,
     but it is commented out as presently the project doesnt need
-    and probably wont ever support a perspsective camera. 
+    and probably wont ever support a perspsective camera.
 **/
 void gfx_perspective_camera_init(GFX_Camera* camera, Vector3 position, f32 near_z, f32 far_z, f32 fov_in_radians){
 
@@ -2441,7 +2464,7 @@ void gfx_draw_line_3d(GFX_State* ctx, GFX_Colour colour, Vector3 start, Vector3 
 
     bool success;
     GFX_SpriteId sprite_id = gfx_one_frame_sprite_alloc(ctx, layer, &success);
-    gfx_sprite_init(ctx, sprite_id, transform3d_to_matrix4x4(transform), colour, (GFX_SpriteRegion){0}, GFX_ColourState_Override, 1, material, true);
+    gfx_sprite_init(ctx, sprite_id, transform3d_to_matrix4x4(transform), colour, (GFX_SpriteRegion){0}, GFX_ColourState_Override, GFX_SpriteOrigin_Center, 1, material, true);
 }
 
 void gfx_draw_line_2d(GFX_State* ctx, GFX_Colour colour, Vector2 start, Vector2 end, f32 z_position, i32 layer, i32 material, f32 thickness){
@@ -2449,11 +2472,11 @@ void gfx_draw_line_2d(GFX_State* ctx, GFX_Colour colour, Vector2 start, Vector2 
     Transform2D transform = TRANSFORM2D_IDENTITY;
     transform = transform2d_rotate(transform, vector2_get_angle_between_points(start, end));
     transform.position = vector2_mul_val(vector2_add(end, start), 0.5f);
-    transform.scale =  (Vector2){.y = thickness, .x = vector2_len(vector2_sub(end, start))};   
+    transform.scale =  (Vector2){.y = thickness, .x = vector2_len(vector2_sub(end, start))};
 
     bool success;
     GFX_SpriteId sprite_id = gfx_one_frame_sprite_alloc(ctx, layer, &success);
-    gfx_sprite_init(ctx, sprite_id, transform2d_to_matrix4x4_depth(transform, z_position), colour, (GFX_SpriteRegion){0}, GFX_ColourState_Override, 1, material, true);
+    gfx_sprite_init(ctx, sprite_id, transform2d_to_matrix4x4_depth(transform, z_position), colour, (GFX_SpriteRegion){0}, GFX_ColourState_Override, GFX_SpriteOrigin_Center, 1, material, true);
 }
 
 void gfx_draw_wire_circle(GFX_State* ctx, Circle shape, GFX_Colour colour, f32 position_z, i32 layer, i32 material){
@@ -2489,7 +2512,7 @@ void gfx_draw_wire_poly(GFX_State* ctx, f32* vertices_x, f32* vertices_y, i32 ve
     }
 }
 
-void gfx_draw_fill_rect(GFX_State* ctx, Rectangle shape, GFX_Colour colour, f32 position_z, i32 layer, i32 material){
+void gfx_draw_fill_rect(GFX_State* ctx, Rectangle shape, GFX_Colour colour, GFX_SpriteOrigin origin, f32 position_z, i32 layer, i32 material){
     Transform2D transform = transform2d_make(
         (Vector2){.x = shape.x, .y = shape.y},
         (Vector2){.x = shape.width, .y = shape.height},
@@ -2498,14 +2521,15 @@ void gfx_draw_fill_rect(GFX_State* ctx, Rectangle shape, GFX_Colour colour, f32 
     bool success;
     GFX_SpriteId sprite_id = gfx_one_frame_sprite_alloc(ctx, layer, &success);
     gfx_sprite_init(
-        ctx, 
-        sprite_id, 
-        transform2d_to_matrix4x4_depth(transform, position_z), 
-        colour, 
-        (GFX_SpriteRegion){0}, 
-        GFX_ColourState_Override, 
-        1, 
-        material, 
+        ctx,
+        sprite_id,
+        transform2d_to_matrix4x4_depth(transform, position_z),
+        colour,
+        (GFX_SpriteRegion){0},
+        GFX_ColourState_Override,
+        origin,
+        1,
+        material,
         true
     );
 }
@@ -2551,7 +2575,7 @@ void gfx_write_to_texture_array(
         .origin = {.x = 0, .y = 0, .z = layer_idx},
         .aspect = WGPUTextureAspect_All
     };
-    
+
     // describe the layout of the host pixel buffer.
     u32 bytes_per_pixel = 0;
     switch(format){
@@ -2570,22 +2594,22 @@ void gfx_write_to_texture_array(
         .bytesPerRow = array->extents.width * bytes_per_pixel,
         .rowsPerImage = array->extents.height
     };
-    
+
     // define the region size we are replacing (1 layer at a time)
     WGPUExtent3D write_size = array->extents;
     write_size.depthOrArrayLayers = 1;
-    
+
     // note that this command is an immediate schedule and dispatch, there is no need to call queue submit.
-        
+
     WGPUQueue queue = wgpuDeviceGetQueue(device);
     wgpuQueueWriteTexture(queue, &dst, src_buffer, (u32)src_buffer_length, &layout, &write_size);
     wgpuQueueSubmit(queue, 0, NULL);
 }
 
 bool gfx_load_image_texture(GFX_State* ctx, i32 virtual_texture_idx){
-    
+
     // validation.
-    ASSERT(ctx->device != (WGPUDevice){0}, "device not init");    
+    ASSERT(ctx->device != (WGPUDevice){0}, "device not init");
     ASSERT(ctx->virtual_texture_manager.is_init, "virtual texture manager not init.");
     if(virtual_texture_idx <= 0){
         ASSERT(false, "invalid virtual texture idx.");
@@ -2596,20 +2620,20 @@ bool gfx_load_image_texture(GFX_State* ctx, i32 virtual_texture_idx){
     if(dvt->is_loaded == 1){
         ASSERT(false, "virtual texture already loaded.");
         return false;
-    }        
+    }
     if(!gfx_is_image_virtual_texture(ctx, virtual_texture_idx)){
         ASSERT(false, "not an image virtual texture.");
         return false;
     }
-    
+
     BOUNDS_CHECK(virtual_texture_idx, ctx->virtual_texture_manager.host_virtual_texture_length);
     GFX_HostVirtualTexture* hvt = &ctx->virtual_texture_manager.host_virtual_texture[virtual_texture_idx];
-    
+
     Image image = (Image){0};
     if(!platform_load_image(&image, hvt->file_path)){
         return false;
     }
-    
+
     // validate that the image can be stored.
     u32 width = (u32)image.width;
     u32 height = (u32)image.height;
@@ -2634,11 +2658,11 @@ bool gfx_load_image_texture(GFX_State* ctx, i32 virtual_texture_idx){
         platform_free_image(&image);
         return false;
     }
-    
+
     dvt->shader_texture_array_binding = texture_array_binding;
     ARRAY_POP(texture_array->free_layer_idx_stack, texture_array->free_layer_idx_stack_length, &texture_array->free_layer_idx_stack_count, &dvt->texture_array_layer_index);
     dvt->is_loaded = true;
-    
+
     // write the pixel data to the texture array.
     gfx_write_to_texture_array(texture_array, ctx->device, WGPUTextureFormat_RGBA8Unorm, dvt->texture_array_layer_index, image.pixel, image.pixel_length);
     platform_free_image(&image);
@@ -2658,7 +2682,7 @@ bool gfx_unload_image_texture(GFX_State* ctx, i32 virtual_texture_idx){
         ASSERT(false, "virtual texture is not an image texture; cannot unload.");
         return false;
     }
-    
+
     // push the freed layer idx back into the texture array for reuse.
     GFX_TextureArray* texture_array = &ctx->virtual_texture_manager.texture_arrays[dvt->shader_texture_array_binding];
     ARRAY_PUSH(texture_array->free_layer_idx_stack, texture_array->free_layer_idx_stack_length, &texture_array->free_layer_idx_stack_count, dvt->texture_array_layer_index);
@@ -2674,8 +2698,8 @@ void gfx_virtual_texture_set_file_path(GFX_State* ctx, String file_path, i32 vir
 }
 
 bool gfx_sprite_id_equals(GFX_SpriteId lhs, GFX_SpriteId rhs){
-    return 
-    lhs.gen_id == rhs.gen_id && 
+    return
+    lhs.gen_id == rhs.gen_id &&
     lhs.layer == rhs.layer;
 }
 
@@ -2683,26 +2707,26 @@ Vector2 gfx_get_mouse_world_position(GFX_State* ctx){
     Vector2I mouse_position_i;
     platform_get_mouse_position(&mouse_position_i.x, &mouse_position_i.y);
     Vector2 mouse_position = {.x = (f32)mouse_position_i.x, .y = (f32)mouse_position_i.y};
-    
+
     Vector2I resolution = {
-        .x = ctx->final_render_texture.extents.width, 
+        .x = ctx->final_render_texture.extents.width,
         .y = ctx->final_render_texture.extents.height
     };
     Vector2 render_texture_position = vector2_get_relative_to_destination_rectangle(mouse_position, ctx->destination_rectangle, resolution);
-    
+
     f32 mouse_horizontal_factor = mouse_position.x / resolution.x;
     f32 mouse_vertical_factor = mouse_position.y / resolution.y;
-    
+
     f32 aspect_ratio = (f32)resolution.x / (f32)resolution.y;
-    
+
     f32 camera_space_x = ctx->world_camera.orthographic_size * aspect_ratio;
     f32 camera_space_y = ctx->world_camera.orthographic_size;
-    
+
     f32 mouse_camera_pos_y = camera_space_y * mouse_vertical_factor;
     f32 mouse_camera_pos_x = camera_space_x * mouse_horizontal_factor;
-                    
+
     return (Vector2){
-        .x = ctx->world_camera.position.x - (camera_space_x * 0.5f) + mouse_camera_pos_x, 
+        .x = ctx->world_camera.position.x - (camera_space_x * 0.5f) + mouse_camera_pos_x,
         .y = ctx->world_camera.position.y - (-(camera_space_y * 0.5f) + mouse_camera_pos_y)
     };
 }
