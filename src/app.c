@@ -7,7 +7,6 @@
 #include "base_layer/base_structures.c"
 #include "renderer/gfx.c"
 #include "renderer/gfx_app_types.c"
-#include "renderer/gfx-clay.c"
 #include "fizx/fizx.c"
 #include "fizx/fizx_draw.c"
 #include "gameplay/entity.c"
@@ -33,7 +32,7 @@
 #define DELTA_TIME_ACCUMULATOR_SLOW_DOWN 0.0333147881012903f
 
 typedef struct{
-    EntityManager* entity_manager;
+    EntityManager* entity_manager;    
 } CollisionCallbackContext;
 
 /**====================
@@ -53,11 +52,11 @@ f32 time_scale = 1.0f;
 
 void enemy_body_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    GenId* enemy_gid = (GenId*)info.target_user_data;
-
+    GenId* enemy_gid = (GenId*)info.target_user_data; 
+    
     if((info.source_layer & PHYSICS_LAYER_PLAYER) != 0){
         entity_deplete_health(ctx->entity_manager, *enemy_gid, 1);
-    }
+    }    
 }
 
 void enemy_body_on_exit_callback(FIZX_CollisionInfo info, void* user_data){
@@ -67,9 +66,9 @@ void enemy_body_on_exit_callback(FIZX_CollisionInfo info, void* user_data){
 }
 
 void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time){
-
+    
     Vector2 mouse_world_position = gfx_get_mouse_world_position(&gfx_state);
-
+        
     f32 camera_speed = 1.0f * delta_time * gfx_state.screen_camera.orthographic_size;
     bool x = input_is_key_pressed(KEY_RIGHT);
     if(input_is_key_pressed(KEY_Q))     {gfx_state.screen_camera.orthographic_size -= gfx_state.screen_camera.orthographic_size * 1.0f * delta_time;}
@@ -78,9 +77,9 @@ void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time)
     if(input_is_key_pressed(KEY_LEFT))  {gfx_state.screen_camera.position.x -= camera_speed;}
     if(input_is_key_pressed(KEY_UP))    {gfx_state.screen_camera.position.y += camera_speed;}
     if(input_is_key_pressed(KEY_DOWN))  {gfx_state.screen_camera.position.y -= camera_speed;}
-
+    
     if(input_is_key_pressed(KEY_SPACE)){
-        time_scale = 0.0f;
+        time_scale = 0.0f;        
     }
     else if(input_is_key_pressed(KEY_F)) {
         time_scale = 0.1f;
@@ -107,7 +106,7 @@ void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time)
             gfx_sprite_set_transform(&gfx_state, entity->sprite_id, entity->transform, entity->sprite_depth);
         }
     }
-
+    
     Vector2I result;
     platform_get_mouse_position(&result.x, &result.y);
 }
@@ -120,8 +119,7 @@ GFX_State app_gfx_init(MemoryArena* persistent, MemoryArena* transient, WindowCo
         font textures.
     **/
     GFX_FontTextureInitInfo font_texture_init_info ={
-        .base_glyph_index = 32,
-        .glyph_count = 128,
+        .max_glyphs = 256,
         .texture_height = 512,
         .texture_width = 512
     };
@@ -182,7 +180,7 @@ GFX_State app_gfx_init(MemoryArena* persistent, MemoryArena* transient, WindowCo
 }
 
 void app_fixed_update(f32 delta_time){
-
+    
 }
 
 void app_late_update(f32 delta_time){
@@ -196,20 +194,20 @@ void app_late_update(f32 delta_time){
     gfx_camera_update_projection_matrix(&gfx_state.screen_camera, aspect_ratio);
 
     Ubo ubo = {
-        .world_camera_matrix =
+        .world_camera_matrix = 
             matrix4x4_mul(
                 matrix4x4_mul(
-                    gfx_state.world_camera.projection,
+                    gfx_state.world_camera.projection, 
                     gfx_state.world_camera.view
-                ),
+                ), 
             gfx_state.world_camera.model
         ),
-        .screen_camera_matrix =
+        .screen_camera_matrix = 
             matrix4x4_mul(
                 matrix4x4_mul(
-                    gfx_state.screen_camera.projection,
+                    gfx_state.screen_camera.projection, 
                     gfx_state.screen_camera.view
-                ),
+                ), 
             gfx_state.screen_camera.model
         ),
         .world_camera_far_z = gfx_state.world_camera.far_z,
@@ -230,9 +228,9 @@ void app_main(){
     platform_init_transient_memory(MEGABYTE(4));
     MemoryArena* persistent = platform_get_persistent_memory();
     MemoryArena* transient = platform_get_transient_memory();
-
-    gfxclay_init(MEGABYTE(8), WINDOW_WIDTH, WINDOW_HEIGHT);
-
+    
+    gfx_clay_init(MEGABYTE(8), WINDOW_WIDTH, WINDOW_HEIGHT);
+    
     window_ctx = platform_window_create(WINDOW_WIDTH, WINDOW_HEIGHT);
 
     input_init(persistent);
@@ -241,19 +239,24 @@ void app_main(){
     gfx_orthographic_camera_init(&gfx_state.screen_camera, GFX_CoordinateSpace_Rasterised, (Vector3){0}, 0.01f, 1028.0f, 1080.0f);
     gfx_global_wireframe_thickness = 0.05f;
     gfx_state = app_gfx_init(persistent, transient, *window_ctx);
-
+    
     String file_path = {0};
-    string_init(&file_path, transient, 32);
+    string_init(&file_path, transient, 48);
 
     string_push_chars(&file_path, "assets/image.png", 16);
     gfx_virtual_texture_set_file_path(&gfx_state, file_path, 3);
     gfx_load_image_texture(&gfx_state, 3);
-
+    
     string_clear(&file_path);
     string_push_chars(&file_path, "assets/sling_shot.png", 21);
     gfx_virtual_texture_set_file_path(&gfx_state, file_path, 4);
     gfx_load_image_texture(&gfx_state, 4);
-
+    
+    string_clear(&file_path);
+    string_push_chars(&file_path, "assets/fonts/PixelifySans-Regular.ttf", 37);
+    gfx_virtual_texture_set_file_path(&gfx_state, file_path, 1);
+    gfx_load_font_texture(&gfx_state, transient, 1, 24, 32, 32 - 128);
+    
     FIZX_DrawInfo fizx_draw_state = {
         .colour_dynamic_shape           = GFX_COLOUR_GREEN,
         .colour_passive_trigger_shape   = GFX_COLOUR_LIGHT_BLUE,
@@ -290,9 +293,9 @@ void app_main(){
     entity_manager = (EntityManager){0};
     entity_manager_init(&entity_manager, persistent, entity_amount, physics_body_amount);
     Entity* entity;
-
+        
     // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
-
+    
     // floor entity.
     GenId floor_gid = entity_manager_alloc_entity(&entity_manager);
     entity_manager_get_entity(entity_manager, floor_gid, &entity);
@@ -302,7 +305,7 @@ void app_main(){
         entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform3d_to_transform2d(entity_transform), false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, entity->physics_body_gid, transform3d_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Kinematic, &floor_gid, PHYSICS_LAYER_ENVIRONMENT, square, material, true);
     }
-
+        
     // another dyanimc entity (piggy).
     GenId enemy_gid = entity_manager_alloc_entity(&entity_manager);
     entity_manager_get_entity(entity_manager, enemy_gid, &entity);
@@ -311,14 +314,14 @@ void app_main(){
         entity->is_physics_body = true;
         entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform3d_to_transform2d(entity_transform), true);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, entity->physics_body_gid, transform3d_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, &enemy_gid, PHYSICS_LAYER_ENEMY, square, material, true);
-
+    
         entity->is_health = true;
         entity->health = 2;
-
+    
         fizx_shape_set_on_enter_callback(&entity_manager.fizx_state, enemy_body_on_enter_callback, entity_shape_gid);
         fizx_shape_set_on_exit_callback(&entity_manager.fizx_state, enemy_body_on_exit_callback, entity_shape_gid);
     }
-
+    
     GenId sling_shot_gid = entity_manager_alloc_entity(&entity_manager);
     entity_manager_get_entity(entity_manager, sling_shot_gid, &entity);
     {
@@ -334,11 +337,11 @@ void app_main(){
             &gfx_state, entity->sprite_id, transform2d_to_matrix4x4(sprite_transform), GFX_COLOUR_WHITE, (GFX_SpriteRegion){.width = 16, .height = 16}, GFX_ColourState_Tint,
             GFX_SpriteOrigin_Center, 4, SPRITE_MATERIAL_IMAGE, true
         );
-
+    
         Transform2D bird_transform = TRANSFORM2D_IDENTITY;
         bird_transform.position = vector2_add(entity->transform.position, (Vector2){.y = 0.5f});
-        bird_transform.scale = VECTOR2_ONE;
-
+        bird_transform.scale = VECTOR2_ONE; 
+    
         entity_spawn_bird(&entity_manager, &gfx_state, bird_transform);
     }
 
@@ -377,7 +380,7 @@ void app_main(){
 
             while(fixed_update_accumulator >= FIXED_DELTA_TIME){
                 app_fixed_update(FIXED_DELTA_TIME);
-                CollisionCallbackContext collision_callback_ctx = {.entity_manager = &entity_manager};
+                CollisionCallbackContext collision_callback_ctx = {.entity_manager = &entity_manager}; 
                 fizx_state_fixed_update(&entity_manager.fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME, 16);
                 fixed_update_accumulator -= FIXED_DELTA_TIME;
             }
@@ -393,13 +396,17 @@ void app_main(){
         {
             app_late_update(delta_time);
         }
-
+    
         // final update.
         {
+            Vector2I mouse_backbuffer_position;
+            platform_get_mouse_position(&mouse_backbuffer_position.x, &mouse_backbuffer_position.y);
             fizx_state_draw(entity_manager.fizx_state, &gfx_state, fizx_draw_state, delta_time);
             entity_manager_debug_draw(entity_manager, &gfx_state, delta_time);
-            gfxclay_update(&gfx_state, (Vector2I){.x = WINDOW_WIDTH, .y = WINDOW_HEIGHT},  (Vector2I){0}, delta_time, false);
-            // gfx_draw_fill_rect(&gfx_state, rect, GFX_COLOUR_GREEN, 1.0f, SPRITE_LAYER_UI, SPRITE_MATERIAL_DEBUG);
+            gfx_clay_update(
+                &gfx_state, (Vector2I){.x = WINDOW_WIDTH, .y = WINDOW_HEIGHT}, mouse_backbuffer_position, delta_time, 
+                SPRITE_LAYER_UI, SPRITE_MATERIAL_DEBUG, input_is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+            );
             gfx_state_draw(&gfx_state);
             transient->stride = 0;
         }

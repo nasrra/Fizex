@@ -107,24 +107,24 @@ typedef struct{
     /*
         The coordinates of the top left point of this glyph in its generated texture atlas.
     */
-    Vector2 texture_coords;
+    Vector2I texture_coords;
     /*
         The size of this glyph's quad in its generated texture atlas.
     */
-    Vector2 size;
+    Vector2I size;
 } GFX_Glyph;
 
 typedef struct{
-    u32 base_glyph_index;
-    u32 max_glyph_height_in_pixels;
-    GFX_Glyph* glyphs;
-    i32 glyphs_length;
+    u32 base_glyph_idx;
+    u32 line_pixel_height;
+    GFX_Glyph* glyph;
+    /*
+        `remarks`
+        when this is zero, it means that a host virtual texture is NOT a Font texture; instead it is a Image texture.
+    */
+    i32 glyph_length;
+    i32 glyph_count;
 } GFX_FontData;
-
-typedef enum{
-    GFX_VirtualTextureType_Image,
-    GFX_VirtualTextureType_Font
-} GFX_VirtualTextureType;
 
 /*
     The maximum amount of virtual textures a shader can store.
@@ -143,7 +143,6 @@ typedef struct{
 typedef struct{
     String file_path;
     GFX_FontData font_data;
-    GFX_VirtualTextureType texture_type;
     bool is_init;
 } GFX_HostVirtualTexture;
 
@@ -162,8 +161,8 @@ typedef struct{
     */
     GFX_HostVirtualTexture* host_virtual_texture;
     i32 host_virtual_texture_length;
-    GFX_TextureArray* texture_arrays;
-    i32 texture_arrays_length;
+    GFX_TextureArray* texture_array;
+    i32 texture_array_length;
     GFX_RenderBuffer device_virtual_texture_buffer;
     bool is_init;
 } GFX_VirtualTextureManager;
@@ -288,19 +287,13 @@ typedef struct{
 } GFX_SpriteLayerCreateInfo;
 
 typedef struct{
-    /*
-        the width of the texture to write the glyph data to.
-    */
+    // the width of the texture to write the glyph data to.
     u32 texture_width;
-    /*
-        the height of the texture to write the glyph data to.
-    */
+    // the height of the texture to write the glyph data to.
     u32 texture_height;
-    u32 base_glyph_index;
-    i32 glyph_count;
-    /*
-        the indices of the virtual textures to initialise as font textures.
-    */
+    // the maximum amount of glyphs any font texture can store.
+    i32 max_glyphs;
+    // the indices of the virtual textures to initialise as font textures.
     i32* virtual_textures;
     i32 virtual_textures_length;
 } GFX_FontTextureInitInfo;
@@ -502,12 +495,12 @@ typedef struct{
 /*
     The index where font textures are stored within the `TextureArrays` array.
 */
-#define GFX_VIRTUAL_TEXTURE_MANAGER_FONT_TEXTURE_ARRAY_INDEX 1
+#define GFX_VIRTUAL_TEXTURE_MANAGER_FONT_TEXTURE_ARRAY_IDX 1
 /*
     The index where the first image textures are stored within the `TextureArrays` array.
 */
 #define GFX_VIRTUAL_TEXTURE_MANAGER_IMAGE_TEXTURE_ARRAY_START_INDEX \
-            GFX_VIRTUAL_TEXTURE_MANAGER_FONT_TEXTURE_ARRAY_INDEX + 1
+            GFX_VIRTUAL_TEXTURE_MANAGER_FONT_TEXTURE_ARRAY_IDX + 1
 /*
     The maximum amount of sprites a shader can store.
 
@@ -630,9 +623,160 @@ DEFINE_QUICKSORT_STRUCT(GFX_DeviceSprite, f32, .transform.m[14], quicksort_devic
 f32 gfx_global_wireframe_thickness = 4;
 f32 gfx_global_circle_vertice_count = 24;
 
-/*====================
-    functions.
-====================*//**/
+
+
+
+//////////
+//  functions: FreeType.
+//////////
+
+
+
+
+#include <ft2build.h>
+#include FT_FREETYPE_H
+/*
+    `paramters`
+    `out_glyphs`: output fort he loaded glyph data; note that the length of the array is the amount of glyphs that will be loaded.
+    `base_glyph_idx`: the index to start loading glyph from in the font file bit map; (refer to an ASCII table; e.g. 32 is 'SPACE').
+    
+    `remarks`
+    Free Type file loading automatically handles utf8 paths on windows, so all is good; there is no need for a conversion. 
+*/
+bool gfx_freetype_load_font(
+    String file_path, MemoryArena* transient,
+    u32 base_glyph_idx, u32 requested_line_pixel_height, u32 texture_width,
+    char* out_texture_data, i32 out_texture_data_length,
+    GFX_Glyph* out_glyph, i32 out_glyph_length, u32* out_actual_line_pixel_height
+){
+
+    // convert to null terminated string.
+    char* n_path;
+    i32 n_path_length;
+    MEMORY_ARENA_ALLOC_ARRAY(transient, n_path, &n_path_length, file_path.length+1);
+    COPY_MEMORY(n_path, file_path.chars, file_path.length);
+    n_path[n_path_length] = '\0';
+    
+    FT_Error error;
+    
+    // init the font library.
+    FT_Library lib;
+    error = FT_Init_FreeType(&lib);
+    ASSERT(!error, "failed to init free type.");
+    
+    // init a font face.
+    FT_Face font_face;
+    FT_New_Face(lib, n_path, 0, &font_face);
+    FT_Set_Pixel_Sizes(font_face, 0, requested_line_pixel_height);
+
+    // how many pixels are between eachother (vertically and horizontally).
+    u32 padding = 2;
+    
+    { // copy glyphs into atlas
+    
+        u32 row = 0;
+        u32 col = padding;
+        *out_actual_line_pixel_height = 0;
+        
+        // loop through ASCII characters 32 to 127.
+        FT_ULong glyph_idx = 0;
+        
+        for(i32 i = 0; i < out_glyph_length; i++){
+            FT_UInt char_idx = FT_Get_Char_Index(font_face, glyph_idx);
+            
+            error = FT_Load_Glyph(font_face, char_idx, FT_LOAD_DEFAULT);
+            if(!error){
+                ASSERT(false, "failed to load glyph.");            
+                return false;
+            }
+            
+            error = FT_Render_Glyph(font_face->glyph, FT_RENDER_MODE_NORMAL);
+            if(!error){
+                ASSERT(false, "failed to render glyph");
+                return false;
+            }
+            
+            // check if the glyph fits into the current row.
+            if(col + font_face->glyph->bitmap.width + padding >= texture_width){
+                // if the glyph doesnt fit; increase the rows and reset the column.                
+                col = padding;
+                row += requested_line_pixel_height;
+            }
+            
+            /*
+                Get the heighest glyph in the font file.
+    
+                NOTE:
+                    In order to get the correct values that correspond to actual pixels values you have to bit 
+                    shift down by 6; as freetype represents sizes in 1/64th of a pixel.
+            */
+            *out_actual_line_pixel_height = MAX((u32)((font_face->size->metrics.ascender - font_face->size->metrics.descender) >> 6), *out_actual_line_pixel_height);
+                        
+            /*
+                go through the rows and columns of the bitmap (the x and y coordinates) and 
+                then copy the glyph pixels one by one into the texture atlas.
+            */
+            for(u32 y = 0; y < font_face->glyph->bitmap.rows; ++y){
+                for(u32 x = 0; x < font_face->glyph->bitmap.width; ++x){
+                    i32 texture_data_idx = (i32)((row+y) * texture_width + col + x);
+                    BOUNDS_CHECK(texture_data_idx, out_texture_data_length);
+                    i32 buffer_idx = y * font_face->glyph->bitmap.width + x; 
+                    out_texture_data[texture_data_idx] = font_face->glyph->bitmap.buffer[buffer_idx];
+                    
+                }
+            }
+            
+            /*
+                retrieve the loaded glyph data.
+            */
+            BOUNDS_CHECK(i, out_glyph_length);
+            GFX_Glyph* glyph = &out_glyph[i];
+            glyph_idx += (i == 0)
+            ? base_glyph_idx // we've loaded the null terminator '🞎' fallback character; now, we should load the actual fonts we want.
+            : i;
+            
+            glyph->size = (Vector2I){.x = (i32)font_face->glyph->bitmap.width, .y = (i32)font_face->glyph->bitmap.rows};
+            /*
+                NOTE:
+                    In order to get the correct values that correspond to actual pixels values you have to bit 
+                    shift down by 6; as freetype represents sizes in 1/64th of a pixel.
+            */
+            glyph->advance = (Vector2){.x = (f32)(font_face->glyph->advance.x >> 6), .y =  (f32)(font_face->glyph->advance.y >> 6)};
+            glyph->offset = (Vector2){.x = (f32)font_face->glyph->bitmap_left, .y = (f32)font_face->glyph->bitmap_top};
+            glyph->texture_coords = (Vector2I){.x = (i32)col, .y = (i32)row};
+
+            //  move to the next column to write the next glyph to.
+            col += font_face->glyph->bitmap.width + padding;   
+        }
+    }
+
+    { // cleanup.
+        error = FT_Done_Face(font_face);
+        if(error){
+            ASSERT(false, "failed to release font face data.");
+            return false;
+        }
+        error = FT_Done_FreeType(lib);
+        if(error){
+            ASSERT(false, "failed to release font lib data.");
+            return false;   
+        }
+        platform_free_memory(n_path);
+    }
+    
+    return true;
+}
+
+
+
+
+//////////
+//  functions: GFX
+//////////
+
+
+
+
 
 inline bool gfx_sprite_is_chain_sprite(GFX_HostSprite sprite){
     return sprite.next_in_chain > 0;
@@ -672,13 +816,6 @@ void gfx_sprite_set_transform_unsafe(GFX_State* ctx, i32 sprite_idx, Transform2D
 
 bool gfx_sprite_set_transform(GFX_State* ctx, GFX_SpriteId sprite_id, Transform2D transform, f32 depth){
     return gfx_sprite_set_transform_matrix(ctx, sprite_id, transform2d_to_matrix4x4_depth(transform, depth));
-}
-
-void gfx_font_data_init(GFX_FontData* font_data, MemoryArena* arena, i32 glyph_count, u32 base_glyph_index){
-    ASSERT(glyph_count > 1, "font data should be init with a glyph count greater than one to account for the Nil element.");
-    glyph_count = CLAMP(glyph_count, 1, I32_MAX);
-    font_data->base_glyph_index = base_glyph_index;
-    MEMORY_ARENA_ALLOC_ARRAY(arena, font_data->glyphs, &font_data->glyphs_length, glyph_count);
 }
 
 void gfx_request_adapter_callback(
@@ -914,37 +1051,39 @@ void gfx_virtual_texture_manager_init(
     // initialise font virtual textures.
     for(i32 i = 0; i < font_info.virtual_textures_length; i++){
         i32 virtual_texture = font_info.virtual_textures[i];
-
         BOUNDS_CHECK(virtual_texture, manager->host_virtual_texture_length);
         GFX_HostVirtualTexture* host = &manager->host_virtual_texture[virtual_texture];
-
-        gfx_font_data_init(&host->font_data, arena, font_info.glyph_count, font_info.base_glyph_index);
-        host->texture_type = GFX_VirtualTextureType_Font;
+    
+        { // alloc font info.
+            host->font_data = (GFX_FontData){0};
+            ASSERT(font_info.max_glyphs > 0, "font data should be init with a glyph count greater than one to account for the Nil element.");
+            MEMORY_ARENA_ALLOC_ARRAY(arena, host->font_data.glyph, &host->font_data.glyph_length, font_info.max_glyphs);
+        }
     }
 
     /*
         initialise texture arrays.
         +1 for the nil entry and the font texture array.
     */
-    i32 texture_array_count = image_infos_length + GFX_VIRTUAL_TEXTURE_MANAGER_FONT_TEXTURE_ARRAY_INDEX + 1;
+    i32 texture_array_count = image_infos_length + GFX_VIRTUAL_TEXTURE_MANAGER_FONT_TEXTURE_ARRAY_IDX + 1;
     i32 write_index = 0;
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->texture_arrays, &manager->texture_arrays_length, texture_array_count);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->texture_array, &manager->texture_array_length, texture_array_count);
 
     // init the nil.
     WGPUTextureFormat nil_texture_format = WGPUTextureFormat_R8Unorm; // the format should be the least taxing on VRAM storage.
-    BOUNDS_CHECK(write_index, manager->texture_arrays_length);
-    gfx_texture_array_init(&manager->texture_arrays[write_index], device, arena, nil_texture_format, 1, 1, 1);
+    BOUNDS_CHECK(write_index, manager->texture_array_length);
+    gfx_texture_array_init(&manager->texture_array[write_index], device, arena, nil_texture_format, 1, 1, 1);
 
     // init the font texture.
-    write_index = GFX_VIRTUAL_TEXTURE_MANAGER_FONT_TEXTURE_ARRAY_INDEX;
+    write_index = GFX_VIRTUAL_TEXTURE_MANAGER_FONT_TEXTURE_ARRAY_IDX;
     /*
         Font textures are an array of bytes ranging from 0-256 for one channel ('red' - relative to the gpu - as it is a one channel value).
         These values should be normalised in the shader; converting 0-256 to 0-1.
     */
     WGPUTextureFormat font_texture_format = WGPUTextureFormat_R8Unorm;
-    BOUNDS_CHECK(write_index, manager->texture_arrays_length);
+    BOUNDS_CHECK(write_index, manager->texture_array_length);
     gfx_texture_array_init(
-        &manager->texture_arrays[write_index], device, arena, font_texture_format,
+        &manager->texture_array[write_index], device, arena, font_texture_format,
         font_info.texture_width, font_info.texture_height, font_info.virtual_textures_length
     );
 
@@ -957,9 +1096,9 @@ void gfx_virtual_texture_manager_init(
     WGPUTextureFormat image_texture_format = WGPUTextureFormat_RGBA8Unorm;
     for(i32 i = 0; i < image_infos_length; i++){
         GFX_ImageTexturesInitInfo* create_info = &image_infos[i];
-        BOUNDS_CHECK(write_index, manager->texture_arrays_length);
+        BOUNDS_CHECK(write_index, manager->texture_array_length);
         gfx_texture_array_init(
-            &manager->texture_arrays[write_index], device, arena, image_texture_format, create_info->width, create_info->height, create_info->max_textures
+            &manager->texture_array[write_index], device, arena, image_texture_format, create_info->width, create_info->height, create_info->max_textures
         );
         write_index++;
     }
@@ -1278,8 +1417,8 @@ void gfx_final_render_target_init(GFX_Texture* texture, WGPUDevice device, u32 w
         TODO: (nich s)
         format of the final render target needs to be dynamically set based on the surface window's format.
     **/
-    // WGPUTextureFormat format = WGPUTextureFormat_RGBA8UnormSrgb;
-    WGPUTextureFormat format = WGPUTextureFormat_BGRA8UnormSrgb;
+    WGPUTextureFormat format = WGPUTextureFormat_RGBA8UnormSrgb;
+    // WGPUTextureFormat format = WGPUTextureFormat_BGRA8UnormSrgb;
     WGPUTextureUsage usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_TextureBinding;
     WGPUTextureAspect aspect = WGPUTextureAspect_All;
     gfx_texture_init(texture, device, format, usage, aspect, width, height);
@@ -1466,7 +1605,7 @@ void gfx_blit_pipeline_init(GFX_BlitPipeline* pipeline, GFX_WindowSurface window
 /*
     parameters:
 
-    `texture_arrays_count`: the total amount of texture arrays to store.
+    `texture_array_count`: the total amount of texture arrays to store.
 */
 void gfx_graphics_pipeline_init(
     GFX_GraphicsPipeline* pipeline, MemoryArena* transient, WGPUDevice device, WGPUAdapter device_adapter,
@@ -1480,7 +1619,7 @@ void gfx_graphics_pipeline_init(
         ASSERT(pipeline->is_init==false, "attempted to init an already init graphics pipeline.");
     }
 
-    i32 texture_arrays_count = virtual_texture_manager.texture_arrays_length;
+    i32 texture_array_count = virtual_texture_manager.texture_array_length;
 
     gfx_sampler_init(&pipeline->non_filter_sampler, device);
 
@@ -1691,7 +1830,7 @@ void gfx_graphics_pipeline_init(
             */
             WGPUBindGroupLayoutEntry* gle1;
             i32 gle1_length;
-            MEMORY_ARENA_ALLOC_ARRAY(transient, gle1, &gle1_length, texture_arrays_count);
+            MEMORY_ARENA_ALLOC_ARRAY(transient, gle1, &gle1_length, texture_array_count);
             // define the texture array entries.
             for(i32 i = 0; i < gle1_length; i++){
                 gle1[i] = (WGPUBindGroupLayoutEntry){
@@ -1703,7 +1842,7 @@ void gfx_graphics_pipeline_init(
             }
             // bind group layout creation.
             WGPUBindGroupLayoutDescriptor gld1 = (WGPUBindGroupLayoutDescriptor){
-                .entryCount = texture_arrays_count,
+                .entryCount = texture_array_count,
                 .entries = gle1
             };
             pipeline->bind_group_layout_1 = wgpuDeviceCreateBindGroupLayout(device, &gld1);
@@ -1793,19 +1932,19 @@ void gfx_graphics_pipeline_init(
             // texture array entries.
             WGPUBindGroupEntry* ge1;
             i32 ge1_length;
-            MEMORY_ARENA_ALLOC_ARRAY(transient, ge1, &ge1_length, texture_arrays_count);
-            for(i32 i = 0; i < texture_arrays_count; i++){
-                BOUNDS_CHECK(i, virtual_texture_manager.texture_arrays_length);
+            MEMORY_ARENA_ALLOC_ARRAY(transient, ge1, &ge1_length, texture_array_count);
+            for(i32 i = 0; i < texture_array_count; i++){
+                BOUNDS_CHECK(i, virtual_texture_manager.texture_array_length);
                 ge1[i] = (WGPUBindGroupEntry){
                     .binding = i,
-                    .textureView = virtual_texture_manager.texture_arrays[i].view
+                    .textureView = virtual_texture_manager.texture_array[i].view
                 };
             }
 
             // bind group creation.
             WGPUBindGroupDescriptor gd1 = {
                 .layout = pipeline->bind_group_layout_1,
-                .entryCount = texture_arrays_count,
+                .entryCount = texture_array_count,
                 .entries = ge1
             };
             pipeline->bind_group_1 = wgpuDeviceCreateBindGroup(device, &gd1);
@@ -2051,10 +2190,6 @@ bool gfx_sprite_string_init(
     { // validation.
         ASSERT(ctx->sprite_manager.is_init == false, "sprite manager isnt init.");
         ASSERT(material_index > 0, "invalid material index.");
-        if(vt->texture_type != GFX_VirtualTextureType_Font){
-            ASSERT(false, "virtual texture is not of type 'Font'.");
-            return false;
-        }
         BOUNDS_CHECK(first_index, ctx->sprite_manager.sprite_generations_length);
         if(ctx->sprite_manager.sprite_generations[first_index] != generation){
             ASSERT(false, "attempted to init a sprite string with a stale sprite-id.");
@@ -2359,8 +2494,8 @@ void gfx_buffer_free_resources(GFX_RenderBuffer* buffer){
 }
 
 void gfx_virtual_texture_manager_free_resources(GFX_VirtualTextureManager* manager){
-    for(i32 i = 0; i < manager->texture_arrays_length; i++){
-        gfx_texture_array_free_resources(&manager->texture_arrays[i]);
+    for(i32 i = 0; i < manager->texture_array_length; i++){
+        gfx_texture_array_free_resources(&manager->texture_array[i]);
     }
     gfx_buffer_free_resources(&manager->device_virtual_texture_buffer);
 }
@@ -2573,16 +2708,6 @@ void gfx_draw_wire_rect(GFX_State* ctx, Rectangle shape, GFX_Colour colour, f32 
     gfx_draw_line_2d(ctx, colour, bottom_left, top_left, position_z, layer, material, gfx_global_wireframe_thickness);
 }
 
-bool gfx_is_image_virtual_texture(GFX_State* ctx, i32 virtual_texture_idx){
-    BOUNDS_CHECK(virtual_texture_idx, ctx->virtual_texture_manager.host_virtual_texture_length);
-    return ctx->virtual_texture_manager.host_virtual_texture[virtual_texture_idx].texture_type == GFX_VirtualTextureType_Image;
-}
-
-bool gfx_is_font_virtual_texture(GFX_State* ctx, i32 virtual_texture_idx){
-    BOUNDS_CHECK(virtual_texture_idx, ctx->virtual_texture_manager.host_virtual_texture_length);
-    return ctx->virtual_texture_manager.host_virtual_texture[virtual_texture_idx].texture_type == GFX_VirtualTextureType_Font;
-}
-
 void gfx_write_to_texture_array(
     GFX_TextureArray* array, WGPUDevice device, WGPUTextureFormat format, u32 layer_idx, u8* src_buffer, i32 src_buffer_length
 ){
@@ -2643,10 +2768,6 @@ bool gfx_load_image_texture(GFX_State* ctx, i32 virtual_texture_idx){
         ASSERT(false, "virtual texture already loaded.");
         return false;
     }
-    if(!gfx_is_image_virtual_texture(ctx, virtual_texture_idx)){
-        ASSERT(false, "not an image virtual texture.");
-        return false;
-    }
 
     BOUNDS_CHECK(virtual_texture_idx, ctx->virtual_texture_manager.host_virtual_texture_length);
     GFX_HostVirtualTexture* hvt = &ctx->virtual_texture_manager.host_virtual_texture[virtual_texture_idx];
@@ -2661,8 +2782,8 @@ bool gfx_load_image_texture(GFX_State* ctx, i32 virtual_texture_idx){
     u32 height = (u32)image.height;
     i32 texture_array_binding = -1  ;
     GFX_TextureArray* texture_array;
-    for(i32 i = GFX_VIRTUAL_TEXTURE_MANAGER_IMAGE_TEXTURE_ARRAY_START_INDEX; i < ctx->virtual_texture_manager.texture_arrays_length; i++){
-        texture_array = &ctx->virtual_texture_manager.texture_arrays[i];
+    for(i32 i = GFX_VIRTUAL_TEXTURE_MANAGER_IMAGE_TEXTURE_ARRAY_START_INDEX; i < ctx->virtual_texture_manager.texture_array_length; i++){
+        texture_array = &ctx->virtual_texture_manager.texture_array[i];
         if(texture_array->extents.width == width && texture_array->extents.height == height){
             texture_array_binding = i;
             break;
@@ -2691,24 +2812,96 @@ bool gfx_load_image_texture(GFX_State* ctx, i32 virtual_texture_idx){
     return true;
 }
 
-bool gfx_unload_image_texture(GFX_State* ctx, i32 virtual_texture_idx){
+bool gfx_load_font_texture(
+    GFX_State* state, MemoryArena* transient, 
+    i32 virtual_texture_idx, u32 line_pixel_height, 
+    i32 base_glyph_idx, i32 glyph_count
+){
+
+    { // validation.
+        ASSERT(base_glyph_idx > 0, "base_glyph_idx must be greater than zero.");
+        ASSERT(line_pixel_height > 0, "line_pixel_height must be greater than zero.");
+        ASSERT(glyph_count > 0, "glyph_count  must be greater than zero.");
+        ASSERT(state->is_init, "not init.");
+        ASSERT(state->virtual_texture_manager.is_init, "not init.");
+        ASSERT(state->device, "device is null.");
+    }
+    
+    BOUNDS_CHECK(virtual_texture_idx, state->virtual_texture_manager.host_virtual_texture_length);
+    GFX_HostVirtualTexture* hvt = &state->virtual_texture_manager.host_virtual_texture[virtual_texture_idx]; 
+    if(hvt->font_data.glyph_length <= 0){
+        ASSERT(false, "virtual texture unable to store font data.");
+        return false;
+    }
+    if(hvt->font_data.glyph_length < glyph_count){
+        ASSERT(false, "virtual texture capacity is lower than requested amount of glyphs.");
+        return false ;
+    }
+    
+    BOUNDS_CHECK(GFX_VIRTUAL_TEXTURE_MANAGER_FONT_TEXTURE_ARRAY_IDX, state->virtual_texture_manager.texture_array_length);
+    GFX_TextureArray* texture_array = &state->virtual_texture_manager.texture_array[GFX_VIRTUAL_TEXTURE_MANAGER_FONT_TEXTURE_ARRAY_IDX];
+    i32 texture_width = (i32)texture_array->extents.width;
+    i32 texture_height = (i32)texture_array->extents.height;
+    // get the next available slot to load into.
+    if(texture_array->free_layer_idx_stack_count <= 0){
+        ASSERT(false, "memory limit hit, cannot load anymore font textures.");
+        return false;
+    }
+    
+    NIL_BOUNDS_CHECK(virtual_texture_idx, state->virtual_texture_manager.device_virtual_texture_length);
+    GFX_DeviceVirtualTexture* dvt = &state->virtual_texture_manager.device_virtual_texture[virtual_texture_idx];    
+    if(dvt->is_loaded == true){
+        ASSERT(false, "attempted to load an already loaded font texture.");
+        return false;
+    }
+    
+    char* texture_data;
+    i32 texture_data_length;
+    MEMORY_ARENA_ALLOC_ARRAY(transient, texture_data, &texture_data_length, texture_array->extents.width * texture_array->extents.height);
+    
+    bool loaded = gfx_freetype_load_font(
+        hvt->file_path, transient,
+        base_glyph_idx, line_pixel_height,
+        texture_array->extents.width,
+        texture_data, texture_data_length,
+        hvt->font_data.glyph, hvt->font_data.glyph_length,
+        &hvt->font_data.line_pixel_height 
+    );
+    
+    // load the font file bitmap into a texture.
+    if(!loaded){
+        return false;
+    }
+    
+    // write data.
+    dvt->shader_texture_array_binding = GFX_VIRTUAL_TEXTURE_MANAGER_FONT_TEXTURE_ARRAY_IDX;
+    dvt->is_loaded = true;
+    ARRAY_POP(texture_array->free_layer_idx_stack, texture_array->free_layer_idx_stack_length, &texture_array->free_layer_idx_stack_count, &dvt->texture_array_layer_index);
+    hvt->font_data.base_glyph_idx = base_glyph_idx;
+    hvt->font_data.glyph_count = glyph_count;
+    gfx_write_to_texture_array(texture_array, state->device, WGPUTextureFormat_R8Unorm, (u32)dvt->texture_array_layer_index, (u8*)texture_data, texture_data_length);
+    return true;
+}
+
+bool gfx_unload_texture(GFX_State* ctx, i32 virtual_texture_idx){
     // validation steps.
     ASSERT(ctx->virtual_texture_manager.is_init, "virtual texture manager is not init.");
+    
     BOUNDS_CHECK(virtual_texture_idx, ctx->virtual_texture_manager.device_virtual_texture_length);
     GFX_DeviceVirtualTexture* dvt = &ctx->virtual_texture_manager.device_virtual_texture[virtual_texture_idx];
     if(dvt->is_loaded == false){
         ASSERT(false, "attempted to unload an unloaded image texture.");
         return false;
     }
-    if(gfx_is_image_virtual_texture(ctx, virtual_texture_idx) == false){
-        ASSERT(false, "virtual texture is not an image texture; cannot unload.");
-        return false;
-    }
-
+    dvt->is_loaded = false;
     // push the freed layer idx back into the texture array for reuse.
-    GFX_TextureArray* texture_array = &ctx->virtual_texture_manager.texture_arrays[dvt->shader_texture_array_binding];
+    GFX_TextureArray* texture_array = &ctx->virtual_texture_manager.texture_array[dvt->shader_texture_array_binding];
     ARRAY_PUSH(texture_array->free_layer_idx_stack, texture_array->free_layer_idx_stack_length, &texture_array->free_layer_idx_stack_count, dvt->texture_array_layer_index);
-    dvt->is_loaded = 0;
+    
+    BOUNDS_CHECK(virtual_texture_idx, ctx->virtual_texture_manager.host_virtual_texture_length);
+    GFX_HostVirtualTexture* hvt = &ctx->virtual_texture_manager.host_virtual_texture[virtual_texture_idx];
+    hvt->font_data.glyph_count = 0;
+    
     return true;
 }
 
@@ -2751,4 +2944,157 @@ Vector2 gfx_get_mouse_world_position(GFX_State* ctx){
         .x = ctx->world_camera.position.x - (camera_space_x * 0.5f) + mouse_camera_pos_x,
         .y = ctx->world_camera.position.y - (-(camera_space_y * 0.5f) + mouse_camera_pos_y)
     };
+}
+
+
+
+
+//////////
+//  functions: Clay.
+//////////
+
+
+
+
+/*
+    Disable MSVC's implicit cast warnings as Nic Barker wrote this and I trust him.
+*/
+#pragma warning(push)
+#pragma warning(disable: 4244)
+#pragma warning(disable: 4305)
+    #define CLAY_IMPLEMENTATION
+    #include "vendors/clay/clay.h"
+#pragma warning(pop)
+
+
+const Clay_Color COLOR_LIGHT = {224, 215, 210, 255};
+const Clay_Color COLOR_RED = {168, 66, 28, 255};
+const Clay_Color COLOR_ORANGE = {225, 138, 50, 255};
+
+void gfxclay_handle_errors(Clay_ErrorData errorData) {
+    // See the Clay_ErrorData struct for more information
+    switch(errorData.errorType) {
+        default:{ASSERT(false, errorData.errorText.chars);}break;
+    }
+}
+
+// Example measure text function
+static inline Clay_Dimensions MeasureText(Clay_StringSlice text, Clay_TextElementConfig *config, uintptr_t userData) {
+    // Clay_TextElementConfig contains members such as fontId, fontSize, letterSpacing etc
+    // Note: Clay_String->chars is not guaranteed to be null terminated
+    return (Clay_Dimensions) {
+            .width = (f32)(text.length * config->fontSize), // <- this will only work for monospace fonts, see the renderers/ directory for more advanced text measurement
+            .height = config->fontSize
+    };
+}
+
+// Re-useable components are just normal functions
+void SidebarItemComponent() {
+
+    // Layout config is just a struct that can be declared statically, or inline
+    Clay_ElementDeclaration sidebarItemConfig = {
+        .layout = {
+            .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_FIXED(50) }
+        },
+        .backgroundColor = COLOR_ORANGE
+    };
+
+    // CLAY(id, sidebarItemConfig) {
+    //     // children go here...
+    // }
+}
+
+void gfx_clay_init(size_t clay_arena_size, i32 screen_height, i32 screen_width){
+    Clay_Arena arena = Clay_CreateArenaWithCapacityAndMemory(clay_arena_size, platform_alloc_memory(clay_arena_size));
+    Clay_Initialize(
+        arena,
+        (Clay_Dimensions){(f32)screen_width, (f32)screen_height},
+        (Clay_ErrorHandler){gfxclay_handle_errors}
+    );
+}
+
+
+GFX_Colour gfx_clay_clay_to_gfx_colour(Clay_Color clay_colour){
+    clay_colour.r /= 255.0f;
+    clay_colour.g /= 255.0f;
+    clay_colour.b /= 255.0f;
+    clay_colour.a /= 255.0f;
+    return (GFX_Colour){
+        .r = clay_colour.r,
+        .g = clay_colour.g,
+        .b = clay_colour.b,
+        .a = clay_colour.a
+    };
+}
+
+Rectangle gfx_clay_clay_to_rectangle(Clay_BoundingBox box){
+    return(Rectangle){
+        .x = box.x,
+        .y = -box.y,
+        .width = box.width,
+        .height = box.height
+    };
+}
+
+void gfx_clay_handle_button_interaction(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        platform_output_message("clicked button!\n");
+    }
+}
+
+void gfx_clay_test_layout(){
+    CLAY(CLAY_ID("Box"), {
+        .layout = {
+            .sizing = {
+                .width = CLAY_SIZING_GROW(0),
+                .height = CLAY_SIZING_GROW(0)
+            },
+            .padding = CLAY_PADDING_ALL(500),
+        },
+        .backgroundColor = { 10, 10, 20, 128},
+    }){
+        CLAY(CLAY_ID("ChildA"), {
+            .backgroundColor = Clay_Hovered() ? (Clay_Color){255.0f,255.0f,255.0f,255.0f} : (Clay_Color){255.0f,255.0f,255.0f,200.0f},
+            .layout = {
+                .sizing = {
+                    .width = CLAY_SIZING_GROW(0),
+                    .height = CLAY_SIZING_GROW(0)
+                }
+            }
+        }){
+            Clay_OnHover(gfx_clay_handle_button_interaction, NULL);
+        }
+    }
+}
+
+void gfx_clay_update(
+    GFX_State* gfx_state, Vector2I screen_resolution, Vector2I mouse_screen_position, 
+    f32 delta_time, i32 sprite_layer, i32 widget_material, bool is_mouse_down
+){
+    Clay_SetLayoutDimensions((Clay_Dimensions) {(f32)screen_resolution.x, (f32)screen_resolution.y});
+    Clay_SetPointerState((Clay_Vector2) {(f32)mouse_screen_position.x, (f32)mouse_screen_position.y}, is_mouse_down);
+    // Clay_UpdateScrollContainers(true, (Clay_Vector2) { mouseWheelX, mouseWheelY }, deltaTime);
+
+    // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
+    Clay_BeginLayout();
+    {
+        gfx_clay_test_layout();
+    }
+    Clay_RenderCommandArray renderCommands = Clay_EndLayout(delta_time);
+
+    // More comprehensive rendering examples can be found in the renderers/ directory
+    for (int i = 0; i < renderCommands.length; i++) {
+        Clay_RenderCommand *renderCommand = &renderCommands.internalArray[i];
+
+        switch (renderCommand->commandType) {
+            case CLAY_RENDER_COMMAND_TYPE_RECTANGLE: {
+                GFX_Colour colour = gfx_clay_clay_to_gfx_colour(renderCommand->renderData.rectangle.backgroundColor);
+                Rectangle rect = gfx_clay_clay_to_rectangle(renderCommand->boundingBox);
+                gfx_draw_fill_rect(gfx_state, rect, colour, GFX_SpriteOrigin_TopLeft, (f32)i+1, sprite_layer, widget_material);
+            }break;
+            default:{
+                ASSERT(false, "attempted to use unimplemented clay feature!");
+            }break;
+        }
+    }
 }

@@ -540,6 +540,10 @@ Vector3 vector2_to_vector3(Vector2 v){
     return (Vector3){v.x, v.y, 0.0f};
 }
 
+inline Vector2I vector2_to_vector2i(Vector2I v){
+    return (Vector2I){(i32)v.x, (i32)v.y};
+}
+
 Vector2 vector2_clamp_to_radius(Vector2 v, f32 radius){
     f32 sqr_len = vector2_len_sqrd(v);
     if(sqr_len > radius * radius){
