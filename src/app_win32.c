@@ -121,6 +121,7 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
                 case VK_UP:         {input_set_key_down(KEY_UP);}break;
                 case VK_DOWN:       {input_set_key_down(KEY_DOWN);}break;
                 case VK_SPACE:      {input_set_key_down(KEY_SPACE);}break;
+                case VK_F1:         {input_set_key_down(KEY_F1);}break;
             }
         }break;
         case WM_SYSKEYUP:
@@ -151,6 +152,7 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
                 case VK_UP:         {input_set_key_up(KEY_UP);}break;
                 case VK_DOWN:       {input_set_key_up(KEY_DOWN);}break;
                 case VK_SPACE:      {input_set_key_up(KEY_SPACE);}break;
+                case VK_F1:         {input_set_key_up(KEY_F1);}break;
             }
         }break;
         case WM_LBUTTONDOWN:{input_set_mouse_button_down(MOUSE_BUTTON_LEFT);}break;

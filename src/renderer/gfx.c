@@ -3368,42 +3368,9 @@ Rectangle gfx_clay_clay_to_rectangle(Clay_BoundingBox box){
     };
 }
 
-void gfx_clay_handle_button_interaction(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        platform_output_message("clicked button!\n");
-    }
-}
-
-void gfx_clay_test_layout(){
-    CLAY(CLAY_ID("Box"), {
-        .layout = {
-            .sizing = {
-                .width = CLAY_SIZING_FIXED(256),
-                .height = CLAY_SIZING_FIXED(256)
-            },
-            .padding = CLAY_PADDING_ALL(24),
-        },
-        .backgroundColor = { 10, 10, 20, 128},
-    }){
-        CLAY(CLAY_ID("ChildA"), {
-            .backgroundColor = Clay_Hovered() ? (Clay_Color){255.0f,255.0f,255.0f,255.0f} : (Clay_Color){255.0f,255.0f,255.0f,200.0f},
-            .layout = {
-                .sizing = {
-                    .width = CLAY_SIZING_GROW(0),
-                    .height = CLAY_SIZING_GROW(0)
-                }
-            },
-            .layout.childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER }
-        }){
-            Clay_OnHover(gfx_clay_handle_button_interaction, NULL);
-            CLAY_TEXT(CLAY_STRING("Hello Sailour"), { .fontSize = 1, .lineHeight = 24, .textColor = {255, 255, 255, 255} });
-        }
-    }
-}
-
-void gfx_clay_update(
+void gfx_clay_begin_layout(
     GFX_State* gfx_state, Vector2I screen_resolution, Vector2I mouse_screen_position,
-    f32 delta_time, i32 sprite_layer, i32 text_material, i32 widget_material, bool is_mouse_down
+    f32 delta_time, bool is_mouse_down
 ){
     Clay_SetLayoutDimensions((Clay_Dimensions) {(f32)screen_resolution.x, (f32)screen_resolution.y});
     Clay_SetPointerState((Clay_Vector2) {(f32)mouse_screen_position.x, (f32)mouse_screen_position.y}, is_mouse_down);
@@ -3411,11 +3378,10 @@ void gfx_clay_update(
 
     // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
     Clay_BeginLayout();
-    {
-        gfx_clay_test_layout();
-    }
-    Clay_RenderCommandArray renderCommands = Clay_EndLayout(delta_time);
+}
 
+void gfx_clay_end_layout(GFX_State* gfx_state, f32 delta_time, i32 sprite_layer, i32 text_material, i32 widget_material){
+    Clay_RenderCommandArray renderCommands = Clay_EndLayout(delta_time);
     // More comprehensive rendering examples can be found in the renderers/ directory
     for (int i = 0; i < renderCommands.length; i++) {
         Clay_RenderCommand *renderCommand = &renderCommands.internalArray[i];

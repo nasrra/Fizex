@@ -69,14 +69,14 @@ void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time)
 
     Vector2 mouse_world_position = gfx_get_mouse_world_position(&gfx_state);
 
-    f32 camera_speed = 1.0f * delta_time * gfx_state.screen_camera.orthographic_size;
+    f32 camera_speed = 1.0f * delta_time * gfx_state.world_camera.orthographic_size;
     bool x = input_is_key_pressed(KEY_RIGHT);
-    if(input_is_key_pressed(KEY_Q))     {gfx_state.screen_camera.orthographic_size -= gfx_state.screen_camera.orthographic_size * 1.0f * delta_time;}
-    if(input_is_key_pressed(KEY_E))     {gfx_state.screen_camera.orthographic_size += gfx_state.screen_camera.orthographic_size * 1.0f * delta_time;}
-    if(input_is_key_pressed(KEY_RIGHT)) {gfx_state.screen_camera.position.x += camera_speed;}
-    if(input_is_key_pressed(KEY_LEFT))  {gfx_state.screen_camera.position.x -= camera_speed;}
-    if(input_is_key_pressed(KEY_UP))    {gfx_state.screen_camera.position.y += camera_speed;}
-    if(input_is_key_pressed(KEY_DOWN))  {gfx_state.screen_camera.position.y -= camera_speed;}
+    if(input_is_key_pressed(KEY_Q))     {gfx_state.world_camera.orthographic_size -= gfx_state.world_camera.orthographic_size * 1.0f * delta_time;}
+    if(input_is_key_pressed(KEY_E))     {gfx_state.world_camera.orthographic_size += gfx_state.world_camera.orthographic_size * 1.0f * delta_time;}
+    if(input_is_key_pressed(KEY_RIGHT)) {gfx_state.world_camera.position.x += camera_speed;}
+    if(input_is_key_pressed(KEY_LEFT))  {gfx_state.world_camera.position.x -= camera_speed;}
+    if(input_is_key_pressed(KEY_UP))    {gfx_state.world_camera.position.y += camera_speed;}
+    if(input_is_key_pressed(KEY_DOWN))  {gfx_state.world_camera.position.y -= camera_speed;}
 
     if(input_is_key_pressed(KEY_SPACE)){
         time_scale = 0.0f;
@@ -98,7 +98,7 @@ void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time)
         }
     }
 
-    player_update(&entity_manager, mouse_world_position, delta_time);
+    player_update(&entity_manager, &gfx_state, mouse_world_position, delta_time);
 
     for(i32 i = 0; i < entity_manager.entity_length; i++){
         Entity* entity = &entity_manager.entity[i];
@@ -136,7 +136,7 @@ GFX_State app_gfx_init(MemoryArena* persistent, MemoryArena* transient, WindowCo
     MEMORY_ARENA_ALLOC_ARRAY(transient, image_textures_init_info, &image_textures_init_info_length, 4);
 
     BOUNDS_CHECK(0, image_textures_init_info_length);
-    image_textures_init_info[0] = (GFX_ImageTexturesInitInfo){.width = 512, .height = 512, .max_textures = 16};
+    image_textures_init_info[0] = (GFX_ImageTexturesInitInfo){.width = 150, .height = 150, .max_textures = 16};
     BOUNDS_CHECK(1, image_textures_init_info_length);
     image_textures_init_info[1] = (GFX_ImageTexturesInitInfo){.width = 360, .height = 162, .max_textures = 2};
     BOUNDS_CHECK(2, image_textures_init_info_length);
@@ -243,14 +243,25 @@ void app_main(){
     String file_path = {0};
     string_init(&file_path, transient, 48);
 
-    string_push_chars(&file_path, "assets/image.png", 16);
-    gfx_virtual_texture_set_file_path(&gfx_state, file_path, 3);
-    gfx_load_image_texture(&gfx_state, 3);
+    string_clear(&file_path);
+    string_push_chars(&file_path, "assets/sprites/bird red.png", 27);
+    gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_RED_BIRD);
+    gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_RED_BIRD);
+
+    string_clear(&file_path);
+    string_push_chars(&file_path, "assets/sprites/bird yellow.png", 30);
+    gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_YELLOW_BIRD);
+    gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_YELLOW_BIRD);
 
     string_clear(&file_path);
     string_push_chars(&file_path, "assets/sling_shot.png", 21);
     gfx_virtual_texture_set_file_path(&gfx_state, file_path, 4);
     gfx_load_image_texture(&gfx_state, 4);
+
+    string_clear(&file_path);
+    string_push_chars(&file_path, "assets/sprites/wood block.png", 29);
+    gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_WOOD_BLOCK);
+    gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_WOOD_BLOCK);
 
     FIZX_DrawInfo fizx_draw_state = {
         .colour_dynamic_shape           = GFX_COLOUR_GREEN,
@@ -338,7 +349,7 @@ void app_main(){
         bird_transform.position = vector2_add(entity->transform.position, (Vector2){.y = 0.5f});
         bird_transform.scale = VECTOR2_ONE;
 
-        entity_spawn_bird(&entity_manager, &gfx_state, bird_transform);
+        entity_spawn_yellow_bird(&entity_manager, &gfx_state, bird_transform);
     }
 
     { // level load.
@@ -398,7 +409,7 @@ void app_main(){
         // update.
         {
             input_update();
-
+            
             if(input_is_key_just_pressed(KEY_1)){
                 fizx_draw_state.draw_bvh_branches = !fizx_draw_state.draw_bvh_branches;
             }
@@ -407,6 +418,9 @@ void app_main(){
             }
             if(input_is_key_just_pressed(KEY_3)){
                 fizx_draw_state.draw_body_shapes = !fizx_draw_state.draw_body_shapes;
+            }
+            if(input_is_key_just_pressed(KEY_F1)){
+                game_state.is_editor_mode = !game_state.is_editor_mode; 
             }
             app_update(persistent, transient, delta_time);
 
@@ -423,10 +437,14 @@ void app_main(){
             platform_get_mouse_position(&mouse_backbuffer_position.x, &mouse_backbuffer_position.y);
             fizx_state_draw(entity_manager.fizx_state, &gfx_state, fizx_draw_state, delta_time);
             entity_manager_debug_draw(entity_manager, &gfx_state, delta_time);
-            gfx_clay_update(
-                &gfx_state, (Vector2I){.x = WINDOW_WIDTH, .y = WINDOW_HEIGHT}, mouse_backbuffer_position, delta_time,
-                SPRITE_LAYER_UI, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG, input_is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+            gfx_clay_begin_layout(
+                &gfx_state, (Vector2I){.x = WINDOW_WIDTH, .y = WINDOW_HEIGHT}, mouse_backbuffer_position, delta_time, 
+                input_is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
             );
+            if(game_state.is_editor_mode){
+                gfx_clay_test_layout();
+            }
+            gfx_clay_end_layout(&gfx_state, delta_time, SPRITE_LAYER_UI, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
             gfx_state_draw(&gfx_state);
             transient->stride = 0;
         }

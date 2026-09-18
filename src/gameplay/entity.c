@@ -19,10 +19,30 @@ typedef struct{
     bool is_init;
 } EntityManager;
 
+
+///
+/// Physics layers.
+///
+
 #define PHYSICS_LAYER_ALL I32_MAX
 #define PHYSICS_LAYER_PLAYER (1 << 1)
 #define PHYSICS_LAYER_ENEMY (1 << 2)
 #define PHYSICS_LAYER_ENVIRONMENT (1 << 3)
+
+///
+/// Entity ID.
+///
+#define ENTITY_ID_RED_BIRD 1
+#define ENTITY_ID_YELLOW_BIRD 2
+#define ENTITY_ID_WOOD_BLOCK 3
+
+///
+/// Virtual Texture ID.
+///
+#define VIRTUAL_TEXTURE_ID_RED_BIRD 3
+#define VIRTUAL_TEXTURE_ID_SLING_SHOT 4
+#define VIRTUAL_TEXTURE_ID_YELLOW_BIRD 5
+#define VIRTUAL_TEXTURE_ID_WOOD_BLOCK 6
 
 void entity_manager_init(EntityManager* manager, MemoryArena* arena, i32 entity_amount, i32 physics_body_amount){
     ASSERT(!manager->is_init, "already init.");
@@ -94,7 +114,7 @@ void entity_deplete_health(EntityManager* manager, GenId entity_gid, i32 amount)
     }
 }
 
-void entity_spawn_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Transform2D transform){
+void entity_spawn_red_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Transform2D transform){
     // clickable entity (angry bird).
     GenId player_gid = entity_manager_alloc_entity(entity_manager);
     Entity* entity;
@@ -119,14 +139,74 @@ void entity_spawn_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Transf
         entity->sprite_depth = 1.0f;
         bool success = false;
         entity->sprite_id = gfx_sprite_alloc(gfx_ctx, SPRITE_LAYER_WORLD, &success);
-        GFX_SpriteRegion region = {.bot_right = {.x = 512, .y = 512}};
+        GFX_SpriteRegion region = {.bot_right = {.x = 150, .y = 150}};
         gfx_sprite_init(
             gfx_ctx, entity->sprite_id, sprite_transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
-            GFX_SpriteOrigin_Center, 3, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
+            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_RED_BIRD, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
         );
     }
 }
 
+void entity_spawn_yellow_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Transform2D transform){
+    // clickable entity (angry bird).
+    GenId player_gid = entity_manager_alloc_entity(entity_manager);
+    Entity* entity;
+    entity_manager_get_entity(*entity_manager, player_gid, &entity);
+    {
+        entity->transform = transform;
+        entity->is_physics_body = true;
+
+        Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
+        FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 5.0f, .restitution = 0.0f};
+
+        Transform2D shape_transform = TRANSFORM2D_IDENTITY;
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, true);
+        GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, shape_transform, FIZX_ShapeBehaviour_Dynamic, &player_gid, PHYSICS_LAYER_PLAYER, square, material, true);
+        fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, false);
+
+        entity->is_clickable = true;
+        entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
+
+        Transform2D sprite_transform = TRANSFORM2D_IDENTITY;
+        // sprite_transform.scale = vector2_mul_val(sprite_transform.scale, 1000.0f);
+        entity->sprite_depth = 1.0f;
+        bool success = false;
+        entity->sprite_id = gfx_sprite_alloc(gfx_ctx, SPRITE_LAYER_WORLD, &success);
+        GFX_SpriteRegion region = {.bot_right = {.x = 150, .y = 150}};
+        gfx_sprite_init(
+            gfx_ctx, entity->sprite_id, sprite_transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
+            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_YELLOW_BIRD, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
+        );
+    }
+}
+
+void entity_spawn_wood_block(EntityManager* entity_manager, GFX_State* gfx_ctx, Transform2D transform){
+    GenId player_gid = entity_manager_alloc_entity(entity_manager);
+    Entity* entity;
+    entity_manager_get_entity(*entity_manager, player_gid, &entity);
+    {
+        entity->transform = transform;
+        entity->is_physics_body = true;
+
+        Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
+        FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 5.0f, .restitution = 0.0f};
+
+        Transform2D shape_transform = TRANSFORM2D_IDENTITY;
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, true);
+        GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, shape_transform, FIZX_ShapeBehaviour_Dynamic, &player_gid, PHYSICS_LAYER_PLAYER, square, material, true);
+        
+        Transform2D sprite_transform = TRANSFORM2D_IDENTITY;
+        // sprite_transform.scale = vector2_mul_val(sprite_transform.scale, 1000.0f);
+        entity->sprite_depth = 1.0f;
+        bool success = false;
+        entity->sprite_id = gfx_sprite_alloc(gfx_ctx, SPRITE_LAYER_WORLD, &success);
+        GFX_SpriteRegion region = {.bot_right = {.x = 150, .y = 150}};
+        gfx_sprite_init(
+            gfx_ctx, entity->sprite_id, sprite_transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
+            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_WOOD_BLOCK, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
+        );
+    }
+}
 
 void load_lvl(EntityManager* entity_manager, GFX_State* gfx, String file_path){
     /*
@@ -164,7 +244,7 @@ void load_lvl(EntityManager* entity_manager, GFX_State* gfx, String file_path){
 
         if(lines_read == 6){
             Transform2D transform = transform2d_make(entity_position, entity_scale, entity_rotation);
-            entity_spawn_bird(entity_manager, gfx, transform);
+            entity_spawn_red_bird(entity_manager, gfx, transform);
             file_data += bytes_consumed;
         }
         else{
