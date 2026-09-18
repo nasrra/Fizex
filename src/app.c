@@ -358,7 +358,7 @@ void app_main(){
 
         // load font.
         string_clear(&file_path);
-        string_push_chars(&file_path, "assets/fonts/PixelifySans-Regular.ttf", 37);
+        string_push_chars(&file_path, "assets/fonts/PixelOperatorSC-Bold.ttf", 37);
         gfx_virtual_texture_set_file_path(&gfx_state, file_path, 1);
         gfx_load_font_texture(&gfx_state, transient, 1, 24, 32, 12);
     }
@@ -423,26 +423,9 @@ void app_main(){
             platform_get_mouse_position(&mouse_backbuffer_position.x, &mouse_backbuffer_position.y);
             fizx_state_draw(entity_manager.fizx_state, &gfx_state, fizx_draw_state, delta_time);
             entity_manager_debug_draw(entity_manager, &gfx_state, delta_time);
-            // display string.
-            {
-                Transform2D sprite_string_transform = TRANSFORM2D_IDENTITY;
-                sprite_string_transform.scale = vector2_mul_val(VECTOR2_ONE, 1.0f);
-                sprite_string_transform.position = (Vector2){.x = 120.0f, .y = -240.0f};
-                string_clear(&file_path);
-                // string_push_chars(&file_path, "hello, sailour.", 15);
-                string_push_chars(&file_path, "farts.", 6);
-        
-                GFX_SpriteId text_sprite;
-                gfx_one_frame_sprite_chain_alloc(&gfx_state, 6, SPRITE_LAYER_UI, &text_sprite);
-                gfx_sprite_string_init(
-                    &gfx_state, text_sprite, file_path,
-                    sprite_string_transform,
-                    1, SPRITE_MATERIAL_TEXT, 0.0f, true
-                );
-            }
             gfx_clay_update(
                 &gfx_state, (Vector2I){.x = WINDOW_WIDTH, .y = WINDOW_HEIGHT}, mouse_backbuffer_position, delta_time,
-                SPRITE_LAYER_UI, SPRITE_MATERIAL_DEBUG, input_is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+                SPRITE_LAYER_UI, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG, input_is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
             );
             gfx_state_draw(&gfx_state);
             transient->stride = 0;

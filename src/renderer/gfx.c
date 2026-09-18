@@ -173,7 +173,6 @@ typedef struct{
     bool is_init;
 } GFX_VirtualTextureManager;
 
-
 typedef struct{
     Vector2I top_left;
     Vector2I bot_right;
@@ -285,7 +284,6 @@ typedef struct{
     */
     i32 layer;
 } GFX_SpriteId;
-
 
 typedef struct{
     i32 max_sprites;
@@ -3320,7 +3318,6 @@ static inline Clay_Dimensions MeasureText(Clay_StringSlice text, Clay_TextElemen
 
 // Re-useable components are just normal functions
 void SidebarItemComponent() {
-
     // Layout config is just a struct that can be declared statically, or inline
     Clay_ElementDeclaration sidebarItemConfig = {
         .layout = {
@@ -3328,10 +3325,15 @@ void SidebarItemComponent() {
         },
         .backgroundColor = COLOR_ORANGE
     };
+}
 
-    // CLAY(id, sidebarItemConfig) {
-    //     // children go here...
-    // }
+static inline Clay_Dimensions gfx_clay_measure_text(Clay_StringSlice text, Clay_TextElementConfig *config, void* userData) {
+    // Clay_TextElementConfig contains members such as fontId, fontSize, letterSpacing etc
+    // Note: Clay_String->chars is not guaranteed to be null terminated
+    return (Clay_Dimensions) {
+            .width = (f32)(text.length * (config->fontSize * 0.5f) * config->lineHeight), // <- this will only work for monospace fonts, see the renderers / directory for more advanced text measurement
+            .height = config->fontSize
+    };
 }
 
 void gfx_clay_init(size_t clay_arena_size, i32 screen_height, i32 screen_width){
@@ -3341,8 +3343,8 @@ void gfx_clay_init(size_t clay_arena_size, i32 screen_height, i32 screen_width){
         (Clay_Dimensions){(f32)screen_width, (f32)screen_height},
         (Clay_ErrorHandler){gfxclay_handle_errors}
     );
+    Clay_SetMeasureTextFunction(gfx_clay_measure_text, NULL);
 }
-
 
 GFX_Colour gfx_clay_clay_to_gfx_colour(Clay_Color clay_colour){
     clay_colour.r /= 255.0f;
@@ -3390,22 +3392,18 @@ void gfx_clay_test_layout(){
                     .width = CLAY_SIZING_GROW(0),
                     .height = CLAY_SIZING_GROW(0)
                 }
-            }
+            },
+            .layout.childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER }
         }){
             Clay_OnHover(gfx_clay_handle_button_interaction, NULL);
-            
-            // CLAY(CLAY_ID("Text"), {
-            //     .lineHeight = 24,
-            //     .textColor = {255, 255, 0, 255}
-            // }){            
-            // }
+            CLAY_TEXT(CLAY_STRING("Hello Sailour"), { .fontSize = 1, .lineHeight = 24, .textColor = {255, 255, 255, 255} });
         }
     }
 }
 
 void gfx_clay_update(
     GFX_State* gfx_state, Vector2I screen_resolution, Vector2I mouse_screen_position,
-    f32 delta_time, i32 sprite_layer, i32 widget_material, bool is_mouse_down
+    f32 delta_time, i32 sprite_layer, i32 text_material, i32 widget_material, bool is_mouse_down
 ){
     Clay_SetLayoutDimensions((Clay_Dimensions) {(f32)screen_resolution.x, (f32)screen_resolution.y});
     Clay_SetPointerState((Clay_Vector2) {(f32)mouse_screen_position.x, (f32)mouse_screen_position.y}, is_mouse_down);
@@ -3429,8 +3427,24 @@ void gfx_clay_update(
                 gfx_draw_fill_rect(gfx_state, rect, colour, GFX_SpriteOrigin_TopLeft, (f32)i+1, sprite_layer, widget_material);
             }break;
             case CLAY_RENDER_COMMAND_TYPE_TEXT:{
+                Rectangle rect = gfx_clay_clay_to_rectangle(renderCommand->boundingBox);
+                Transform2D sprite_string_transform = TRANSFORM2D_IDENTITY;
+                sprite_string_transform.scale = vector2_mul_val(sprite_string_transform.scale, renderCommand->renderData.text.fontSize);
+                sprite_string_transform.position = (Vector2){.x = rect.x, .y = rect.y};
                 
-                // renderCommand->renderData.text;
+                String str = {
+                    .chars = (char*)renderCommand->renderData.text.stringContents.chars, 
+                    .length = renderCommand->renderData.text.stringContents.length,
+                    .count = renderCommand->renderData.text.stringContents.length
+                };
+
+                GFX_SpriteId text_sprite;
+                gfx_one_frame_sprite_chain_alloc(gfx_state, str.length, sprite_layer, &text_sprite);
+                gfx_sprite_string_init(
+                    gfx_state, text_sprite, str,
+                    sprite_string_transform,
+                    1, text_material, 0.0f, true
+                );                
             }break;
             default:{
                 ASSERT(false, "attempted to use unimplemented clay feature!");
