@@ -397,15 +397,15 @@ f32 vector2_len(Vector2 vector){
 }
 
 Vector2 vector2_get_relative_to_destination_rectangle(Vector2 vector, Rectangle dst_rect, Vector2I dst_resolution){
-    // get the distance from the destination rect to the mouse position. 
+    // get the distance from the destination rect to the mouse position.
     vector.x = vector.x - dst_rect.x;
     vector.y = vector.y - dst_rect.y;
-    
+
     // normalise the value between zero and one, to find
     // how far into the destination rect the mouse is.
     vector.x /= dst_rect.width;
     vector.y /= dst_rect.height;
-    
+
     // bring into the destination resolution coordinate space.
     vector.x *= (f32)dst_resolution.x;
     vector.y *= (f32)dst_resolution.y;
@@ -875,7 +875,7 @@ Matrix4x4 matrix4x4_create_perspective(f32 fov_y_radians, f32 aspect_ratio, f32 
 /*
     Computes a Left-Handed rotation Matrix applied to a source matrix (Column-Major)
 */
-Matrix4x4 rotate_matrix4x4(Matrix4x4 src, f32 radians, Vector3 axis){
+Matrix4x4 matrix4x4_rotate(Matrix4x4 src, f32 radians, Vector3 axis){
 
     // how much the of the objects original orientation is kept along its original axis.
     f32 c = f32_cos(radians);
@@ -934,6 +934,69 @@ Matrix4x4 rotate_matrix4x4(Matrix4x4 src, f32 radians, Vector3 axis){
 }
 
 /*
+    Scales the lhs by the rhs.
+
+    `remarks`
+    The matrix must be in left hand side format.
+*/
+Matrix4x4 matrix4x4_scale_by(Matrix4x4 lhs, Matrix4x4 rhs){
+    lhs.m[0] *= rhs.m[0];
+    lhs.m[5] *= rhs.m[5];
+    lhs.m[10] *= rhs.m[10];
+    return lhs;
+}
+
+/*
+    Scales the matrix by a vector.
+
+    `remarks`
+    The matrix must be in left hand side format.
+*/
+Matrix4x4 matrix4x4_scale_by_vector2(Matrix4x4 matrix, Vector2 vector){
+    matrix.m[0] *= vector.x;
+    matrix.m[5] *= vector.y;
+    return matrix;
+}
+
+/*
+    Applies a translation to a matrix4x4
+
+    `remarks`
+    The matrix must be in left hand side format.
+*/
+Matrix4x4 matrix4x4_translate_by_vector3(Matrix4x4 matrix, Vector3 vector){
+    matrix.m[12] += vector.x;
+    matrix.m[13] += vector.y;
+    matrix.m[14] += vector.z;
+    return matrix;
+}
+
+/*
+    Applies a translation to a matrix4x4
+
+    `remarks`
+    The matrix must be in left hand side format.
+*/
+Matrix4x4 matrix4x4_translate_by_vector2(Matrix4x4 matrix, Vector2 vector){
+    matrix.m[12] += vector.x;
+    matrix.m[13] += vector.y;
+    return matrix;
+}
+
+/*
+    Applies a scaling vector to a matrix4x4
+
+    `remarks`
+    The matrix must be in left hand side format.
+*/
+Matrix4x4 matrix4x4_scale_by_vector3(Matrix4x4 matrix, Vector3 scale){
+    matrix.m[0] *= scale.x;
+    matrix.m[5] *= scale.y;
+    matrix.m[10] *= scale.z;
+    return matrix;
+}
+
+/*
     Computes a Left-Handed Orthographic Matrix mapping depth to Vulkan 0..1 (Column-Major)
 
     Parameters:
@@ -980,6 +1043,14 @@ Matrix4x4 matrix4x4_create_orthographic(f32 lower_x, f32 upper_x, f32 lower_y, f
     m[15] = 1.0f;
 
     return result;
+}
+
+Vector3 matrix4x4_get_scale(Matrix4x4 matrix){
+    return (Vector3){
+        .x = matrix.m[0],
+        .y = matrix.m[5],
+        .z = matrix.m[10]
+    };
 }
 
 
@@ -1274,7 +1345,7 @@ Transform2D transform2d_make(Vector2 position, Vector2 scale, f32 rotation){
         .rotation = rotation,
         .sine = f32_sin(rotation),
         .cosine = f32_cos(rotation)
-    };    
+    };
 }
 
 inline Matrix4x4 transform2d_to_matrix4x4_depth(Transform2D transform, f32 depth){
@@ -1312,7 +1383,7 @@ inline Matrix4x4 transform2d_to_matrix4x4_depth(Transform2D transform, f32 depth
 }
 
 Matrix4x4 transform2d_to_matrix4x4(Transform2D transform){
-    return transform2d_to_matrix4x4_depth(transform, 0.0f);    
+    return transform2d_to_matrix4x4_depth(transform, 0.0f);
 }
 
 bool soa_transform2d_init(Soa_Transform2D* soa, MemoryArena* arena, i32 length){

@@ -99,6 +99,16 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
         case WM_KEYDOWN:{
             UINT32 vk_code = (UINT32)w_param;
             switch(vk_code){
+                case '0':           {input_set_key_down(KEY_0);}break;
+                case '1':           {input_set_key_down(KEY_1);}break;
+                case '2':           {input_set_key_down(KEY_2);}break;
+                case '3':           {input_set_key_down(KEY_3);}break;
+                case '4':           {input_set_key_down(KEY_4);}break;
+                case '5':           {input_set_key_down(KEY_5);}break;
+                case '6':           {input_set_key_down(KEY_6);}break;
+                case '7':           {input_set_key_down(KEY_7);}break;
+                case '8':           {input_set_key_down(KEY_8);}break;
+                case '9':           {input_set_key_down(KEY_9);}break;
                 case 'A':           {input_set_key_down(KEY_A);}break;
                 case 'D':           {input_set_key_down(KEY_D);}break;
                 case 'E':           {input_set_key_down(KEY_E);}break;
@@ -111,7 +121,7 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
                 case VK_UP:         {input_set_key_down(KEY_UP);}break;
                 case VK_DOWN:       {input_set_key_down(KEY_DOWN);}break;
                 case VK_SPACE:      {input_set_key_down(KEY_SPACE);}break;
-            }                    
+            }
         }break;
         case WM_SYSKEYUP:
         case WM_KEYUP:{
@@ -119,6 +129,16 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
             // int was_down = ((l_param & (1 << 30)) != 0)? 1 : 0;
             // int is_down = ((w_param & (1 << 15)) == 0)? 1 : 0;
             switch(vk_code){
+                case '0':           {input_set_key_up(KEY_0);}break;
+                case '1':           {input_set_key_up(KEY_1);}break;
+                case '2':           {input_set_key_up(KEY_2);}break;
+                case '3':           {input_set_key_up(KEY_3);}break;
+                case '4':           {input_set_key_up(KEY_4);}break;
+                case '5':           {input_set_key_up(KEY_5);}break;
+                case '6':           {input_set_key_up(KEY_6);}break;
+                case '7':           {input_set_key_up(KEY_7);}break;
+                case '8':           {input_set_key_up(KEY_8);}break;
+                case '9':           {input_set_key_up(KEY_9);}break;
                 case 'A':           {input_set_key_up(KEY_A);}break;
                 case 'D':           {input_set_key_up(KEY_D);}break;
                 case 'E':           {input_set_key_up(KEY_E);}break;
@@ -260,12 +280,12 @@ WindowContext* platform_window_create(i32 width, i32 height){
         /**
             expands window_rect to the size needed so the *client area* ends up being `width` x `height`.
             this is done because the specified resolution used for creating a window includes the toolbar and borders
-            to be within the requested size. 
+            to be within the requested size.
         **/
         AdjustWindowRectEx(&window_rect, window_style, FALSE, 0);
         i32 adjusted_width = window_rect.right - window_rect.left;
         i32 adjusted_height = window_rect.bottom - window_rect.top;
-    
+
         window_handle = CreateWindowEx(
             0,
             class_name,
@@ -331,7 +351,7 @@ bool platform_load_file_into_memory_arena(String file_path, MemoryArena* arena){
     i32 null_terminated_file_path_length;
     MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.length+1);
     COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
-    null_terminated_file_path[null_terminated_file_path_length] = '\0';
+    null_terminated_file_path[file_path.length] = '\0';
 
     /**
         open file.
@@ -386,7 +406,7 @@ void* platform_load_file(String file_path, size_t* out_buffer_size){
     i32 null_terminated_file_path_length;
     MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.length+1);
     COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
-    null_terminated_file_path[null_terminated_file_path_length] = '\0';
+    null_terminated_file_path[file_path.length] = '\0';
 
     /**
         open file.
@@ -443,8 +463,8 @@ i32 platform_write_file(String file_path, void* data, size_t data_size){
     i32 null_terminated_file_path_length;
     MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.length+1);
     COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
-    null_terminated_file_path[null_terminated_file_path_length] = '\0';
-    
+    null_terminated_file_path[file_path.length] = '\0';
+
     HANDLE h = CreateFileA(
         null_terminated_file_path,
         GENERIC_WRITE,              // we want to write.
@@ -454,12 +474,12 @@ i32 platform_write_file(String file_path, void* data, size_t data_size){
         FILE_ATTRIBUTE_NORMAL,
         NULL
     );
-    
+
     if(h == INVALID_HANDLE_VALUE){
         ASSERT(false, "failed to open/create file to write to.");
         return 0;
     }
-    
+
     DWORD bytes_written = 0;
     BOOL ok = WriteFile(
         h,
@@ -468,9 +488,9 @@ i32 platform_write_file(String file_path, void* data, size_t data_size){
         &bytes_written,
         NULL // no overlapped I/O.
     );
-    
+
     CloseHandle(h);
-    
+
     return ok && (bytes_written == data_size);
 }
 
@@ -506,11 +526,11 @@ bool platform_free_image(Image* image){
     if(image->pixel == NULL){
         return false;
     }
-    
+
     stbi_image_free(image->pixel);
     // zero out image once free;
     *image = (Image){0};
-    return true; 
+    return true;
 }
 
 void platform_get_mouse_position(int* out_x, int* out_y){

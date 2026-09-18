@@ -65,6 +65,7 @@ bool entity_manager_get_entity(EntityManager manager, GenId entity_gid, Entity**
 }
 
 void entity_manager_debug_draw(EntityManager manager, GFX_State* gfx, f32 delta_time){
+#if 0
     for(i32 i = 0; i < manager.entity_length; i++){
         Entity* entity = &manager.entity[i];
         if(entity->is_clickable){
@@ -77,6 +78,7 @@ void entity_manager_debug_draw(EntityManager manager, GFX_State* gfx, f32 delta_
             gfx_draw_wire_rect(gfx, shape , GFX_COLOUR_WHITE, 0.0f, SPRITE_LAYER_WORLD, SPRITE_MATERIAL_DEBUG);
         }
     }
+#endif
 }
 
 void entity_deplete_health(EntityManager* manager, GenId entity_gid, i32 amount){
@@ -117,9 +119,10 @@ void entity_spawn_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Transf
         entity->sprite_depth = 1.0f;
         bool success = false;
         entity->sprite_id = gfx_sprite_alloc(gfx_ctx, SPRITE_LAYER_WORLD, &success);
+        GFX_SpriteRegion region = {.bot_right = {.x = 512, .y = 512}};
         gfx_sprite_init(
-            gfx_ctx, entity->sprite_id, transform2d_to_matrix4x4(sprite_transform), GFX_COLOUR_WHITE, (GFX_SpriteRegion){.width = 512, .height = 512}, GFX_ColourState_Tint,
-            GFX_SpriteOrigin_Center, 3, SPRITE_MATERIAL_IMAGE, true
+            gfx_ctx, entity->sprite_id, sprite_transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
+            GFX_SpriteOrigin_Center, 1, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
         );
     }
 }

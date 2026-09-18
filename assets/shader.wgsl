@@ -265,6 +265,7 @@ fn fs_main(
         case material_debug:            {colour = vec4f(0,0,0,0);} // default to white in case colour state is set to Tint.
         case material_simple_sprite:    {colour = fs_draw_sprite_simple(sprite, vec2i(in.pixel_position));}
         case material_simple_text:      {colour = fs_draw_text_simple(sprite, vec2i(in.pixel_position));}
+        // case material_simple_text:      {return fail_colour;}
     }
 
     switch sprite.colour_state{
