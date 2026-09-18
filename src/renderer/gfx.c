@@ -1421,8 +1421,8 @@ void gfx_final_render_target_init(GFX_Texture* texture, WGPUDevice device, u32 w
         TODO: (nich s)
         format of the final render target needs to be dynamically set based on the surface window's format.
     **/
-    // WGPUTextureFormat format = WGPUTextureFormat_RGBA8UnormSrgb;
-    WGPUTextureFormat format = WGPUTextureFormat_BGRA8UnormSrgb;
+    WGPUTextureFormat format = WGPUTextureFormat_RGBA8UnormSrgb;
+    // WGPUTextureFormat format = WGPUTextureFormat_BGRA8UnormSrgb;
     WGPUTextureUsage usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_TextureBinding;
     WGPUTextureAspect aspect = WGPUTextureAspect_All;
     gfx_texture_init(texture, device, format, usage, aspect, width, height);
@@ -2145,7 +2145,8 @@ void gfx_dealloc_sprite_unsafe(GFX_State* ctx, i32 sprite_index, i32 sprite_laye
     manager->host_sprite[sprite_index] = (GFX_HostSprite){0};
 
     BOUNDS_CHECK(sprite_index, manager->device_sprite_length);
-    manager->device_sprite[sprite_index].state = GFX_SpriteState_Deallocated;
+    // NOTE: do not change this; one-frame sprites need to have their GPU memory zero'd out after each frame.
+    manager->device_sprite[sprite_index] = (GFX_DeviceSprite){0};
 
     ARRAY_PUSH(layer->free_sprite_indices, layer->free_sprite_indices_length, &layer->free_sprite_indices_count, sprite_index);
 }
@@ -2201,6 +2202,60 @@ bool gfx_sprite_chain_alloc(GFX_State* state, i32 chain_length, i32 layer, GFX_S
             return false;
         }
 
+        i32 idx = gen_id_get_index(sprite_id.gen_id);
+        GFX_HostSprite* curr_hs = &manager->host_sprite[idx];
+
+        if(i == 0){
+            first = sprite_id;
+            first_idx = idx;
+            curr_hs->is_first_in_chain = true;
+        }
+        else{
+            manager->host_sprite[previous_idx].next_in_chain = idx;
+            curr_hs->is_first_in_chain = false;
+        }
+
+        // always close the loop back to first; gets overwritten by the next
+        // iteration's link unless this is the last node, in which case it sticks.
+        curr_hs->next_in_chain = first_idx;
+
+        previous_idx = idx;
+    }
+
+    *out_sprite_id = first;
+    return true;
+}
+
+
+bool gfx_one_frame_sprite_chain_alloc(GFX_State* state, i32 chain_length, i32 layer, GFX_SpriteId* out_sprite_id){
+    GFX_SpriteManager* manager = &state->sprite_manager;
+
+    if(chain_length <= 0){
+        ASSERT(false, "chain_length must be at least 1.");
+        return false;
+    }
+
+    GFX_SpriteId first = {0};
+    i32 first_idx = 0;
+    i32 previous_idx = 0;
+    bool success = false;
+
+    for(i32 i = 0; i < chain_length; i++){
+        GFX_SpriteId sprite_id = gfx_sprite_alloc(state, layer, &success);
+        if(!success){
+            ASSERT(false, "failed to alloc full sprite chain.");
+            // TODO: dealloc first.
+            return false;
+        }
+
+        // flag the sprite to be deallocated afterwards.
+        ARRAY_PUSH(
+            manager->one_frame_sprite_stack,
+            manager->one_frame_sprite_stack_length,
+            &manager->one_frame_sprite_stack_count,
+            sprite_id
+        );
+        
         i32 idx = gen_id_get_index(sprite_id.gen_id);
         GFX_HostSprite* curr_hs = &manager->host_sprite[idx];
 
@@ -3338,6 +3393,12 @@ void gfx_clay_test_layout(){
             }
         }){
             Clay_OnHover(gfx_clay_handle_button_interaction, NULL);
+            
+            // CLAY(CLAY_ID("Text"), {
+            //     .lineHeight = 24,
+            //     .textColor = {255, 255, 0, 255}
+            // }){            
+            // }
         }
     }
 }
@@ -3366,6 +3427,10 @@ void gfx_clay_update(
                 GFX_Colour colour = gfx_clay_clay_to_gfx_colour(renderCommand->renderData.rectangle.backgroundColor);
                 Rectangle rect = gfx_clay_clay_to_rectangle(renderCommand->boundingBox);
                 gfx_draw_fill_rect(gfx_state, rect, colour, GFX_SpriteOrigin_TopLeft, (f32)i+1, sprite_layer, widget_material);
+            }break;
+            case CLAY_RENDER_COMMAND_TYPE_TEXT:{
+                
+                // renderCommand->renderData.text;
             }break;
             default:{
                 ASSERT(false, "attempted to use unimplemented clay feature!");

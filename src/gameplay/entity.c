@@ -122,7 +122,7 @@ void entity_spawn_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Transf
         GFX_SpriteRegion region = {.bot_right = {.x = 512, .y = 512}};
         gfx_sprite_init(
             gfx_ctx, entity->sprite_id, sprite_transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
-            GFX_SpriteOrigin_Center, 1, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
+            GFX_SpriteOrigin_Center, 3, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
         );
     }
 }
