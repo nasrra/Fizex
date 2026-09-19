@@ -2237,7 +2237,7 @@ void fizx_shape_dealloc_unsafe(FIZX_State* state, i32 shape_idx, bool recalculat
     }
 
     fizx_shape_set_active_unsafe(state, shape_idx, false);
-    intrusive_list_remove_node(&state->body_hierarchy, shape_idx);
+    intrusive_list_remove_node(&state->body_hierarchy, shape_idx, NULL);
     gen_id_allocator_dealloc_unsafe(&state->gen_id_allocator, shape_idx);
     if(recalculate_body_center_of_mass){
         BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
@@ -2325,7 +2325,7 @@ void fizx_body_dealloc_unsafe(FIZX_State* state, i32 body_idx){
         }
     }
 
-    intrusive_list_remove_node(&state->body_hierarchy, body_idx);
+    intrusive_list_remove_node(&state->body_hierarchy, body_idx, NULL);
     BOUNDS_CHECK(body_idx, state->entities.gravity_affected_length);
     state->entities.gravity_affected[body_idx] = false;
     fizx_body_set_active_unsafe(state, body_idx, false);
@@ -2369,7 +2369,9 @@ i32 fizx_shape_set_category_unsafe(FIZX_State* state, FIZX_ShapeType shape_type,
 }
 
 inline void fizx_shape_init_prepare(FIZX_State* state, FIZX_ShapeType type, FIZX_ShapeBehaviour behaviour, i32 shape_idx, i32 body_idx, bool is_rigid, void* user_data, i32 layer){
-    state->entities.entity_type[shape_idx];
+    
+    state->entities.entity_type[shape_idx] = FIZX_EntityType_Shape;
+    
     // clear any garbage data from previous allocations.
     fssoa_vector2_clear_chunk_count(&state->entities.base_vertex, shape_idx);
 

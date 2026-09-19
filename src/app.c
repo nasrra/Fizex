@@ -303,17 +303,33 @@ void app_main(){
     // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
 
     // floor entity.
-    GenId floor_gid = entity_manager_alloc_entity(&entity_manager);
+    GenId floor_gid = entity_manager_alloc_entity(&entity_manager, 0);
     entity_manager_get_entity(entity_manager, floor_gid, &entity);
     {
-        Transform3D entity_transform = {.scale = {.x = 100.0f, .y = 1.0f}};
+        
+        Transform2D entity_transform = TRANSFORM2D_IDENTITY;
+        entity_transform.scale = (Vector2){.x = 100.0f, .y = 1.0f};
         entity->is_physics_body = true;
-        entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform3d_to_transform2d(entity_transform), false);
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, entity_transform, false);
+        GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, entity->physics_body_gid, transform3d_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Kinematic, &floor_gid, PHYSICS_LAYER_ENVIRONMENT, square, material, true);
+    }
+    
+    GenId wall_gid = entity_manager_alloc_entity(&entity_manager, floor_gid);
+    entity_manager_get_entity(entity_manager, wall_gid, &entity);
+    {
+        Transform2D entity_transform = TRANSFORM2D_IDENTITY;
+        entity_transform.scale = (Vector2){.x = 100.0f, .y = 1.0f};
+        entity_transform = transform2d_rotate(entity_transform, 1.0f); 
+        
+        entity->is_physics_body = true;
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, entity_transform, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, entity->physics_body_gid, transform3d_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Kinematic, &floor_gid, PHYSICS_LAYER_ENVIRONMENT, square, material, true);
     }
 
+    entity_manager_dealloc_entity(&entity_manager, floor_gid);
+
     // another dyanimc entity (piggy).
-    GenId enemy_gid = entity_manager_alloc_entity(&entity_manager);
+    GenId enemy_gid = entity_manager_alloc_entity(&entity_manager, 0);
     entity_manager_get_entity(entity_manager, enemy_gid, &entity);
     {
         Transform3D entity_transform = {.position = {.x = -1.5f, .y = 5.0f}, .scale = VECTOR3_ONE};
@@ -326,9 +342,9 @@ void app_main(){
 
         fizx_shape_set_on_enter_callback(&entity_manager.fizx_state, enemy_body_on_enter_callback, entity_shape_gid);
         fizx_shape_set_on_exit_callback(&entity_manager.fizx_state, enemy_body_on_exit_callback, entity_shape_gid);
-    }
+    }    
 
-    GenId sling_shot_gid = entity_manager_alloc_entity(&entity_manager);
+    GenId sling_shot_gid = entity_manager_alloc_entity(&entity_manager, 0);
     entity_manager_get_entity(entity_manager, sling_shot_gid, &entity);
     {
         entity->transform = TRANSFORM2D_IDENTITY;
@@ -349,7 +365,7 @@ void app_main(){
         bird_transform.position = vector2_add(entity->transform.position, (Vector2){.y = 0.5f});
         bird_transform.scale = VECTOR2_ONE;
 
-        entity_spawn_yellow_bird(&entity_manager, &gfx_state, bird_transform);
+        entity_spawn_yellow_bird(&entity_manager, &gfx_state, bird_transform, 0);
     }
 
     { // level load.
@@ -401,7 +417,7 @@ void app_main(){
             while(fixed_update_accumulator >= FIXED_DELTA_TIME){
                 app_fixed_update(FIXED_DELTA_TIME);
                 CollisionCallbackContext collision_callback_ctx = {.entity_manager = &entity_manager};
-                fizx_state_fixed_update(&entity_manager.fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME, 16);
+                fizx_state_fixed_update(&entity_manager.fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME, 32);
                 fixed_update_accumulator -= FIXED_DELTA_TIME;
             }
         }

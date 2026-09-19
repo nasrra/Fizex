@@ -4,7 +4,7 @@
 
 typedef struct{
     /**
-        the `node_index` of this node's parent.
+        the `node_idx` of this node's parent.
 
         `remarks`
         invalid when `0`.
@@ -19,14 +19,14 @@ typedef struct{
     **/
     i32 next_sibling;
     /**
-        the `node_index` of this node's previous sibling.
+        the `node_idx` of this node's previous sibling.
 
         `remarks`
         this value is self-recursive, meaning the previous sibling loops back to this node's index.
     **/
     i32 previous_sibling;
     /**
-        `node_index` of this node's first child.
+        `node_idx` of this node's first child.
 
         `remarks`
         invalid when `0`.
@@ -49,7 +49,8 @@ typedef struct{
     bool is_active;
 } IntrusiveListNode;
 
-typedef struct{
+typedef struct IntrusiveList IntrusiveList;
+struct IntrusiveList {
     IntrusiveListNode* node;
     /**
         contains a `Nil` element.
@@ -62,7 +63,8 @@ typedef struct{
     **/
     bool preserve_root_order;
     bool is_init;
-} IntrusiveList;
+    void (*on_dealloc_callback)(IntrusiveList* list, i32 deallocated_idx, void* user_data);
+};
 
 typedef struct{
     char* data;
@@ -1351,27 +1353,27 @@ void intrusive_list_init(IntrusiveList* list, MemoryArena* arena, i32 length, bo
     list->is_init = true;
 }
 
-bool intrusive_list_add_root(IntrusiveList* list, i32 node_index){
+bool intrusive_list_add_root(IntrusiveList* list, i32 node_idx){
 
     // node cannot be the Nil.
-    if(node_index == 0){
+    if(node_idx == 0){
         ASSERT(false, "nil element");
         return false;
     }
 
-    BOUNDS_CHECK(node_index, list->length);
-    IntrusiveListNode* node = &list->node[node_index];
+    BOUNDS_CHECK(node_idx, list->length);
+    IntrusiveListNode* node = &list->node[node_idx];
 
     if(node->in_tree){
         return false;
     }
 
     node->root_dense_index = list->root_index_count;
-    node->next_sibling = node_index;
-    node->previous_sibling = node_index;
+    node->next_sibling = node_idx;
+    node->previous_sibling = node_idx;
     node->in_tree = true;
     node->is_active = true;
-    ARRAY_PUSH(list->root_index, list->length, &list->root_index_count, node_index);
+    ARRAY_PUSH(list->root_index, list->length, &list->root_index_count, node_idx);
 
     return true;
 }
@@ -1385,19 +1387,19 @@ bool intrusive_list_add_root(IntrusiveList* list, i32 node_index){
     `returns`
     true, if successfully added to the tree; otherwise false if already added.
 **/
-bool intrusive_list_add_branch(IntrusiveList* list, i32 node_index, i32 parent_index){
+bool intrusive_list_add_branch(IntrusiveList* list, i32 node_idx, i32 parent_index){
     // node cannot be nil.
-    if(node_index == 0){
+    if(node_idx == 0){
         ASSERT(false, "nil element");
         return false;
     }
 
     if(parent_index == 0){
-        return intrusive_list_add_root(list, node_index);
+        return intrusive_list_add_root(list, node_idx);
     }
 
-    BOUNDS_CHECK(node_index, list->length);
-    IntrusiveListNode* node = &list->node[node_index];
+    BOUNDS_CHECK(node_idx, list->length);
+    IntrusiveListNode* node = &list->node[node_idx];
 
     if(node->in_tree){
         return false;
@@ -1411,10 +1413,10 @@ bool intrusive_list_add_branch(IntrusiveList* list, i32 node_index, i32 parent_i
     node->parent = parent_index;
     // only set if it is pointing to the Nil.
     if(parent->first_child == 0){
-        parent->first_child = node_index;
+        parent->first_child = node_idx;
         // node has no other siblings (as it is the first child).
-        node->next_sibling = node_index;
-        node->previous_sibling = node_index;
+        node->next_sibling = node_idx;
+        node->previous_sibling = node_idx;
     }
     else{
         // get the last child.
@@ -1431,10 +1433,10 @@ bool intrusive_list_add_branch(IntrusiveList* list, i32 node_index, i32 parent_i
         IntrusiveListNode* first_child = &list->node[first_child_index];
 
         // connect last child to the new node.
-        last_child->next_sibling = node_index;
+        last_child->next_sibling = node_idx;
         node->previous_sibling = last_child_index;
         node->next_sibling = first_child_index;
-        first_child->previous_sibling = node_index;
+        first_child->previous_sibling = node_idx;
     }
 
     node->in_tree = true;
@@ -1446,14 +1448,14 @@ bool intrusive_list_add_branch(IntrusiveList* list, i32 node_index, i32 parent_i
     `returns`
     true, if successfully removed from the tree; otherwise false if already removed.
 **/
-bool intrusive_list_remove_node(IntrusiveList* list, i32 node_index){
-    if(node_index == 0){
+bool intrusive_list_remove_node(IntrusiveList* list, i32 node_idx, void* user_data){
+    if(node_idx == 0){
         ASSERT(false, "nil element");
         return false;
     }
 
-    BOUNDS_CHECK(node_index, list->length);
-    IntrusiveListNode* node = &list->node[node_index];
+    BOUNDS_CHECK(node_idx, list->length);
+    IntrusiveListNode* node = &list->node[node_idx];
 
     if(node->in_tree == false){
         return false;
@@ -1471,14 +1473,14 @@ bool intrusive_list_remove_node(IntrusiveList* list, i32 node_index){
         // if this node doesnt have any children;
         if(node->first_child == 0){
             // nil the parents child.
-            if(parent->first_child == node_index){
+            if(parent->first_child == node_idx){
                 parent->first_child = 0;
             }
         }
         else{
 
             // move the children to the parent.
-            if(parent->first_child == node_index){
+            if(parent->first_child == node_idx){
                 parent->first_child = node->first_child;
 
                 // dealloc from children by setting theirparent to this node's parent.
@@ -1487,14 +1489,14 @@ bool intrusive_list_remove_node(IntrusiveList* list, i32 node_index){
 
                 while(true){
                     child->parent = parent_index;
-                    i32 next_sibling_index = child->next_sibling;
+                    i32 next_sibling_idx = child->next_sibling;
 
-                    if(next_sibling_index == first_child_index){
+                    if(next_sibling_idx == first_child_index){
                         break;
                     }
 
-                    BOUNDS_CHECK(next_sibling_index, list->length);
-                    *child = list->node[next_sibling_index];
+                    BOUNDS_CHECK(next_sibling_idx, list->length);
+                    *child = list->node[next_sibling_idx];
                 }
             }
 
@@ -1517,15 +1519,15 @@ bool intrusive_list_remove_node(IntrusiveList* list, i32 node_index){
 
                 while(true){
                     child->parent = parent_index;
-                    i32 next_sibling_index = child->next_sibling;
-                    if(next_sibling_index == first_child_index){
+                    i32 next_sibling_idx = child->next_sibling;
+                    if(next_sibling_idx == first_child_index){
                         child->next_sibling = parent_first_child_index;
                         parent_first_child->previous_sibling = current_sibling_index;
                         break;
                     }
-                    current_sibling_index = next_sibling_index;
-                    BOUNDS_CHECK(next_sibling_index, list->length);
-                    child = &list->node[next_sibling_index];
+                    current_sibling_index = next_sibling_idx;
+                    BOUNDS_CHECK(next_sibling_idx, list->length);
+                    child = &list->node[next_sibling_idx];
                 }
 
                 // don't perform sibling deallocation at the end of this function.
@@ -1577,15 +1579,15 @@ bool intrusive_list_remove_node(IntrusiveList* list, i32 node_index){
                 child->root_dense_index = list->root_index_count;
 
                 // children are now roots, so they should no longer be associated with thier siblings.
-                i32 next_sibling_index = child->next_sibling;
+                i32 next_sibling_idx = child->next_sibling;
                 child->next_sibling = current_sibling_index;
                 child->previous_sibling = current_sibling_index;
 
-                if(next_sibling_index == first_child_index){
+                if(next_sibling_idx == first_child_index){
                     break;
                 }
                 // go to the next sibling of the child.
-                current_sibling_index = next_sibling_index;
+                current_sibling_index = next_sibling_idx;
                 BOUNDS_CHECK(current_sibling_index, list->length);
                 child = &list->node[current_sibling_index];
             }
@@ -1597,18 +1599,21 @@ bool intrusive_list_remove_node(IntrusiveList* list, i32 node_index){
 
     // deallocate from siblings.
     if(node->next_sibling > 0 && node->previous_sibling > 0){
-        i32 next_sibling_index = node->next_sibling;
-        BOUNDS_CHECK(next_sibling_index, list->length);
-        IntrusiveListNode* next_sibling = &list->node[next_sibling_index];
+        i32 next_sibling_idx = node->next_sibling;
+        BOUNDS_CHECK(next_sibling_idx, list->length);
+        IntrusiveListNode* next_sibling = &list->node[next_sibling_idx];
         next_sibling->previous_sibling = node->previous_sibling;
 
-        i32 previous_sibling_index = node->previous_sibling;
-        BOUNDS_CHECK(previous_sibling_index, list->length);
-        IntrusiveListNode* previous_sibling = &list->node[previous_sibling_index];
+        i32 previous_sibling_idx = node->previous_sibling;
+        BOUNDS_CHECK(previous_sibling_idx, list->length);
+        IntrusiveListNode* previous_sibling = &list->node[previous_sibling_idx];
         previous_sibling->next_sibling = node->next_sibling;
     }
 
     End:
+    if(list->on_dealloc_callback != NULL){
+        list->on_dealloc_callback(list, node_idx, user_data);
+    }
     *node = (IntrusiveListNode){0};
     return true;
 }
@@ -1618,37 +1623,40 @@ bool intrusive_list_remove_node(IntrusiveList* list, i32 node_index){
     and shouldnt be used.
 **/
 void intrusive_list_remove_node_and_children_update_node_recursive(
-    IntrusiveListNode* nodes, i32 nodes_length, i32 parent_index, i32 node_index, i32 parent_first_child_index
+    IntrusiveList* list, i32 parent_index, i32 node_idx, i32 parent_first_child_index, void* user_data
 ){
-    BOUNDS_CHECK(node_index, nodes_length);
-    IntrusiveListNode* node = &nodes[node_index];
+    BOUNDS_CHECK(node_idx, list->length);
+    IntrusiveListNode* node = &list->node[node_idx];
     i32 first_child_index = node->first_child;
     i32 next_index = node->next_sibling;
+    if(list->on_dealloc_callback != NULL){
+        list->on_dealloc_callback(list, node_idx, user_data);
+    }
     *node = (IntrusiveListNode){0};
 
     if(first_child_index != 0){
-        intrusive_list_remove_node_and_children_update_node_recursive(nodes, nodes_length, node_index, first_child_index, first_child_index);
+        intrusive_list_remove_node_and_children_update_node_recursive(list, node_idx, first_child_index, first_child_index, user_data);
     }
     if(next_index == parent_first_child_index){
         return;
     }
     else{
-        intrusive_list_remove_node_and_children_update_node_recursive(nodes, nodes_length, parent_index, next_index, parent_first_child_index);
+        intrusive_list_remove_node_and_children_update_node_recursive(list, parent_index, next_index, parent_first_child_index, user_data);
     }
 }
 /**
     `returns`
     true, if successfully removed from the tree; otherwise false if already removed.
 **/
-bool intrusive_list_remove_node_and_children(IntrusiveList* list, i32 node_index){
+bool intrusive_list_remove_node_and_children(IntrusiveList* list, i32 node_idx, void* user_data){
     // node cannot be nil.
-    if(node_index == 0){
+    if(node_idx == 0){
         ASSERT(false, "nil element");
         return false;
     }
 
-    BOUNDS_CHECK(node_index, list->length);
-    IntrusiveListNode* node = &list->node[node_index];
+    BOUNDS_CHECK(node_idx, list->length);
+    IntrusiveListNode* node = &list->node[node_idx];
     if(node->in_tree == false){
         return false;
     }
@@ -1660,14 +1668,14 @@ bool intrusive_list_remove_node_and_children(IntrusiveList* list, i32 node_index
     if(node->first_child != 0){
         BOUNDS_CHECK(node->first_child, list->length);
         IntrusiveListNode* child = &list->node[node->first_child];
-        intrusive_list_remove_node_and_children_update_node_recursive(list->node, list->length, node_index, node->first_child, node->first_child);
+        intrusive_list_remove_node_and_children_update_node_recursive(list, node_idx, node->first_child, node->first_child, user_data);
     }
 
     // dealloc from parent
     if(parent_index!=0){
         BOUNDS_CHECK(parent_index, list->length);
         IntrusiveListNode* parent = &list->node[parent_index];
-        if(parent->first_child == node_index){
+        if(parent->first_child == node_idx){
             parent->first_child = 0;
         }
     }
@@ -1697,21 +1705,24 @@ bool intrusive_list_remove_node_and_children(IntrusiveList* list, i32 node_index
     }
 
     // deallocate from siblings.
-    i32 next_sibling_index = node->next_sibling;
-    i32 previous_sibling_index = node->previous_sibling;
+    i32 next_sibling_idx = node->next_sibling;
+    i32 previous_sibling_idx = node->previous_sibling;
 
-    if(next_sibling_index > 0 && previous_sibling_index > 0){
+    if(next_sibling_idx > 0 && previous_sibling_idx > 0){
 
-        BOUNDS_CHECK(next_sibling_index, list->length);
-        IntrusiveListNode* next_sibling = &list->node[next_sibling_index];
-        next_sibling->previous_sibling = previous_sibling_index;
+        BOUNDS_CHECK(next_sibling_idx, list->length);
+        IntrusiveListNode* next_sibling = &list->node[next_sibling_idx];
+        next_sibling->previous_sibling = previous_sibling_idx;
 
-        BOUNDS_CHECK(previous_sibling_index, list->length);
-        IntrusiveListNode* previous_sibling = &list->node[previous_sibling_index];
-        previous_sibling->next_sibling = next_sibling_index;
+        BOUNDS_CHECK(previous_sibling_idx, list->length);
+        IntrusiveListNode* previous_sibling = &list->node[previous_sibling_idx];
+        previous_sibling->next_sibling = next_sibling_idx;
     }
 
     // deallocate.
+    if(list->on_dealloc_callback != NULL){
+        list->on_dealloc_callback(list, node_idx, user_data);
+    }
     *node = (IntrusiveListNode){0};
     return true;
 }
@@ -1737,36 +1748,33 @@ void intrusive_list_send_root_front(IntrusiveList* list, i32 root_index){
 
     // set the root node's root index to 1 (which is the front).
     BOUNDS_CHECK(root_index, list->length);
-    i32 node_index = list->root_index[root_index];
-    BOUNDS_CHECK(node_index, list->length);
-    list->node[node_index].root_dense_index = 1;
+    i32 node_idx = list->root_index[root_index];
+    BOUNDS_CHECK(node_idx, list->length);
+    list->node[node_idx].root_dense_index = 1;
 
     // send the root node to the front of the root list.
     ARRAY_ORDERED_REMOVE_AT(list->root_index, list->length, &list->root_index_count, root_index);
-    ARRAY_ORDERED_INSERT(list->root_index, list->length, &list->root_index_count, 1, node_index);
+    ARRAY_ORDERED_INSERT(list->root_index, list->length, &list->root_index_count, 1, node_idx);
 }
 
-bool intrusive_list_is_node_in_tree(IntrusiveList* list, i32 node_index){
-    BOUNDS_CHECK(node_index, list->length);
-    return list->node[node_index].in_tree;
+bool intrusive_list_is_node_in_tree(IntrusiveList* list, i32 node_idx){
+    BOUNDS_CHECK(node_idx, list->length);
+    return list->node[node_idx].in_tree;
 }
 
-bool intrusive_list_is_node_root(IntrusiveList* list, i32 node_index){
-    BOUNDS_CHECK(node_index, list->length);
-    return list->node[node_index].parent == 0;
+bool intrusive_list_is_node_root(IntrusiveList* list, i32 node_idx){
+    BOUNDS_CHECK(node_idx, list->length);
+    return list->node[node_idx].parent == 0;
 }
 
 /**
     Gets the root node of a node within an intrusive list.
 **/
-IntrusiveListNode* intrusive_list_get_node_root(IntrusiveList* list, i32 node_index){
-    BOUNDS_CHECK(node_index, list->length);
-    IntrusiveListNode* node = &list->node[node_index];
+IntrusiveListNode* intrusive_list_get_node_root(IntrusiveList* list, i32 node_idx){
+    BOUNDS_CHECK(node_idx, list->length);
+    IntrusiveListNode* node = &list->node[node_idx];
     while(node->parent != 0){
         node = &list->node[node->parent];
     }
     return node;
 }
-
-
-

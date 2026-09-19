@@ -69,13 +69,13 @@ void player_update(EntityManager* entity_manager, GFX_State* gfx_state, Vector2 
             
             switch(game_state.editor_mouse_state.entity_to_spawn){
                 case ENTITY_ID_RED_BIRD:{
-                    entity_spawn_red_bird(entity_manager, gfx_state, spawn_transform);
+                    entity_spawn_red_bird(entity_manager, gfx_state, spawn_transform, 0);
                 }break;
                 case ENTITY_ID_YELLOW_BIRD:{
-                    entity_spawn_yellow_bird(entity_manager, gfx_state, spawn_transform);
+                    entity_spawn_yellow_bird(entity_manager, gfx_state, spawn_transform, 0);
                 }break;
                 case ENTITY_ID_WOOD_BLOCK:{
-                    entity_spawn_wood_block(entity_manager, gfx_state, spawn_transform);
+                    entity_spawn_wood_block(entity_manager, gfx_state, spawn_transform, 0);
                 }break;
             }
         }

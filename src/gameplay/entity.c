@@ -16,6 +16,7 @@ typedef struct{
     i32 entity_length;
     GenIdAllocator gen_id_allocator;
     FIZX_State fizx_state;
+    IntrusiveList entity_hierarchy;
     bool is_init;
 } EntityManager;
 
@@ -44,24 +45,34 @@ typedef struct{
 #define VIRTUAL_TEXTURE_ID_YELLOW_BIRD 5
 #define VIRTUAL_TEXTURE_ID_WOOD_BLOCK 6
 
-void entity_manager_init(EntityManager* manager, MemoryArena* arena, i32 entity_amount, i32 physics_body_amount){
-    ASSERT(!manager->is_init, "already init.");
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->entity, &manager->entity_length, entity_amount);
-    gen_id_allocator_init(&manager->gen_id_allocator, arena, physics_body_amount);
-    fizx_state_init(&manager->fizx_state, arena, entity_amount, 4, sizeof(GenId));
-    manager->is_init = true;
-}
-
-GenId entity_manager_alloc_entity(EntityManager* manager){
-    return gen_id_allocator_alloc(&manager->gen_id_allocator);
-}
-
-bool entity_manager_dealloc_entity(EntityManager* manager, GenId gid){
-    if(!gen_id_allocator_dealloc(&manager->gen_id_allocator, gid)){
-        return false;
+GenId entity_manager_alloc_entity(EntityManager* manager, GenId parent){
+    GenId gid = gen_id_allocator_alloc(&manager->gen_id_allocator);
+    if(gid == 0){
+        return gid;
     }
-
+    
     i32 idx = gen_id_get_index(gid);
+    
+    if(parent == 0){
+        if(!intrusive_list_add_root(&manager->entity_hierarchy, idx)){
+            ASSERT(false, "failed to insert entity into entity hierarchy.");
+            gen_id_allocator_dealloc(&manager->gen_id_allocator, gid);
+            gid = 0;
+        }
+    }
+    else{
+        i32 parent_idx = gen_id_get_index(parent);
+        if(!intrusive_list_add_branch(&manager->entity_hierarchy, idx, parent_idx)){
+            ASSERT(false, "failed to insert entity into entity hierarchy.");
+            gen_id_allocator_dealloc(&manager->gen_id_allocator, gid);
+            gid = 0;
+        }
+    }
+    
+    return gid;
+}
+
+void entity_manager_dealloc_entity_data_unsafe(EntityManager* manager, i32 idx){
     BOUNDS_CHECK(idx, manager->entity_length);
     Entity* entity = &manager->entity[idx];
 
@@ -70,7 +81,27 @@ bool entity_manager_dealloc_entity(EntityManager* manager, GenId gid){
     }
 
     *entity = (Entity){0};
+}
 
+void entity_on_entity_hierarchy_dealloc(IntrusiveList* list, i32 node_idx, void* user_data){
+    EntityManager* manager = (EntityManager*)user_data;
+    entity_manager_dealloc_entity_data_unsafe(manager, node_idx);
+}
+
+bool entity_manager_dealloc_entity(EntityManager* manager, GenId gid){
+    if(!gen_id_allocator_dealloc(&manager->gen_id_allocator, gid)){
+        return false;
+    }
+    i32 idx = gen_id_get_index(gid);
+
+    // TODO:
+    // may want to add functionality later so the user can deallocate an entity independently from its children.
+    
+    // NOTE:
+    // the on_dealloc callback for this calls entity_manager_dealloc_entity_data_unsafe.
+    if(!intrusive_list_remove_node_and_children(&manager->entity_hierarchy, idx, manager)){
+        ASSERT(false, "failed to remove entity from entity hierarchy.");
+    }
     return true;
 }
 
@@ -114,9 +145,9 @@ void entity_deplete_health(EntityManager* manager, GenId entity_gid, i32 amount)
     }
 }
 
-void entity_spawn_red_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Transform2D transform){
+void entity_spawn_red_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Transform2D transform, GenId parent){
     // clickable entity (angry bird).
-    GenId player_gid = entity_manager_alloc_entity(entity_manager);
+    GenId player_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     entity_manager_get_entity(*entity_manager, player_gid, &entity);
     {
@@ -124,10 +155,10 @@ void entity_spawn_red_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Tr
         entity->is_physics_body = true;
 
         Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
-        FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 5.0f, .restitution = 0.0f};
+        FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 2.0f, .restitution = 0.0f};
 
         Transform2D shape_transform = TRANSFORM2D_IDENTITY;
-        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, true);
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, shape_transform, FIZX_ShapeBehaviour_Dynamic, &player_gid, PHYSICS_LAYER_PLAYER, square, material, true);
         fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, false);
 
@@ -147,9 +178,9 @@ void entity_spawn_red_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Tr
     }
 }
 
-void entity_spawn_yellow_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Transform2D transform){
+void entity_spawn_yellow_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, Transform2D transform, GenId parent){
     // clickable entity (angry bird).
-    GenId player_gid = entity_manager_alloc_entity(entity_manager);
+    GenId player_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     entity_manager_get_entity(*entity_manager, player_gid, &entity);
     {
@@ -157,10 +188,10 @@ void entity_spawn_yellow_bird(EntityManager* entity_manager, GFX_State* gfx_ctx,
         entity->is_physics_body = true;
 
         Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
-        FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 5.0f, .restitution = 0.0f};
+        FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 1.0f, .restitution = 0.0f};
 
         Transform2D shape_transform = TRANSFORM2D_IDENTITY;
-        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, true);
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, shape_transform, FIZX_ShapeBehaviour_Dynamic, &player_gid, PHYSICS_LAYER_PLAYER, square, material, true);
         fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, false);
 
@@ -180,8 +211,8 @@ void entity_spawn_yellow_bird(EntityManager* entity_manager, GFX_State* gfx_ctx,
     }
 }
 
-void entity_spawn_wood_block(EntityManager* entity_manager, GFX_State* gfx_ctx, Transform2D transform){
-    GenId player_gid = entity_manager_alloc_entity(entity_manager);
+void entity_spawn_wood_block(EntityManager* entity_manager, GFX_State* gfx_ctx, Transform2D transform, GenId parent){
+    GenId player_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     entity_manager_get_entity(*entity_manager, player_gid, &entity);
     {
@@ -189,10 +220,10 @@ void entity_spawn_wood_block(EntityManager* entity_manager, GFX_State* gfx_ctx, 
         entity->is_physics_body = true;
 
         Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
-        FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 5.0f, .restitution = 0.0f};
+        FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 22.6f, .restitution = 0.0f};
 
         Transform2D shape_transform = TRANSFORM2D_IDENTITY;
-        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, true);
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, shape_transform, FIZX_ShapeBehaviour_Dynamic, &player_gid, PHYSICS_LAYER_PLAYER, square, material, true);
         
         Transform2D sprite_transform = TRANSFORM2D_IDENTITY;
@@ -244,7 +275,7 @@ void load_lvl(EntityManager* entity_manager, GFX_State* gfx, String file_path){
 
         if(lines_read == 6){
             Transform2D transform = transform2d_make(entity_position, entity_scale, entity_rotation);
-            entity_spawn_red_bird(entity_manager, gfx, transform);
+            entity_spawn_red_bird(entity_manager, gfx, transform, 0);
             file_data += bytes_consumed;
         }
         else{
@@ -252,4 +283,14 @@ void load_lvl(EntityManager* entity_manager, GFX_State* gfx, String file_path){
         }
     }
     platform_free_memory(raw_file);
+}
+
+void entity_manager_init(EntityManager* manager, MemoryArena* arena, i32 entity_amount, i32 physics_body_amount){
+    ASSERT(!manager->is_init, "already init.");
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->entity, &manager->entity_length, entity_amount);
+    gen_id_allocator_init(&manager->gen_id_allocator, arena, physics_body_amount);
+    intrusive_list_init(&manager->entity_hierarchy, arena, entity_amount, false);
+    manager->entity_hierarchy.on_dealloc_callback = entity_on_entity_hierarchy_dealloc;
+    fizx_state_init(&manager->fizx_state, arena, entity_amount, 4, sizeof(GenId));
+    manager->is_init = true;
 }
