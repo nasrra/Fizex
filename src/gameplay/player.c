@@ -79,13 +79,16 @@ void player_update(EntityManager* entity_manager, GFX_State* gfx_state, Vector2 
                     entity_spawn_red_bird(entity_manager, gfx_state, (String){.chars = "spawned red bird", .length = 16, .count = 16}, spawn_transform, game_state.editor_mouse_state.entity_parent_gid);
                 }break;
                 case EntityTypeId_YellowBird:{
-                    entity_spawn_yellow_bird(entity_manager, gfx_state, (String){.chars = "spawned yellow bird", .length = 19, .count = 16}, spawn_transform, game_state.editor_mouse_state.entity_parent_gid);
+                    entity_spawn_yellow_bird(entity_manager, gfx_state, (String){.chars = "spawned yellow bird", .length = 19, .count = 19}, spawn_transform, game_state.editor_mouse_state.entity_parent_gid);
                 }break;
                 case EntityTypeId_WoodBlock:{
-                    entity_spawn_wood_block(entity_manager, gfx_state,  (String){.chars = "spawned wood block", .length = 18, .count = 16}, spawn_transform, game_state.editor_mouse_state.entity_parent_gid);
+                    entity_spawn_wood_block(entity_manager, gfx_state, (String){.chars = "spawned wood block", .length = 18, .count = 18}, spawn_transform, game_state.editor_mouse_state.entity_parent_gid);
                 }break;
                 case EntityTypeId_LevelRoot:{
-                    entity_spawn_level_root(entity_manager, gfx_state,  (String){.chars = "spawned level", .length = 13, .count = 16}, spawn_transform, game_state.editor_mouse_state.entity_parent_gid);
+                    entity_spawn_level_root(entity_manager, gfx_state, (String){.chars = "spawned level", .length = 16, .count = 16}, spawn_transform, game_state.editor_mouse_state.entity_parent_gid);
+                }break;
+                case EntityTypeId_Pig:{
+                    entity_spawn_pig(entity_manager, gfx_state, (String){.chars = "spawned pig", .length = 11, .count = 11}, spawn_transform, game_state.editor_mouse_state.entity_parent_gid);
                 }break;
             }
         }
@@ -107,6 +110,12 @@ void editor_select_yellow_bird_button_on_hover(Clay_ElementId element_id, Clay_P
 void editor_select_wood_block_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
     if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
         game_state.editor_mouse_state.entity_to_spawn = EntityTypeId_WoodBlock;
+    }
+}
+
+void editor_select_pig_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        game_state.editor_mouse_state.entity_to_spawn = EntityTypeId_Pig;
     }
 }
 
@@ -284,6 +293,20 @@ void gfx_clay_test_layout(EntityManager* manager){
         }){
             Clay_OnHover(editor_select_wood_block_button_on_hover, NULL);
             CLAY_TEXT(CLAY_STRING("Wood Block"), { .fontSize = 1, .lineHeight = 24, .textColor = {255, 255, 255, 255} });
+        }
+        
+        CLAY(CLAY_ID("Pig Button"), {
+            .backgroundColor = Clay_Hovered() ? (Clay_Color){255.0f,255.0f,255.0f,255.0f} : (Clay_Color){255.0f,255.0f,255.0f,200.0f},
+            .layout = {
+                .sizing = {
+                    .width = CLAY_SIZING_PERCENT(0.2f),
+                    .height = CLAY_SIZING_PERCENT(0.085f)
+                }
+            },
+            .layout.childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER }
+        }){
+            Clay_OnHover(editor_select_pig_button_on_hover, NULL);
+            CLAY_TEXT(CLAY_STRING("Pig"), { .fontSize = 1, .lineHeight = 24, .textColor = {255, 255, 255, 255} });
         }
         
         for(i32 i = 1; i < manager->entity_hierarchy.root_index_count; i++){

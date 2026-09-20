@@ -31,10 +31,6 @@
 **/
 #define DELTA_TIME_ACCUMULATOR_SLOW_DOWN 0.0333147881012903f
 
-typedef struct{
-    EntityManager* entity_manager;
-} CollisionCallbackContext;
-
 /**====================
     globals
 ====================**//**/
@@ -49,21 +45,6 @@ f32 time_scale = 1.0f;
 /**====================
     functions
 ====================**//**/
-
-void enemy_body_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
-    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    GenId* enemy_gid = (GenId*)info.target_user_data;
-
-    if((info.source_layer & PHYSICS_LAYER_PLAYER) != 0){
-        entity_deplete_health(ctx->entity_manager, *enemy_gid, 1);
-    }
-}
-
-void enemy_body_on_exit_callback(FIZX_CollisionInfo info, void* user_data){
-    if((info.source_layer & PHYSICS_LAYER_PLAYER) != 0){
-        platform_output_message("exit player\n");
-    }
-}
 
 void app_update(MemoryArena* persistent, MemoryArena* transient, f32 delta_time){
 
@@ -153,9 +134,9 @@ GFX_State app_gfx_init(MemoryArena* persistent, MemoryArena* transient, WindowCo
     MEMORY_ARENA_ALLOC_ARRAY(transient, sprite_layer_create_infos, &sprite_layer_create_infos_length, 2);
 
     BOUNDS_CHECK(0, sprite_layer_create_infos_length);
-    sprite_layer_create_infos[0] = (GFX_SpriteLayerCreateInfo){.max_sprites = 1024};
+    sprite_layer_create_infos[0] = (GFX_SpriteLayerCreateInfo){.max_sprites = 512};
     BOUNDS_CHECK(1, sprite_layer_create_infos_length);
-    sprite_layer_create_infos[1] = (GFX_SpriteLayerCreateInfo){.max_sprites = 1024};
+    sprite_layer_create_infos[1] = (GFX_SpriteLayerCreateInfo){.max_sprites = 512};
 
     /**
         context.
@@ -254,9 +235,14 @@ void app_main(){
     gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_YELLOW_BIRD);
 
     string_clear(&file_path);
-    string_push_chars(&file_path, "assets/sling_shot.png", 21);
-    gfx_virtual_texture_set_file_path(&gfx_state, file_path, 4);
-    gfx_load_image_texture(&gfx_state, 4);
+    string_push_chars(&file_path, "assets/sprites/sling_shot.png", 29);
+    gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_SLING_SHOT);
+    gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_SLING_SHOT);
+
+    string_clear(&file_path);
+    string_push_chars(&file_path, "assets/sprites/pig.png", 22);
+    gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_PIG);
+    gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_PIG);
 
     string_clear(&file_path);
     string_push_chars(&file_path, "assets/sprites/wood block.png", 29);
@@ -343,6 +329,8 @@ void app_main(){
     }
 
     // entity_manager_dealloc_entity(&entity_manager, level_gid);
+
+    // entity_spawn_pig(&entity_manager, &gfx_state, (String){0}, TRANSFORM2D_IDENTITY, 0);
 
     u128 prev_process_tick_in_mili  = 0;
     f32 previous_time_in_seconds    = 0.0f;
