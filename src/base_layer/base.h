@@ -844,7 +844,7 @@ bool gen_id_equals(GenId a, GenId b);
 void string_init(String* string, MemoryArena* arena, i32 size);
 void string_clear(String* string);
 void string_push_chars(String* string, char* chars, i32 chars_length);
-void string_push(String* dst, String src);
+void string_push (String* dst, String src);
 
 void gen_id_allocator_init(GenIdAllocator* allocator, MemoryArena* arena, i32 length);
 /**

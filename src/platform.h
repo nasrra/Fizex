@@ -25,6 +25,11 @@ typedef struct{
     i32 height;
 } Image;
 
+typedef enum{
+    FileWriteType_Truncate, // 0
+    FileWriteType_Append  // 1
+} FileWriteType;
+
 void platform_output_message(char* msg);
 void* platform_alloc_memory(size_t size);
 void platform_free_memory(void* memory);
@@ -60,7 +65,9 @@ bool platform_read_file(String file_path, MemoryArena* arena);
     a pointer to the loaded data; otherwise NULL in the case of a file read failure.
 **/
 void* platform_load_file(String file_path, size_t* out_buffer_size);
-i32 platform_write_file(String file_path, void* data, size_t data_size);
+i32 platform_write_file(String file_path, void* data, size_t data_size, FileWriteType write_type);
+bool platform_delete_file(String file_path);
+
 f32 platform_window_calc_aspect_ratio(WindowContext window_ctx);
 u128 platform_get_system_tick();
 u128 platform_get_proccess_tick();

@@ -153,9 +153,9 @@ GFX_State app_gfx_init(MemoryArena* persistent, MemoryArena* transient, WindowCo
     MEMORY_ARENA_ALLOC_ARRAY(transient, sprite_layer_create_infos, &sprite_layer_create_infos_length, 2);
 
     BOUNDS_CHECK(0, sprite_layer_create_infos_length);
-    sprite_layer_create_infos[0] = (GFX_SpriteLayerCreateInfo){.max_sprites = 512};
+    sprite_layer_create_infos[0] = (GFX_SpriteLayerCreateInfo){.max_sprites = 1024};
     BOUNDS_CHECK(1, sprite_layer_create_infos_length);
-    sprite_layer_create_infos[1] = (GFX_SpriteLayerCreateInfo){.max_sprites = 512};
+    sprite_layer_create_infos[1] = (GFX_SpriteLayerCreateInfo){.max_sprites = 1024};
 
     /**
         context.
@@ -289,96 +289,48 @@ void app_main(){
         // .draw_collision_info = true
     };
 
-    Transform3D shape_transform = {.scale = VECTOR3_ONE};
-    Circle circle = {.x = 0.0f, .y = 0.0f, .radius = 1.0f};
-    Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
-    FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 5.0f, .restitution = 0.0f};
-
     i32 entity_amount = 2048;
     i32 physics_body_amount = 128;
     entity_manager = (EntityManager){0};
-    entity_manager_init(&entity_manager, persistent, entity_amount, physics_body_amount);
-    Entity* entity;
-
+    entity_manager_init(&entity_manager, persistent, &gfx_state, entity_amount, physics_body_amount);
+    
     // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
 
     // floor entity.
-    GenId floor_gid = entity_manager_alloc_entity(&entity_manager, 0);
-    entity_manager_get_entity(entity_manager, floor_gid, &entity);
-    {
-        
-        Transform2D entity_transform = TRANSFORM2D_IDENTITY;
-        entity_transform.scale = (Vector2){.x = 100.0f, .y = 1.0f};
-        entity->is_physics_body = true;
-        entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, entity_transform, false);
-        GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, entity->physics_body_gid, transform3d_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Kinematic, &floor_gid, PHYSICS_LAYER_ENVIRONMENT, square, material, true);
-    }
+    Transform2D floor_transform = TRANSFORM2D_IDENTITY;
+    GenId level_gid = entity_spawn_level_root(&entity_manager, &gfx_state, (String){.chars = "level 0", .length = 7, .count = 7}, TRANSFORM2D_IDENTITY, 0);
+
+    // floor_transform.scale = (Vector2){.x = 100.0f, .y = 1.0f};
+    // entity_spawn_invisible_wall(&entity_manager, &gfx_state, (String){.chars = "floor", .length = 5, .count = 5}, floor_transform, level_gid);
     
-    GenId wall_gid = entity_manager_alloc_entity(&entity_manager, floor_gid);
-    entity_manager_get_entity(entity_manager, wall_gid, &entity);
-    {
-        Transform2D entity_transform = TRANSFORM2D_IDENTITY;
-        entity_transform.scale = (Vector2){.x = 100.0f, .y = 1.0f};
-        entity_transform = transform2d_rotate(entity_transform, 1.0f); 
-        
-        entity->is_physics_body = true;
-        entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, entity_transform, false);
-        GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, entity->physics_body_gid, transform3d_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Kinematic, &floor_gid, PHYSICS_LAYER_ENVIRONMENT, square, material, true);
-    }
+    // GenId sling_shot_gid = entity_manager_alloc_entity(&entity_manager, level_gid);
+    // entity_manager_get_entity(entity_manager, sling_shot_gid, &entity);
+    // {
+    //     entity->transform = TRANSFORM2D_IDENTITY;
+    //     entity->transform.scale = vector2_mul_val(entity->transform.scale, 3.0f);
+    //     entity->transform.position = (Vector2){.y = 2.0f};
+    //     entity->sprite_depth = 10.0f;
+    //     Transform2D sprite_transform = TRANSFORM2D_IDENTITY;
+    //     sprite_transform.scale = vector2_mul_val(sprite_transform.scale, 10.0f);
+    //     bool success = false;
+    //     entity->sprite_id = gfx_sprite_alloc(&gfx_state, SPRITE_LAYER_WORLD, &success);
+    //     GFX_SpriteRegion region = {.bot_right = {.x = 16, .y = 16}};
+    //     gfx_sprite_init(
+    //         &gfx_state, entity->sprite_id, sprite_transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
+    //         GFX_SpriteOrigin_Center, 4, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
+    //     );
 
-    entity_manager_dealloc_entity(&entity_manager, floor_gid);
+    //     Transform2D bird_transform = TRANSFORM2D_IDENTITY;
+    //     bird_transform.position = vector2_add(entity->transform.position, (Vector2){.y = 0.5f});
+    //     bird_transform.scale = VECTOR2_ONE;
 
-    // another dyanimc entity (piggy).
-    GenId enemy_gid = entity_manager_alloc_entity(&entity_manager, 0);
-    entity_manager_get_entity(entity_manager, enemy_gid, &entity);
-    {
-        Transform3D entity_transform = {.position = {.x = -1.5f, .y = 5.0f}, .scale = VECTOR3_ONE};
-        entity->is_physics_body = true;
-        entity->physics_body_gid = fizx_body_alloc(&entity_manager.fizx_state, transform3d_to_transform2d(entity_transform), true);
-        GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager.fizx_state, entity->physics_body_gid, transform3d_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, &enemy_gid, PHYSICS_LAYER_ENEMY, square, material, true);
-
-        entity->is_health = true;
-        entity->health = 2;
-
-        fizx_shape_set_on_enter_callback(&entity_manager.fizx_state, enemy_body_on_enter_callback, entity_shape_gid);
-        fizx_shape_set_on_exit_callback(&entity_manager.fizx_state, enemy_body_on_exit_callback, entity_shape_gid);
-    }    
-
-    GenId sling_shot_gid = entity_manager_alloc_entity(&entity_manager, 0);
-    entity_manager_get_entity(entity_manager, sling_shot_gid, &entity);
-    {
-        entity->transform = TRANSFORM2D_IDENTITY;
-        entity->transform.scale = vector2_mul_val(entity->transform.scale, 3.0f);
-        entity->transform.position = (Vector2){.y = 2.0f};
-        entity->sprite_depth = 10.0f;
-        Transform2D sprite_transform = TRANSFORM2D_IDENTITY;
-        sprite_transform.scale = vector2_mul_val(sprite_transform.scale, 10.0f);
-        bool success = false;
-        entity->sprite_id = gfx_sprite_alloc(&gfx_state, SPRITE_LAYER_WORLD, &success);
-        GFX_SpriteRegion region = {.bot_right = {.x = 16, .y = 16}};
-        gfx_sprite_init(
-            &gfx_state, entity->sprite_id, sprite_transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
-            GFX_SpriteOrigin_Center, 4, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
-        );
-
-        Transform2D bird_transform = TRANSFORM2D_IDENTITY;
-        bird_transform.position = vector2_add(entity->transform.position, (Vector2){.y = 0.5f});
-        bird_transform.scale = VECTOR2_ONE;
-
-        entity_spawn_yellow_bird(&entity_manager, &gfx_state, bird_transform, 0);
-    }
+    //     entity_spawn_yellow_bird(&entity_manager, &gfx_state, bird_transform, level_gid);
+    // }
 
     { // level load.
         string_clear(&file_path);
-        string_push_chars(&file_path, "assets/lvl.scsv", 15);
-        load_lvl(&entity_manager, &gfx_state, file_path);
-    }
-
-    { // level save.
-        string_clear(&file_path);
-        string_push_chars(&file_path, "assets/other_lvl.scsv", 21);
-        char* data =  "1;1.0;1.0;12.0;12.0;3.3;\n";
-        platform_write_file(file_path, data, sizeof(*data) * 25);
+        string_push_chars(&file_path, "assets/saved.scsv", 17);
+        load_lvl(&entity_manager, &gfx_state, file_path, level_gid);
     }
 
     { // font render.
@@ -389,6 +341,8 @@ void app_main(){
         gfx_virtual_texture_set_file_path(&gfx_state, file_path, 1);
         gfx_load_font_texture(&gfx_state, transient, 1, 24, 32, 12);
     }
+
+    // entity_manager_dealloc_entity(&entity_manager, level_gid);
 
     u128 prev_process_tick_in_mili  = 0;
     f32 previous_time_in_seconds    = 0.0f;
@@ -458,7 +412,7 @@ void app_main(){
                 input_is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
             );
             if(game_state.is_editor_mode){
-                gfx_clay_test_layout();
+                gfx_clay_test_layout(&entity_manager);
             }
             gfx_clay_end_layout(&gfx_state, delta_time, SPRITE_LAYER_UI, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
             gfx_state_draw(&gfx_state);
@@ -468,4 +422,3 @@ void app_main(){
 
     platform_window_context_free(window_ctx);
 }
-

@@ -175,7 +175,7 @@ struct sprite{
 }
 
 struct sprite_array{
-    instance: array<sprite, 512>
+    instance: array<sprite, 1024>
 }
 
 struct vertex_output {

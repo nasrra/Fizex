@@ -457,7 +457,7 @@ void* platform_load_file(String file_path, size_t* out_buffer_size){
     return buffer;
 }
 
-i32 platform_write_file(String file_path, void* data, size_t data_size){
+i32 platform_write_file(String file_path, void* data, size_t data_size, FileWriteType write_type){
     /**
         convert to null terminated string.
     **/
@@ -467,15 +467,35 @@ i32 platform_write_file(String file_path, void* data, size_t data_size){
     COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
     null_terminated_file_path[file_path.length] = '\0';
 
-    HANDLE h = CreateFileA(
-        null_terminated_file_path,
-        GENERIC_WRITE,              // we want to write.
-        0,                          // no sharing while we write.
-        NULL,                       // default security attributes.
-        CREATE_ALWAYS,              // overwrite if it exists, create if it doesnt.
-        FILE_ATTRIBUTE_NORMAL,
-        NULL
-    );
+    HANDLE h;
+    switch(write_type){
+        case FileWriteType_Truncate:{
+            h = CreateFileA(
+                null_terminated_file_path,
+                GENERIC_WRITE,              // we want to write.
+                0,                          // no sharing while we write.
+                NULL,                       // default security attributes.
+                CREATE_ALWAYS,              // overwrite if it exists, create if it doesnt.
+                FILE_ATTRIBUTE_NORMAL,
+                NULL
+            );
+        }break;
+        case FileWriteType_Append:{
+            h = CreateFileA(
+                null_terminated_file_path,
+                FILE_APPEND_DATA,           // request append-specific access.
+                0,                          // no sharing while we write.
+                NULL,                       // default security attributes.
+                OPEN_ALWAYS,                // open if it exits, create if it doesnt.
+                FILE_ATTRIBUTE_NORMAL,
+                NULL
+            );
+        }break;
+        default:{
+            ASSERT(false, "unknown file write type.");
+            return 0;
+        }break;
+    }
 
     if(h == INVALID_HANDLE_VALUE){
         ASSERT(false, "failed to open/create file to write to.");
@@ -494,6 +514,22 @@ i32 platform_write_file(String file_path, void* data, size_t data_size){
     CloseHandle(h);
 
     return ok && (bytes_written == data_size);
+}
+
+bool platform_delete_file(String file_path){
+    /**
+        convert to null terminated string.
+    **/
+    char* null_terminated_file_path;
+    i32 null_terminated_file_path_length;
+    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.length+1);
+    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
+    null_terminated_file_path[file_path.length] = '\0';
+
+    if(DeleteFileA(null_terminated_file_path)){
+        return true;
+    }
+    return false;
 }
 
 f32 platform_window_calc_aspect_ratio(WindowContext ctx){
