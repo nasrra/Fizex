@@ -9,8 +9,7 @@
 #include "renderer/gfx_app_types.c"
 #include "fizx/fizx.c"
 #include "fizx/fizx_draw.c"
-#include "gameplay/entity.c"
-#include "gameplay/player.c"
+#include "gameplay/gameplay.c"
 
 /**====================
     defines.
@@ -316,7 +315,7 @@ void app_main(){
     { // level load.
         string_clear(&file_path);
         string_push_chars(&file_path, "assets/saved.scsv", 17);
-        load_lvl(&entity_manager, &gfx_state, file_path, level_gid);
+        load_lvl(&entity_manager, &gfx_state, file_path);
     }
 
     { // font render.
