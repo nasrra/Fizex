@@ -81,6 +81,7 @@ typedef struct{
 
 typedef struct{
     EntityManager* entity_manager;
+    GFX_State* gfx_state;
 } CollisionCallbackContext;
 
 
@@ -125,11 +126,16 @@ GameState game_state;
 ///
 /// Virtual Texture ID.
 ///
-#define VIRTUAL_TEXTURE_ID_RED_BIRD 3
+#define VIRTUAL_TEXTURE_ID_TEST_SHEET 3
 #define VIRTUAL_TEXTURE_ID_SLING_SHOT 4
-#define VIRTUAL_TEXTURE_ID_YELLOW_BIRD 5
 #define VIRTUAL_TEXTURE_ID_WOOD_BLOCK 6
-#define VIRTUAL_TEXTURE_ID_PIG 7
+
+/// 
+/// Texture Views.
+///
+#define GFX_SPRITE_REGION_PIG_HEALTHY (GFX_SpriteRegion){.top_left = {692, 855}, .bot_right = {740, 901}}
+#define GFX_SPRITE_REGION_PIG_HURT (GFX_SpriteRegion){.top_left = {692, 902}, .bot_right = {740, 948}}
+#define GFX_SPRITE_REGION_PIG_CRITICAL (GFX_SpriteRegion){.top_left = {752, 846}, .bot_right = {800, 892}}
 
 GenId entity_manager_alloc_entity(EntityManager* manager, GenId parent){
     GenId gid = gen_id_allocator_alloc(&manager->gen_id_allocator);
@@ -222,23 +228,6 @@ void entity_manager_debug_draw(EntityManager manager, GFX_State* gfx, f32 delta_
 #endif
 }
 
-void entity_deplete_health(EntityManager* manager, GenId entity_gid, i32 amount){
-    Entity* entity;
-    if(!entity_manager_get_entity(*manager, entity_gid, &entity)){
-        ASSERT(false, "failed to get entity.");
-    }
-
-    ASSERT(entity->is_health, "entity doesnt use health.");
-    entity->health -= amount;
-    if(entity->health <= 0){
-        entity_manager_dealloc_entity(manager, entity_gid);
-        game_state.alive_enemies-=1;
-        if(game_state.alive_enemies <= 0){
-            platform_output_message("WIN!");
-        }
-    }
-}
-
 GenId entity_spawn_red_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, String name, Transform2D transform, GenId parent){
     // clickable entity (angry bird).
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
@@ -268,10 +257,10 @@ GenId entity_spawn_red_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, S
         entity->sprite_depth = 1.0f;
         bool success = false;
         entity->sprite_id = gfx_sprite_alloc(gfx_ctx, SPRITE_LAYER_WORLD, &success);
-        GFX_SpriteRegion region = {.bot_right = {.x = 150, .y = 150}};
+        GFX_SpriteRegion region = {.top_left = {863, 797}, .bot_right = {863 + 45, 797 + 45}};
         gfx_sprite_init(
             gfx_ctx, entity->sprite_id, sprite_transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
-            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_RED_BIRD, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
+            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_TEST_SHEET, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
         );
     }
     return entity_gid;
@@ -306,10 +295,10 @@ GenId entity_spawn_yellow_bird(EntityManager* entity_manager, GFX_State* gfx_ctx
         entity->sprite_depth = 1.0f;
         bool success = false;
         entity->sprite_id = gfx_sprite_alloc(gfx_ctx, SPRITE_LAYER_WORLD, &success);
-        GFX_SpriteRegion region = {.bot_right = {.x = 150, .y = 150}};
+        GFX_SpriteRegion region = {.top_left = {629, 879}, .bot_right = {629 + 58, 879 + 53}};
         gfx_sprite_init(
             gfx_ctx, entity->sprite_id, sprite_transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
-            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_YELLOW_BIRD, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
+            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_TEST_SHEET, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
         );
     }
     return entity_gid;
@@ -390,12 +379,31 @@ GenId entity_spawn_level_root(EntityManager* entity_manager, GFX_State* gfx_ctx,
     return entity_gid;
 }
 
-void enemy_body_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
+void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    GenId* enemy_gid = (GenId*)info.target_user_data;
+    GenId* entity_gid = (GenId*)info.target_user_data;
 
     if((info.source_layer & PHYSICS_LAYER_PLAYER) != 0){
-        entity_deplete_health(ctx->entity_manager, *enemy_gid, 1);
+        Entity* entity;
+        if(!entity_manager_get_entity(*ctx->entity_manager, *entity_gid, &entity)){
+            ASSERT(false, "failed to get entity.");
+        }
+        ASSERT(entity->is_health, "entity doesnt use health.");
+        entity->health -= 1;
+        
+        if(entity->health <= 0){
+            entity_manager_dealloc_entity(ctx->entity_manager, *entity_gid);
+            game_state.alive_enemies-=1;
+            if(game_state.alive_enemies <= 0){
+                platform_output_message("WIN!");
+            }
+        }
+        else if(entity->health <= 1){
+            gfx_sprite_set_region(ctx->gfx_state, entity->sprite_id, GFX_SPRITE_REGION_PIG_CRITICAL);
+        }
+        else if(entity->health <= 2){
+            gfx_sprite_set_region(ctx->gfx_state, entity->sprite_id, GFX_SPRITE_REGION_PIG_HURT);        
+        }        
     }
 }
 
@@ -417,19 +425,19 @@ GenId entity_spawn_pig(EntityManager* entity_manager, GFX_State* gfx_ctx, String
         Transform2D shape_transform = TRANSFORM2D_IDENTITY;
         entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, shape_transform, FIZX_ShapeBehaviour_Dynamic, &entity_gid, PHYSICS_LAYER_ENEMY, square, material, true);
-        fizx_shape_set_on_enter_callback(&entity_manager->fizx_state, enemy_body_on_enter_callback, entity_shape_gid);
+        fizx_shape_set_on_enter_callback(&entity_manager->fizx_state, pig_fizx_shape_on_enter_callback, entity_shape_gid);
 
         entity->is_health = true;
-        entity->health = 1;
+        entity->health = 3;
 
         Transform2D sprite_transform = TRANSFORM2D_IDENTITY;
         entity->sprite_depth = 1.0f;
         bool success = false;
         entity->sprite_id = gfx_sprite_alloc(gfx_ctx, SPRITE_LAYER_WORLD, &success);
-        GFX_SpriteRegion region = {.bot_right = {.x = 150, .y = 150}};
+        GFX_SpriteRegion region = GFX_SPRITE_REGION_PIG_HEALTHY;
         gfx_sprite_init(
             gfx_ctx, entity->sprite_id, sprite_transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
-            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_PIG, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
+            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_TEST_SHEET, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
         );
     }
     game_state.alive_enemies+=1;

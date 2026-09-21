@@ -113,7 +113,7 @@ GFX_State app_gfx_init(MemoryArena* persistent, MemoryArena* transient, WindowCo
     **/
     GFX_ImageTexturesInitInfo* image_textures_init_info;
     i32 image_textures_init_info_length;
-    MEMORY_ARENA_ALLOC_ARRAY(transient, image_textures_init_info, &image_textures_init_info_length, 4);
+    MEMORY_ARENA_ALLOC_ARRAY(transient, image_textures_init_info, &image_textures_init_info_length, 5);
 
     BOUNDS_CHECK(0, image_textures_init_info_length);
     image_textures_init_info[0] = (GFX_ImageTexturesInitInfo){.width = 150, .height = 150, .max_textures = 16};
@@ -123,6 +123,8 @@ GFX_State app_gfx_init(MemoryArena* persistent, MemoryArena* transient, WindowCo
     image_textures_init_info[2] = (GFX_ImageTexturesInitInfo){.width = 640, .height = 360, .max_textures = 2};
     BOUNDS_CHECK(3, image_textures_init_info_length);
     image_textures_init_info[3] = (GFX_ImageTexturesInitInfo){.width = 16, .height = 16, .max_textures = 24};
+    BOUNDS_CHECK(4, image_textures_init_info_length);
+    image_textures_init_info[4] = (GFX_ImageTexturesInitInfo){.width = 1028, .height = 1028, .max_textures = 4};
 
 
     /**
@@ -224,24 +226,14 @@ void app_main(){
     string_init(&file_path, transient, 48);
 
     string_clear(&file_path);
-    string_push_chars(&file_path, "assets/sprites/bird red.png", 27);
-    gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_RED_BIRD);
-    gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_RED_BIRD);
-
-    string_clear(&file_path);
-    string_push_chars(&file_path, "assets/sprites/bird yellow.png", 30);
-    gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_YELLOW_BIRD);
-    gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_YELLOW_BIRD);
+    string_push_chars(&file_path, "assets/sprites/test-sheet.png", 29);
+    gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_TEST_SHEET);
+    gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_TEST_SHEET);
 
     string_clear(&file_path);
     string_push_chars(&file_path, "assets/sprites/sling_shot.png", 29);
     gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_SLING_SHOT);
     gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_SLING_SHOT);
-
-    string_clear(&file_path);
-    string_push_chars(&file_path, "assets/sprites/pig.png", 22);
-    gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_PIG);
-    gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_PIG);
 
     string_clear(&file_path);
     string_push_chars(&file_path, "assets/sprites/wood block.png", 29);
@@ -357,7 +349,7 @@ void app_main(){
 
             while(fixed_update_accumulator >= FIXED_DELTA_TIME){
                 app_fixed_update(FIXED_DELTA_TIME);
-                CollisionCallbackContext collision_callback_ctx = {.entity_manager = &entity_manager};
+                CollisionCallbackContext collision_callback_ctx = {.entity_manager = &entity_manager, .gfx_state = &gfx_state};
                 fizx_state_fixed_update(&entity_manager.fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME, 32);
                 fixed_update_accumulator -= FIXED_DELTA_TIME;
             }

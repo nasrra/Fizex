@@ -205,6 +205,7 @@ struct vertex_output {
 @group(1) @binding(3) var textures_360_162: texture_2d_array<f32>;
 @group(1) @binding(4) var textures_640_360: texture_2d_array<f32>;
 @group(1) @binding(5) var textures_16_16: texture_2d_array<f32>;
+@group(1) @binding(6) var textures_1028_1028: texture_2d_array<f32>;
 @group(2) @binding(0) var non_filter_texture_sampler: sampler;
 
 /**##########################################################################################################################################
@@ -296,6 +297,7 @@ fn fs_draw_sprite_simple(
         case 3: {return textureLoad(textures_360_162, pixel_position, virtual_texture.layer_index, 0);}
         case 4: {return textureLoad(textures_640_360, pixel_position, virtual_texture.layer_index, 0);}
         case 5: {return textureLoad(textures_16_16, pixel_position, virtual_texture.layer_index, 0);}
+        case 6: {return textureLoad(textures_1028_1028, pixel_position, virtual_texture.layer_index, 0);}
         case default:{return fail_colour;}
     }
 }
