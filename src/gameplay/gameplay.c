@@ -48,7 +48,33 @@ typedef struct{
     bool is_health;
     bool is_clickable;
     bool is_physics_body;
+    bool is_invincible;
 } Entity;
+
+typedef void (*TimerTimeout)(void* user_data);
+
+typedef struct{
+    GenIdAllocator gen_id_allocator;
+    f32* time_scale;
+    f32* previous_time;
+    f32* current_time;
+    // `remarks`
+    // 1.0f = true, 0.0f = false.
+    f32* is_ticking;
+    // `remarks`
+    // 1.0f = true, 0.0f = false.
+    f32* has_started;
+    f32* delta_time_scratch_space;
+    char* timeout_data;
+    TimerTimeout* timeout_function;
+    i32 timeout_data_length;
+    i32 timeout_data_element_size;
+    // the length of all backing arrays.
+    i32 length;
+    bool is_init;
+} TimerManager;
+
+typedef GenId TimerHandle;
 
 typedef struct{
     // the transform to spawn the entity at.
@@ -75,13 +101,13 @@ typedef struct{
     GenIdAllocator gen_id_allocator;
     FIZX_State fizx_state;
     GFX_State* gfx_state;
+    TimerManager timer_manager;
     IntrusiveList entity_hierarchy;
     bool is_init;
 } EntityManager;
 
 typedef struct{
     EntityManager* entity_manager;
-    GFX_State* gfx_state;
 } CollisionCallbackContext;
 
 
@@ -110,6 +136,14 @@ GameState game_state;
 #define PLAYER_MOUSE_MAX_DRAW_RADIUS 2.5f
 #define PLAYER_MOUSE_LAUNCH_FORCE 7.5f
 #define LEVEL_FILE_LINE_LENGTH 512
+// timer manager's `is_ticking` value that indicates a boolean `true`.
+#define TIMER_MANAGER_IS_TICKING_TRUE 1.0f
+// timer manager's `is_ticking` value that indicates a boolean `false`.
+#define TIMER_MANAGER_IS_TICKING_FALSE 0.0f
+// timer manager's `has_started` value that indicates a boolean `true`.
+#define TIMER_MANAGER_HAS_STARTED_TRUE 1.0f
+// timer manager's `has_started` value that indicates a boolean `false`.
+#define TIMER_MANAGER_HAS_STARTED_FALSE 0.0f
 
 
 
@@ -136,6 +170,222 @@ GameState game_state;
 #define GFX_SPRITE_REGION_PIG_HEALTHY (GFX_SpriteRegion){.top_left = {692, 855}, .bot_right = {740, 901}}
 #define GFX_SPRITE_REGION_PIG_HURT (GFX_SpriteRegion){.top_left = {692, 902}, .bot_right = {740, 948}}
 #define GFX_SPRITE_REGION_PIG_CRITICAL (GFX_SpriteRegion){.top_left = {752, 846}, .bot_right = {800, 892}}
+
+
+
+
+///
+/// Timer Manager.
+///
+
+
+
+
+bool timer_manager_init(TimerManager* manager, MemoryArena* arena, i32 timer_amount, i32 timeout_data_element_size){
+    if(manager->is_init){
+        ASSERT(false, "already init.");
+        return false;
+    }
+    
+    gen_id_allocator_init(&manager->gen_id_allocator, arena, timer_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->time_scale, &manager->length, timer_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->previous_time, &manager->length, timer_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->current_time, &manager->length, timer_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->is_ticking, &manager->length, timer_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->has_started, &manager->length, timer_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->delta_time_scratch_space, &manager->length, timer_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->timeout_function, &manager->length, timer_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->timeout_data, &manager->timeout_data_length, timeout_data_element_size * timer_amount);
+    manager->timeout_data_element_size = timeout_data_element_size;
+    manager->is_init = true;
+    
+    return true;
+}
+
+/*
+    `returns`
+    a handle to the newly started timer; otherwise 0 if allocation was unsuccessful.
+*/
+TimerHandle timer_manager_timer_start(TimerManager* manager, f32 start_time, f32 time_scale, TimerTimeout timer_timeout_function, void* timeout_data, size_t timeout_data_size){
+    TimerHandle handle = gen_id_allocator_alloc(&manager->gen_id_allocator);
+    if(handle == 0){
+        return handle;
+    }
+    
+    if(timeout_data_size > manager->timeout_data_element_size){
+        ASSERT(false, "attempted to alloc timer data that has a size greater than the allocated maximum size.");
+        return handle;
+    }
+    
+    i32 idx = gen_id_get_index(handle);
+    
+    // set timer callback data.
+    size_t timeout_data_idx = idx * manager->timeout_data_element_size;
+    BOUNDS_CHECK(timeout_data_idx, manager->timeout_data_length);
+    COPY_MEMORY(manager->timeout_data + timeout_data_idx, timeout_data, timeout_data_size);
+    
+    // set the timer state.
+    manager->current_time[idx] = start_time;
+    manager->previous_time[idx] = 0.0f;
+    manager->is_ticking[idx] = TIMER_MANAGER_IS_TICKING_TRUE;
+    manager->has_started[idx] = TIMER_MANAGER_HAS_STARTED_TRUE;
+    manager->timeout_function[idx] = timer_timeout_function;
+    
+    return handle;
+}
+
+/*
+    `returns`
+    true, if the timer was successfully stopped; otherwise false, if it was already stopped.
+*/
+bool timer_manager_timer_stop_unsafe(TimerManager* manager, i32 timer_idx){
+    BOUNDS_CHECK(timer_idx, manager->length);
+    if(manager->has_started[timer_idx] == TIMER_MANAGER_HAS_STARTED_FALSE){
+        return false;
+    }
+    manager->has_started[timer_idx]         = TIMER_MANAGER_HAS_STARTED_FALSE;
+    manager->is_ticking[timer_idx]          = TIMER_MANAGER_IS_TICKING_FALSE;
+    manager->current_time[timer_idx]        = 0.0f;
+    manager->previous_time[timer_idx]       = 0.0f;
+    manager->timeout_function[timer_idx]    = NULL; 
+    gen_id_allocator_dealloc_unsafe(&manager->gen_id_allocator, timer_idx);
+    return true;
+}
+
+/*
+    `returns`
+    true, if the timer was successfully stopped; otherwise false, if the `handle` is invalid.
+*/
+bool timer_manager_timer_stop(TimerManager* manager, TimerHandle handle){
+    if(gen_id_allocator_is_gen_id_invalid(&manager->gen_id_allocator, handle)){
+        return false;
+    }
+    i32 idx = gen_id_get_index(handle);
+    return timer_manager_timer_stop_unsafe(manager, idx);
+}
+
+/*
+    `returns`
+    true, if the timer was successfully paused; otherwise false, if the `handle` is invalid.
+*/
+bool timer_manager_timer_pause(TimerManager* manager, TimerHandle handle){
+    if(gen_id_allocator_is_gen_id_invalid(&manager->gen_id_allocator, handle)){
+        return false;
+    }
+    i32 idx = gen_id_get_index(handle);
+    BOUNDS_CHECK(idx, manager->length);
+    if(manager->has_started[idx] == TIMER_MANAGER_HAS_STARTED_FALSE){
+        return false;
+    }
+    manager->is_ticking[idx] = TIMER_MANAGER_IS_TICKING_FALSE;
+    return true;
+}
+
+/*
+    `returns`
+    true, if the timer was successfully resumed; otherwise false, if the `handle` is invalid.
+*/
+bool timer_manager_timer_resume(TimerManager* manager, TimerHandle handle){
+    if(gen_id_allocator_is_gen_id_invalid(&manager->gen_id_allocator, handle)){
+        return false;
+    }
+    i32 idx = gen_id_get_index(handle);
+    BOUNDS_CHECK(idx, manager->length);
+    if(manager->has_started[idx] == TIMER_MANAGER_HAS_STARTED_FALSE){
+        return false;
+    }    
+    manager->is_ticking[idx] = TIMER_MANAGER_IS_TICKING_TRUE;
+    return true;
+}
+
+void timer_manager_update(TimerManager* manager, f32 delta_time){
+    COPY_MEMORY(manager->previous_time, manager->current_time, manager->length * sizeof(f32));
+    simd_f32_store_val(manager->delta_time_scratch_space, manager->length, delta_time);
+    simd_f32_mul(manager->delta_time_scratch_space, manager->delta_time_scratch_space, manager->time_scale, manager->length, 0);
+    simd_f32_mul(manager->delta_time_scratch_space, manager->delta_time_scratch_space, manager->is_ticking, manager->length, 0);
+    simd_f32_mul(manager->delta_time_scratch_space, manager->delta_time_scratch_space, manager->has_started, manager->length, 0);
+    simd_f32_sub_val_clamped_sse(manager->current_time, delta_time, manager->current_time, 0.0f, manager->length);
+    for(i32 i = 0; i < manager->length; i++){
+        if(manager->has_started[i] == TIMER_MANAGER_HAS_STARTED_FALSE){
+            continue;
+        }
+        if(manager->is_ticking[i] == TIMER_MANAGER_IS_TICKING_FALSE){
+            continue;
+        }
+        if(manager->current_time[i] != 0.0f){
+            continue;
+        }
+        if(manager->previous_time[i] <= manager->current_time[i]){
+            continue;
+        }
+        if(manager->timeout_function[i] != NULL){
+            i32 timeout_data_idx = i * manager->timeout_data_element_size;
+            BOUNDS_CHECK(timeout_data_idx, manager->timeout_data_length);
+            manager->timeout_function[i](&manager->timeout_data[timeout_data_idx]);
+        }
+        timer_manager_timer_stop_unsafe(manager, i);
+    }
+}
+
+bool timer_manager_timer_has_started(TimerManager manager, TimerHandle handle){
+    if(gen_id_allocator_is_gen_id_invalid(&manager.gen_id_allocator, handle)){
+        return false;
+    }
+    i32 idx = gen_id_get_index(handle);
+    BOUNDS_CHECK(idx, manager.length);
+    return manager.has_started[idx] == TIMER_MANAGER_HAS_STARTED_TRUE;
+}
+
+/*
+    `returns`
+    true if the timer is ticking; otherwise false if it isnt or the handle is invalid.
+*/
+bool timer_manager_timer_is_ticking(TimerManager manager, TimerHandle handle){
+    if(gen_id_allocator_is_gen_id_invalid(&manager.gen_id_allocator, handle)){
+        return false;
+    }
+    i32 idx = gen_id_get_index(handle);
+    BOUNDS_CHECK(idx, manager.length);
+    if(manager.has_started[idx] == TIMER_MANAGER_HAS_STARTED_FALSE){
+        return false;
+    }  
+    return manager.is_ticking[idx] == TIMER_MANAGER_IS_TICKING_TRUE;
+}
+
+/*
+    `returns`
+    true, if the timer's time scale was successfully set; otherwise false.
+*/
+bool timer_manager_timer_set_time_scale(TimerManager* manager, TimerHandle handle, f32 time_scale){
+    if(gen_id_allocator_is_gen_id_invalid(&manager->gen_id_allocator, handle)){
+        return false;
+    }
+    i32 idx = gen_id_get_index(handle);
+    BOUNDS_CHECK(idx, manager->length);
+    manager->time_scale[idx] = time_scale;
+    return true;
+}
+
+/*
+    `returns`
+    the delta time between updates that the timer ticked by; otherwise 0 if the timer didn't tick or the handle is invalid.
+*/
+f32 timer_manager_timer_get_delta_tick_time(TimerManager manager, TimerHandle handle){
+    if(gen_id_allocator_is_gen_id_invalid(&manager.gen_id_allocator, handle)){
+        return 0.0f;
+    }
+    i32 idx = gen_id_get_index(handle);
+    BOUNDS_CHECK(idx, manager.length);
+    return ABS(manager.previous_time[idx] - manager.current_time[idx]);
+}
+
+inline bool timer_manager_is_timer_handle_invalid(TimerManager manager, TimerHandle handle){
+    return gen_id_allocator_is_gen_id_invalid(&manager.gen_id_allocator, handle);
+}
+
+
+
+
 
 GenId entity_manager_alloc_entity(EntityManager* manager, GenId parent){
     GenId gid = gen_id_allocator_alloc(&manager->gen_id_allocator);
@@ -379,32 +629,60 @@ GenId entity_spawn_level_root(EntityManager* entity_manager, GFX_State* gfx_ctx,
     return entity_gid;
 }
 
+typedef struct{
+    EntityManager* entity_manager;
+    GenId entity_gid;
+} PigInvincibleTimerTimeoutContext;
+
+void pig_invincible_timer_timeout(void* user_data){
+    PigInvincibleTimerTimeoutContext* ctx = (PigInvincibleTimerTimeoutContext*)user_data;
+    Entity* entity;
+    if(!entity_manager_get_entity(*ctx->entity_manager, ctx->entity_gid, &entity)){
+        return;
+    }
+    entity->is_invincible = false;
+}
+
 void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
     GenId* entity_gid = (GenId*)info.target_user_data;
 
-    if((info.source_layer & PHYSICS_LAYER_PLAYER) != 0){
-        Entity* entity;
-        if(!entity_manager_get_entity(*ctx->entity_manager, *entity_gid, &entity)){
-            ASSERT(false, "failed to get entity.");
-        }
-        ASSERT(entity->is_health, "entity doesnt use health.");
-        entity->health -= 1;
-        
-        if(entity->health <= 0){
-            entity_manager_dealloc_entity(ctx->entity_manager, *entity_gid);
-            game_state.alive_enemies-=1;
-            if(game_state.alive_enemies <= 0){
-                platform_output_message("WIN!");
-            }
-        }
-        else if(entity->health <= 1){
-            gfx_sprite_set_region(ctx->gfx_state, entity->sprite_id, GFX_SPRITE_REGION_PIG_CRITICAL);
-        }
-        else if(entity->health <= 2){
-            gfx_sprite_set_region(ctx->gfx_state, entity->sprite_id, GFX_SPRITE_REGION_PIG_HURT);        
-        }        
+    if((info.source_layer & PHYSICS_LAYER_PLAYER) == 0){
+        return;
     }
+    
+    Entity* entity;
+    if(!entity_manager_get_entity(*ctx->entity_manager, *entity_gid, &entity)){
+        ASSERT(false, "failed to get entity.");
+    }
+    if(entity->is_invincible){
+        return;
+    }
+
+    ASSERT(entity->is_health, "entity doesnt use health.");
+    entity->health -= 1;
+    
+    if(entity->health <= 0){
+        entity_manager_dealloc_entity(ctx->entity_manager, *entity_gid);
+        game_state.alive_enemies-=1;
+        if(game_state.alive_enemies <= 0){
+            platform_output_message("WIN!");
+        }
+    }
+    else if(entity->health <= 1){
+        gfx_sprite_set_region(ctx->entity_manager->gfx_state, entity->sprite_id, GFX_SPRITE_REGION_PIG_CRITICAL);
+    }
+    else if(entity->health <= 2){
+        gfx_sprite_set_region(ctx->entity_manager->gfx_state, entity->sprite_id, GFX_SPRITE_REGION_PIG_HURT);        
+    }
+    
+    PigInvincibleTimerTimeoutContext timeout_data = {
+        .entity_manager = ctx->entity_manager,
+        .entity_gid = *entity_gid
+    };
+    
+    entity->is_invincible = true;
+    timer_manager_timer_start(&ctx->entity_manager->timer_manager, 0.675f, 1.0f, pig_invincible_timer_timeout, &timeout_data, sizeof(timeout_data));
 }
 
 GenId entity_spawn_pig(EntityManager* entity_manager, GFX_State* gfx_ctx, String name, Transform2D transform, GenId parent){
@@ -550,7 +828,7 @@ void load_lvl(EntityManager* entity_manager, GFX_State* gfx, String file_path){
 
 void entity_manager_init(
     EntityManager* manager, MemoryArena* arena, GFX_State* gfx_state, 
-    i32 entity_amount, i32 physics_body_amount
+    i32 entity_amount, i32 physics_body_amount, i32 timer_timeout_data_size
 ){
     ASSERT(!manager->is_init, "already init.");
     
@@ -568,6 +846,7 @@ void entity_manager_init(
     manager->entity_hierarchy.on_dealloc_callback = entity_on_entity_hierarchy_dealloc;
     manager->gfx_state = gfx_state;
     fizx_state_init(&manager->fizx_state, arena, entity_amount, 4, sizeof(GenId));
+    timer_manager_init(&manager->timer_manager, arena, entity_amount, timer_timeout_data_size);
     manager->is_init = true;
 }
 

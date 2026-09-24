@@ -201,8 +201,6 @@ void app_late_update(f32 delta_time){
 
 void app_main(){
 
-
-
     /**
         memory allocation.
     **/
@@ -269,7 +267,8 @@ void app_main(){
     i32 entity_amount = 2048;
     i32 physics_body_amount = 128;
     entity_manager = (EntityManager){0};
-    entity_manager_init(&entity_manager, persistent, &gfx_state, entity_amount, physics_body_amount);
+    i32 timeout_data_element_size = 512;
+    entity_manager_init(&entity_manager, persistent, &gfx_state, entity_amount, physics_body_amount, timeout_data_element_size);
     
     // GenId entity_shape_gid = fizx_circle_rigid_alloc(&entity_manager.fizx_state, circle, transform_to_transform2d(shape_transform), FIZX_ShapeBehaviour_Dynamic, material, dynamic_body_gid, true);
 
@@ -322,7 +321,7 @@ void app_main(){
     // entity_manager_dealloc_entity(&entity_manager, level_gid);
 
     // entity_spawn_pig(&entity_manager, &gfx_state, (String){0}, TRANSFORM2D_IDENTITY, 0);
-
+    
     u128 prev_process_tick_in_mili  = 0;
     f32 previous_time_in_seconds    = 0.0f;
     f32 fixed_update_accumulator    = 0.0f;
@@ -349,7 +348,7 @@ void app_main(){
 
             while(fixed_update_accumulator >= FIXED_DELTA_TIME){
                 app_fixed_update(FIXED_DELTA_TIME);
-                CollisionCallbackContext collision_callback_ctx = {.entity_manager = &entity_manager, .gfx_state = &gfx_state};
+                CollisionCallbackContext collision_callback_ctx = {.entity_manager = &entity_manager};
                 fizx_state_fixed_update(&entity_manager.fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME, 32);
                 fixed_update_accumulator -= FIXED_DELTA_TIME;
             }
@@ -358,6 +357,7 @@ void app_main(){
         // update.
         {
             input_update();
+            timer_manager_update(&entity_manager.timer_manager, delta_time);
             
             if(input_is_key_just_pressed(KEY_1)){
                 fizx_draw_state.draw_bvh_branches = !fizx_draw_state.draw_bvh_branches;

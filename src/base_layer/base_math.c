@@ -1650,11 +1650,11 @@ void soa_aabb_reset_count(Soa_Aabb* soa){
 
 void soa_aabb_calculate_centroids(Soa_Aabb* soa, f32* out_x, f32* out_y){
 
-    simd_add_f32(soa->max_x, soa->min_x, out_x, soa->length);
-    simd_mul_val_f32(out_x, 0.5f, out_x, soa->length);
+    simd_f32_add(out_x, soa->max_x, soa->min_x, soa->length, 0);
+    simd_f32_mul_val(out_x, out_x, 0.5f, soa->length, 0);
 
-    simd_add_f32(soa->max_y, soa->min_y, out_y, soa->length);
-    simd_mul_val_f32(out_y, 0.5f, out_y, soa->length);
+    simd_f32_add(out_y, soa->max_y, soa->min_y, soa->length, 0);
+    simd_f32_mul_val(out_y, out_y, 0.5f, soa->length, 0);
 }
 
 
