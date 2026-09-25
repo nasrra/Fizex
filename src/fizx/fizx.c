@@ -20,10 +20,12 @@ typedef struct{
     f32 depth;
     
     i32 source_layer;
+    // this is the entity index of the `source` in the fizx state.
     i32 source_entity_idx;
     void* source_user_data;
     
     i32 target_layer;
+    // this is the entity index of the `target` in the fizx state.
     i32 target_entity_idx;
     void* target_user_data;
     

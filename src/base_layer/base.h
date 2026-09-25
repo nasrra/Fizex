@@ -550,13 +550,13 @@ typedef enum {
     Data data = {0};
     PUSH_STRUCT_MEMARENA(&arena, data);
 */
-#define MEMORY_ARENA_PUSH_STRUCT(arena, data) do {                                                  \
+#define MEMORY_ARENA_PUSH_STRUCT(arena, data, out_dst) do {                                         \
                                                                                                     \
     size_t MEMORY_ARENA_PUSH_STRUCT_size = sizeof(data);                                            \
     size_t MEMORY_ARENA_PUSH_STRUCT_new_stride = (arena)->stride + MEMORY_ARENA_PUSH_STRUCT_size;   \
     if(MEMORY_ARENA_PUSH_STRUCT_new_stride <= (arena)->size){                                       \
-        void* dst = (void*)((u8*)(arena)->ptr + (arena)->stride);                                   \
-        COPY_MEMORY(dst, &(data), MEMORY_ARENA_PUSH_STRUCT_size);                                   \
+        out_dst = (void*)((u8*)(arena)->ptr + (arena)->stride);                                     \
+        COPY_MEMORY(out_dst, &(data), MEMORY_ARENA_PUSH_STRUCT_size);                               \
         (arena)->stride = MEMORY_ARENA_PUSH_STRUCT_new_stride;                                      \
     }                                                                                               \
     else{                                                                                           \

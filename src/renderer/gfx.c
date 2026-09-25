@@ -5,6 +5,15 @@
 
 
 #include "vendors/webgpu/webgpu.h"
+/*
+    Disable MSVC's implicit cast warnings as Nic Barker wrote this and I trust him.
+*/
+#pragma warning(push)
+#pragma warning(disable: 4244)
+#pragma warning(disable: 4305)
+    #define CLAY_IMPLEMENTATION
+    #include "vendors/clay/clay.h"
+#pragma warning(pop)
 
 /*====================
     types.
@@ -397,6 +406,12 @@ typedef struct{
     Rectangle destination_rectangle;
     GFX_Camera world_camera;
     GFX_Camera screen_camera;
+    /*
+        the window that this gfx_state has been linked to.
+    */
+    WindowContext* window_ctx;
+    Clay_Context* clay_game_ui_ctx;
+    Clay_Context* clay_editor_ui_ctx;
     bool is_init;
 } GFX_State;
 
@@ -1349,24 +1364,25 @@ void gfx_configure_window_surface(GFX_WindowSurface* surface, WGPUDevice device,
     wgpuSurfaceCapabilitiesFreeMembers(capabilities);
 }
 
-void gfx_link_to_window(GFX_State* ctx, WindowContext window_ctx, u32 window_width, u32 window_height){
-    if(ctx->window_surface.is_init){
-        wgpuSurfaceRelease(ctx->window_surface.surface);
+void gfx_link_to_window(GFX_State* state, WindowContext* window_ctx){
+    if(state->window_surface.is_init){
+        wgpuSurfaceRelease(state->window_surface.surface);
     }
 
     WGPUSurfaceDescriptor surface_desc = {0};
     WGPUSurfaceSourceWindowsHWND win32_desc = {0};
 #if OS_WINDOWS
     win32_desc.chain = (WGPUChainedStruct){.sType = WGPUSType_SurfaceSourceWindowsHWND};
-    win32_desc.hinstance = window_ctx.win32_hinstance;
-    win32_desc.hwnd = window_ctx.win32_hwnd;
+    win32_desc.hinstance = window_ctx->win32_hinstance;
+    win32_desc.hwnd = window_ctx->win32_hwnd;
     surface_desc.nextInChain = (WGPUChainedStruct*)&win32_desc;
 #else
 #   error OS not set up.
 #endif
     // initialise render specifics.
-    gfx_window_surface_init(&ctx->window_surface, ctx->instance, surface_desc, window_width, window_height);
-    gfx_configure_window_surface(&ctx->window_surface, ctx->device, ctx->adapter, window_width, window_height);
+    gfx_window_surface_init(&state->window_surface, state->instance, surface_desc, window_ctx->width, window_ctx->height);
+    gfx_configure_window_surface(&state->window_surface, state->device, state->adapter, window_ctx->width, window_ctx->height);
+    state->window_ctx = window_ctx;
 }
 
 void gfx_texture_init(GFX_Texture* texture, WGPUDevice device, WGPUTextureFormat format, WGPUTextureUsage usage, WGPUTextureAspect aspect, u32 width, u32 height){
@@ -2544,7 +2560,7 @@ bool gfx_sprite_string_init(
 void gfx_state_init(
     GFX_State* ctx, GFX_StateInitInfo info,
     MemoryArena* persistent, MemoryArena* transient,
-    WindowContext window_ctx, u32 window_width, u32 window_height
+    WindowContext* window_ctx
 ){
 
     ASSERT(ctx->is_init == false, "cannot init an already init renderer ctx");
@@ -2567,7 +2583,7 @@ void gfx_state_init(
     gfx_index_buffer_init(&ctx->index_buffer, transient, ctx->device, ctx->sprite_manager.device_sprite_length);
     gfx_user_uniform_buffer_init(&ctx->user_uniform_buffer, ctx->device, info.max_user_uniform_buffer_size_in_bytes);
     gfx_user_storage_buffer_init(&ctx->user_storage_buffer, ctx->device, info.max_user_storage_buffer_size_in_bytes);
-    gfx_link_to_window(ctx, window_ctx, window_width, window_height);
+    gfx_link_to_window(ctx, window_ctx);
     gfx_final_render_target_init(&ctx->final_render_texture, ctx->device, info.final_render_texture_width, info.final_render_texture_height);
     gfx_depth_texture_init(&ctx->depth_texture, ctx->device, info.final_render_texture_width, info.final_render_texture_height);
     gfx_blit_pipeline_init(&ctx->blit_pipeline, ctx->window_surface, ctx->device, ctx->adapter);
@@ -3284,17 +3300,6 @@ Vector2 gfx_get_mouse_world_position(GFX_State* ctx){
 
 
 
-/*
-    Disable MSVC's implicit cast warnings as Nic Barker wrote this and I trust him.
-*/
-#pragma warning(push)
-#pragma warning(disable: 4244)
-#pragma warning(disable: 4305)
-    #define CLAY_IMPLEMENTATION
-    #include "vendors/clay/clay.h"
-#pragma warning(pop)
-
-
 const Clay_Color COLOR_LIGHT = {224, 215, 210, 255};
 const Clay_Color COLOR_RED = {168, 66, 28, 255};
 const Clay_Color COLOR_ORANGE = {225, 138, 50, 255};
@@ -3336,14 +3341,17 @@ static inline Clay_Dimensions gfx_clay_measure_text(Clay_StringSlice text, Clay_
     };
 }
 
-void gfx_clay_init(size_t clay_arena_size, i32 screen_height, i32 screen_width){
+Clay_Context* gfx_clay_create_context(size_t clay_arena_size, i32 screen_height, i32 screen_width){
+    // TODO: this should change to use the persistent memory arena.
     Clay_Arena arena = Clay_CreateArenaWithCapacityAndMemory(clay_arena_size, platform_alloc_memory(clay_arena_size));
-    Clay_Initialize(
+    Clay_Context* ctx = Clay_Initialize(
         arena,
         (Clay_Dimensions){(f32)screen_width, (f32)screen_height},
         (Clay_ErrorHandler){gfxclay_handle_errors}
     );
+    Clay_SetCurrentContext(ctx);
     Clay_SetMeasureTextFunction(gfx_clay_measure_text, NULL);
+    return ctx;
 }
 
 GFX_Colour gfx_clay_clay_to_gfx_colour(Clay_Color clay_colour){
@@ -3385,12 +3393,13 @@ void gfx_clay_end_layout(GFX_State* gfx_state, f32 delta_time, i32 sprite_layer,
     // More comprehensive rendering examples can be found in the renderers/ directory
     for (int i = 0; i < renderCommands.length; i++) {
         Clay_RenderCommand *renderCommand = &renderCommands.internalArray[i];
+        f32 depth = (f32)renderCommands.length-i;
 
         switch (renderCommand->commandType) {
             case CLAY_RENDER_COMMAND_TYPE_RECTANGLE: {
                 GFX_Colour colour = gfx_clay_clay_to_gfx_colour(renderCommand->renderData.rectangle.backgroundColor);
                 Rectangle rect = gfx_clay_clay_to_rectangle(renderCommand->boundingBox);
-                gfx_draw_fill_rect(gfx_state, rect, colour, GFX_SpriteOrigin_TopLeft, (f32)i+1, sprite_layer, widget_material);
+                gfx_draw_fill_rect(gfx_state, rect, colour, GFX_SpriteOrigin_TopLeft, depth, sprite_layer, widget_material);
             }break;
             case CLAY_RENDER_COMMAND_TYPE_TEXT:{
                 Rectangle rect = gfx_clay_clay_to_rectangle(renderCommand->boundingBox);
@@ -3409,7 +3418,7 @@ void gfx_clay_end_layout(GFX_State* gfx_state, f32 delta_time, i32 sprite_layer,
                 gfx_sprite_string_init(
                     gfx_state, text_sprite, str,
                     sprite_string_transform,
-                    1, text_material, 0.0f, true
+                    1, text_material, depth, true
                 );                
             }break;
             default:{

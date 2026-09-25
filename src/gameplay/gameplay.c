@@ -1,3 +1,8 @@
+///
+/// todo:
+/// bird damage per km/h or speed lol, do it.
+///
+
 
 
 
@@ -22,19 +27,6 @@ typedef struct{
     i32 clicked_entity_idx;
     Vector2 clicked_entity_initial_position;
 } GameMouseState;
-
-typedef struct{
-    // the entity_id of the entity to spawn. 
-    EntityTypeId entity_to_spawn;    
-    GenId entity_parent_gid;
-} EditorMouseState;
-
-typedef struct{
-    bool is_editor_mode;
-    EditorMouseState editor_mouse_state;
-    GameMouseState mouse_state;
-    i32 alive_enemies;
-} GameState;
 
 typedef struct{
     String name;
@@ -100,27 +92,24 @@ typedef struct{
     i32 deserialised_entity_count;
     GenIdAllocator gen_id_allocator;
     FIZX_State fizx_state;
+    FIZX_DrawInfo fizx_draw_state;
     GFX_State* gfx_state;
     TimerManager timer_manager;
     IntrusiveList entity_hierarchy;
+    i32 alive_enemies;
     bool is_init;
 } EntityManager;
 
 typedef struct{
+    GameMouseState mouse_state;
+    EntityManager entity_manager;
+    f32 time_scale;
+    bool is_init;
+} GameState;
+
+typedef struct{
     EntityManager* entity_manager;
 } CollisionCallbackContext;
-
-
-
-
-///
-/// Globals.
-///
-
-
-
-
-GameState game_state;
 
 
 
@@ -144,7 +133,17 @@ GameState game_state;
 #define TIMER_MANAGER_HAS_STARTED_TRUE 1.0f
 // timer manager's `has_started` value that indicates a boolean `false`.
 #define TIMER_MANAGER_HAS_STARTED_FALSE 0.0f
-
+/**
+    The amount of time in miliseconds that each fixed update should move forwards by.
+**/
+#define FIXED_DELTA_TIME 0.01666666666666666666666666666667f
+/**
+    The amount of time that has to be store in the fixed update accumulator
+    (in milliseconds) before slowing down the game; avoiding the "spiral of death".
+    note that the value is not greater than or equal to the FixedDt * 2,
+    this is so that two fixed update steps are never called at a single time.
+**/
+#define DELTA_TIME_ACCUMULATOR_SLOW_DOWN 0.0333147881012903f
 
 
 
@@ -170,6 +169,18 @@ GameState game_state;
 #define GFX_SPRITE_REGION_PIG_HEALTHY (GFX_SpriteRegion){.top_left = {692, 855}, .bot_right = {740, 901}}
 #define GFX_SPRITE_REGION_PIG_HURT (GFX_SpriteRegion){.top_left = {692, 902}, .bot_right = {740, 948}}
 #define GFX_SPRITE_REGION_PIG_CRITICAL (GFX_SpriteRegion){.top_left = {752, 846}, .bot_right = {800, 892}}
+
+
+
+
+///
+/// globals.
+///
+
+
+
+
+static f32 fixed_update_accumulator = 0.0f;
 
 
 
@@ -461,7 +472,7 @@ bool entity_manager_get_entity(EntityManager manager, GenId entity_gid, Entity**
     return true;
 }
 
-void entity_manager_debug_draw(EntityManager manager, GFX_State* gfx, f32 delta_time){
+void entity_manager_debug_draw(EntityManager manager, f32 delta_time){
 #if 0
     for(i32 i = 0; i < manager.entity_length; i++){
         Entity* entity = &manager.entity[i];
@@ -472,13 +483,13 @@ void entity_manager_debug_draw(EntityManager manager, GFX_State* gfx, f32 delta_
                 .width = entity->clickable_aabb.max_x - entity->clickable_aabb.min_x,
                 .height = entity->clickable_aabb.max_y - entity->clickable_aabb.min_y
             };
-            gfx_draw_wire_rect(gfx, shape , GFX_COLOUR_WHITE, 0.0f, SPRITE_LAYER_WORLD, SPRITE_MATERIAL_DEBUG);
+            gfx_draw_wire_rect(entity_manager.gfx_state, shape , GFX_COLOUR_WHITE, 0.0f, SPRITE_LAYER_WORLD, SPRITE_MATERIAL_DEBUG);
         }
     }
 #endif
 }
 
-GenId entity_spawn_red_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, String name, Transform2D transform, GenId parent){
+GenId entity_spawn_red_bird(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
     // clickable entity (angry bird).
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
@@ -502,21 +513,19 @@ GenId entity_spawn_red_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, S
         entity->is_clickable = true;
         entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
 
-        Transform2D sprite_transform = TRANSFORM2D_IDENTITY;
-        // sprite_transform.scale = vector2_mul_val(sprite_transform.scale, 1000.0f);
         entity->sprite_depth = 1.0f;
         bool success = false;
-        entity->sprite_id = gfx_sprite_alloc(gfx_ctx, SPRITE_LAYER_WORLD, &success);
+        entity->sprite_id = gfx_sprite_alloc(entity_manager->gfx_state, SPRITE_LAYER_WORLD, &success);
         GFX_SpriteRegion region = {.top_left = {863, 797}, .bot_right = {863 + 45, 797 + 45}};
         gfx_sprite_init(
-            gfx_ctx, entity->sprite_id, sprite_transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
+            entity_manager->gfx_state, entity->sprite_id, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
             GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_TEST_SHEET, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
         );
     }
     return entity_gid;
 }
 
-GenId entity_spawn_yellow_bird(EntityManager* entity_manager, GFX_State* gfx_ctx, String name, Transform2D transform, GenId parent){
+GenId entity_spawn_yellow_bird(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
     // clickable entity (angry bird).
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
@@ -540,21 +549,19 @@ GenId entity_spawn_yellow_bird(EntityManager* entity_manager, GFX_State* gfx_ctx
         entity->is_clickable = true;
         entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
 
-        Transform2D sprite_transform = TRANSFORM2D_IDENTITY;
-        // sprite_transform.scale = vector2_mul_val(sprite_transform.scale, 1000.0f);
         entity->sprite_depth = 1.0f;
         bool success = false;
-        entity->sprite_id = gfx_sprite_alloc(gfx_ctx, SPRITE_LAYER_WORLD, &success);
+        entity->sprite_id = gfx_sprite_alloc(entity_manager->gfx_state, SPRITE_LAYER_WORLD, &success);
         GFX_SpriteRegion region = {.top_left = {629, 879}, .bot_right = {629 + 58, 879 + 53}};
         gfx_sprite_init(
-            gfx_ctx, entity->sprite_id, sprite_transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
+            entity_manager->gfx_state, entity->sprite_id, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
             GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_TEST_SHEET, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
         );
     }
     return entity_gid;
 }
 
-GenId entity_spawn_wood_block(EntityManager* entity_manager, GFX_State* gfx_ctx, String name, Transform2D transform, GenId parent){
+GenId entity_spawn_wood_block(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     entity_manager_get_entity(*entity_manager, entity_gid, &entity);
@@ -573,14 +580,12 @@ GenId entity_spawn_wood_block(EntityManager* entity_manager, GFX_State* gfx_ctx,
         entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, shape_transform, FIZX_ShapeBehaviour_Dynamic, &entity_gid, PHYSICS_LAYER_ENVIRONMENT, square, material, true);
         
-        Transform2D sprite_transform = TRANSFORM2D_IDENTITY;
-        // sprite_transform.scale = vector2_mul_val(sprite_transform.scale, 1000.0f);
         entity->sprite_depth = 1.0f;
         bool success = false;
-        entity->sprite_id = gfx_sprite_alloc(gfx_ctx, SPRITE_LAYER_WORLD, &success);
+        entity->sprite_id = gfx_sprite_alloc(entity_manager->gfx_state, SPRITE_LAYER_WORLD, &success);
         GFX_SpriteRegion region = {.bot_right = {.x = 150, .y = 150}};
         gfx_sprite_init(
-            gfx_ctx, entity->sprite_id, sprite_transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
+            entity_manager->gfx_state, entity->sprite_id, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
             GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_WOOD_BLOCK, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
         );
     }
@@ -588,7 +593,7 @@ GenId entity_spawn_wood_block(EntityManager* entity_manager, GFX_State* gfx_ctx,
 }
 
 
-GenId entity_spawn_invisible_wall(EntityManager* entity_manager, GFX_State* gfx_ctx, String name, Transform2D transform, GenId parent){
+GenId entity_spawn_invisible_wall(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     entity_manager_get_entity(*entity_manager, entity_gid, &entity);
@@ -618,7 +623,7 @@ GenId entity_spawn_invisible_wall(EntityManager* entity_manager, GFX_State* gfx_
     return entity_gid;
 }
 
-GenId entity_spawn_level_root(EntityManager* entity_manager, GFX_State* gfx_ctx, String name, Transform2D transform, GenId parent){
+GenId entity_spawn_level_root(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     entity_manager_get_entity(*entity_manager, entity_gid, &entity);
@@ -659,13 +664,17 @@ void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
         return;
     }
 
+    // Vector2 velocity = fizx_body_get_linear_velocity_unsafe(ctx->entity_manager->fizx_state, info.target_entity_idx);
+    // f32 magnitude = vector2_len(velocity);
+    // f32 damage = magnitude
+
     ASSERT(entity->is_health, "entity doesnt use health.");
     entity->health -= 1;
     
     if(entity->health <= 0){
         entity_manager_dealloc_entity(ctx->entity_manager, *entity_gid);
-        game_state.alive_enemies-=1;
-        if(game_state.alive_enemies <= 0){
+        ctx->entity_manager->alive_enemies-=1;
+        if(ctx->entity_manager->alive_enemies <= 0){
             platform_output_message("WIN!");
         }
     }
@@ -685,7 +694,7 @@ void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
     timer_manager_timer_start(&ctx->entity_manager->timer_manager, 0.675f, 1.0f, pig_invincible_timer_timeout, &timeout_data, sizeof(timeout_data));
 }
 
-GenId entity_spawn_pig(EntityManager* entity_manager, GFX_State* gfx_ctx, String name, Transform2D transform, GenId parent){
+GenId entity_spawn_pig(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     entity_manager_get_entity(*entity_manager, entity_gid, &entity);
@@ -708,21 +717,20 @@ GenId entity_spawn_pig(EntityManager* entity_manager, GFX_State* gfx_ctx, String
         entity->is_health = true;
         entity->health = 3;
 
-        Transform2D sprite_transform = TRANSFORM2D_IDENTITY;
         entity->sprite_depth = 1.0f;
         bool success = false;
-        entity->sprite_id = gfx_sprite_alloc(gfx_ctx, SPRITE_LAYER_WORLD, &success);
+        entity->sprite_id = gfx_sprite_alloc(entity_manager->gfx_state, SPRITE_LAYER_WORLD, &success);
         GFX_SpriteRegion region = GFX_SPRITE_REGION_PIG_HEALTHY;
         gfx_sprite_init(
-            gfx_ctx, entity->sprite_id, sprite_transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
+            entity_manager->gfx_state, entity->sprite_id, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
             GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_TEST_SHEET, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
         );
     }
-    game_state.alive_enemies+=1;
+    entity_manager->alive_enemies+=1;
     return entity_gid;
 }
 
-void load_lvl(EntityManager* entity_manager, GFX_State* gfx, String file_path){
+void load_lvl(EntityManager* entity_manager, String file_path){
     /*
         .scsv are .csv files that are separated with ';' instead of ','
 
@@ -791,27 +799,27 @@ void load_lvl(EntityManager* entity_manager, GFX_State* gfx, String file_path){
             switch(deserialised_entity->entity_type_id){
                 case EntityTypeId_RedBird:{
                     deserialised_entity->entity_gid 
-                        = entity_spawn_red_bird(entity_manager, gfx, name, deserialised_entity->spawn_transform, parent_gid);
+                        = entity_spawn_red_bird(entity_manager, name, deserialised_entity->spawn_transform, parent_gid);
                 }break;
                 case EntityTypeId_YellowBird:{
                     deserialised_entity->entity_gid 
-                        = entity_spawn_yellow_bird(entity_manager, gfx, name, deserialised_entity->spawn_transform, parent_gid);
+                        = entity_spawn_yellow_bird(entity_manager, name, deserialised_entity->spawn_transform, parent_gid);
                 }break;
                 case EntityTypeId_WoodBlock:{
                     deserialised_entity->entity_gid 
-                        = entity_spawn_wood_block(entity_manager, gfx, name, deserialised_entity->spawn_transform, parent_gid);
+                        = entity_spawn_wood_block(entity_manager, name, deserialised_entity->spawn_transform, parent_gid);
                 }break;
                 case EntityTypeId_InvisibleWall:{
                     deserialised_entity->entity_gid 
-                        = entity_spawn_invisible_wall(entity_manager, gfx, name, deserialised_entity->spawn_transform, parent_gid);
+                        = entity_spawn_invisible_wall(entity_manager, name, deserialised_entity->spawn_transform, parent_gid);
                 }break;
                 case EntityTypeId_Pig:{
                     deserialised_entity->entity_gid
-                        = entity_spawn_pig(entity_manager, gfx, name, deserialised_entity->spawn_transform, parent_gid);
+                        = entity_spawn_pig(entity_manager, name, deserialised_entity->spawn_transform, parent_gid);
                 }break;
                 case EntityTypeId_LevelRoot:{
                     deserialised_entity->entity_gid
-                        = entity_spawn_level_root(entity_manager, gfx, name, deserialised_entity->spawn_transform, parent_gid);
+                        = entity_spawn_level_root(entity_manager, name, deserialised_entity->spawn_transform, parent_gid);
                 }break;
                 default:{
                     ASSERT(false, "unknown entity type id.");
@@ -850,9 +858,131 @@ void entity_manager_init(
     manager->is_init = true;
 }
 
-void player_update(EntityManager* entity_manager, GFX_State* gfx_state, Vector2 mouse_world_position, f32 delta_time){
+void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena* transient, GFX_State* gfx_state){
+
+    ASSERT(!game_state->is_init, "already init.");
+
+    game_state->time_scale = 1.0f;
     
-    if(!game_state.is_editor_mode){
+    i32 entity_amount = 2048;
+    i32 physics_body_amount = 128;    
+    i32 timeout_data_element_size = 512;
+
+    game_state->entity_manager.fizx_draw_state = (FIZX_DrawInfo){
+        .colour_dynamic_shape           = GFX_COLOUR_GREEN,
+        .colour_passive_trigger_shape   = GFX_COLOUR_LIGHT_BLUE,
+        .colour_kinematic_shape         = GFX_COLOUR_ORANGE,
+        .colour_active_trigger_shape    = GFX_COLOUR_RED,
+        .colour_aabb                    = GFX_COLOUR_LIGHT_BLUE,
+        .colour_fallback_shape          = GFX_COLOUR_WHITE,
+        .colour_inactive_entity         = GFX_COLOUR_BLACK,
+        .colour_bvh_leaf                = GFX_COLOUR_WHITE,
+        .colour_bvh_branch              = GFX_COLOUR_LIGHT_GREEN,
+        .colour_contact_point           = GFX_COLOUR_RED,
+        .colour_linear_velocity         = GFX_COLOUR_WHITE,
+        .colour_global_position         = GFX_COLOUR_WHITE,
+        .colour_centroid                = GFX_COLOUR_YELLOW,
+        .colour_collision_other         = GFX_COLOUR_BLUE,
+        .colour_collision_normal        = GFX_COLOUR_LIGHT_BLUE,
+        .colour_center_of_mass          = GFX_COLOUR_ORANGE,
+        .sprite_layer                   = SPRITE_LAYER_WORLD,
+        .wireframe_thickness            = 0.005f,
+        .material_idx                   = SPRITE_MATERIAL_DEBUG,
+    };
+
+    entity_manager_init(&game_state->entity_manager, persistent, gfx_state, entity_amount, physics_body_amount, timeout_data_element_size);
+    game_state->is_init = true;
+}
+
+void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryArena* transient, f32 delta_time, bool in_editor_mode){
+
+    // hoisting invariance.
+    EntityManager* entity_manager = &game_state->entity_manager;
+    GFX_State* gfx_state = entity_manager->gfx_state;
+    FIZX_DrawInfo* fizx_draw_state = &entity_manager->fizx_draw_state;
+    TimerManager* timer_manager = &entity_manager->timer_manager;
+    FIZX_State* fizx_state = &entity_manager->fizx_state;
+
+    // retrieve necessary data.
+    Vector2 mouse_world_position = gfx_get_mouse_world_position(gfx_state);    
+
+    { // update fizx draw state.
+    
+        if(input_is_key_just_pressed(KEY_1)){
+            fizx_draw_state->draw_bvh_branches = !fizx_draw_state->draw_bvh_branches;
+        }
+        if(input_is_key_just_pressed(KEY_2)){
+            fizx_draw_state->draw_bvh_leaves = !fizx_draw_state->draw_bvh_leaves;
+        }
+        if(input_is_key_just_pressed(KEY_3)){
+            fizx_draw_state->draw_body_shapes = !fizx_draw_state->draw_body_shapes;
+        }
+        if(input_is_key_just_pressed(KEY_4)){
+            fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info; 
+        }
+    }
+
+    { // time management.
+        
+        if(input_is_key_pressed(KEY_SPACE)){
+            game_state->time_scale = 0.0f;
+        }
+        else if(input_is_key_pressed(KEY_F)) {
+            game_state->time_scale = 0.1f;
+        }
+        else{
+            game_state->time_scale = 1.0f;
+        }
+        
+        delta_time *= game_state->time_scale;
+        timer_manager_update(timer_manager, delta_time);
+    }
+
+
+    { // fixed update.
+        
+        fixed_update_accumulator += delta_time;
+        if(fixed_update_accumulator > DELTA_TIME_ACCUMULATOR_SLOW_DOWN){
+            fixed_update_accumulator = DELTA_TIME_ACCUMULATOR_SLOW_DOWN;
+        }
+
+        while(fixed_update_accumulator >= FIXED_DELTA_TIME){
+
+            CollisionCallbackContext collision_callback_ctx = {.entity_manager = entity_manager};
+            fizx_state_fixed_update(fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME, 32);
+
+            fixed_update_accumulator -= FIXED_DELTA_TIME;
+        }
+    }
+
+    { // move camera.
+        
+        f32 camera_speed = 1.0f * delta_time * gfx_state->world_camera.orthographic_size;
+        bool x = input_is_key_pressed(KEY_RIGHT);
+        if(input_is_key_pressed(KEY_DOWN))  {gfx_state->world_camera.position.y -= camera_speed;}    
+        if(input_is_key_pressed(KEY_Q))     {gfx_state->world_camera.orthographic_size -= gfx_state->world_camera.orthographic_size * 1.0f * delta_time;}
+        if(input_is_key_pressed(KEY_E))     {gfx_state->world_camera.orthographic_size += gfx_state->world_camera.orthographic_size * 1.0f * delta_time;}
+        if(input_is_key_pressed(KEY_RIGHT)) {gfx_state->world_camera.position.x += camera_speed;}
+        if(input_is_key_pressed(KEY_LEFT))  {gfx_state->world_camera.position.x -= camera_speed;}
+        if(input_is_key_pressed(KEY_UP))    {gfx_state->world_camera.position.y += camera_speed;}
+    }
+
+    { // set entity transforms to their physics body's transforms.
+        
+        for(i32 i = 0; i < entity_manager->entity_length; i++){
+            Entity* entity = &entity_manager->entity[i];
+            if(entity->physics_body_gid != 0){
+                Transform2D transform2d;
+                if(fizx_body_get_transform(fizx_state, entity->physics_body_gid, &transform2d)){
+                    entity->transform = transform2d;
+                }
+            }
+        }
+    }
+
+    if(!in_editor_mode)
+    { // player game update.
+        
         if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)){
             for(i32 e_idx = 0; e_idx < entity_manager->entity_length; e_idx++){
                 Entity* entity = &entity_manager->entity[e_idx];
@@ -860,322 +990,112 @@ void player_update(EntityManager* entity_manager, GFX_State* gfx_state, Vector2 
                 if(aabb_overlaps_point(world_aabb, mouse_world_position)){
                     platform_output_message("clicked entity\n");
                     if(entity->is_physics_body){
-                        fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, false);
+                        fizx_body_set_active(fizx_state, entity->physics_body_gid, false);
                     }
-                    game_state.mouse_state.clicked_entity_initial_position = entity->transform.position;
-                    game_state.mouse_state.clicked_entity_idx = e_idx;
+                    game_state->mouse_state.clicked_entity_initial_position = entity->transform.position;
+                    game_state->mouse_state.clicked_entity_idx = e_idx;
                 }
             }
         }
         
         Vector2 impulse_magnitude;
         
-        if(game_state.mouse_state.clicked_entity_idx){
-            Entity* entity = &entity_manager->entity[game_state.mouse_state.clicked_entity_idx];
-            Vector2 position_diff = vector2_sub(game_state.mouse_state.clicked_entity_initial_position, mouse_world_position);
+        if(game_state->mouse_state.clicked_entity_idx){
+            i32 entity_idx = game_state->mouse_state.clicked_entity_idx;
+            BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
+            Entity* entity = &entity_manager->entity[entity_idx];
+            Vector2 position_diff = vector2_sub(game_state->mouse_state.clicked_entity_initial_position, mouse_world_position);
             
             position_diff = vector2_clamp_to_radius(position_diff, PLAYER_MOUSE_MAX_DRAW_RADIUS);
             impulse_magnitude = vector2_mul_val(position_diff, PLAYER_MOUSE_LAUNCH_FORCE); 
             
-            Vector2 new_position = vector2_sub(game_state.mouse_state.clicked_entity_initial_position, position_diff);
+            Vector2 new_position = vector2_sub(game_state->mouse_state.clicked_entity_initial_position, position_diff);
                 
             entity->transform.position = new_position;
-            fizx_body_set_global_position(&entity_manager->fizx_state, entity->physics_body_gid, new_position);
+            fizx_body_set_global_position(fizx_state, entity->physics_body_gid, new_position);
         }
         
         if(input_is_mouse_button_just_released(MOUSE_BUTTON_LEFT)){
-            if(game_state.mouse_state.clicked_entity_idx > 0){
-                Entity* entity = &entity_manager->entity[game_state.mouse_state.clicked_entity_idx];
-                fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
-                game_state.mouse_state.clicked_entity_idx = 0;
-                fizx_body_clear_forces_and_velocities(&entity_manager->fizx_state, entity->physics_body_gid);
+            if(game_state->mouse_state.clicked_entity_idx > 0){
+                i32 entity_idx = game_state->mouse_state.clicked_entity_idx; 
+                BOUNDS_CHECK(entity_idx, game_state->entity_manager.entity_length);
+                Entity* entity = &entity_manager->entity[entity_idx];
+                fizx_body_set_active(fizx_state, entity->physics_body_gid, true);
+                game_state->mouse_state.clicked_entity_idx = 0;
+                fizx_body_clear_forces_and_velocities(fizx_state, entity->physics_body_gid);
+                fizx_body_impulse_force(fizx_state,impulse_magnitude, entity->physics_body_gid);
+            }
+        }
+    }
+
+    { // set entity sprite transforms to their entity's transform.
+        
+        for(i32 i = 0; i < entity_manager->entity_length; i++){
+            Entity* entity = &entity_manager->entity[i];
+            if(!gfx_sprite_id_equals(entity->sprite_id, (GFX_SpriteId){0})){
+                gfx_sprite_set_transform(gfx_state, entity->sprite_id, entity->transform, entity->sprite_depth);
+            }
+        }
+    }
+}
+
+void game_state_late_update(GameState* game_state, f32 delta_time){
     
-                fizx_body_impulse_force(&entity_manager->fizx_state,impulse_magnitude, entity->physics_body_gid);
-            }
-        }
-    }
-    else{
-        if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)){
-            Transform2D spawn_transform = TRANSFORM2D_IDENTITY;
-            spawn_transform.position = mouse_world_position;
-            
-            if(game_state.editor_mouse_state.entity_parent_gid == 0){
-                return;
-            }
-            
-            switch(game_state.editor_mouse_state.entity_to_spawn){
-                case EntityTypeId_RedBird:{
-                    entity_spawn_red_bird(entity_manager, gfx_state, (String){.chars = "spawned red bird", .length = 16, .count = 16}, spawn_transform, game_state.editor_mouse_state.entity_parent_gid);
-                }break;
-                case EntityTypeId_YellowBird:{
-                    entity_spawn_yellow_bird(entity_manager, gfx_state, (String){.chars = "spawned yellow bird", .length = 19, .count = 19}, spawn_transform, game_state.editor_mouse_state.entity_parent_gid);
-                }break;
-                case EntityTypeId_WoodBlock:{
-                    entity_spawn_wood_block(entity_manager, gfx_state, (String){.chars = "spawned wood block", .length = 18, .count = 18}, spawn_transform, game_state.editor_mouse_state.entity_parent_gid);
-                }break;
-                case EntityTypeId_LevelRoot:{
-                    entity_spawn_level_root(entity_manager, gfx_state, (String){.chars = "spawned level", .length = 16, .count = 16}, spawn_transform, game_state.editor_mouse_state.entity_parent_gid);
-                }break;
-                case EntityTypeId_Pig:{
-                    entity_spawn_pig(entity_manager, gfx_state, (String){.chars = "spawned pig", .length = 11, .count = 11}, spawn_transform, game_state.editor_mouse_state.entity_parent_gid);
-                }break;
-            }
-        }
-    }
-}
-
-void editor_select_red_bird_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        game_state.editor_mouse_state.entity_to_spawn = EntityTypeId_RedBird;
-    }
-}
-
-void editor_select_yellow_bird_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        game_state.editor_mouse_state.entity_to_spawn = EntityTypeId_YellowBird;
-    }
-}
-
-void editor_select_wood_block_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        game_state.editor_mouse_state.entity_to_spawn = EntityTypeId_WoodBlock;
-    }
-}
-
-void editor_select_pig_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        game_state.editor_mouse_state.entity_to_spawn = EntityTypeId_Pig;
-    }
-}
-
-void editor_on_hover_select_level_button(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        game_state.editor_mouse_state.entity_parent_gid = *((GenId*)user_data);
-    }
-}
-
-void editor_save_level_entity_recurssive(
-    EntityManager* entity_manager, 
-    String file_path,
-    String* entity_char_buffer, 
-    char* char_scratch_space, i32 char_scratch_space_length, 
-    i32 entity_idx, i32 parent_line_idx, i32 line_idx
-){
-
-    // loop through branch level.
-    i32 first_idx = entity_idx;
-    while(true){    
-        BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
-        Entity* entity = &entity_manager->entity[entity_idx];
-        
-        i32 written = 0;
-        string_clear(entity_char_buffer);
-        
-        { // prepare entity data for serialisation.
-            
-            // entity name.
-            string_push(entity_char_buffer, entity->name);
-            string_push_chars(entity_char_buffer, ";", 1);
-            
-            // entity type id.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%i", entity->type_id);
-            string_push_chars(entity_char_buffer, char_scratch_space, written);
-            string_push_chars(entity_char_buffer, ";", 1);
-        
-            // parent idx.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%i", parent_line_idx);
-            string_push_chars(entity_char_buffer, char_scratch_space, written);
-            string_push_chars(entity_char_buffer, ";", 1);
-            
-            // transform position x.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->transform.position.x);
-            string_push_chars(entity_char_buffer, char_scratch_space, written);
-            string_push_chars(entity_char_buffer, ";", 1);
-        
-            // transform position y.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->transform.position.y);
-            string_push_chars(entity_char_buffer, char_scratch_space, written);
-            string_push_chars(entity_char_buffer, ";", 1);
-        
-            // transform scale x.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->transform.scale.x);
-            string_push_chars(entity_char_buffer, char_scratch_space, written);
-            string_push_chars(entity_char_buffer, ";", 1);
-        
-            // transform scale y.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->transform.scale.y);
-            string_push_chars(entity_char_buffer, char_scratch_space, written);
-            string_push_chars(entity_char_buffer, ";", 1);
-            
-            // transform rotation.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->transform.rotation);
-            string_push_chars(entity_char_buffer, char_scratch_space, written);
-            string_push_chars(entity_char_buffer, ";", 1);
-
-            // new line.
-            string_push_chars(entity_char_buffer, "\n", 1);
-        }
+    // hoisting invariance.
+    EntityManager* entity_manager = &game_state->entity_manager;
+    GFX_State* gfx_state = entity_manager->gfx_state;
     
-        { // write entity data to file.
-            platform_write_file(
-                file_path, 
-                entity_char_buffer->chars, 
-                entity_char_buffer->count, 
-                FileWriteType_Append
-            );
-        }
+    /**
+        NOTE:
+        this might have to be swapped for the final render target resolution, maybe idk.
+    **/
+    f32 aspect_ratio = platform_window_calc_aspect_ratio(*gfx_state->window_ctx);
+    gfx_camera_update_projection_matrix(&gfx_state->world_camera, aspect_ratio);
+    gfx_camera_update_projection_matrix(&gfx_state->screen_camera, aspect_ratio);
+
+    Ubo ubo = {
+        .world_camera_matrix =
+            matrix4x4_mul(
+                matrix4x4_mul(
+                    gfx_state->world_camera.projection,
+                    gfx_state->world_camera.view
+                ),
+            gfx_state->world_camera.model
+        ),
+        .screen_camera_matrix =
+            matrix4x4_mul(
+                matrix4x4_mul(
+                    gfx_state->screen_camera.projection,
+                    gfx_state->screen_camera.view
+                ),
+            gfx_state->screen_camera.model
+        ),
+        .world_camera_far_z     = gfx_state->world_camera.far_z,
+        .world_camera_near_z    = gfx_state->world_camera.near_z,
+    };
+
+    gfx_write_to_user_uniform_buffer(gfx_state, &ubo, sizeof(Ubo));
+}
+
+void game_state_draw(GameState* game_state, f32 delta_time){
     
-        BOUNDS_CHECK(entity_idx, entity_manager->entity_hierarchy.length);
-        IntrusiveListNode* node = &entity_manager->entity_hierarchy.node[entity_idx];
-        
-        line_idx += 1;
-        // go further into tree.
-        if(node->first_child != 0){
-            editor_save_level_entity_recurssive(
-                entity_manager, file_path, entity_char_buffer, char_scratch_space, char_scratch_space_length, node->first_child, line_idx, line_idx 
-            );
-        }
-        
-        // loop through branch level.
-        entity_idx = node->next_sibling;
-        if(entity_idx == first_idx){
-            break;
-        }
-    }
-}
+    EntityManager* entity_manager = &game_state->entity_manager;
+    GFX_State* gfx_state = entity_manager->gfx_state;
+    FIZX_State* fizx_state = &entity_manager->fizx_state;
+    FIZX_DrawInfo* fizx_draw_state = &entity_manager->fizx_draw_state;
 
-void editor_on_hover_save_level_button(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        
-        EntityManager* entity_manager = (EntityManager*)user_data;
+    fizx_state_draw(*fizx_state, gfx_state, *fizx_draw_state, delta_time);
 
-        i32 level_idx = gen_id_get_index(game_state.editor_mouse_state.entity_parent_gid);
-        
-        String entity_char_buffer = {
-            .chars = (char[LEVEL_FILE_LINE_LENGTH]){0},
-            .length = LEVEL_FILE_LINE_LENGTH  
-        };
-        char* char_scratch_space = (char[64]){0};
-        String file_path = {.chars = "assets/saved.scsv", .length = 17, .count = 17};
-        platform_delete_file(file_path);
-        
-        editor_save_level_entity_recurssive(
-            entity_manager, 
-            file_path,
-            &entity_char_buffer,
-            char_scratch_space,
-            64,
-            level_idx,
-            0,
-            0
-        );
-    }
-}
+    entity_manager_debug_draw(*entity_manager, delta_time);
 
-void gfx_clay_test_layout(EntityManager* manager){
-    CLAY(CLAY_ID("Box"), {
-        .layout = {
-            .sizing = {
-                .width = CLAY_SIZING_FIXED(512),
-                .height = CLAY_SIZING_FIXED(1080)
-            },
-            .padding = CLAY_PADDING_ALL(24),
-            .childGap = 12
-        },
-        .backgroundColor = { 10, 10, 20, 128},
-    }){
-        CLAY(CLAY_ID("Red Bird Button"), {
-            .backgroundColor = Clay_Hovered() ? (Clay_Color){255.0f,255.0f,255.0f,255.0f} : (Clay_Color){255.0f,255.0f,255.0f,200.0f},
-            .layout = {
-                .sizing = {
-                    .width = CLAY_SIZING_PERCENT(0.2f),
-                    .height = CLAY_SIZING_PERCENT(0.085f)
-                }
-            },
-            .layout.childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER }
-        }){
-            Clay_OnHover(editor_select_red_bird_button_on_hover, NULL);
-            CLAY_TEXT(CLAY_STRING("Red Bird"), { .fontSize = 1, .lineHeight = 24, .textColor = {255, 255, 255, 255} });
-        }
-        
-        CLAY(CLAY_ID("Yellow Bird Button"), {
-            .backgroundColor = Clay_Hovered() ? (Clay_Color){255.0f,255.0f,255.0f,255.0f} : (Clay_Color){255.0f,255.0f,255.0f,200.0f},
-            .layout = {
-                .sizing = {
-                    .width = CLAY_SIZING_PERCENT(0.2f),
-                    .height = CLAY_SIZING_PERCENT(0.085f)
-                }
-            },
-            .layout.childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER }
-        }){
-            Clay_OnHover(editor_select_yellow_bird_button_on_hover, NULL);
-            CLAY_TEXT(CLAY_STRING("Yellow Bird"), { .fontSize = 1, .lineHeight = 24, .textColor = {255, 255, 255, 255} });
-        }
- 
-        CLAY(CLAY_ID("Wood Block Button"), {
-            .backgroundColor = Clay_Hovered() ? (Clay_Color){255.0f,255.0f,255.0f,255.0f} : (Clay_Color){255.0f,255.0f,255.0f,200.0f},
-            .layout = {
-                .sizing = {
-                    .width = CLAY_SIZING_PERCENT(0.2f),
-                    .height = CLAY_SIZING_PERCENT(0.085f)
-                }
-            },
-            .layout.childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER }
-        }){
-            Clay_OnHover(editor_select_wood_block_button_on_hover, NULL);
-            CLAY_TEXT(CLAY_STRING("Wood Block"), { .fontSize = 1, .lineHeight = 24, .textColor = {255, 255, 255, 255} });
-        }
-        
-        CLAY(CLAY_ID("Pig Button"), {
-            .backgroundColor = Clay_Hovered() ? (Clay_Color){255.0f,255.0f,255.0f,255.0f} : (Clay_Color){255.0f,255.0f,255.0f,200.0f},
-            .layout = {
-                .sizing = {
-                    .width = CLAY_SIZING_PERCENT(0.2f),
-                    .height = CLAY_SIZING_PERCENT(0.085f)
-                }
-            },
-            .layout.childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER }
-        }){
-            Clay_OnHover(editor_select_pig_button_on_hover, NULL);
-            CLAY_TEXT(CLAY_STRING("Pig"), { .fontSize = 1, .lineHeight = 24, .textColor = {255, 255, 255, 255} });
-        }
-        
-        for(i32 i = 1; i < manager->entity_hierarchy.root_index_count; i++){
-            i32 idx = manager->entity_hierarchy.root_index[i];
-            
-            BOUNDS_CHECK(idx, manager->entity_length);
-            Entity* entity = &manager->entity[idx];
-            
-            Clay_String name = {.length = entity->name.count, .chars = entity->name.chars};
-            
-            CLAY(CLAY_SIDI(name, idx), {
-                .backgroundColor = Clay_Hovered() ? (Clay_Color){255.0f,255.0f,255.0f,255.0f} : (Clay_Color){255.0f,255.0f,255.0f,200.0f},
-                .layout = {
-                    .sizing = {
-                        .width = CLAY_SIZING_PERCENT(0.2f),
-                        .height = CLAY_SIZING_PERCENT(0.085f)
-                    }
-                },
-                .layout.childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER }
-            }){
-                Clay_OnHover(editor_on_hover_select_level_button, &manager->gen_id_allocator.gen_ids[idx]);
-                CLAY_TEXT(name, { .fontSize = 1, .lineHeight = 24, .textColor = {255, 255, 255, 255}});
-            }
-        }
-        
-        
-        CLAY(CLAY_ID("Save Level Button"), {
-            .backgroundColor = Clay_Hovered() ? (Clay_Color){255.0f,255.0f,255.0f,255.0f} : (Clay_Color){255.0f,255.0f,255.0f,200.0f},
-            .layout = {
-                .sizing = {
-                    .width = CLAY_SIZING_PERCENT(0.2f),
-                    .height = CLAY_SIZING_PERCENT(0.085f)
-                }
-            },
-            .layout.childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER }
-        }){
-            Clay_OnHover(editor_on_hover_save_level_button, manager);
-            CLAY_TEXT(CLAY_STRING("Save Level"), { .fontSize = 1, .lineHeight = 24, .textColor = {255, 255, 255, 255} });
-        }
-    }
+    Vector2I mouse_backbuffer_position;
+    platform_get_mouse_position(&mouse_backbuffer_position.x, &mouse_backbuffer_position.y);                                
+
+    Clay_SetCurrentContext(gfx_state->clay_game_ui_ctx);
+    gfx_clay_begin_layout(
+        gfx_state, (Vector2I){.x = gfx_state->window_ctx->width, .y = gfx_state->window_ctx->height}, mouse_backbuffer_position, delta_time, 
+        input_is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+    );
+    // gfx_clay_test_layout(&entity_manager);
+    gfx_clay_end_layout(gfx_state, delta_time, SPRITE_LAYER_UI, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
 }

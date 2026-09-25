@@ -11,6 +11,7 @@ typedef struct{
 
 #define SPRITE_LAYER_WORLD 0
 #define SPRITE_LAYER_UI 1
+#define SPRITE_LAYER_EDITOR 2
 
 #define SPRITE_MATERIAL_DEBUG 1
 #define SPRITE_MATERIAL_IMAGE 2
