@@ -218,10 +218,17 @@ bool gen_id_allocator_dealloc(GenIdAllocator* allocator, GenId gen_id){
     return true;
 }
 
-bool gen_id_allocator_is_gen_id_invalid(GenIdAllocator* allocator, GenId gen_id){
-    i32 index = gen_id_get_index(gen_id);
-    BOUNDS_CHECK(index, allocator->length);
-    return gen_id == (GenId){0} || allocator->gen_ids[index] != gen_id;
+/*
+    `returns`
+    0 if the gen_id is invalid, otherwise an integer array `index` to any data that is associated with the `gen_id`.
+*/
+i32 gen_id_allocator_is_gen_id_valid(const GenIdAllocator* allocator, GenId gen_id){
+    i32 idx = gen_id_get_index(gen_id);
+    BOUNDS_CHECK(idx, allocator->length);
+    if(allocator->gen_ids[idx] != gen_id){
+        return 0;
+    }
+    return idx;
 }
 
 void input_set_key_up(Key key){

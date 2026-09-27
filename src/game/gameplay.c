@@ -39,11 +39,13 @@ typedef struct{
 typedef struct{
     String name;
     Transform2D transform;
+    Transform2D sprite_local_transform;
     GenId sprite_gid;
     GenId physics_body_gid;
     Aabb clickable_aabb;
     EntityTypeId type_id;
     i32 health;
+    bool is_sprite;
     bool is_health;
     bool is_clickable;
     bool is_physics_body;
@@ -174,9 +176,9 @@ typedef struct{
 /// 
 /// Texture Views.
 ///
-#define GFX_SPRITE_REGION_PIG_HEALTHY (GFX_SpriteRegion){.top_left = {692, 855}, .bot_right = {740, 901}}
-#define GFX_SPRITE_REGION_PIG_HURT (GFX_SpriteRegion){.top_left = {692, 902}, .bot_right = {740, 948}}
-#define GFX_SPRITE_REGION_PIG_CRITICAL (GFX_SpriteRegion){.top_left = {752, 846}, .bot_right = {800, 892}}
+#define GFX_TEXTURE_VIEW_PIG_HEALTHY (GFX_TextureView){.top_left = {692, 855}, .bot_right = {740, 901}}
+#define GFX_TEXTURE_VIEW_PIG_HURT (GFX_TextureView){.top_left = {692, 902}, .bot_right = {740, 948}}
+#define GFX_TEXTURE_VIEW_PIG_CRITICAL (GFX_TextureView){.top_left = {752, 846}, .bot_right = {800, 892}}
 
 #define FONT_HEIGHT_IN_PIXELS 48
 
@@ -286,10 +288,10 @@ bool timer_manager_timer_stop_unsafe(TimerManager* manager, i32 timer_idx){
     true, if the timer was successfully stopped; otherwise false, if the `handle` is invalid.
 */
 bool timer_manager_timer_stop(TimerManager* manager, TimerHandle handle){
-    if(gen_id_allocator_is_gen_id_invalid(&manager->gen_id_allocator, handle)){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, handle);
+    if(!idx){
         return false;
-    }
-    i32 idx = gen_id_get_index(handle);
+    }    
     return timer_manager_timer_stop_unsafe(manager, idx);
 }
 
@@ -298,10 +300,10 @@ bool timer_manager_timer_stop(TimerManager* manager, TimerHandle handle){
     true, if the timer was successfully paused; otherwise false, if the `handle` is invalid.
 */
 bool timer_manager_timer_pause(TimerManager* manager, TimerHandle handle){
-    if(gen_id_allocator_is_gen_id_invalid(&manager->gen_id_allocator, handle)){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, handle);
+    if(!idx){
         return false;
-    }
-    i32 idx = gen_id_get_index(handle);
+    }    
     BOUNDS_CHECK(idx, manager->length);
     if(manager->has_started[idx] == TIMER_MANAGER_HAS_STARTED_FALSE){
         return false;
@@ -315,10 +317,10 @@ bool timer_manager_timer_pause(TimerManager* manager, TimerHandle handle){
     true, if the timer was successfully resumed; otherwise false, if the `handle` is invalid.
 */
 bool timer_manager_timer_resume(TimerManager* manager, TimerHandle handle){
-    if(gen_id_allocator_is_gen_id_invalid(&manager->gen_id_allocator, handle)){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, handle);
+    if(!idx){
         return false;
-    }
-    i32 idx = gen_id_get_index(handle);
+    }    
     BOUNDS_CHECK(idx, manager->length);
     if(manager->has_started[idx] == TIMER_MANAGER_HAS_STARTED_FALSE){
         return false;
@@ -357,10 +359,10 @@ void timer_manager_update(TimerManager* manager, f32 delta_time){
 }
 
 bool timer_manager_timer_has_started(TimerManager manager, TimerHandle handle){
-    if(gen_id_allocator_is_gen_id_invalid(&manager.gen_id_allocator, handle)){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&manager.gen_id_allocator, handle);
+    if(!idx){
         return false;
-    }
-    i32 idx = gen_id_get_index(handle);
+    }    
     BOUNDS_CHECK(idx, manager.length);
     return manager.has_started[idx] == TIMER_MANAGER_HAS_STARTED_TRUE;
 }
@@ -370,10 +372,10 @@ bool timer_manager_timer_has_started(TimerManager manager, TimerHandle handle){
     true if the timer is ticking; otherwise false if it isnt or the handle is invalid.
 */
 bool timer_manager_timer_is_ticking(TimerManager manager, TimerHandle handle){
-    if(gen_id_allocator_is_gen_id_invalid(&manager.gen_id_allocator, handle)){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&manager.gen_id_allocator, handle);
+    if(!idx){
         return false;
-    }
-    i32 idx = gen_id_get_index(handle);
+    }    
     BOUNDS_CHECK(idx, manager.length);
     if(manager.has_started[idx] == TIMER_MANAGER_HAS_STARTED_FALSE){
         return false;
@@ -386,10 +388,10 @@ bool timer_manager_timer_is_ticking(TimerManager manager, TimerHandle handle){
     true, if the timer's time scale was successfully set; otherwise false.
 */
 bool timer_manager_timer_set_time_scale(TimerManager* manager, TimerHandle handle, f32 time_scale){
-    if(gen_id_allocator_is_gen_id_invalid(&manager->gen_id_allocator, handle)){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, handle);
+    if(!idx){
         return false;
-    }
-    i32 idx = gen_id_get_index(handle);
+    }    
     BOUNDS_CHECK(idx, manager->length);
     manager->time_scale[idx] = time_scale;
     return true;
@@ -400,18 +402,13 @@ bool timer_manager_timer_set_time_scale(TimerManager* manager, TimerHandle handl
     the delta time between updates that the timer ticked by; otherwise 0 if the timer didn't tick or the handle is invalid.
 */
 f32 timer_manager_timer_get_delta_tick_time(TimerManager manager, TimerHandle handle){
-    if(gen_id_allocator_is_gen_id_invalid(&manager.gen_id_allocator, handle)){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&manager.gen_id_allocator, handle);
+    if(!idx){
         return 0.0f;
-    }
-    i32 idx = gen_id_get_index(handle);
+    }    
     BOUNDS_CHECK(idx, manager.length);
     return ABS(manager.previous_time[idx] - manager.current_time[idx]);
 }
-
-inline bool timer_manager_is_timer_handle_invalid(TimerManager manager, TimerHandle handle){
-    return gen_id_allocator_is_gen_id_invalid(&manager.gen_id_allocator, handle);
-}
-
 
 
 
@@ -481,10 +478,10 @@ bool entity_manager_dealloc_entity(EntityManager* manager, GenId gid){
 }
 
 bool entity_manager_get_entity(EntityManager manager, GenId entity_gid, Entity** out_entity){
-    if(gen_id_allocator_is_gen_id_invalid(&manager.gen_id_allocator, entity_gid)){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&manager.gen_id_allocator, entity_gid);
+    if(!idx){
         return false;
-    }
-    i32 idx = gen_id_get_index(entity_gid);
+    }    
     BOUNDS_CHECK(idx, manager.entity_length);
     *out_entity = &manager.entity[idx];
     return true;
@@ -494,7 +491,6 @@ bool entity_manager_is_entity_allocated_unsafe(EntityManager manager, i32 entity
     BOUNDS_CHECK(entity_idx, manager.gen_id_allocator.length);
     return manager.gen_id_allocator.allocated[entity_idx];
 }
-
 
 void entity_manager_debug_draw(EntityManager manager, f32 delta_time){
 #if 0
@@ -537,13 +533,19 @@ GenId entity_spawn_red_bird(EntityManager* entity_manager, String name, Transfor
         entity->is_clickable = true;
         entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
 
+        GFX_TextureView texture_view = {.top_left = {863, 797}, .bot_right = {863 + 45, 797 + 45}};
+        entity->is_sprite = true;
+        entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
         entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
-        GFX_SpriteRegion region = {.top_left = {863, 797}, .bot_right = {863 + 45, 797 + 45}};
-        u32 sprite_depth = 0;
-        gfx_sprite_init(
-            entity_manager->gfx_state, entity->sprite_gid, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
-            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_TEST_SHEET, SPRITE_MATERIAL_IMAGE, SPRITE_LAYER_GAME_WORLD, sprite_depth, true
-        );
+        gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+        gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, texture_view);
+        gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
+        gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_TEST_SHEET);
+        gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
+        gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
+        gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+        gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+        gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
     }
     return entity_gid;
 }
@@ -572,13 +574,19 @@ GenId entity_spawn_yellow_bird(EntityManager* entity_manager, String name, Trans
         entity->is_clickable = true;
         entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
 
+        GFX_TextureView texture_view = {.top_left = {629, 879}, .bot_right = {629 + 58, 879 + 53}};
+        entity->is_sprite = true;
+        entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
         entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
-        GFX_SpriteRegion region = {.top_left = {629, 879}, .bot_right = {629 + 58, 879 + 53}};
-        u32 sprite_depth = 1;
-        gfx_sprite_init(
-            entity_manager->gfx_state, entity->sprite_gid, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
-            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_TEST_SHEET, SPRITE_MATERIAL_IMAGE, SPRITE_LAYER_GAME_WORLD, sprite_depth, true
-        );
+        gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+        gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, texture_view);
+        gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
+        gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_TEST_SHEET);
+        gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
+        gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
+        gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+        gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+        gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
     }
     return entity_gid;
 }
@@ -602,14 +610,19 @@ GenId entity_spawn_wood_block(EntityManager* entity_manager, String name, Transf
         entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, shape_transform, FIZX_ShapeBehaviour_Dynamic, &entity_gid, PHYSICS_LAYER_ENVIRONMENT, square, material, true);
         
-        bool success = false;
+        GFX_TextureView texture_view = {.bot_right = {.x = 150, .y = 150}};
+        entity->is_sprite = true;
+        entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
         entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
-        GFX_SpriteRegion region = {.bot_right = {.x = 150, .y = 150}};
-        u32 sprite_depth = 1;
-        gfx_sprite_init(
-            entity_manager->gfx_state, entity->sprite_gid, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
-            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_WOOD_BLOCK, SPRITE_MATERIAL_IMAGE, SPRITE_LAYER_GAME_WORLD, sprite_depth, true
-        );
+        gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+        gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, texture_view);
+        gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
+        gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_WOOD_BLOCK);
+        gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
+        gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
+        gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+        gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+        gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
     }
     return entity_gid;
 }
@@ -701,10 +714,10 @@ void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
         }
     }
     else if(entity->health <= 1){
-        gfx_sprite_set_region(ctx->entity_manager->gfx_state, entity->sprite_gid, GFX_SPRITE_REGION_PIG_CRITICAL);
+        gfx_sprite_set_texture_view(ctx->entity_manager->gfx_state, entity->sprite_gid, GFX_TEXTURE_VIEW_PIG_CRITICAL);
     }
     else if(entity->health <= 2){
-        gfx_sprite_set_region(ctx->entity_manager->gfx_state, entity->sprite_gid, GFX_SPRITE_REGION_PIG_HURT);        
+        gfx_sprite_set_texture_view(ctx->entity_manager->gfx_state, entity->sprite_gid, GFX_TEXTURE_VIEW_PIG_HURT);        
     }
     
     PigInvincibleTimerTimeoutContext timeout_data = {
@@ -739,13 +752,19 @@ GenId entity_spawn_pig(EntityManager* entity_manager, String name, Transform2D t
         entity->is_health = true;
         entity->health = 3;
 
+        GFX_TextureView texture_view = GFX_TEXTURE_VIEW_PIG_HEALTHY;
+        entity->is_sprite = true;
+        entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
         entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
-        GFX_SpriteRegion region = GFX_SPRITE_REGION_PIG_HEALTHY;
-        u32 sprite_depth = 1;
-        gfx_sprite_init(
-            entity_manager->gfx_state, entity->sprite_gid, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
-            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_TEST_SHEET, SPRITE_MATERIAL_IMAGE, SPRITE_LAYER_GAME_WORLD, sprite_depth, true
-        );
+        gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+        gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, texture_view);
+        gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
+        gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_TEST_SHEET);
+        gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
+        gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
+        gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+        gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+        gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
     }
     entity_manager->alive_enemies+=1;
     return entity_gid;
@@ -988,18 +1007,6 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         if(input_is_key_pressed(KEY_UP))    {gfx_state->world_camera.position.y += camera_speed;}
     }
 
-    { // set entity transforms to their physics body's transforms.
-        for(i32 i = 0; i < entity_manager->entity_length; i++){
-            Entity* entity = &entity_manager->entity[i];
-            if(entity->physics_body_gid != 0){
-                Transform2D transform2d;
-                if(fizx_body_get_transform(fizx_state, entity->physics_body_gid, &transform2d)){
-                    entity->transform = transform2d;
-                }
-            }
-        }
-    }
-
     if(!in_editor_mode)
     { // player game update.
         
@@ -1048,12 +1055,25 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         }
     }
 
-    { // set entity sprite transforms to their entity's transform.
-        
+    { 
         for(i32 i = 0; i < entity_manager->entity_length; i++){
             Entity* entity = &entity_manager->entity[i];
-            if(entity->sprite_gid){
-                gfx_sprite_set_transform(gfx_state, entity->sprite_gid, entity->transform);
+            
+            if(entity->is_physics_body){
+                if(fizx_body_is_active(fizx_state, entity->physics_body_gid)){
+                    Transform2D transform;
+                    if(fizx_body_get_transform(fizx_state, entity->physics_body_gid, &transform)){
+                        entity->transform.position = transform.position;
+                        entity->transform.rotation = transform.rotation;
+                        entity->transform.cosine = transform.cosine;
+                        entity->transform.sine = transform.sine; 
+                    }
+                }
+            }
+            
+            if(entity->is_sprite){
+                Transform2D sprite_transform = transform2d_transform(entity->sprite_local_transform, entity->transform);
+                gfx_sprite_set_transform(gfx_state, entity->sprite_gid, sprite_transform);
             }
         }
     }

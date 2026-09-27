@@ -696,10 +696,11 @@ typedef struct{
 **/
 i32 fizx_validate_shape_gen_id(FIZX_State* state, GenId gid){
 
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, gid)){
+    i32 gidx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, gid);
+    if(!gidx){
         return 0;
     }
-    i32 gidx = gen_id_get_index(gid);
+    
     BOUNDS_CHECK(gidx, state->entities.entity_type_length);
     if(state->entities.entity_type[gidx] != FIZX_EntityType_Shape){
         return 0;
@@ -716,11 +717,11 @@ i32 fizx_validate_shape_gen_id(FIZX_State* state, GenId gid){
 **/
 i32 fizx_validate_body_gen_id(FIZX_State* state, GenId gid){
 
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, gid)){
+    i32 gidx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, gid);
+    if(!gidx){
         return 0;
     }
 
-    i32 gidx = gen_id_get_index(gid);
     BOUNDS_CHECK(gidx, state->entities.entity_type_length);
     if(state->entities.entity_type[gidx] != FIZX_EntityType_Body){
         return 0;
@@ -1480,10 +1481,12 @@ i32 fizx_entity_get_layer(FIZX_State* state, i32 entity_idx){
 }
 
 bool fizx_body_get_transform(FIZX_State* state, GenId body_gid, Transform2D* out_transform){
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
+
+    i32 idx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, body_gid);
+    if(!idx){
         return false;    
     }
-    i32 idx = gen_id_get_index(body_gid);
+
     *out_transform = soa_transform2d_copy_elem(&state->entities.global_transform, idx);
     return true;
 }
@@ -1818,10 +1821,12 @@ void fizx_shape_set_active_unsafe(FIZX_State* state, i32 shape_idx, bool is_acti
 }
 
 bool fizx_shape_set_active(FIZX_State* state, GenId body_gid, bool is_active){
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
+    
+    i32 body_idx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, body_gid);
+    if(!body_idx){
         return false;
     }
-    i32 body_idx = gen_id_get_index(body_gid);
+    
     BOUNDS_CHECK(body_idx, state->entities.entity_type_length);
     if(state->entities.entity_type[body_idx] != FIZX_EntityType_Shape){
         ASSERT(false, "not a shape.");
@@ -1864,10 +1869,12 @@ void fizx_body_impulse_force_unsafe(FIZX_State* state, Vector2 force, i32 body_i
 }
 
 bool fizx_body_impulse_force(FIZX_State* state, Vector2 force, GenId body_gid){
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
+
+    i32 body_idx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, body_gid);
+    if(!body_idx){
         return false;
     }
-    i32 body_idx = gen_id_get_index(body_gid);
+    
     BOUNDS_CHECK(body_idx, state->entities.entity_type_length);
     if(state->entities.entity_type[body_idx] != FIZX_EntityType_Body){
         ASSERT(false, "not a body.");
@@ -1878,10 +1885,11 @@ bool fizx_body_impulse_force(FIZX_State* state, Vector2 force, GenId body_gid){
 }
 
 bool fizx_body_set_active(FIZX_State* state, GenId body_gid, bool is_active){
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
+    i32 body_idx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, body_gid);
+    if(!body_idx){
         return false;
     }
-    i32 body_idx = gen_id_get_index(body_gid);
+
     BOUNDS_CHECK(body_idx, state->entities.entity_type_length);
     if(state->entities.entity_type[body_idx] != FIZX_EntityType_Body){
         ASSERT(false, "not a body.");
@@ -1897,10 +1905,10 @@ bool fizx_body_is_active_unsafe(FIZX_State* state, i32 body_idx){
 }
 
 bool fizx_body_is_active(FIZX_State* state, GenId body_gid){
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, body_gid)){
+    i32 body_idx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, body_gid);
+    if(!body_idx){
         return false;
     }
-    i32 body_idx = gen_id_get_index(body_gid);
     BOUNDS_CHECK(body_idx, state->entities.entity_type_length);
     if(state->entities.entity_type[body_idx] != FIZX_EntityType_Body){
         ASSERT(false, "not a body.");
@@ -2462,10 +2470,10 @@ void fizx_shape_set_rotational_response_unsafe(FIZX_State* state, i32 shape_idx,
 }
 
 bool fizx_shape_set_rotational_response(FIZX_State* state, GenId shape_gid, bool enabled){
-    if(gen_id_allocator_is_gen_id_invalid(&state->gen_id_allocator, shape_gid)){
+    i32 shape_idx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, shape_gid);
+    if(!shape_idx){
         return false;
     }
-    i32 shape_idx = gen_id_get_index(shape_gid);
     BOUNDS_CHECK(shape_idx, state->entities.entity_type_length);
     if(state->entities.entity_type[shape_idx] != FIZX_EntityType_Shape){
         ASSERT(false, "entity is not shape.");

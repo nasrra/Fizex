@@ -867,7 +867,7 @@ void gen_id_allocator_dealloc_unsafe(GenIdAllocator* allocator, i32 index);
     Deallocates an gen id from a allocator instance.
 **/
 bool gen_id_allocator_dealloc(GenIdAllocator* allocator, GenId gen_id);
-bool gen_id_allocator_is_gen_id_invalid(GenIdAllocator* allocator, GenId gen_id);
+i32 gen_id_allocator_is_gen_id_valid(const GenIdAllocator* allocator, GenId gen_id);
 
 void input_set_key_up(Key key);
 void input_set_key_down(Key key);
