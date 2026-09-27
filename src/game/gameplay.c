@@ -12,6 +12,14 @@
 
 
 
+typedef struct{
+    Matrix4x4 world_camera_matrix;
+    Matrix4x4 screen_camera_matrix;
+    f32 time;
+    f32 world_camera_far_z;
+    f32 world_camera_near_z;
+    f32 padding_0;
+} Ubo;
 
 typedef enum{
     EntityTypeId_None = 0,
@@ -31,8 +39,7 @@ typedef struct{
 typedef struct{
     String name;
     Transform2D transform;
-    GFX_SpriteId sprite_id;
-    f32 sprite_depth;
+    GenId sprite_gid;
     GenId physics_body_gid;
     Aabb clickable_aabb;
     EntityTypeId type_id;
@@ -159,6 +166,7 @@ typedef struct{
 ///
 /// Virtual Texture ID.
 ///
+#define VIRTUAL_TEXTURE_ID_FONT 1
 #define VIRTUAL_TEXTURE_ID_TEST_SHEET 3
 #define VIRTUAL_TEXTURE_ID_SLING_SHOT 4
 #define VIRTUAL_TEXTURE_ID_WOOD_BLOCK 6
@@ -170,6 +178,16 @@ typedef struct{
 #define GFX_SPRITE_REGION_PIG_HURT (GFX_SpriteRegion){.top_left = {692, 902}, .bot_right = {740, 948}}
 #define GFX_SPRITE_REGION_PIG_CRITICAL (GFX_SpriteRegion){.top_left = {752, 846}, .bot_right = {800, 892}}
 
+#define FONT_HEIGHT_IN_PIXELS 48
+
+#define SPRITE_LAYER_GAME_WORLD 3
+#define SPRITE_LAYER_EDITOR_WORLD 2
+#define SPRITE_LAYER_GAME_UI 1
+#define SPRITE_LAYER_EDITOR_UI 0
+
+#define SPRITE_MATERIAL_DEBUG 1
+#define SPRITE_MATERIAL_IMAGE 2
+#define SPRITE_MATERIAL_TEXT 3
 
 
 
@@ -429,12 +447,12 @@ void entity_manager_dealloc_entity_data_unsafe(EntityManager* manager, i32 idx){
     BOUNDS_CHECK(idx, manager->entity_length);
     Entity* entity = &manager->entity[idx];
 
-    if(entity->physics_body_gid != 0){
+    if(entity->physics_body_gid){
         fizx_body_dealloc(&manager->fizx_state, entity->physics_body_gid);
     }
     
-    if(!gfx_sprite_id_equals(entity->sprite_id, (GFX_SpriteId){0})){
-        gfx_dealloc_sprite(manager->gfx_state, entity->sprite_id);
+    if(entity->sprite_gid){
+        gfx_dealloc_sprite(manager->gfx_state, entity->sprite_gid);
     }
 
     *entity = (Entity){0};
@@ -472,6 +490,12 @@ bool entity_manager_get_entity(EntityManager manager, GenId entity_gid, Entity**
     return true;
 }
 
+bool entity_manager_is_entity_allocated_unsafe(EntityManager manager, i32 entity_idx){
+    BOUNDS_CHECK(entity_idx, manager.gen_id_allocator.length);
+    return manager.gen_id_allocator.allocated[entity_idx];
+}
+
+
 void entity_manager_debug_draw(EntityManager manager, f32 delta_time){
 #if 0
     for(i32 i = 0; i < manager.entity_length; i++){
@@ -483,7 +507,7 @@ void entity_manager_debug_draw(EntityManager manager, f32 delta_time){
                 .width = entity->clickable_aabb.max_x - entity->clickable_aabb.min_x,
                 .height = entity->clickable_aabb.max_y - entity->clickable_aabb.min_y
             };
-            gfx_draw_wire_rect(entity_manager.gfx_state, shape , GFX_COLOUR_WHITE, 0.0f, SPRITE_LAYER_WORLD, SPRITE_MATERIAL_DEBUG);
+            gfx_draw_wire_rect(entity_manager.gfx_state, shape , GFX_COLOUR_WHITE, 0.0f, SPRITE_LAYER_GAME_WORLD, SPRITE_MATERIAL_DEBUG);
         }
     }
 #endif
@@ -513,13 +537,12 @@ GenId entity_spawn_red_bird(EntityManager* entity_manager, String name, Transfor
         entity->is_clickable = true;
         entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
 
-        entity->sprite_depth = 1.0f;
-        bool success = false;
-        entity->sprite_id = gfx_sprite_alloc(entity_manager->gfx_state, SPRITE_LAYER_WORLD, &success);
+        entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
         GFX_SpriteRegion region = {.top_left = {863, 797}, .bot_right = {863 + 45, 797 + 45}};
+        u32 sprite_depth = 0;
         gfx_sprite_init(
-            entity_manager->gfx_state, entity->sprite_id, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
-            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_TEST_SHEET, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
+            entity_manager->gfx_state, entity->sprite_gid, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
+            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_TEST_SHEET, SPRITE_MATERIAL_IMAGE, SPRITE_LAYER_GAME_WORLD, sprite_depth, true
         );
     }
     return entity_gid;
@@ -549,13 +572,12 @@ GenId entity_spawn_yellow_bird(EntityManager* entity_manager, String name, Trans
         entity->is_clickable = true;
         entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
 
-        entity->sprite_depth = 1.0f;
-        bool success = false;
-        entity->sprite_id = gfx_sprite_alloc(entity_manager->gfx_state, SPRITE_LAYER_WORLD, &success);
+        entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
         GFX_SpriteRegion region = {.top_left = {629, 879}, .bot_right = {629 + 58, 879 + 53}};
+        u32 sprite_depth = 1;
         gfx_sprite_init(
-            entity_manager->gfx_state, entity->sprite_id, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
-            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_TEST_SHEET, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
+            entity_manager->gfx_state, entity->sprite_gid, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
+            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_TEST_SHEET, SPRITE_MATERIAL_IMAGE, SPRITE_LAYER_GAME_WORLD, sprite_depth, true
         );
     }
     return entity_gid;
@@ -580,13 +602,13 @@ GenId entity_spawn_wood_block(EntityManager* entity_manager, String name, Transf
         entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, shape_transform, FIZX_ShapeBehaviour_Dynamic, &entity_gid, PHYSICS_LAYER_ENVIRONMENT, square, material, true);
         
-        entity->sprite_depth = 1.0f;
         bool success = false;
-        entity->sprite_id = gfx_sprite_alloc(entity_manager->gfx_state, SPRITE_LAYER_WORLD, &success);
+        entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
         GFX_SpriteRegion region = {.bot_right = {.x = 150, .y = 150}};
+        u32 sprite_depth = 1;
         gfx_sprite_init(
-            entity_manager->gfx_state, entity->sprite_id, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
-            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_WOOD_BLOCK, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
+            entity_manager->gfx_state, entity->sprite_gid, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
+            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_WOOD_BLOCK, SPRITE_MATERIAL_IMAGE, SPRITE_LAYER_GAME_WORLD, sprite_depth, true
         );
     }
     return entity_gid;
@@ -679,10 +701,10 @@ void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
         }
     }
     else if(entity->health <= 1){
-        gfx_sprite_set_region(ctx->entity_manager->gfx_state, entity->sprite_id, GFX_SPRITE_REGION_PIG_CRITICAL);
+        gfx_sprite_set_region(ctx->entity_manager->gfx_state, entity->sprite_gid, GFX_SPRITE_REGION_PIG_CRITICAL);
     }
     else if(entity->health <= 2){
-        gfx_sprite_set_region(ctx->entity_manager->gfx_state, entity->sprite_id, GFX_SPRITE_REGION_PIG_HURT);        
+        gfx_sprite_set_region(ctx->entity_manager->gfx_state, entity->sprite_gid, GFX_SPRITE_REGION_PIG_HURT);        
     }
     
     PigInvincibleTimerTimeoutContext timeout_data = {
@@ -717,13 +739,12 @@ GenId entity_spawn_pig(EntityManager* entity_manager, String name, Transform2D t
         entity->is_health = true;
         entity->health = 3;
 
-        entity->sprite_depth = 1.0f;
-        bool success = false;
-        entity->sprite_id = gfx_sprite_alloc(entity_manager->gfx_state, SPRITE_LAYER_WORLD, &success);
+        entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
         GFX_SpriteRegion region = GFX_SPRITE_REGION_PIG_HEALTHY;
+        u32 sprite_depth = 1;
         gfx_sprite_init(
-            entity_manager->gfx_state, entity->sprite_id, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
-            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_TEST_SHEET, SPRITE_MATERIAL_IMAGE, entity->sprite_depth, true
+            entity_manager->gfx_state, entity->sprite_gid, transform, GFX_COLOUR_WHITE, region, GFX_ColourState_Tint,
+            GFX_SpriteOrigin_Center, VIRTUAL_TEXTURE_ID_TEST_SHEET, SPRITE_MATERIAL_IMAGE, SPRITE_LAYER_GAME_WORLD, sprite_depth, true
         );
     }
     entity_manager->alive_enemies+=1;
@@ -849,7 +870,7 @@ void entity_manager_init(
         string_init(&entity->name, arena, ENTITY_NAME_LENGTH);
     }
     
-    gen_id_allocator_init(&manager->gen_id_allocator, arena, physics_body_amount);
+    gen_id_allocator_init(&manager->gen_id_allocator, arena, entity_amount);
     intrusive_list_init(&manager->entity_hierarchy, arena, entity_amount, false);
     manager->entity_hierarchy.on_dealloc_callback = entity_on_entity_hierarchy_dealloc;
     manager->gfx_state = gfx_state;
@@ -885,7 +906,7 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
         .colour_collision_other         = GFX_COLOUR_BLUE,
         .colour_collision_normal        = GFX_COLOUR_LIGHT_BLUE,
         .colour_center_of_mass          = GFX_COLOUR_ORANGE,
-        .sprite_layer                   = SPRITE_LAYER_WORLD,
+        .sprite_layer                   = SPRITE_LAYER_GAME_WORLD,
         .wireframe_thickness            = 0.005f,
         .material_idx                   = SPRITE_MATERIAL_DEBUG,
     };
@@ -968,7 +989,6 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
     }
 
     { // set entity transforms to their physics body's transforms.
-        
         for(i32 i = 0; i < entity_manager->entity_length; i++){
             Entity* entity = &entity_manager->entity[i];
             if(entity->physics_body_gid != 0){
@@ -1032,8 +1052,8 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         
         for(i32 i = 0; i < entity_manager->entity_length; i++){
             Entity* entity = &entity_manager->entity[i];
-            if(!gfx_sprite_id_equals(entity->sprite_id, (GFX_SpriteId){0})){
-                gfx_sprite_set_transform(gfx_state, entity->sprite_id, entity->transform, entity->sprite_depth);
+            if(entity->sprite_gid){
+                gfx_sprite_set_transform(gfx_state, entity->sprite_gid, entity->transform);
             }
         }
     }
@@ -1097,5 +1117,5 @@ void game_state_draw(GameState* game_state, f32 delta_time){
         input_is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
     );
     // gfx_clay_test_layout(&entity_manager);
-    gfx_clay_end_layout(gfx_state, delta_time, SPRITE_LAYER_UI, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
+    gfx_clay_end_layout(gfx_state, delta_time, SPRITE_LAYER_GAME_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
 }

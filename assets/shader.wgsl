@@ -151,27 +151,60 @@ struct pixel_coords{
     bot_right: vec2i
 }
 
+// struct sprite{
+//     // 1 - 64.
+//     transform: mat4x4f,
+//     // 64 - 80
+//     pixel_coords: pixel_coords,
+//     // 80 - 96
+//     colour: vec4f,
+//     // 96 - 100
+//     vertex_offset: vec2f,
+//     // 100 - 108
+//     state: i32,
+//     // 108 - 112
+//     virtual_texture_index: i32,
+//     // 112 - 116
+//     material_id: i32,
+//     // 116 - 120
+//     colour_state: i32,
+//     // 116 - 124
+//     layer: i32,
+//     // 124 - 128
+//     padding_0: i32,
+// }
+
 struct sprite{
+    
     // 1 - 64.
     transform: mat4x4f,
+    
     // 64 - 80
     pixel_coords: pixel_coords,
+    
     // 80 - 96
     colour: vec4f,
+    
     // 96 - 100
     vertex_offset: vec2f,
-    // 100 - 108
-    state: i32,
+    
     // 108 - 112
-    virtual_texture_index: i32,
+    depth: u32,
+    
+    // 100 - 108
+    layer: u32,
+    
     // 112 - 116
-    material_id: i32,
+    state: i32,
+    
     // 116 - 120
-    colour_state: i32,
-    // 116 - 124
-    layer: i32,
-    // 124 - 128
-    padding_0: i32,
+    virtual_texture_index: i32,
+    
+    // 116 - 120
+    material_id: i32,
+    
+    // 120 - 124
+    colour_state: i32,    
 }
 
 struct sprite_array{
@@ -230,7 +263,7 @@ fn vs_main (
 
     var position: vec4f;
     var adjusted_vertex_position = in_vertex_position + vec3f(sprite.vertex_offset, 0.0);
-    if(sprite.layer >= screen_layer){
+    if(sprite.layer <= screen_layer){
         position = user_uniform.screen_cam_mat * sprite.transform * vec4f(adjusted_vertex_position, 1.0);
         // position = sprite.transform * vec4f(adjusted_vertex_position, 1.0);
 
@@ -266,7 +299,6 @@ fn fs_main(
         case material_debug:            {colour = vec4f(0,0,0,0);} // default to white in case colour state is set to Tint.
         case material_simple_sprite:    {colour = fs_draw_sprite_simple(sprite, vec2i(in.pixel_position));}
         case material_simple_text:      {colour = fs_draw_text_simple(sprite, vec2i(in.pixel_position));}
-        // case material_simple_text:      {return fail_colour;}
     }
 
     switch sprite.colour_state{

@@ -4,10 +4,9 @@
             "name": "Debug (Win32)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/app.exe",
+            "program": "${workspaceFolder}/build_and_run_debug_win32.bat",
             "args": [],
             "cwd": "${workspaceFolder}/build",
-            "preLaunchTask": "Debug Build (MSVC)"
         }
     ]
 }

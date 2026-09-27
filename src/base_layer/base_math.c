@@ -190,12 +190,12 @@ typedef struct{
 #define ONE_SIXTH 1.0f / 6.0f
 #define ONE_TWENTY_FOURTH 1.0f / 24.0f
 #define MATRIX4X4_IDENTITY (Matrix4x4){ \
-    .m = { \
-        1.0f, 0.0f, 0.0f, 0.0f, \
-        0.0f, 1.0f, 0.0f, 0.0f, \
-        0.0f, 0.0f, 1.0f, 0.0f, \
-        0.0f, 0.0f, 0.0f, 1.0f \
-    } \
+    .m = {                              \
+        1.0f, 0.0f, 0.0f, 0.0f,         \
+        0.0f, 1.0f, 0.0f, 0.0f,         \
+        0.0f, 0.0f, 1.0f, 0.0f,         \
+        0.0f, 0.0f, 0.0f, 1.0f          \
+    }                                   \
 }
 /*
     the fallback normal for any SAT intersect will be up.
@@ -285,6 +285,27 @@ f32 vector3_dot_scalar(f32 lhs_x, f32 lhs_y, f32 lhs_z, f32 rhs_x, f32 rhs_y, f3
 
 f32 vector3_dot(Vector3 lhs, Vector3 rhs){
     return vector3_dot_scalar(lhs.x, lhs.y, lhs.z, rhs.x, rhs.y, rhs.z);
+}
+
+Transform2D matrix4x4_to_transform2d(Matrix4x4 matrix){
+
+    f32* m = matrix.m;
+    Transform2D transform = TRANSFORM2D_IDENTITY;
+    
+    // column 0 `length` is the horizontal scale.
+    transform.scale.x = f32_sqrt(m[0]*m[0] + m[1]*m[1]);
+    transform.scale.y = f32_sqrt(m[4]*m[4] + m[5]*m[5]);
+    
+    // undo the scale to get pure rotation back
+    if(transform.scale.y > -F32_MAX){
+        transform.cosine = m[0] / transform.scale.x;
+        transform.sine = m[1] / transform.scale.y;
+    }
+    
+    transform.position.x = m[12];
+    transform.position.y = m[13];
+    
+    return transform;
 }
 
 Matrix4x4 matrix4x4_mul(Matrix4x4 lhs, Matrix4x4 rhs){
@@ -386,6 +407,10 @@ Vector3 vector3_clamp_to_radius(Vector3 v, f32 radius){
 
 
 
+
+inline bool vector2_equals(Vector2 a, Vector2 b){
+    return a.x == b.x && a.y == b.y;
+}
 
 f32 vector2_len_sqrd(Vector2 vector){
     return (vector.x * vector.x) + (vector.y * vector.y);
@@ -1348,6 +1373,46 @@ Transform2D transform2d_make(Vector2 position, Vector2 scale, f32 rotation){
     };
 }
 
+// polygon_get_min_max_vertices(v_x, v_y, v_length, &soa->aabb.min_x[shape_idx], &soa->aabb.min_y[shape_idx], &soa->aabb.max_x[shape_idx], &soa->aabb.max_y[shape_idx]);
+
+PolygonRectangle transform2d_to_polygon_rectangle_centered_origin(Transform2D transform){
+    PolygonRectangle poly_rect = {
+        .x = {-0.5f, 0.5f, 0.5f, -0.5f},
+        .y = {0.5f, 0.5f, -0.5f, -0.5f}
+    };
+        
+    for(i32 i = 0; i < 4; i++){
+        vector2_transform_scalar(
+            poly_rect.x[i], poly_rect.y[i],
+            transform.scale.x, transform.scale.y, 
+            transform.cosine, transform.sine,
+            transform.position.x, transform.position.y,
+            &poly_rect.x[i], &poly_rect.y[i]
+        );
+    }
+    
+    return poly_rect;
+}
+
+PolygonRectangle transform2d_to_polygon_rectangle_top_left_origin(Transform2D transform){
+    PolygonRectangle poly_rect = {
+        .x = {0.0f, 1.0f, 1.0f, 0.0f},
+        .y = {0.0f, 0.0f, -1.0f, -1.0f}
+    };
+        
+    for(i32 i = 0; i < 4; i++){
+        vector2_transform_scalar(
+            poly_rect.x[i], poly_rect.y[i],
+            transform.scale.x, transform.scale.y, 
+            transform.cosine, transform.sine,
+            transform.position.x, transform.position.y,
+            &poly_rect.x[i], &poly_rect.y[i]
+        );
+    }
+
+    return poly_rect;
+}
+
 inline Matrix4x4 transform2d_to_matrix4x4_depth(Transform2D transform, f32 depth){
     Matrix4x4 result = {0};
     f32* m = result.m;
@@ -2185,7 +2250,7 @@ void project_polygon(
     }
 }
 
-bool overlaps_point_scalar_polygon(
+bool polygon_overlaps_point_scalar(
     f32* verts_x, f32* verts_y, i32 verts_size,
     f32 point_x, f32 point_y,
     f32* out_normal_x, f32* out_normal_y, f32* out_depth

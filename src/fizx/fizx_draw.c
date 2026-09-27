@@ -1,3 +1,4 @@
+
 typedef struct{
     GFX_Camera camera;
     GFX_Colour colour_dynamic_shape;
@@ -17,7 +18,7 @@ typedef struct{
     GFX_Colour colour_collision_normal;
     GFX_Colour colour_center_of_mass;
     i32 sprite_layer;
-    f32 z_position;
+    u32 sprite_depth;
     f32 wireframe_thickness;
     i32 material_idx;
     bool draw_body_global_positions;
@@ -54,7 +55,7 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                     .radius = 0.1f
                 };
 
-                gfx_draw_wire_circle(gfx, shape, info.colour_global_position, info.z_position, info.sprite_layer, info.material_idx);
+                gfx_draw_wire_circle(gfx, shape, info.colour_global_position, info.sprite_layer, info.sprite_depth, info.material_idx);
 
                 BOUNDS_CHECK(shape_idx, state.body_hierarchy.length);
                 shape_idx = state.body_hierarchy.node[shape_idx].next_sibling;
@@ -110,7 +111,7 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                 // draw in accordance with the shape.
                 if(fizx_shape_category_is_polygon(category)){
                     fizx_shape_get_vertices_unsafe(state.entities.global_vertex, shape_idx, &poly_vert_x, &poly_vert_y, &poly_vert_length);
-                    gfx_draw_wire_poly(gfx, poly_vert_x, poly_vert_y, poly_vert_length, colour, info.z_position, info.sprite_layer, info.material_idx);
+                    gfx_draw_wire_poly(gfx, poly_vert_x, poly_vert_y, poly_vert_length, colour, info.sprite_layer, info.sprite_depth, info.material_idx);
                 }
                 else if(fizx_shape_category_is_circle(category)){
                     BOUNDS_CHECK(shape_idx, state.entities.centroid.length);
@@ -120,7 +121,7 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                         .y = state.entities.centroid.y[shape_idx],
                         .radius = state.entities.global_radius[shape_idx]
                     };
-                    gfx_draw_wire_circle(gfx, shape, colour, info.z_position, info.sprite_layer, info.material_idx);
+                    gfx_draw_wire_circle(gfx, shape, colour, info.sprite_layer, info.sprite_depth, info.material_idx);
                 }
                 else{
                     ASSERT(false, "unknown shape category (shape type)");
@@ -160,7 +161,7 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                     .radius = 0.1f
                 };
 
-                gfx_draw_wire_circle(gfx, shape, info.colour_centroid, info.z_position, info.sprite_layer, info.material_idx);
+                gfx_draw_wire_circle(gfx, shape, info.colour_centroid, info.sprite_layer, info.sprite_depth, info.material_idx);
 
                 BOUNDS_CHECK(shape_idx, state.body_hierarchy.length);
                 shape_idx = state.body_hierarchy.node[shape_idx].next_sibling;
@@ -190,9 +191,9 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
             f32 end_x = start_x + state.entities.linear_velocity.x[body_idx];
             f32 end_y = start_y + state.entities.linear_velocity.y[body_idx];
 
-            Vector3 start = {.x = start_x, .y = start_y, .z = info.z_position};
-            Vector3 end = {.x = end_x, .y = end_y, .z = info.z_position};
-            gfx_draw_line_3d(gfx, info.colour_linear_velocity, start, end, info.sprite_layer, info.material_idx, gfx_global_wireframe_thickness);
+            Vector2 start = {.x = start_x, .y = start_y};
+            Vector2 end = {.x = end_x, .y = end_y};
+            gfx_draw_line_2d(gfx, info.colour_linear_velocity, start, end, info.sprite_layer, info.sprite_depth, info.material_idx, gfx_global_wireframe_thickness);
         }
     }
 
@@ -225,7 +226,7 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                 y[2] = state.entities.aabb.min_y[shape_idx];
                 y[3] = y[2];
 
-                gfx_draw_wire_poly(gfx, x, y, 4, info.colour_aabb, info.z_position, info.sprite_layer, info.material_idx);
+                gfx_draw_wire_poly(gfx, x, y, 4, info.colour_aabb, info.sprite_layer, info.sprite_depth, info.material_idx);
 
                 BOUNDS_CHECK(shape_idx, state.body_hierarchy.length);
                 shape_idx = state.body_hierarchy.node[body_idx].next_sibling;
@@ -247,7 +248,7 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                 .width = state.bvh.branches.aabb.max_x[i] - state.bvh.branches.aabb.min_x[i],
                 .height = state.bvh.branches.aabb.max_y[i] - state.bvh.branches.aabb.min_y[i]
             };
-            gfx_draw_wire_rect(gfx, shape, info.colour_bvh_branch, info.z_position, info.sprite_layer, info.material_idx);
+            gfx_draw_wire_rect(gfx, shape, info.colour_bvh_branch, info.sprite_layer, info.sprite_depth, info.material_idx);
         }
     }
 
@@ -262,7 +263,7 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                 .width = state.bvh.leaves.aabb.max_x[i] - state.bvh.leaves.aabb.min_x[i],
                 .height = state.bvh.leaves.aabb.max_y[i] - state.bvh.leaves.aabb.min_y[i]
             };
-            gfx_draw_wire_rect(gfx, shape, info.colour_bvh_leaf, info.z_position, info.sprite_layer, info.material_idx);
+            gfx_draw_wire_rect(gfx, shape, info.colour_bvh_leaf, info.sprite_layer, info.sprite_depth, info.material_idx);
         }
     }
 
@@ -274,8 +275,8 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
         f32 contact_point_y;
         f32 normal_x;
         f32 normal_y;
-        Vector3 normal_start;
-        Vector3 normal_end;
+        Vector2 normal_start;
+        Vector2 normal_end;
         Circle shape;
 
         for(i32 i = 0; i < state.collision_manifold.active_index.chunk_count_length; i++){
@@ -311,16 +312,14 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
             shape.x = contact_point_x;
             shape.y = contact_point_y;
             shape.radius = 0.1f;
-            gfx_draw_wire_circle(gfx, shape, info.colour_collision_other, info.z_position, info.sprite_layer, info.material_idx);
+            gfx_draw_wire_circle(gfx, shape, info.colour_collision_other, info.sprite_layer, info.sprite_depth, info.material_idx);
 
             // draw normal from contact point.
             normal_start.x = contact_point_x;
             normal_start.y = contact_point_y;
-            normal_start.z = info.z_position;
             normal_end.x = contact_point_x + normal_x;
             normal_end.y = contact_point_y + normal_y;
-            normal_end.z = normal_start.z;
-            gfx_draw_line_3d(gfx, info.colour_collision_normal, normal_start, normal_end, info.sprite_layer, info.material_idx, gfx_global_wireframe_thickness);
+            gfx_draw_line_2d(gfx, info.colour_collision_normal, normal_start, normal_end, info.sprite_layer, info.sprite_depth, info.material_idx, gfx_global_wireframe_thickness);
 
             // draw second contact point if there is one.
             BOUNDS_CHECK(collision_idx, state.collision_manifold.two_contact_points_length);
@@ -334,16 +333,14 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                 shape.x = contact_point_x;
                 shape.y = contact_point_y;
                 shape.radius = 0.1f;
-                gfx_draw_wire_circle(gfx, shape, info.colour_collision_other, info.z_position, info.sprite_layer, info.material_idx);
+                gfx_draw_wire_circle(gfx, shape, info.colour_collision_other, info.sprite_layer, info.sprite_depth, info.material_idx);
 
                 // draw normal from contact point.
                 normal_start.x = contact_point_x;
                 normal_start.y = contact_point_y;
-                normal_start.z = info.z_position;
                 normal_end.x = contact_point_x + normal_x;
                 normal_end.y = contact_point_y + normal_y;
-                normal_end.z = normal_start.z;
-                gfx_draw_line_3d(gfx, info.colour_collision_normal, normal_start, normal_end, info.sprite_layer, info.material_idx, gfx_global_wireframe_thickness);
+                gfx_draw_line_2d(gfx, info.colour_collision_normal, normal_start, normal_end, info.sprite_layer, info.sprite_depth, info.material_idx, gfx_global_wireframe_thickness);
             }
         }
     }
@@ -360,7 +357,7 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                 .radius = 0.1f
             };
 
-            gfx_draw_wire_circle(gfx, shape, info.colour_center_of_mass, info.z_position, info.sprite_layer, info.material_idx);
+            gfx_draw_wire_circle(gfx, shape, info.colour_center_of_mass, info.sprite_layer, info.sprite_depth, info.material_idx);
         }
     }
 }

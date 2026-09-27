@@ -14,6 +14,8 @@ typedef struct{
     EntityTypeId entity_to_spawn;    
     GenId entity_parent_gid;
     bool hovering_element;
+    GenId selected_entity;
+    PolygonRectangle selected_entity_poly_rect;
 } EditorMouseState;
 
 typedef struct{
@@ -312,6 +314,11 @@ void gfx_clay_test_layout(EditorState* editor_state, GameState* game_state, Memo
 
 void editor_state_update(EditorState* editor_state, GameState* game_state, MemoryArena* transient, f32 delta_time){
     
+    // hoisting invariance.
+    GFX_State* editor_gfx_state = editor_state->gfx_state;
+    EntityManager* entity_manager = &game_state->entity_manager;
+    GFX_State* game_gfx_state = entity_manager->gfx_state;
+    
     /*
         clear from pervious run.
    
@@ -322,73 +329,132 @@ void editor_state_update(EditorState* editor_state, GameState* game_state, Memor
     gfx_clay_element_id = 0;
     
     editor_state->mouse_state.hovering_element = false;
+            
+    { // ui drawing.
     
-    // hoisting invariance.
-    GFX_State* gfx_state = editor_state->gfx_state;
-    EntityManager* entity_manager = &game_state->entity_manager;
-        
-    Vector2I mouse_backbuffer_position;
-    platform_get_mouse_position(&mouse_backbuffer_position.x, &mouse_backbuffer_position.y);
-    Clay_SetCurrentContext(gfx_state->clay_editor_ui_ctx);
-    gfx_clay_begin_layout(
-        gfx_state, (Vector2I){.x = gfx_state->window_ctx->width, .y = gfx_state->window_ctx->height}, mouse_backbuffer_position, delta_time, 
-        input_is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
-    );
-    gfx_clay_test_layout(editor_state, game_state, transient);
-    gfx_clay_end_layout(gfx_state, delta_time, SPRITE_LAYER_UI, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
+        Vector2I mouse_backbuffer_position;
+        platform_get_mouse_position(&mouse_backbuffer_position.x, &mouse_backbuffer_position.y);
+        Clay_SetCurrentContext(editor_gfx_state->clay_editor_ui_ctx);
+        gfx_clay_begin_layout(
+            editor_gfx_state, (Vector2I){.x = editor_gfx_state->window_ctx->width, .y = editor_gfx_state->window_ctx->height}, mouse_backbuffer_position, delta_time, 
+            input_is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+        );
+        gfx_clay_test_layout(editor_state, game_state, transient);
+        gfx_clay_end_layout(editor_gfx_state, delta_time, SPRITE_LAYER_GAME_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
+    }
     
-    if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)){
-        if(editor_state->mouse_state.hovering_element==true){
-            return;
-        }
+    { // entity drawing.
         
-        Transform2D spawn_transform = TRANSFORM2D_IDENTITY;
-        spawn_transform.position = gfx_get_mouse_world_position(entity_manager->gfx_state); // we use the game state's gfx_state; just in case.
-        
-        if(editor_state->mouse_state.entity_parent_gid == 0){
-            return;
-        }
-        
-        switch(editor_state->mouse_state.entity_to_spawn){
-            case EntityTypeId_RedBird:{
-                entity_spawn_red_bird(
-                    entity_manager, 
-                    (String){.chars = "spawned red bird", .length = 16, .count = 16}, 
-                    spawn_transform, 
-                    editor_state->mouse_state.entity_parent_gid
-                );
-            }break;
-            case EntityTypeId_YellowBird:{
-                entity_spawn_yellow_bird(
-                    entity_manager, 
-                    (String){.chars = "spawned yellow bird", .length = 19, .count = 19}, 
-                    spawn_transform, 
-                    editor_state->mouse_state.entity_parent_gid
-                );
-            }break;
-            case EntityTypeId_WoodBlock:{
-                entity_spawn_wood_block(
-                    entity_manager, 
-                    (String){.chars = "spawned wood block", .length = 18, .count = 18}, 
-                    spawn_transform, 
-                    editor_state->mouse_state.entity_parent_gid
-                );
-            }break;
-            case EntityTypeId_LevelRoot:{
-                entity_spawn_level_root(
-                    entity_manager, 
-                    (String){.chars = "spawned level", .length = 16, .count = 16}, 
-                    spawn_transform, 
-                    editor_state->mouse_state.entity_parent_gid
-                );
-            }break;
-            case EntityTypeId_Pig:{
-                entity_spawn_pig(
-                    entity_manager, 
-                    (String){.chars = "spawned pig", .length = 11, .count = 11}, 
-                    spawn_transform, 
-                    editor_state->mouse_state.entity_parent_gid);
-            }break;
+
+        i32 verts_length = 4;
+        u32 sprite_depth = 0;
+        Transform2D preferred_transform;
+        PolygonRectangle clickable_area;
+
+        for(i32 idx = 0; idx < entity_manager->entity_length; idx++){
+            if(!entity_manager_is_entity_allocated_unsafe(*entity_manager, idx)){
+                continue;
+            }
+            Entity* entity = &entity_manager->entity[idx];
+            
+            // get the relevant transform of the entity,
+            // using either its sprite's, or the entity,s if the is no sprite allocated. 
+                        
+            // is a sprite.
+            if(gfx_sprite_get_transform(*game_gfx_state, entity->sprite_gid, &preferred_transform)){
+                // this is okay, as it is inferred that the spritethe get transfrom
+                GFX_SpriteOrigin sprite_origin;
+                if(!gfx_sprite_get_sprite_origin(*game_gfx_state, entity->sprite_gid, &sprite_origin)){
+                    continue;
+                }
+                
+                switch(sprite_origin){  
+                    default:
+                        ASSERT(false, "unknown sprite origin");
+                    case GFX_SpriteOrigin_Center:{
+                        clickable_area = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+                    }break;
+                    case GFX_SpriteOrigin_TopLeft:{
+                        clickable_area = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+                    }break;
+                }                
+            }
+            
+            // is not a sprite.
+            else{
+                preferred_transform = entity->transform;
+                clickable_area = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+            }
+
+            gfx_draw_wire_poly(
+                editor_gfx_state,
+                clickable_area.x, 
+                clickable_area.y, 
+                verts_length, 
+                GFX_COLOUR_BLUE,
+                SPRITE_LAYER_GAME_WORLD, 
+                sprite_depth,
+                SPRITE_MATERIAL_DEBUG
+            );            
         }
     }
+    
+    { // input handling.
+    
+        if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)){
+            if(editor_state->mouse_state.hovering_element==true){
+                return;
+            }
+            
+            Transform2D spawn_transform = TRANSFORM2D_IDENTITY;
+            spawn_transform.position = gfx_get_mouse_world_position(entity_manager->gfx_state); // we use the game state's gfx_state; just in case.
+            
+            if(editor_state->mouse_state.entity_parent_gid == 0){
+                return;
+            }
+            
+            switch(editor_state->mouse_state.entity_to_spawn){
+                case EntityTypeId_RedBird:{
+                    entity_spawn_red_bird(
+                        entity_manager, 
+                        (String){.chars = "spawned red bird", .length = 16, .count = 16}, 
+                        spawn_transform, 
+                        editor_state->mouse_state.entity_parent_gid
+                    );
+                }break;
+                case EntityTypeId_YellowBird:{
+                    entity_spawn_yellow_bird(
+                        entity_manager, 
+                        (String){.chars = "spawned yellow bird", .length = 19, .count = 19}, 
+                        spawn_transform, 
+                        editor_state->mouse_state.entity_parent_gid
+                    );
+                }break;
+                case EntityTypeId_WoodBlock:{
+                    entity_spawn_wood_block(
+                        entity_manager, 
+                        (String){.chars = "spawned wood block", .length = 18, .count = 18}, 
+                        spawn_transform, 
+                        editor_state->mouse_state.entity_parent_gid
+                    );
+                }break;
+                case EntityTypeId_LevelRoot:{
+                    entity_spawn_level_root(
+                        entity_manager, 
+                        (String){.chars = "spawned level", .length = 16, .count = 16}, 
+                        spawn_transform, 
+                        editor_state->mouse_state.entity_parent_gid
+                    );
+                }break;
+                case EntityTypeId_Pig:{
+                    entity_spawn_pig(
+                        entity_manager, 
+                        (String){.chars = "spawned pig", .length = 11, .count = 11}, 
+                        spawn_transform, 
+                        editor_state->mouse_state.entity_parent_gid);
+                }break;
+            }
+        }
+    
+    }    
 }

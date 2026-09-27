@@ -588,6 +588,8 @@ typedef enum {
     }                                                                                               \
 } while(0)
 
+// binary: 0000 0000 0000 0000 0000 0000 0000 0000 1111 1111 1111 1111 1111 1111 1111 1111.
+
 /*
     the bit-wise mask used to extract the generation value from the gen id.
 */

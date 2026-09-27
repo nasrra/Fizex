@@ -6,11 +6,10 @@
 #include "base_layer/base_algorithms.c"
 #include "base_layer/base_structures.c"
 #include "renderer/gfx.c"
-#include "renderer/gfx_app_types.c"
 #include "fizx/fizx.c"
 #include "fizx/fizx_draw.c"
-#include "gameplay/gameplay.c"
-#include "gameplay/editor.c"
+#include "game/gameplay.c"
+#include "game/editor.c"
 
 /**====================
     defines.
@@ -71,20 +70,6 @@ void app_main(){
         image_textures_init_info[4] = (GFX_ImageTexturesInitInfo){.width = 1028, .height = 1028, .max_textures = 4};
     
         /**
-            sprite layers.
-        **/
-        GFX_SpriteLayerCreateInfo* sprite_layer_create_infos;
-        i32 sprite_layer_create_infos_length;
-        MEMORY_ARENA_ALLOC_ARRAY(transient, sprite_layer_create_infos, &sprite_layer_create_infos_length, 3);
-    
-        BOUNDS_CHECK(0, sprite_layer_create_infos_length);
-        sprite_layer_create_infos[0] = (GFX_SpriteLayerCreateInfo){.max_sprites = 512};
-        BOUNDS_CHECK(1, sprite_layer_create_infos_length);
-        sprite_layer_create_infos[1] = (GFX_SpriteLayerCreateInfo){.max_sprites = 512};
-        BOUNDS_CHECK(1, sprite_layer_create_infos_length);
-        sprite_layer_create_infos[2] = (GFX_SpriteLayerCreateInfo){.max_sprites = 512};
-    
-        /**
             context.
         **/
         GFX_StateInitInfo gfx_init_info = {
@@ -95,15 +80,14 @@ void app_main(){
             .font_textures_init_info = font_texture_init_info,
             .image_textures_init_infos = image_textures_init_info,
             .image_textures_init_infos_length = image_textures_init_info_length,
-            .sprite_layer_create_infos = sprite_layer_create_infos,
-            .sprite_layer_create_infos_length = sprite_layer_create_infos_length,
             .final_render_texture_width = 1920,
             .final_render_texture_height = 1080,
-            .graphics_pipeline_shader_file_path = (String){.chars = "assets/shader.wgsl", .length = 18}
+            .graphics_pipeline_shader_file_path = (String){.chars = "assets/shader.wgsl", .length = 18},
+            .max_sprites = 512
         };
     
         gfx_state_init(&gfx_state, gfx_init_info, persistent, transient, window_ctx);
-        gfx_orthographic_camera_init(&gfx_state.world_camera, GFX_CoordinateSpace_Cartesian, (Vector3){.y = 5.0f, .z = -4.0f}, 0.01f, 100.0f, 22.0f);
+        gfx_orthographic_camera_init(&gfx_state.world_camera, GFX_CoordinateSpace_Cartesian, (Vector3){.y = 5.0f, .z = -1.0f}, 0.01f, 100.0f, 22.0f);
         gfx_orthographic_camera_init(&gfx_state.screen_camera, GFX_CoordinateSpace_Rasterised, (Vector3){.z = -1.0f}, 0.01f, 1028.0f, 1080.0f);
         gfx_global_wireframe_thickness = 0.05f;
         gfx_state.clay_game_ui_ctx = gfx_clay_create_context(MEGABYTE(8), WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -143,8 +127,8 @@ void app_main(){
 
             string_clear(&file_path);
             string_push_chars(&file_path, "assets/fonts/PixelOperatorSC-Bold.ttf", 37);
-            gfx_virtual_texture_set_file_path(&gfx_state, file_path, 1);
-            gfx_load_font_texture(&gfx_state, transient, 1, 24, 32, 12);
+            gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_FONT);
+            gfx_load_font_texture(&gfx_state, transient, VIRTUAL_TEXTURE_ID_FONT, 24, 32, 12);
     
         }    
         

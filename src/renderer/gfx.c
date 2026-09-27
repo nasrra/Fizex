@@ -1,3 +1,7 @@
+
+
+
+
 ///
 /// TODO:
 /// - text rendering currently doesnt work when setting a sprite chain to SpriteOrigin_TopLeft.
@@ -207,17 +211,33 @@ typedef enum{
     Remember to look at alignments and sizes when changing this:
     https://www.w3.org/TR/WGSL/#alignment-and-size
 */
+// typedef struct{
+//     Matrix4x4 transform;
+//     GFX_SpriteRegion region;
+//     GFX_Colour colour;
+//     Vector2 vertex_offset;
+//     GFX_SpriteState state;
+//     i32 virtual_texture;
+//     i32 material;
+//     i32 colour_state;
+//     i32 layer;
+//     i32 _padding_2;
+// } GFX_DeviceSprite;
+
 typedef struct{
     Matrix4x4 transform;
     GFX_SpriteRegion region;
     GFX_Colour colour;
     Vector2 vertex_offset;
+    /*
+        `remarks`
+        the lower 32 bits are `depth`, where as the upper 32 bits is the `layer`.
+    */
+    u64 depth_layer;
     GFX_SpriteState state;
     i32 virtual_texture;
     i32 material;
     i32 colour_state;
-    i32 layer;
-    i32 _padding_2;
 } GFX_DeviceSprite;
 
 typedef struct{
@@ -232,17 +252,6 @@ typedef struct{
     i32 next_in_chain;
     bool is_first_in_chain;
 } GFX_HostSprite;
-
-typedef struct{
-    i32 max_sprites;
-    /*
-        remarks:
-        this is a stack array.
-    */
-    i32* free_sprite_indices;
-    i32 free_sprite_indices_length;
-    i32 free_sprite_indices_count;
-} GFX_SpriteLayer;
 
 typedef struct{
     /*
@@ -286,19 +295,6 @@ typedef enum{
 } GFX_SpriteType;
 
 typedef struct{
-    GenId gen_id;
-    /*
-        remarks:
-        Indicates the layer this sprite ID came from and should return to.
-    */
-    i32 layer;
-} GFX_SpriteId;
-
-typedef struct{
-    i32 max_sprites;
-} GFX_SpriteLayerCreateInfo;
-
-typedef struct{
     // the width of the texture to write the glyph data to.
     u32 texture_width;
     // the height of the texture to write the glyph data to.
@@ -328,19 +324,13 @@ typedef struct{
     GFX_ImageTexturesInitInfo* image_textures_init_infos;
     i32 image_textures_init_infos_length;
     GFX_FontTextureInitInfo font_textures_init_info;
-    /*
-        remarks:
-        The order of the layers determines the order that they are drawn.
-        E.g, layer index 4 will be above layers 3, 2, 1, etc, ...
-    */
-    GFX_SpriteLayerCreateInfo* sprite_layer_create_infos;
-    i32 sprite_layer_create_infos_length;
     i32 max_file_path_length;
     i32 max_virtual_textures;
     u32 max_user_uniform_buffer_size_in_bytes;
     u32 max_user_storage_buffer_size_in_bytes;
     u32 final_render_texture_width;
     u32 final_render_texture_height;
+    i32 max_sprites;
     String graphics_pipeline_shader_file_path;
 } GFX_StateInitInfo;
 
@@ -359,24 +349,16 @@ typedef struct {
     */
     GFX_HostSprite* host_sprite;
     i32 host_sprite_length;
-    /*
-        remarks:
-        - contains a `NIL` element.
-        - elements vertically align with `host_sprite` and `device_sprite`.
-    */
-    i32* sprite_generation;
-    i32 sprite_generation_length;
+    GenIdAllocator gen_id_allocator;
     /*
         remarks:
         this is a stack-array.
     */
-    GFX_SpriteId* one_frame_sprite_stack;
+    i32* one_frame_sprite_stack;
     i32 one_frame_sprite_stack_length;
     i32 one_frame_sprite_stack_count;
     GFX_DeviceSprite* device_sprite_scratch_space;
     i32 device_sprite_scratch_space_length;
-    GFX_SpriteLayer* sprite_layer;
-    i32 sprite_layer_length;
     GFX_RenderBuffer sprite_buffer;
     bool is_init;
 } GFX_SpriteManager;
@@ -418,6 +400,14 @@ typedef struct{
 /*====================
     defines
 ====================*//**/
+
+#define GFX_SPRITE_ORIGIN_CENTER_VERTEX_OFFSET (Vector2){0}
+#define GFX_SPRITE_ORIGIN_TOP_LEFT_VERTEX_OFFSET (Vector2){.x = 0.5f, .y = -0.5f}
+
+// the lower 32-bits of the 64 bit number.
+#define GFX_DEVICE_SPRITE_DEPTH_BIT_MASK 0x00000000FFFFFFFFULL
+// the upper 32-bits of the 64 bit number.
+#define GFX_DEVICE_SPRITE_LAYER_BIT_MASK 0xFFFFFFFF00000000ULL
 
 #define GFX_COLOUR_RED          (GFX_Colour){.r = 1.0f, .a = 1.0f}
 #define GFX_COLOUR_GREEN        (GFX_Colour){.g = 1.0f, .a = 1.0f}
@@ -535,18 +525,15 @@ typedef struct{
                                                                                                                 \
 void gfx_sprite_set_##FUNCTION_SUFFIX##_unsafe(GFX_State* ctx, i32 sprite_index, MEMBER_TYPE MEMBER_NAME){      \
     GFX_SpriteManager* sprite_manager = &ctx->sprite_manager;                                                   \
-    BOUNDS_CHECK(sprite_index, sprite_manager->device_sprite_length);                                          \
-    sprite_manager->device_sprite[sprite_index].##MEMBER_NAME = MEMBER_NAME;                                   \
+    BOUNDS_CHECK(sprite_index, sprite_manager->device_sprite_length);                                           \
+    sprite_manager->device_sprite[sprite_index].##MEMBER_NAME = MEMBER_NAME;                                    \
 }                                                                                                               \
                                                                                                                 \
-bool gfx_sprite_set_##FUNCTION_SUFFIX(GFX_State* ctx, GFX_SpriteId sprite_id, MEMBER_TYPE MEMBER_NAME){         \
-    i32 index = gen_id_get_index(sprite_id.gen_id);                                                             \
-    i32 generation = gen_id_get_generation(sprite_id.gen_id);                                                   \
-    BOUNDS_CHECK(index, ctx->sprite_manager.sprite_generation_length);                                         \
-    if(ctx->sprite_manager.sprite_generation[index] != generation){                                            \
+bool gfx_sprite_set_##FUNCTION_SUFFIX(GFX_State* ctx, GenId sprite_gid, MEMBER_TYPE MEMBER_NAME){               \
+    if(gen_id_allocator_is_gen_id_invalid(&ctx->sprite_manager.gen_id_allocator, sprite_gid)){                  \
         return false;                                                                                           \
     }                                                                                                           \
-    gfx_sprite_set_##FUNCTION_SUFFIX##_unsafe(ctx, index, MEMBER_NAME);                                         \
+    gfx_sprite_set_##FUNCTION_SUFFIX##_unsafe(ctx, gen_id_get_index(sprite_gid), MEMBER_NAME);                  \
     return true;                                                                                                \
 }
 
@@ -556,8 +543,8 @@ void gfx_sprite_chain_set_##FUNCTION_SUFFIX##_unsafe(GFX_State* ctx, i32 sprite_
     i32 first_index = sprite_index;                                                                                 \
     i32 index = first_index;                                                                                        \
     while(true){                                                                                                    \
-        BOUNDS_CHECK(index, ctx->sprite_manager.host_sprite_length);                                               \
-        GFX_HostSprite* host = &ctx->sprite_manager.host_sprite[index];                                            \
+        BOUNDS_CHECK(index, ctx->sprite_manager.host_sprite_length);                                                \
+        GFX_HostSprite* host = &ctx->sprite_manager.host_sprite[index];                                             \
         gfx_sprite_set_##FUNCTION_SUFFIX##_unsafe(ctx, index, MEMBER_NAME);                                         \
         index = host->next_in_chain;                                                                                \
         if(index == first_index){                                                                                   \
@@ -566,22 +553,16 @@ void gfx_sprite_chain_set_##FUNCTION_SUFFIX##_unsafe(GFX_State* ctx, i32 sprite_
     }                                                                                                               \
 }                                                                                                                   \
                                                                                                                     \
-bool gfx_sprite_chain_set_##FUNCTION_SUFFIX(GFX_State* ctx, GFX_SpriteId sprite_id, MEMBER_TYPE MEMBER_NAME){       \
-    i32 first_index = gen_id_get_index(sprite_id.gen_id);                                                           \
-    i32 generation = gen_id_get_generation(sprite_id.gen_id);                                                       \
+bool gfx_sprite_chain_set_##FUNCTION_SUFFIX(GFX_State* ctx, GenId sprite_gid, MEMBER_TYPE MEMBER_NAME){             \
                                                                                                                     \
-    {                                                                                                               \
-        ASSERT(ctx->sprite_manager.is_init == true, "sprite manager not init.");                                    \
-        BOUNDS_CHECK(first_index, ctx->sprite_manager.sprite_generation_length);                                   \
-        if(ctx->sprite_manager.sprite_generation[first_index] != generation){                                      \
-            ASSERT(false, "stale sprite_id.");                                                                      \
-            return false;                                                                                           \
-        }                                                                                                           \
-        BOUNDS_CHECK(first_index, ctx->sprite_manager.host_sprite_length);                                         \
-        if(gfx_sprite_is_chain_sprite(ctx->sprite_manager.host_sprite[first_index]) == true){                      \
-            ASSERT(false, "sprite is not within a sprite-chain.");                                                  \
-            return false;                                                                                           \
-        }                                                                                                           \
+    if(gen_id_allocator_is_gen_id_invalid(&ctx->sprite_manager.gen_id_allocator, sprite_gid)){                      \
+        return false;                                                                                               \
+    }                                                                                                               \
+    i32 first_index = gen_id_get_index(sprite_gid);                                                                 \
+    BOUNDS_CHECK(first_index, ctx->sprite_manager.host_sprite_length);                                              \
+    if(gfx_sprite_is_chain_sprite(ctx->sprite_manager.host_sprite[first_index]) == true){                           \
+        ASSERT(false, "sprite is not within a sprite-chain.");                                                      \
+        return false;                                                                                               \
     }                                                                                                               \
                                                                                                                     \
     gfx_sprite_set_##FUNCTION_SUFFIX##_unsafe(ctx, first_index, MEMBER_NAME);                                       \
@@ -632,7 +613,7 @@ bool gfx_sprite_chain_set_##FUNCTION_SUFFIX(GFX_State* ctx, GFX_SpriteId sprite_
     remarks:
     As the camera is not expected to rotate or move from its fixed position; this is okay.
 **/
-DEFINE_QUICKSORT_STRUCT(GFX_DeviceSprite, f32, .transform.m[14], quicksort_device_sprite);
+DEFINE_QUICKSORT_STRUCT(GFX_DeviceSprite, u64, .depth_layer, quicksort_device_sprite);
 
 /**====================
     globals.
@@ -795,6 +776,12 @@ bool gfx_freetype_load_font(
 
 
 
+///
+/// functions: sprite
+///
+
+
+
 
 inline bool gfx_sprite_is_chain_sprite(GFX_HostSprite sprite){
     return sprite.next_in_chain > 0;
@@ -828,13 +815,47 @@ GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(colour_state, colour_state, GFX_ColourSt
 GFX_DEFINE_SPRITE_SETTER_FUNCTION(vertex_offset, vertex_offset, Vector2);
 GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(vertex_offset, vertex_offset, Vector2);
 
-void gfx_sprite_set_transform_unsafe(GFX_State* ctx, i32 sprite_idx, Transform2D transform, f32 depth){
-    gfx_sprite_set_transform_matrix_unsafe(ctx, sprite_idx, transform2d_to_matrix4x4_depth(transform, depth));
+void gfx_sprite_set_transform_unsafe(GFX_State* ctx, i32 sprite_idx, Transform2D transform){
+    gfx_sprite_set_transform_matrix_unsafe(ctx, sprite_idx, transform2d_to_matrix4x4(transform));
 }
 
-bool gfx_sprite_set_transform(GFX_State* ctx, GFX_SpriteId sprite_id, Transform2D transform, f32 depth){
-    return gfx_sprite_set_transform_matrix(ctx, sprite_id, transform2d_to_matrix4x4_depth(transform, depth));
+bool gfx_sprite_set_transform(GFX_State* ctx, GenId sprite_gid, Transform2D transform){
+    return gfx_sprite_set_transform_matrix(ctx, sprite_gid, transform2d_to_matrix4x4(transform));
 }
+
+void gfx_sprite_set_layer_unsafe(GFX_State* state, i32 sprite_idx, u32 layer){
+    GFX_SpriteManager* sprite_manager = &state->sprite_manager;
+    BOUNDS_CHECK(sprite_idx, sprite_manager->device_sprite_length);
+    GFX_DeviceSprite* sprite = &sprite_manager->device_sprite[sprite_idx];
+    sprite->depth_layer = (sprite->depth_layer & GFX_DEVICE_SPRITE_DEPTH_BIT_MASK) | ((u64)layer << 32);
+}
+
+void gfx_sprite_set_depth_unsafe(GFX_State* state, i32 sprite_idx, u32 depth){
+    GFX_SpriteManager* sprite_manager = &state->sprite_manager;
+    BOUNDS_CHECK(sprite_idx, sprite_manager->device_sprite_length);
+    GFX_DeviceSprite* sprite = &sprite_manager->device_sprite[sprite_idx];
+    sprite->depth_layer = (sprite->depth_layer & GFX_DEVICE_SPRITE_LAYER_BIT_MASK) | ((u64)depth);
+} 
+
+GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(depth, depth, u32);
+GFX_DEFINE_SPRITE_CHAIN_SETTER_FUNCTION(layer, layer, u32);
+
+u32 gfx_get_sprite_layer_unsafe(GFX_State* state, i32 sprite_idx){
+    GFX_SpriteManager* sprite_manager = &state->sprite_manager;
+    BOUNDS_CHECK(sprite_idx, sprite_manager->device_sprite_length);
+    GFX_DeviceSprite* sprite = &sprite_manager->device_sprite[sprite_idx];
+    return (u32)((sprite->depth_layer & GFX_DEVICE_SPRITE_LAYER_BIT_MASK) >> 32);
+}
+
+u32 gfx_get_sprite_depth_unsafe(GFX_State* state, i32 sprite_idx){
+    GFX_SpriteManager* sprite_manager = &state->sprite_manager;
+    BOUNDS_CHECK(sprite_idx, sprite_manager->device_sprite_length);
+    GFX_DeviceSprite* sprite = &sprite_manager->device_sprite[sprite_idx];
+    return (u32)(sprite->depth_layer & GFX_DEVICE_SPRITE_DEPTH_BIT_MASK);
+}
+
+
+
 
 void gfx_request_adapter_callback(
     WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView message,
@@ -1123,57 +1144,23 @@ void gfx_virtual_texture_manager_init(
     manager->is_init = true;
 }
 
-void gfx_sprite_manager_init(GFX_SpriteManager* manager, WGPUDevice device, MemoryArena* arena, GFX_SpriteLayerCreateInfo* layer_infos, i32 layer_infos_length){
+void gfx_sprite_manager_init(GFX_SpriteManager* manager, WGPUDevice device, MemoryArena* arena, i32 sprite_amount){
 
     { // validation step.
         ASSERT(!manager->is_init, "attempted to init an already init sprite manager.");
-        ASSERT(layer_infos, "layer_infos is NULL.");
+        ASSERT(sprite_amount<GFX_DEVICE_SPRITE_MAX_AMOUNT, "attempted to init sprite manager with a sprite amount greater than the max device sprite amount.");
     }
-
-    i32 max_sprites = 0;
-    for(i32 i = 0; i < layer_infos_length; i++){
-        ASSERT(layer_infos[i].max_sprites > 0, "should not init sprite layer with less than 1 sprite; as a NIL element is required.");
-        max_sprites += layer_infos[i].max_sprites;
-    }
-
-    ASSERT(max_sprites<GFX_DEVICE_SPRITE_MAX_AMOUNT, "attempted to init sprite manager with a sprite amount greater than the max device sprite amount.");
+    
     WGPUBufferUsage host_usage = WGPUBufferUsage_CopySrc | WGPUBufferUsage_MapWrite;
     WGPUBufferUsage device_usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Storage;
-    gfx_buffer_init(&manager->sprite_buffer, device, host_usage, device_usage, max_sprites, sizeof(GFX_DeviceSprite));
+    gfx_buffer_init(&manager->sprite_buffer, device, host_usage, device_usage, sprite_amount, sizeof(GFX_DeviceSprite));
 
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->device_sprite, &manager->device_sprite_length, max_sprites);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->host_sprite, &manager->host_sprite_length, max_sprites);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->sprite_generation, &manager->sprite_generation_length, max_sprites);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->device_sprite_scratch_space, &manager->device_sprite_scratch_space_length, max_sprites);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->sprite_layer, &manager->sprite_layer_length, layer_infos_length);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->one_frame_sprite_stack, &manager->one_frame_sprite_stack_length, max_sprites);
+    gen_id_allocator_init(&manager->gen_id_allocator, arena, sprite_amount);
 
-    i32 free_index = 1; // exclude the nil.
-    for(i32 i = 0; i < manager->sprite_layer_length; i++){
-        GFX_SpriteLayer* layer = &manager->sprite_layer[i];
-
-        BOUNDS_CHECK(i, layer_infos_length);
-        GFX_SpriteLayerCreateInfo* create_info = &layer_infos[i];
-
-        layer->max_sprites = create_info->max_sprites;
-        MEMORY_ARENA_ALLOC_ARRAY(arena, layer->free_sprite_indices, &layer->free_sprite_indices_length, layer->max_sprites);
-#if 0
-        // push the free indices.
-        if(i == 0){
-            i32 j = i == 0 ? 1 : 0; // exclude the Nil sprite.
-            for(i32 j = 1; j < layer->max_sprites; j++){
-                ARRAY_PUSH(layer->free_sprite_indices, layer->free_sprite_indices_length, &layer->free_sprite_indices_count, free_index);
-                free_index++;
-            }
-        }
-#endif
-
-        for(i32 j = 1; j < layer->max_sprites; j++){
-            ARRAY_PUSH(layer->free_sprite_indices, layer->free_sprite_indices_length, &layer->free_sprite_indices_count, free_index);
-            free_index++;
-        }
-
-    }
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->device_sprite, &manager->device_sprite_length, sprite_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->host_sprite, &manager->host_sprite_length, sprite_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->device_sprite_scratch_space, &manager->device_sprite_scratch_space_length, sprite_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->one_frame_sprite_stack, &manager->one_frame_sprite_stack_length, sprite_amount);
     manager->is_init = true;
 }
 
@@ -2068,163 +2055,195 @@ void gfx_free_surface_texture(GFX_SurfaceTexture* texture){
     wgpuTextureViewRelease(texture->view);
 }
 
-GFX_SpriteId gfx_sprite_alloc(GFX_State* ctx, i32 layer_index, bool* out_success){
+GenId gfx_sprite_alloc(GFX_State* state){
 
-    ASSERT(ctx->sprite_manager.is_init, "sprite manager has not been init");
-    GFX_SpriteManager* sprite_manager = &ctx->sprite_manager;
-
-    BOUNDS_CHECK(layer_index, sprite_manager->sprite_layer_length);
-    GFX_SpriteLayer* layer = &sprite_manager->sprite_layer[layer_index];
-    if(layer->free_sprite_indices_count == 0){
-        ASSERT(0!=0, "memory limit hit; cannot allocate more sprites.");
-        *out_success = false;
-        return (GFX_SpriteId){0};
+    ASSERT(state->sprite_manager.is_init, "sprite manager has not been init");
+    GFX_SpriteManager* sprite_manager = &state->sprite_manager;
+    
+    GenId gid = gen_id_allocator_alloc(&state->sprite_manager.gen_id_allocator);
+    if(gid == 0){
+        return gid;
     }
-
-    i32 sprite_index = 0;
-    ARRAY_POP(layer->free_sprite_indices, layer->free_sprite_indices_length, &layer->free_sprite_indices_count, &sprite_index);
-
-    BOUNDS_CHECK(sprite_index, ctx->sprite_manager.device_sprite_length);
-    GFX_DeviceSprite* sprite = &ctx->sprite_manager.device_sprite[sprite_index];
+    
+    i32 idx = gen_id_get_index(gid);    
+    
+    BOUNDS_CHECK(idx, state->sprite_manager.device_sprite_length);
+    // device sprite is assumedt to be zeroed.
+    GFX_DeviceSprite* sprite = &state->sprite_manager.device_sprite[idx];
     sprite->state = GFX_SpriteState_Inactive;
-    sprite->layer = layer_index;
-
-    BOUNDS_CHECK(sprite_index, ctx->sprite_manager.sprite_generation_length);
-    GenId gen_id = gen_id_make(sprite_index, ctx->sprite_manager.sprite_generation[sprite_index]);
-
-    *out_success = true;
-    return (GFX_SpriteId){.gen_id = gen_id, .layer = layer_index};
+    
+    return gid;
 }
 
-GFX_SpriteId gfx_one_frame_sprite_alloc(GFX_State* ctx, i32 layer, bool* out_success){
-    GFX_SpriteId sprite_id = gfx_sprite_alloc(ctx, layer, out_success);
-    GFX_SpriteManager* manager = &ctx->sprite_manager;
-    if(*out_success){
+GenId gfx_one_frame_sprite_alloc(GFX_State* state){
+    GenId sprite_gid = gfx_sprite_alloc(state);
+    GFX_SpriteManager* manager = &state->sprite_manager;
+    if(sprite_gid != 0){
         ARRAY_PUSH(
             manager->one_frame_sprite_stack,
             manager->one_frame_sprite_stack_length,
             &manager->one_frame_sprite_stack_count,
-            sprite_id
+            gen_id_get_index(sprite_gid)
         );
     }
-    return sprite_id;
+    return sprite_gid;
 }
 
 bool gfx_sprite_init(
-    GFX_State* ctx, GFX_SpriteId sprite_id, Transform2D transform, GFX_Colour colour,
+    GFX_State* state, GenId sprite_gid, Transform2D transform, GFX_Colour colour,
     GFX_SpriteRegion region, GFX_ColourState colour_state, GFX_SpriteOrigin origin,
-    i32 virtual_texture, i32 material, f32 z_position, bool is_active
+    i32 virtual_texture, i32 material, u32 layer, u32 depth, bool is_active
 ){
-    GFX_SpriteManager* sprite_manager = &ctx->sprite_manager;
-    i32 idx = gen_id_get_index(sprite_id.gen_id);
-    i32 gen = gen_id_get_generation(sprite_id.gen_id);
+    GFX_SpriteManager* sprite_manager = &state->sprite_manager;
 
     ASSERT(sprite_manager->is_init == true, "sprite manager has not been init.");
-    ASSERT(idx > 0, "invalid sprite id.");
     ASSERT(virtual_texture > 0, "invalid virtual texture index.");
     ASSERT(material > 0, "invalid material index.");
 
-    BOUNDS_CHECK(idx, sprite_manager->sprite_generation_length);
-    if(gen != ctx->sprite_manager.sprite_generation[idx]){
+    if(gen_id_allocator_is_gen_id_invalid(&state->sprite_manager.gen_id_allocator, sprite_gid)){
         return false;
     }
+    
+    i32 idx = gen_id_get_index(sprite_gid);
 
-    gfx_sprite_set_transform_unsafe(ctx, idx, transform, z_position);
-    gfx_sprite_set_material_unsafe(ctx, idx, material);
-    gfx_sprite_set_region_unsafe(ctx, idx, region);
-    gfx_sprite_set_virtual_texture_unsafe(ctx, idx, virtual_texture);
-    gfx_sprite_set_state_unsafe(ctx, idx, is_active ? GFX_SpriteState_Active : GFX_SpriteState_Inactive);
-    gfx_sprite_set_colour_unsafe(ctx, idx, colour);
-    gfx_sprite_set_colour_state_unsafe(ctx, idx, colour_state);
+    gfx_sprite_set_transform_unsafe(state, idx, transform);
+    gfx_sprite_set_material_unsafe(state, idx, material);
+    gfx_sprite_set_region_unsafe(state, idx, region);
+    gfx_sprite_set_virtual_texture_unsafe(state, idx, virtual_texture);
+    gfx_sprite_set_state_unsafe(state, idx, is_active ? GFX_SpriteState_Active : GFX_SpriteState_Inactive);
+    gfx_sprite_set_colour_unsafe(state, idx, colour);
+    gfx_sprite_set_colour_state_unsafe(state, idx, colour_state);
+    gfx_sprite_set_layer_unsafe(state, idx, layer);
+    gfx_sprite_set_depth_unsafe(state, idx, depth);
+    
     switch(origin){
         case GFX_SpriteOrigin_Center:{
-            gfx_sprite_set_vertex_offset_unsafe(ctx, idx, (Vector2){0});
+            gfx_sprite_set_vertex_offset_unsafe(state, idx, GFX_SPRITE_ORIGIN_CENTER_VERTEX_OFFSET);
         }break;
         case GFX_SpriteOrigin_TopLeft:{
-            gfx_sprite_set_vertex_offset_unsafe(ctx, idx, (Vector2){.x = 0.5f, .y = -0.5f});
+            gfx_sprite_set_vertex_offset_unsafe(state, idx, GFX_SPRITE_ORIGIN_TOP_LEFT_VERTEX_OFFSET);
         }break;
     }
 
     return true;
 }
 
-void gfx_dealloc_sprite_unsafe(GFX_State* ctx, i32 sprite_index, i32 sprite_layer){
+bool gfx_sprite_get_transform(GFX_State state, GenId sprite_gid, Transform2D* out_transform){
+    
+    // hoisting invariance.
+    GFX_SpriteManager* sprite_manager = &state.sprite_manager; 
+    
+    if(gen_id_allocator_is_gen_id_invalid(&sprite_manager->gen_id_allocator, sprite_gid)){
+        return false;
+    }
 
-    GFX_SpriteManager* manager = &ctx->sprite_manager;
-
-    BOUNDS_CHECK(sprite_layer, manager->sprite_layer_length);
-    GFX_SpriteLayer* layer = &manager->sprite_layer[sprite_layer];
-
-    BOUNDS_CHECK(sprite_index, manager->host_sprite_length);
-    manager->host_sprite[sprite_index] = (GFX_HostSprite){0};
-
-    BOUNDS_CHECK(sprite_index, manager->device_sprite_length);
-    // NOTE: do not change this; one-frame sprites need to have their GPU memory zero'd out after each frame.
-    manager->device_sprite[sprite_index] = (GFX_DeviceSprite){0};
-
-    ARRAY_PUSH(layer->free_sprite_indices, layer->free_sprite_indices_length, &layer->free_sprite_indices_count, sprite_index);
+    i32 idx = gen_id_get_index(sprite_gid);
+    BOUNDS_CHECK(idx, sprite_manager->device_sprite_length);
+    *out_transform = matrix4x4_to_transform2d(sprite_manager->device_sprite[idx].transform);
+    return true;
 }
 
-bool gfx_dealloc_sprite(GFX_State* ctx, GFX_SpriteId sprite_id){
+bool gfx_sprite_get_sprite_origin(GFX_State state, GenId sprite_gid, GFX_SpriteOrigin* out_sprite_origin){
+    
+    // hoisting invariance.
+    GFX_SpriteManager* sprite_manager = &state.sprite_manager; 
+    
+    if(gen_id_allocator_is_gen_id_invalid(&sprite_manager->gen_id_allocator, sprite_gid)){
+        return false;
+    }
+    
+    i32 idx = gen_id_get_index(sprite_gid);
+    BOUNDS_CHECK(idx, sprite_manager->device_sprite_length);
+    Vector2 vertex_offset = sprite_manager->device_sprite[idx].vertex_offset;
+    
+    if(vector2_equals(vertex_offset, GFX_SPRITE_ORIGIN_CENTER_VERTEX_OFFSET)){
+        *out_sprite_origin = GFX_SpriteOrigin_Center;
+    }
+    else if(vector2_equals(vertex_offset, GFX_SPRITE_ORIGIN_TOP_LEFT_VERTEX_OFFSET)){
+        *out_sprite_origin = GFX_SpriteOrigin_TopLeft;
+    }
+    else{
+        ASSERT(false, "sprite has an unexpected vertex offset; unable to determine what sprite origin it contains");
+        return false;
+    }
+    return true;
+}
 
-    // validation.
-    ASSERT(ctx->is_init == true, "renderer context is not init.");
-    ASSERT(ctx->sprite_manager.is_init == true, "renderer sprite manager has not been init.");
+void gfx_dealloc_sprite_unsafe(GFX_State* ctx, i32 sprite_idx){
 
     GFX_SpriteManager* manager = &ctx->sprite_manager;
-    i32 generation = gen_id_get_generation(sprite_id.gen_id);
-    i32 index = gen_id_get_index(sprite_id.gen_id);
+
+    BOUNDS_CHECK(sprite_idx, manager->host_sprite_length);
+    manager->host_sprite[sprite_idx] = (GFX_HostSprite){0};
+
+    // NOTE: do not change this; one-frame sprites need to have their GPU memory zero'd out after each frame.
+    BOUNDS_CHECK(sprite_idx, manager->device_sprite_length);
+    manager->device_sprite[sprite_idx] = (GFX_DeviceSprite){0};
+
+    gen_id_allocator_dealloc_unsafe(&ctx->sprite_manager.gen_id_allocator, sprite_idx);
+}
+
+bool gfx_dealloc_sprite(GFX_State* state, GenId sprite_gid){
 
     // validation.
-    if(index <= 0){
-        ASSERT(0!=0, "attempted to deallocate an invalid or the Nil sprite.");
-        return false;
-    }
-    if(generation != manager->sprite_generation[index]){
-        ASSERT(0!=0, "attempted to deallocate a sprite with a stale index.");
+    ASSERT(state->is_init == true, "renderer context is not init.");
+    ASSERT(state->sprite_manager.is_init == true, "renderer sprite manager has not been init.");
+    GFX_SpriteManager* manager = &state->sprite_manager;
+    
+    if(gen_id_allocator_is_gen_id_invalid(&state->sprite_manager.gen_id_allocator, sprite_gid)){
         return false;
     }
 
-    GFX_DeviceSprite* sprite = &manager->device_sprite[index];
+    i32 idx = gen_id_get_index(sprite_gid);
+    GFX_DeviceSprite* sprite = &manager->device_sprite[idx];
     if(sprite->state == GFX_SpriteState_Deallocated){
         ASSERT(0!=0, "attempted to deallocate a sprite that has already been deallocated.");
         return false;
     }
 
-    gfx_dealloc_sprite_unsafe(ctx, index, sprite_id.layer);
+    gfx_dealloc_sprite_unsafe(state, idx);
     return true;
 }
 
-bool gfx_sprite_chain_alloc(GFX_State* state, i32 chain_length, i32 layer, GFX_SpriteId* out_sprite_id){
+/*
+    `remarks`
+    the first sprite will be returned always, regardless of whether or not the full sprite chain was allocated.
+
+    `returns`
+    the GenId of the `first` sprite in the sprite chain; otherwise 0 if the chain didnt allocate at all. 
+*/
+GenId gfx_sprite_chain_alloc(GFX_State* state, i32 chain_length){
     GFX_SpriteManager* manager = &state->sprite_manager;
 
     if(chain_length <= 0){
         ASSERT(false, "chain_length must be at least 1.");
-        return false;
+        return 0;
     }
 
-    GFX_SpriteId first = {0};
+    GenId first_gid = 0;
     i32 first_idx = 0;
     i32 previous_idx = 0;
     bool success = false;
 
     for(i32 i = 0; i < chain_length; i++){
-        GFX_SpriteId sprite_id = gfx_sprite_alloc(state, layer, &success);
-        if(!success){
+        GenId sprite_gid = gfx_sprite_alloc(state);
+        if(sprite_gid == 0){
             ASSERT(false, "failed to alloc full sprite chain.");
             // TODO: dealloc first.
-            return false;
+            return first_gid;
         }
 
-        i32 idx = gen_id_get_index(sprite_id.gen_id);
+        i32 idx = gen_id_get_index(sprite_gid);
+        BOUNDS_CHECK(idx, manager->host_sprite_length);
         GFX_HostSprite* curr_hs = &manager->host_sprite[idx];
 
         if(i == 0){
-            first = sprite_id;
+            first_gid = sprite_gid;
             first_idx = idx;
             curr_hs->is_first_in_chain = true;
         }
         else{
+            BOUNDS_CHECK(previous_idx, manager->host_sprite_length);
             manager->host_sprite[previous_idx].next_in_chain = idx;
             curr_hs->is_first_in_chain = false;
         }
@@ -2232,53 +2251,52 @@ bool gfx_sprite_chain_alloc(GFX_State* state, i32 chain_length, i32 layer, GFX_S
         // always close the loop back to first; gets overwritten by the next
         // iteration's link unless this is the last node, in which case it sticks.
         curr_hs->next_in_chain = first_idx;
-
         previous_idx = idx;
     }
-
-    *out_sprite_id = first;
-    return true;
+    return first_gid;
 }
 
-
-bool gfx_one_frame_sprite_chain_alloc(GFX_State* state, i32 chain_length, i32 layer, GFX_SpriteId* out_sprite_id){
+GenId gfx_one_frame_sprite_chain_alloc(GFX_State* state, i32 chain_length){
     GFX_SpriteManager* manager = &state->sprite_manager;
 
     if(chain_length <= 0){
         ASSERT(false, "chain_length must be at least 1.");
-        return false;
+        return 0;
     }
 
-    GFX_SpriteId first = {0};
+    GenId first_gid = 0;
     i32 first_idx = 0;
     i32 previous_idx = 0;
     bool success = false;
 
     for(i32 i = 0; i < chain_length; i++){
-        GFX_SpriteId sprite_id = gfx_sprite_alloc(state, layer, &success);
-        if(!success){
+        GenId sprite_gid = gfx_sprite_alloc(state);
+        if(sprite_gid == 0){
             ASSERT(false, "failed to alloc full sprite chain.");
             // TODO: dealloc first.
-            return false;
+            return first_gid;
         }
 
-        // flag the sprite to be deallocated afterwards.
+        i32 idx = gen_id_get_index(sprite_gid);
+ 
+         // flag the sprite to be deallocated afterwards.
         ARRAY_PUSH(
             manager->one_frame_sprite_stack,
             manager->one_frame_sprite_stack_length,
             &manager->one_frame_sprite_stack_count,
-            sprite_id
+            idx
         );
         
-        i32 idx = gen_id_get_index(sprite_id.gen_id);
+        BOUNDS_CHECK(idx, manager->host_sprite_length);
         GFX_HostSprite* curr_hs = &manager->host_sprite[idx];
 
         if(i == 0){
-            first = sprite_id;
+            first_gid = sprite_gid;
             first_idx = idx;
             curr_hs->is_first_in_chain = true;
         }
         else{
+            BOUNDS_CHECK(previous_idx, manager->host_sprite_length);
             manager->host_sprite[previous_idx].next_in_chain = idx;
             curr_hs->is_first_in_chain = false;
         }
@@ -2286,15 +2304,12 @@ bool gfx_one_frame_sprite_chain_alloc(GFX_State* state, i32 chain_length, i32 la
         // always close the loop back to first; gets overwritten by the next
         // iteration's link unless this is the last node, in which case it sticks.
         curr_hs->next_in_chain = first_idx;
-
         previous_idx = idx;
     }
-
-    *out_sprite_id = first;
-    return true;
+    return first_gid;
 }
 
-void gfx_sprite_string_set_transform(GFX_State* state, i32 sprite_idx, Transform2D transform, f32 depth){
+void gfx_sprite_string_set_transform(GFX_State* state, i32 sprite_idx, Transform2D transform){
     GFX_SpriteManager* sprites = &state->sprite_manager;
     i32 first_idx = sprite_idx;
     i32 idx = first_idx;
@@ -2312,7 +2327,7 @@ void gfx_sprite_string_set_transform(GFX_State* state, i32 sprite_idx, Transform
         glyph_transform.position = vector2_add(transform.position, glyph_offset);
 
         // set the position.
-        gfx_sprite_set_transform_unsafe(state, idx, glyph_transform, depth);
+        gfx_sprite_set_transform_unsafe(state, idx, glyph_transform);
 
         // next loop iteration preperation.
         idx = sprite->next_in_chain;
@@ -2321,113 +2336,6 @@ void gfx_sprite_string_set_transform(GFX_State* state, i32 sprite_idx, Transform
         }
     }
 }
-
-#if 0
-public static void SetSpriteStringTransformUnsafe(
-    ref SpriteManager manager, int spriteIndex, Transform transform
-){
-    int firstIndex = spriteIndex;
-    int index = firstIndex;
-    while(true){
-
-        ref HostSprite sprite = ref manager.HostSprites[index];
-        Transform glyphTransform = default;
-        // Apply the base transform's scale to the glyph's dimensions
-        glyphTransform.Scale = transform.Scale * new Vector3(){X = sprite.GlyphQuadSize.X, Y = sprite.GlyphQuadSize.Y, Z = 1.0f};
-
-        // Position needs to inherit the base transform's position plus our offset scaled by the base scale
-        glyphTransform.Position = transform.Position + (sprite.GlyphOffset * transform.Scale);
-
-        SetSpriteTransformUnsafe(ref manager, index, glyphTransform);
-
-        // next loop iteration preperation.
-        index = sprite.NextInChain;
-        if(index==firstIndex){
-            break;
-        }
-    }
-}
-
-
-[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-public static void SetSpriteStringTextUnsafe(
-    ref SpriteManager sprites, ref VirtualTextureManager textures, int spriteIndex, String text
-){
-    int firstIndex = spriteIndex;
-    int index = firstIndex;
-    int charIndex = 0;
-    Vector2 advance = default;
-    while(true){
-        ref DeviceSprite device = ref sprites.DeviceSprites[index];
-        ref HostSprite host = ref sprites.HostSprites[index];
-        ref FontData fontData = ref textures.HostVirtualTextures[device.VirtualTextureIndex].FontData;
-        Vector2I maxGlyphSize = new(){X = (int)fontData.MaxGlyphHeightInPixels, Y = (int)fontData.MaxGlyphHeightInPixels};
-
-        if(charIndex >= text.Count){
-            host.GlyphOffset = default;
-            host.GlyphQuadSize = default;
-            goto End;
-        }
-
-        char c = text[charIndex];
-        int glyphDataIndex = (int)c - (int)fontData.BaseGlyphIndex + 1;
-        ref Glyph glyphData = ref fontData.Glyphs[glyphDataIndex];
-
-        // pixel coords.
-        SetSpriteVirtualTextureUnsafe(ref sprites, index, device.VirtualTextureIndex);
-        SetSpriteRegionUnsafe(
-            ref sprites, index,
-            new(){
-                TopLeft = new(){
-                    X = glyphData.TextureCoords.X,
-                    Y = glyphData.TextureCoords.Y
-                },
-                BotRight = new(){
-                    X = glyphData.TextureCoords.X + glyphData.Size.X,
-                    Y = glyphData.TextureCoords.Y + glyphData.Size.Y
-                }
-            }
-        );
-
-        /**
-            Note that the transform code below expects to be handed glyph data that is within rasterised space:
-            (X+ = right, Y+ = down). where the origin of the glyph on the font texture is the top left of its quad region.
-
-            As this renderer is in cartesian space (X+ = right, Y+ = up) and the origin of the sprite is at its center, there
-            are conversions that must be accounted for.
-        **/
-        Vector3 scaling = new(){X = (float)glyphData.Size.X/maxGlyphSize.X, Y = (float)glyphData.Size.Y/maxGlyphSize.Y};
-        // Calculate the local top-left of the glyph using the glyph data metrics.
-        // In Y+ up space, adding Offset.Y pushes the top edge correctly upwards from the baseline.
-        float localLeft = advance.X + glyphData.Offset.X;
-        float localTop  = advance.Y + glyphData.Offset.Y;
-
-
-        // Since sprites have an origin at their center:
-        // X moves right (+), but Y must move DOWN (-) to reach the center from the top edge.
-        host.GlyphOffset = new(){
-            X = localLeft + (glyphData.Size.X * 0.5f),
-            Y = localTop  - (glyphData.Size.Y * 0.5f),
-        };
-        host.GlyphQuadSize.X = glyphData.Size.X;
-        host.GlyphQuadSize.Y = glyphData.Size.Y;
-
-        // Advance the cursor for the next character, scaled by your base transform scale
-        // advance += glyphData.Advance * new Vector2(){X = transform.Scale.X * (1f/transform.Scale.X), Y = transform.Scale.Y* (1f/transform.Scale.Y)};
-        advance += glyphData.Advance;
-        charIndex++;
-
-        End:
-        {
-            index = host.NextInChain;
-            if(index==firstIndex){
-                // Debug.Assert(false, $"Sprite String '{firstIndex}' is too small to fully contain string: '{String.ToSystemString(text)}'");
-                break;
-            }
-        }
-    }
-}
-#endif
 
 void gfx_sprite_string_set_text_unsafe(GFX_State* state, i32 sprite_idx, String text){
     GFX_SpriteManager* sprites = &state->sprite_manager;
@@ -2519,40 +2427,38 @@ void gfx_sprite_string_set_text_unsafe(GFX_State* state, i32 sprite_idx, String 
 }
 
 bool gfx_sprite_string_init(
-    GFX_State* state, GFX_SpriteId sprite_id, String text, Transform2D transform, i32 virtual_texture_index,
-    i32 material_index, f32 depth, bool is_active
+    GFX_State* state, GenId sprite_gid, String text, Transform2D transform, i32 virtual_texture_idx,
+    i32 material_idx, u32 layer, u32 depth, bool is_active
 ){
-    i32 first_idx = gen_id_get_index(sprite_id.gen_id);
-    i32 generation = gen_id_get_generation(sprite_id.gen_id);
-
-    BOUNDS_CHECK(virtual_texture_index, state->virtual_texture_manager.host_virtual_texture_length);
-    GFX_HostVirtualTexture* vt = &state->virtual_texture_manager.host_virtual_texture[virtual_texture_index];
 
 
-    { // validation.
-        ASSERT(state->sprite_manager.is_init, "sprite manager isnt init.");
-        ASSERT(material_index > 0, "invalid material index.");
-        BOUNDS_CHECK(first_idx, state->sprite_manager.sprite_generation_length);
-        if(state->sprite_manager.sprite_generation[first_idx] != generation){
-            ASSERT(false, "attempted to init a sprite string with a stale sprite-id.");
-            return false;
-        }
-        BOUNDS_CHECK(first_idx, state->sprite_manager.host_sprite_length);
-        if(!gfx_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
-            ASSERT(false, "sprite is not a sprite string / apart of a sprite chain.");
-            return false;
-        }
+    ASSERT(state->sprite_manager.is_init, "sprite manager isnt init.");
+    ASSERT(material_idx > 0, "invalid material index.");
+    if(gen_id_allocator_is_gen_id_invalid(&state->sprite_manager.gen_id_allocator, sprite_gid)){
+        return false;
     }
+
+    i32 first_idx = gen_id_get_index(sprite_gid);
+    BOUNDS_CHECK(first_idx, state->sprite_manager.host_sprite_length);
+    if(!gfx_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
+        ASSERT(false, "sprite is not a sprite string / apart of a sprite chain.");
+        return false;
+    }
+
+    BOUNDS_CHECK(virtual_texture_idx, state->virtual_texture_manager.host_virtual_texture_length);
+    GFX_HostVirtualTexture* vt = &state->virtual_texture_manager.host_virtual_texture[virtual_texture_idx];
 
     /**
         Order Matters Here:x
             virtual_texture -> text -> transform.
     **/
-    gfx_sprite_chain_set_virtual_texture_unsafe(state, first_idx, virtual_texture_index);
+    gfx_sprite_chain_set_virtual_texture_unsafe(state, first_idx, virtual_texture_idx);
     gfx_sprite_string_set_text_unsafe(state, first_idx, text);
-    gfx_sprite_string_set_transform(state, first_idx, transform, depth);
+    gfx_sprite_string_set_transform(state, first_idx, transform);
     gfx_sprite_chain_set_state_unsafe(state, first_idx, is_active ? GFX_SpriteState_Active : GFX_SpriteState_Inactive);
-    gfx_sprite_chain_set_material_unsafe(state, first_idx, material_index);
+    gfx_sprite_chain_set_material_unsafe(state, first_idx, material_idx);
+    gfx_sprite_chain_set_layer_unsafe(state, first_idx, layer);
+    gfx_sprite_chain_set_depth_unsafe(state, first_idx, depth);
 
     return true;
 }
@@ -2578,7 +2484,7 @@ void gfx_state_init(
         info.font_textures_init_info, info.max_virtual_textures, info.max_file_path_length
     );
 
-    gfx_sprite_manager_init(&ctx->sprite_manager, ctx->device, persistent, info.sprite_layer_create_infos, info.sprite_layer_create_infos_length);
+    gfx_sprite_manager_init(&ctx->sprite_manager, ctx->device, persistent, info.max_sprites);
     gfx_vertex_buffer_init(&ctx->vertex_buffer, ctx->device);
     gfx_index_buffer_init(&ctx->index_buffer, transient, ctx->device, ctx->sprite_manager.device_sprite_length);
     gfx_user_uniform_buffer_init(&ctx->user_uniform_buffer, ctx->device, info.max_user_uniform_buffer_size_in_bytes);
@@ -2617,32 +2523,9 @@ void gfx_state_draw(GFX_State* ctx){
     // prepare for sorting.
     GFX_Colour c = ctx->sprite_manager.device_sprite[1].colour;
     COPY_MEMORY(ctx->sprite_manager.device_sprite_scratch_space, ctx->sprite_manager.device_sprite, sizeof(GFX_DeviceSprite) * ctx->sprite_manager.device_sprite_length);
-    GFX_Colour a = ctx->sprite_manager.device_sprite_scratch_space[1].colour;
-    /**
-        sort sprites by their z position within their local layer groups.
 
-        Example Output:
-        ----------------------------------
-        | Sprite Id | Z Position | Layer |
-        ----------------------------------
-        | 0         | 0          | 0     |
-        | 1         | 1          | 0     |
-        | 2         | 2          | 0     |
-        | 3         | -1         | 1     |
-        | 4         | 23         | 1     |
-        | 5         | 43         | 1     |
-        | 6         | -99        | 2     |
-        ----------------------------------
-    **/
-    i32 ptr_offset = 0;
+    quicksort_device_sprite_dsc(ctx->sprite_manager.device_sprite_scratch_space, ctx->sprite_manager.device_sprite_scratch_space_length);
 
-
-    for(i32 i = 0; i < ctx->sprite_manager.sprite_layer_length; i++){
-        GFX_SpriteLayer* layer = &ctx->sprite_manager.sprite_layer[i];
-        GFX_DeviceSprite* ptr = ctx->sprite_manager.device_sprite_scratch_space + ptr_offset;
-        quicksort_device_sprite_dsc(ptr, layer->max_sprites);
-        ptr_offset += layer->max_sprites;
-    }
     gfx_write_to_buffer(
         &ctx->sprite_manager.sprite_buffer,
         device,
@@ -2807,7 +2690,7 @@ void gfx_state_draw(GFX_State* ctx){
     **/
     gfx_free_surface_texture(&swapchain_texture);
     for(i32 i = 0; i < ctx->sprite_manager.one_frame_sprite_stack_count; i++){
-        gfx_dealloc_sprite(ctx, ctx->sprite_manager.one_frame_sprite_stack[i]);
+        gfx_dealloc_sprite_unsafe(ctx, ctx->sprite_manager.one_frame_sprite_stack[i]);
     }
     ctx->sprite_manager.one_frame_sprite_stack_count = 0;
 }
@@ -2954,32 +2837,32 @@ void gfx_camera_update_projection_matrix(GFX_Camera* camera, f32 surface_aspect_
     }
 }
 
-void gfx_draw_line_3d(GFX_State* ctx, GFX_Colour colour, Vector3 start, Vector3 end, i32 layer, i32 material, f32 thickness){
-    ASSERT(ctx->is_init, "renderer context has not been init.");
-    Transform3D transform = {
-        .rotation = quaternion_get_rotation_between_points(start, end),
-        .position = vector3_mul_val(vector3_add(end, start), 0.5f),
-        .scale = (Vector3){.x = thickness, .y = vector3_len(vector3_sub(end, start))}
-    };
-
-    bool success;
-    GFX_SpriteId sprite_id = gfx_one_frame_sprite_alloc(ctx, layer, &success);
-    gfx_sprite_init(ctx, sprite_id, transform3d_to_transform2d(transform), colour, (GFX_SpriteRegion){0}, GFX_ColourState_Override, GFX_SpriteOrigin_Center, 1, material, 0.0f, true);
-}
-
-void gfx_draw_line_2d(GFX_State* ctx, GFX_Colour colour, Vector2 start, Vector2 end, f32 z_position, i32 layer, i32 material, f32 thickness){
-    ASSERT(ctx->is_init, "renderer context has not been init.");
+void gfx_draw_line_2d(GFX_State* state, GFX_Colour colour, Vector2 start, Vector2 end, u32 layer, u32 depth, i32 material, f32 thickness){
+    ASSERT(state->is_init, "renderer context has not been init.");
     Transform2D transform = TRANSFORM2D_IDENTITY;
     transform = transform2d_rotate(transform, vector2_get_angle_between_points(start, end));
     transform.position = vector2_mul_val(vector2_add(end, start), 0.5f);
     transform.scale =  (Vector2){.y = thickness, .x = vector2_len(vector2_sub(end, start))};
 
-    bool success;
-    GFX_SpriteId sprite_id = gfx_one_frame_sprite_alloc(ctx, layer, &success);
-    gfx_sprite_init(ctx, sprite_id, transform, colour, (GFX_SpriteRegion){0}, GFX_ColourState_Override, GFX_SpriteOrigin_Center, 1, material, z_position, true);
+    i32 virtual_texture = 1;
+    GenId sprite_gid = gfx_one_frame_sprite_alloc(state);
+    gfx_sprite_init(
+        state, 
+        sprite_gid, 
+        transform, 
+        colour, 
+        (GFX_SpriteRegion){0}, 
+        GFX_ColourState_Override, 
+        GFX_SpriteOrigin_Center, 
+        virtual_texture, 
+        material, 
+        layer,
+        depth, 
+        true
+    );
 }
 
-void gfx_draw_wire_circle(GFX_State* ctx, Circle shape, GFX_Colour colour, f32 position_z, i32 layer, i32 material){
+void gfx_draw_wire_circle(GFX_State* state, Circle shape, GFX_Colour colour, u32 layer, u32 depth, i32 material){
     f32 rotation = TAU / gfx_global_circle_vertice_count;
     f32 sin = f32_sin(rotation);
     f32 cos = f32_cos(rotation);
@@ -2995,34 +2878,33 @@ void gfx_draw_wire_circle(GFX_State* ctx, Circle shape, GFX_Colour colour, f32 p
         f32 end_y = sin * rel_x + cos * rel_y + shape.y;
         Vector2 start = {.x = start_x, .y = start_y};
         Vector2 end = {.x = end_x, .y = end_y};
-        gfx_draw_line_2d(ctx, colour, start, end, position_z, layer, material, gfx_global_wireframe_thickness);
+        gfx_draw_line_2d(state, colour, start, end, layer, depth, material, gfx_global_wireframe_thickness);
         // iterate around the circle.
         start_x = end_x;
         start_y = end_y;
     }
 }
 
-void gfx_draw_wire_poly(GFX_State* ctx, f32* vertices_x, f32* vertices_y, i32 vertices_length, GFX_Colour colour, f32 position_z, i32 layer, i32 material){
+void gfx_draw_wire_poly(GFX_State* ctx, f32* vertices_x, f32* vertices_y, i32 vertices_length, GFX_Colour colour, u32 layer, u32 depth, i32 material){
     i32 next_index;
     for(i32 start_index = 0; start_index < vertices_length; start_index++){
         next_index = (start_index + 1) % vertices_length;
         Vector2 start = {.x = vertices_x[start_index], .y = vertices_y[start_index]};
         Vector2 end = {.x = vertices_x[next_index], .y = vertices_y[next_index]};
-        gfx_draw_line_2d(ctx, colour, start, end, position_z, layer, material, gfx_global_wireframe_thickness);
+        gfx_draw_line_2d(ctx, colour, start, end, layer, depth, material, gfx_global_wireframe_thickness);
     }
 }
 
-void gfx_draw_fill_rect(GFX_State* ctx, Rectangle shape, GFX_Colour colour, GFX_SpriteOrigin origin, f32 position_z, i32 layer, i32 material){
+void gfx_draw_fill_rect(GFX_State* ctx, Rectangle shape, GFX_Colour colour, GFX_SpriteOrigin origin, u32 layer, u32 depth, i32 material){
     Transform2D transform = transform2d_make(
         (Vector2){.x = shape.x, .y = shape.y},
         (Vector2){.x = shape.width, .y = shape.height},
         0.0f
     );
-    bool success;
-    GFX_SpriteId sprite_id = gfx_one_frame_sprite_alloc(ctx, layer, &success);
+    GenId sprite_gid = gfx_one_frame_sprite_alloc(ctx);
     gfx_sprite_init(
         ctx,
-        sprite_id,
+        sprite_gid,
         transform,
         colour,
         (GFX_SpriteRegion){0},
@@ -3030,12 +2912,13 @@ void gfx_draw_fill_rect(GFX_State* ctx, Rectangle shape, GFX_Colour colour, GFX_
         origin,
         1,
         material,
-        position_z,
+        layer, 
+        depth,
         true
     );
 }
 
-void gfx_draw_wire_rect(GFX_State* ctx, Rectangle shape, GFX_Colour colour, f32 position_z, i32 layer, i32 material){
+void gfx_draw_wire_rect(GFX_State* state, Rectangle shape, GFX_Colour colour, u32 layer, u32 depth, i32 material){
     f32 top_y = shape.y;
     f32 left_x = shape.x;
     f32 right_x = shape.x + shape.width;
@@ -3046,10 +2929,10 @@ void gfx_draw_wire_rect(GFX_State* ctx, Rectangle shape, GFX_Colour colour, f32 
     Vector2 bottom_left = {.x = left_x, .y = bottom_y};
     Vector2 bottom_right = {.x = right_x, .y = bottom_y};
 
-    gfx_draw_line_2d(ctx, colour, top_left, top_right, position_z, layer, material, gfx_global_wireframe_thickness);
-    gfx_draw_line_2d(ctx, colour, top_right, bottom_right, position_z, layer, material, gfx_global_wireframe_thickness);
-    gfx_draw_line_2d(ctx, colour, bottom_right, bottom_left, position_z, layer, material, gfx_global_wireframe_thickness);
-    gfx_draw_line_2d(ctx, colour, bottom_left, top_left, position_z, layer, material, gfx_global_wireframe_thickness);
+    gfx_draw_line_2d(state, colour, top_left, top_right, layer, depth, material, gfx_global_wireframe_thickness);
+    gfx_draw_line_2d(state, colour, top_right, bottom_right, layer, depth, material, gfx_global_wireframe_thickness);
+    gfx_draw_line_2d(state, colour, bottom_right, bottom_left, layer, depth, material, gfx_global_wireframe_thickness);
+    gfx_draw_line_2d(state, colour, bottom_left, top_left, layer, depth, material, gfx_global_wireframe_thickness);
 }
 
 void gfx_write_to_texture_array(
@@ -3256,12 +3139,6 @@ void gfx_virtual_texture_set_file_path(GFX_State* ctx, String file_path, i32 vir
     string_push(dst, file_path);
 }
 
-bool gfx_sprite_id_equals(GFX_SpriteId lhs, GFX_SpriteId rhs){
-    return
-    lhs.gen_id == rhs.gen_id &&
-    lhs.layer == rhs.layer;
-}
-
 Vector2 gfx_get_mouse_world_position(GFX_State* ctx){
     Vector2I mouse_position_i;
     platform_get_mouse_position(&mouse_position_i.x, &mouse_position_i.y);
@@ -3388,18 +3265,18 @@ void gfx_clay_begin_layout(
     Clay_BeginLayout();
 }
 
-void gfx_clay_end_layout(GFX_State* gfx_state, f32 delta_time, i32 sprite_layer, i32 text_material, i32 widget_material){
+void gfx_clay_end_layout(GFX_State* gfx_state, f32 delta_time, u32 sprite_layer, i32 font_virtual_texture, i32 text_material, i32 widget_material){
     Clay_RenderCommandArray renderCommands = Clay_EndLayout(delta_time);
     // More comprehensive rendering examples can be found in the renderers/ directory
     for (int i = 0; i < renderCommands.length; i++) {
         Clay_RenderCommand *renderCommand = &renderCommands.internalArray[i];
-        f32 depth = (f32)renderCommands.length-i;
+        u32 depth = (u32)renderCommands.length-i;
 
         switch (renderCommand->commandType) {
             case CLAY_RENDER_COMMAND_TYPE_RECTANGLE: {
                 GFX_Colour colour = gfx_clay_clay_to_gfx_colour(renderCommand->renderData.rectangle.backgroundColor);
                 Rectangle rect = gfx_clay_clay_to_rectangle(renderCommand->boundingBox);
-                gfx_draw_fill_rect(gfx_state, rect, colour, GFX_SpriteOrigin_TopLeft, depth, sprite_layer, widget_material);
+                gfx_draw_fill_rect(gfx_state, rect, colour, GFX_SpriteOrigin_TopLeft, sprite_layer, depth, widget_material);
             }break;
             case CLAY_RENDER_COMMAND_TYPE_TEXT:{
                 Rectangle rect = gfx_clay_clay_to_rectangle(renderCommand->boundingBox);
@@ -3413,12 +3290,17 @@ void gfx_clay_end_layout(GFX_State* gfx_state, f32 delta_time, i32 sprite_layer,
                     .count = renderCommand->renderData.text.stringContents.length
                 };
 
-                GFX_SpriteId text_sprite;
-                gfx_one_frame_sprite_chain_alloc(gfx_state, str.length, sprite_layer, &text_sprite);
+                GenId sprite_gid = gfx_one_frame_sprite_chain_alloc(gfx_state, str.length);
                 gfx_sprite_string_init(
-                    gfx_state, text_sprite, str,
+                    gfx_state, 
+                    sprite_gid, 
+                    str,
                     sprite_string_transform,
-                    1, text_material, depth, true
+                    font_virtual_texture,
+                    text_material,
+                    sprite_layer, 
+                    depth, 
+                    true
                 );                
             }break;
             default:{

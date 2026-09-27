@@ -173,9 +173,9 @@ void gen_id_allocator_init(GenIdAllocator* allocator, MemoryArena* arena, i32 le
     // set the indices for the gen ids.
     for(u32 i = 1; i < (u32)length; i++){
         allocator->gen_ids[i] = i;
+        ARRAY_PUSH(allocator->free_slots_stack, length, &allocator->free_slots_stack_count, i);
     }
 
-    ARRAY_PUSH(allocator->free_slots_stack, length, &allocator->free_slots_stack_count, 1);
     allocator->is_init = true;
 }
 
@@ -191,17 +191,6 @@ GenId gen_id_allocator_alloc(GenIdAllocator* allocator){
     // get the next available slot to allocate in.
     i32 slot;
     ARRAY_POP(allocator->free_slots_stack, allocator->length, &allocator->free_slots_stack_count, &slot);
-
-    // check if its neighbour can be allocated as well.
-    i32 next_slot = slot + 1;
-    if(next_slot > 0 && next_slot < allocator->length){
-        // add to the stack if it is also free.
-        if (allocator->allocated[next_slot] == false){
-            ARRAY_PUSH(allocator->free_slots_stack, allocator->length, &allocator->free_slots_stack_count, next_slot);
-        }
-    }
-
-    // update the gen index with the newly allocate data.
     allocator->allocated[slot] = true;
     return allocator->gen_ids[slot];
 }
