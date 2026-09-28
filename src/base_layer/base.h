@@ -395,7 +395,7 @@ typedef enum {
 #define U8_MAX  (255)
 #define U16_MAX (65535)
 #define U32_MAX (4294967295U)
-#define U64_MAX (__UINT64_C(18446744073709551615))
+#define U64_MAX UINT64_C(18446744073709551615)
 
 /*
     maximum of floating-point types.
@@ -423,6 +423,9 @@ typedef enum {
 #define GIGABYTE(val) MEGABYTE(val) * 1024
 #define MEGABYTE(val) KILOBYTE(val) * 1024
 #define KILOBYTE(val) val * 1024
+
+// gen id.
+#define GENID_MAX U32_MAX 
 
 /**
     arrays.

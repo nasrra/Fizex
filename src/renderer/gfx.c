@@ -1130,6 +1130,25 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
     
 ///
 
+/// sprite depth_layer.
+
+u64 gfx_sprite_get_depth_layer_unsafe(GFX_State* state, i32 sprite_idx){
+    GFX_SpriteManager* sprite_manager = &state->sprite_manager;
+    BOUNDS_CHECK(sprite_idx, sprite_manager->device_sprite_length);
+    return sprite_manager->device_sprite[sprite_idx].depth_layer;
+}
+
+bool gfx_sprite_get_depth_layer(GFX_State* state, GenId sprite_gid, u64* out_depth_layer){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&state->sprite_manager.gen_id_allocator, sprite_gid);
+    if(!idx){
+        return false;
+    }
+    *out_depth_layer = gfx_sprite_get_depth_layer_unsafe(state, idx);
+    return true;
+}
+
+///
+
 /// sprite active.
 
     void gfx_sprite_set_active_unsafe(GFX_State* state, i32 sprite_idx){

@@ -622,7 +622,7 @@ GenId entity_spawn_wood_block(EntityManager* entity_manager, String name, Transf
         gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
         gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
         gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
-        gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
+        gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 2);
     }
     return entity_gid;
 }
@@ -934,6 +934,17 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
     game_state->is_init = true;
 }
 
+void game_state_preupdate(GameState* game_state, f32 delta_time){
+    EntityManager* entity_manager = &game_state->entity_manager;
+    for(i32 i = 0; i < entity_manager->entity_length; i++){
+        Entity* entity = &entity_manager->entity[i];
+        if(!entity->is_physics_body){
+            continue;
+        }
+        fizx_body_set_global_position(&entity_manager->fizx_state, entity->physics_body_gid, entity->transform.position);
+    }
+}
+
 void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryArena* transient, f32 delta_time, bool in_editor_mode){
 
     // hoisting invariance.
@@ -989,8 +1000,9 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         while(fixed_update_accumulator >= FIXED_DELTA_TIME){
 
             CollisionCallbackContext collision_callback_ctx = {.entity_manager = entity_manager};
-            fizx_state_fixed_update(fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME, 32);
-
+            if(!in_editor_mode){
+                fizx_state_fixed_update(fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME, 32);
+            }
             fixed_update_accumulator -= FIXED_DELTA_TIME;
         }
     }

@@ -100,8 +100,7 @@ void app_main(){
 
     // create editor state.
     EditorState editor_state = {0};
-    editor_state_init(&editor_state, &gfx_state);
-
+    editor_state_init(&editor_state, persistent, &gfx_state, game_state.entity_manager.entity_length);
     
     { // load assets.
 
@@ -171,6 +170,7 @@ void app_main(){
                 
             { // game update.
             
+                game_state_preupdate(&game_state, delta_time);
                 game_state_update(&game_state, persistent, transient, delta_time, in_editor_mode);
                 game_state_late_update(&game_state, delta_time);            
                 game_state_draw(&game_state, delta_time);
