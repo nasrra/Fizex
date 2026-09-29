@@ -1,5 +1,8 @@
-
-
+/*
+    TODO:
+    - forbid the user from changing editor ui screens / alterning the clay layout
+        to ensure that the selected_ui_entity integrity is preserved.
+*/
 
 
 ///
@@ -12,33 +15,40 @@
 typedef struct{
     u64 depth_layer;
     GenId gid;
-} EditorSelectedWorldEntity;
+} Editor_SelectedWorldEntity;
 
 typedef struct{
     // the entity_id of the entity to spawn. 
     EntityTypeId entity_to_spawn;    
     GenId entity_to_spawn_parent_gid;
-    EditorSelectedWorldEntity first_hit_world_entity;
-    EditorSelectedWorldEntity selected_world_entity;
-    EditorSelectedWorldEntity* previously_selected_world_entity;
+    Editor_SelectedWorldEntity first_hit_world_entity;
+    Editor_SelectedWorldEntity selected_world_entity;
+    Editor_SelectedWorldEntity* previously_selected_world_entity;
     i32 previously_selected_world_entity_length;
     i32 previously_selected_world_entity_count;
+    Clay_ElementId selected_ui_entity;
     bool hovering_element;
-} EditorMouseState;
+} Editor_MouseState;
 
 typedef struct{
-    EditorMouseState mouse_state;
+    PolygonRectangle shape;
+    u64 depth_layer;
+}Editor_EntityClickableArea;
+
+typedef struct{
+    Editor_MouseState mouse_state;
+    String ui_input_scratch_space;
     GFX_State* gfx_state;
     bool is_init;
-} EditorState;
+} Editor_State;
 
 typedef struct{
-    EditorState* editor_state;
+    Editor_State* editor_state;
     GameState* game_state;
 } SaveLevelButtonOnHoverContext;
 
 typedef struct{
-    EditorState* editor_state;
+    Editor_State* editor_state;
     GenId level_root_entity_gid;
 } SelectLevelButtonOnHoverContext;
 
@@ -62,6 +72,35 @@ static i32 gfx_clay_element_id = 0;
 
 
 
+#define EDITOR_MAX_STRING_LENGTH 64
+
+#define GFX_CLAY_WIDGET_COLOUR (Clay_Color){.r = 10, .g = 10, .b = 20, .a = 128}
+
+#define GFX_CLAY_TEXT_CONFIG    \
+(Clay_TextElementConfig){       \
+    .fontSize = 1,              \
+    .lineHeight = 24,           \
+    .textColor = {              \
+        .r = 255,               \
+        .g = 255,               \
+        .b = 255,               \
+        .a = 255                \
+    }                           \
+}
+
+#define GFX_CLAY_SIDE_PANEL()                                           \
+CLAY(CLAY_SIDI(CLAY_STRING("Side Panel"), gfx_clay_element_id++), {     \
+    .layout = {                                                         \
+        .sizing = {                                                     \
+            .width = CLAY_SIZING_PERCENT(0.25),                         \
+            .height = CLAY_SIZING_GROW(0)                               \
+        },                                                              \
+        .padding = CLAY_PADDING_ALL(6),                                 \
+        .childGap = 4,                                                  \
+        .layoutDirection = CLAY_TOP_TO_BOTTOM                           \
+    },                                                                  \
+    .backgroundColor = GFX_CLAY_WIDGET_COLOUR,                          \
+})
 
 #define GFX_CLAY_ROW_BUTTON_CONTAINER(vertical_percent_size)            \
 CLAY(                                                                   \
@@ -78,11 +117,13 @@ CLAY(                                                                   \
     }                                                                   \
 )
 
+#define GFX_CLAY_BUTTON_IDLE_COLOUR (Clay_Color){100.0f,100.0f,100.0f,225.0f}
+#define GFX_CLAY_BUTTON_HOVER_COLOUR (Clay_Color){155.0f,155.0f,155.0f,255.0f}
 #define GFX_CLAY_BUTTON(clay_string_name, horizontal_percent_size, vertical_percent_size, on_hover_callback, on_hover_user_data)    \
 CLAY(                                                                                                                               \
     CLAY_SIDI(clay_string_name, gfx_clay_element_id++),                                                                             \
     {                                                                                                                               \
-        .backgroundColor = Clay_Hovered() ? (Clay_Color){155.0f,155.0f,155.0f,255.0f} : (Clay_Color){100.0f,100.0f,100.0f,225.0f},  \
+        .backgroundColor = Clay_Hovered() ? GFX_CLAY_BUTTON_HOVER_COLOUR : GFX_CLAY_BUTTON_IDLE_COLOUR,                             \
         .layout = {                                                                                                                 \
             .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },                                                         \
             .sizing = {                                                                                                             \
@@ -93,9 +134,42 @@ CLAY(                                                                           
     }                                                                                                                               \
 ) {                                                                                                                                 \
     Clay_OnHover(on_hover_callback, on_hover_user_data);                                                                            \
-    CLAY_TEXT(clay_string_name, { .fontSize = 1, .lineHeight = 24, .textColor = {255, 255, 255, 255} });                            \
+    CLAY_TEXT(clay_string_name, GFX_CLAY_TEXT_CONFIG);                                                                              \
 }
 
+#define GFX_CLAY_INPUT_TEXT_BOX(clay_string_button_sid, clay_string_button_label, horizontal_percent_size, vertical_percent_size, editor_state_ptr) do{ \
+Clay_ElementId GFX_CLAY_INPUT_TEXT_BOX_element_id = CLAY_SIDI(clay_string_button_sid, gfx_clay_element_id++);                                           \
+CLAY(                                                                                                                                                   \
+    GFX_CLAY_INPUT_TEXT_BOX_element_id,                                                                                                                 \
+    {                                                                                                                                                   \
+        .backgroundColor = Clay_Hovered() ? GFX_CLAY_BUTTON_HOVER_COLOUR : GFX_CLAY_BUTTON_IDLE_COLOUR,                                                 \
+        .layout = {                                                                                                                                     \
+            .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },                                                                             \
+            .sizing = {                                                                                                                                 \
+                CLAY_SIZING_PERCENT(horizontal_percent_size),                                                                                           \
+                CLAY_SIZING_PERCENT(vertical_percent_size)                                                                                              \
+            },                                                                                                                                          \
+        }                                                                                                                                               \
+    }                                                                                                                                                   \
+) {                                                                                                                                                     \
+    Clay_OnHover(editor_input_field_on_hover, editor_state_ptr);                                                                                        \
+    if(                                                                                                                                                 \
+        GFX_CLAY_INPUT_TEXT_BOX_element_id.id == editor_state_ptr->mouse_state.selected_ui_entity.id &&                                                 \
+        GFX_CLAY_INPUT_TEXT_BOX_element_id.offset == editor_state_ptr->mouse_state.selected_ui_entity.offset &&                                         \
+        GFX_CLAY_INPUT_TEXT_BOX_element_id.baseId == editor_state_ptr->mouse_state.selected_ui_entity.baseId                                            \
+    ){                                                                                                                                                  \
+                                                                                                                                                        \
+        Clay_String scratch_space_string = {                                                                                                            \
+            .chars = (const char*)editor_state_ptr->ui_input_scratch_space.chars,                                                                       \
+            .length = editor_state_ptr->ui_input_scratch_space.count                                                                                    \
+        };                                                                                                                                              \
+        CLAY_TEXT(scratch_space_string, GFX_CLAY_TEXT_CONFIG);                                                                                          \
+    }                                                                                                                                                   \
+    else{                                                                                                                                               \
+        CLAY_TEXT(clay_string_button_label, GFX_CLAY_TEXT_CONFIG);                                                                                      \
+    }                                                                                                                                                   \
+}                                                                                                                                                       \
+}while(0)
 
 
 
@@ -106,40 +180,48 @@ CLAY(                                                                           
 
 
 
-void editor_state_init(EditorState* state, MemoryArena* arena, GFX_State* gfx_state, i32 entity_amount){
+void editor_state_init(Editor_State* state, MemoryArena* arena, GFX_State* gfx_state, i32 entity_amount){
     ASSERT(!state->is_init, "already init.");
-    state->mouse_state = (EditorMouseState){0};
+    state->mouse_state = (Editor_MouseState){0};
     MEMORY_ARENA_ALLOC_ARRAY(
         arena, state->mouse_state.previously_selected_world_entity, &state->mouse_state.previously_selected_world_entity_length, entity_amount
     );
+    string_init(&state->ui_input_scratch_space, arena, EDITOR_MAX_STRING_LENGTH);
     state->mouse_state.previously_selected_world_entity_count = 0;
     state->gfx_state = gfx_state;
     state->is_init = true;
 }
 
+void editor_input_field_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    Editor_State* editor_state = (Editor_State*)user_data;
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        editor_state->mouse_state.selected_ui_entity = element_id;
+    }
+}
+
 void editor_select_red_bird_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    EditorState* editor_state = (EditorState*)user_data;
+    Editor_State* editor_state = (Editor_State*)user_data;
     if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
         editor_state->mouse_state.entity_to_spawn = EntityTypeId_RedBird;
     }
 }
 
 void editor_select_yellow_bird_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    EditorState* editor_state = (EditorState*)user_data;
+    Editor_State* editor_state = (Editor_State*)user_data;
     if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
         editor_state->mouse_state.entity_to_spawn = EntityTypeId_YellowBird;
     }
 }
 
 void editor_select_wood_block_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    EditorState* editor_state = (EditorState*)user_data;    
+    Editor_State* editor_state = (Editor_State*)user_data;    
     if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
         editor_state->mouse_state.entity_to_spawn = EntityTypeId_WoodBlock;
     }
 }
 
 void editor_select_pig_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    EditorState* editor_state = (EditorState*)user_data;
+    Editor_State* editor_state = (Editor_State*)user_data;
     if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
         editor_state->mouse_state.entity_to_spawn = EntityTypeId_Pig;
     }
@@ -270,23 +352,12 @@ void editor_on_hover_select_level_button(Clay_ElementId element_id, Clay_Pointer
     }
 }
 
-void gfx_clay_test_layout(EditorState* editor_state, GameState* game_state, MemoryArena* transient){
+void gfx_clay_entity_spawner_layout(Editor_State* editor_state, GameState* game_state, MemoryArena* transient){
     
     // hoisting invariance.
     EntityManager* entity_manager = &game_state->entity_manager;
-    
-    CLAY(CLAY_ID("Box"), {
-        .layout = {
-            .sizing = {
-                .width = CLAY_SIZING_FIXED(512),
-                .height = CLAY_SIZING_FIXED(1080)
-            },
-            .padding = CLAY_PADDING_ALL(6),
-            .childGap = 4,
-            .layoutDirection = CLAY_TOP_TO_BOTTOM
-        },
-        .backgroundColor = { 10, 10, 20, 128},
-    }){
+    GFX_CLAY_SIDE_PANEL(){    
+        
         if(Clay_Hovered()){
             editor_state->mouse_state.hovering_element = true;
         }
@@ -324,17 +395,121 @@ void gfx_clay_test_layout(EditorState* editor_state, GameState* game_state, Memo
     }
 }
 
-bool editor_selected_world_entity_equals(EditorSelectedWorldEntity a, EditorSelectedWorldEntity b){
+void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* game_state, MemoryArena* transient){
+    
+    // hoist invariance.
+    EntityManager* entity_manager = &game_state->entity_manager;
+    
+    
+    GFX_CLAY_SIDE_PANEL(){    
+    
+        if(Clay_Hovered()){
+            editor_state->mouse_state.hovering_element = true;
+        }
+            
+        GenId entity_gid = editor_state->mouse_state.selected_world_entity.gid; 
+        if(entity_gid != 0){
+            i32 idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, entity_gid);
+            if(idx){
+            
+                i32 max_chars = 35; // +1 for null terminator, as f32 is a max 34 char string.
+                char* chars;
+                MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
+                Clay_String position_x_string = {.chars = (const char*)chars};
+                MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
+                Clay_String position_y_string = {.chars = (const char*)chars};
+                MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
+                Clay_String scale_x_string = {.chars = (const char*)chars};
+                MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
+                Clay_String scale_y_string = {.chars = (const char*)chars};
+                MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
+                Clay_String rotation_string = {.chars = (const char*)chars};
+                
+                BOUNDS_CHECK(idx, entity_manager->entity_length);
+                Entity* entity = &entity_manager->entity[idx];
+                
+                // position-x.
+                position_x_string.length = snprintf((char*)position_x_string.chars, max_chars, "%f", entity->transform.position.x);      
+                ASSERT(position_x_string.length > 0, "failed to encode float.");
+                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Position X"), position_x_string, 0.75f, 0.05f, editor_state);
+                
+                // #if 0
+                // // position-x.
+                // position_x_string.length = snprintf((char*)position_x_string.chars, max_chars, "%f", entity->transform.position.x);      
+                // ASSERT(position_x_string.length > 0, "failed to encode float.");
+                // CLAY_TEXT(position_x_string, GFX_CLAY_TEXT_CONFIG);
+                
+                // // position-y.
+                // position_y_string.length = snprintf((char*)position_y_string.chars, max_chars, "%f", entity->transform.position.y);      
+                // ASSERT(position_y_string.length > 0, "failed to encode float.");
+                // CLAY_TEXT(position_y_string, GFX_CLAY_TEXT_CONFIG);
+                
+                // // scale-x.
+                // scale_x_string.length = snprintf((char*)scale_x_string.chars, max_chars, "%f", entity->transform.scale.x);      
+                // ASSERT(scale_x_string.length > 0, "failed to encode float.");
+                // CLAY_TEXT(scale_x_string, GFX_CLAY_TEXT_CONFIG);
+            
+                // // scale-y.
+                // scale_y_string.length = snprintf((char*)scale_y_string.chars, max_chars, "%f", entity->transform.scale.y);      
+                // ASSERT(scale_y_string.length > 0, "failed to encode float.");
+                // CLAY_TEXT(scale_y_string, GFX_CLAY_TEXT_CONFIG);
+                
+                // // rotation.
+                // rotation_string.length = snprintf((char*)rotation_string.chars, max_chars, "%f", entity->transform.rotation);      
+                // ASSERT(rotation_string.length > 0, "failed to encode float.");
+                // CLAY_TEXT(rotation_string, GFX_CLAY_TEXT_CONFIG);
+                // #endif
+            }
+        }
+    }    
+}
+
+bool editor_selected_world_entity_equals(Editor_SelectedWorldEntity a, Editor_SelectedWorldEntity b){
     return a.gid == b.gid && a.depth_layer == b.depth_layer;
 }
 
-void editor_state_update(EditorState* editor_state, GameState* game_state, MemoryArena* transient, f32 delta_time){
+Editor_EntityClickableArea editor_get_entity_clickable_area(EntityManager* entity_manager, Entity entity){
+    Transform2D preferred_transform = {0};
+    Editor_EntityClickableArea area = {0}; 
+    
+    // is a sprite.
+    if(gfx_sprite_get_transform(*entity_manager->gfx_state, entity.sprite_gid, &preferred_transform)){
+        // this is okay, as it is inferred that the spritethe get transfrom
+        GFX_SpriteOrigin sprite_origin;
+        if(!gfx_sprite_get_sprite_origin(*entity_manager->gfx_state, entity.sprite_gid, &sprite_origin)){
+            preferred_transform = entity.transform;
+            area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+        }
+        
+        switch(sprite_origin){  
+            default:
+                ASSERT(false, "unknown sprite origin");
+            case GFX_SpriteOrigin_Center:{
+                area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+            }break;
+            case GFX_SpriteOrigin_TopLeft:{
+                area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+            }break;
+        }
+        gfx_sprite_get_depth_layer(entity_manager->gfx_state, entity.sprite_gid, &area.depth_layer);
+    }
+    
+    // is not a sprite.
+    else{
+        preferred_transform = entity.transform;
+        area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+    }
+    
+    return area;
+}
+
+void editor_state_update(Editor_State* editor_state, GameState* game_state, MemoryArena* transient, f32 delta_time){
     
     // hoisting invariance.
     GFX_State* editor_gfx_state = editor_state->gfx_state;
     EntityManager* entity_manager = &game_state->entity_manager;
     GFX_State* game_gfx_state = entity_manager->gfx_state;
-    EditorMouseState* editor_mouse_state = &editor_state->mouse_state;
+    Editor_MouseState* editor_mouse_state = &editor_state->mouse_state;
     
     // retrieve necessary data.
     Vector2 mouse_world_position = gfx_get_mouse_world_position(game_gfx_state);
@@ -360,20 +535,19 @@ void editor_state_update(EditorState* editor_state, GameState* game_state, Memor
             editor_gfx_state, (Vector2I){.x = editor_gfx_state->window_ctx->width, .y = editor_gfx_state->window_ctx->height}, mouse_backbuffer_position, delta_time, 
             input_is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
         );
-        gfx_clay_test_layout(editor_state, game_state, transient);
+        // gfx_clay_entity_spawner_layout(editor_state, game_state, transient);
+        gfx_clay_entity_inspector_layout(editor_state, game_state, transient);
         gfx_clay_end_layout(editor_gfx_state, delta_time, SPRITE_LAYER_GAME_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
     }
     
     { // entity selecting.
-        
-
+    
         i32 verts_length = 4;
         u32 sprite_depth = 0;
-        Transform2D preferred_transform;
-        PolygonRectangle clickable_area;
         u64 depth_layer = 0;        
+        Editor_EntityClickableArea clickable_area;
         
-        if(input_is_mouse_button_released(MOUSE_BUTTON_LEFT)){
+        if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_RIGHT)){
         
             /*
                 this is here in the very astronomially low case that  entities are deallocated enough times
@@ -392,8 +566,8 @@ void editor_state_update(EditorState* editor_state, GameState* game_state, Memor
                     editor_mouse_state->selected_world_entity
                 );
             }
-            editor_mouse_state->first_hit_world_entity = (EditorSelectedWorldEntity){.gid = GENID_MAX, .depth_layer = U64_MAX};
-            editor_mouse_state->selected_world_entity = (EditorSelectedWorldEntity){0};
+            editor_mouse_state->first_hit_world_entity = (Editor_SelectedWorldEntity){.gid = GENID_MAX, .depth_layer = U64_MAX};
+            editor_mouse_state->selected_world_entity = (Editor_SelectedWorldEntity){0};
         }
 
         for(i32 idx = 0; idx < entity_manager->entity_length; idx++){
@@ -403,40 +577,14 @@ void editor_state_update(EditorState* editor_state, GameState* game_state, Memor
             Entity* entity = &entity_manager->entity[idx];
             
             // get the relevant transform of the entity,
-            // using either its sprite's, or the entity,s if the is no sprite allocated. 
+            // using either its sprite's, or the entity,s if the is no sprite allocated.
                         
-            // is a sprite.
-            if(gfx_sprite_get_transform(*game_gfx_state, entity->sprite_gid, &preferred_transform)){
-                // this is okay, as it is inferred that the spritethe get transfrom
-                GFX_SpriteOrigin sprite_origin;
-                if(!gfx_sprite_get_sprite_origin(*game_gfx_state, entity->sprite_gid, &sprite_origin)){
-                    continue;
-                }
-                
-                switch(sprite_origin){  
-                    default:
-                        ASSERT(false, "unknown sprite origin");
-                    case GFX_SpriteOrigin_Center:{
-                        clickable_area = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
-                    }break;
-                    case GFX_SpriteOrigin_TopLeft:{
-                        clickable_area = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
-                    }break;
-                }                
-            }
-            
-            // is not a sprite.
-            else{
-                preferred_transform = entity->transform;
-                clickable_area = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
-                depth_layer = 0;
-            }
-            
+            clickable_area = editor_get_entity_clickable_area(entity_manager, *entity);
             // draw the clickable area.
             gfx_draw_wire_poly(
                 editor_gfx_state,
-                clickable_area.x, 
-                clickable_area.y, 
+                clickable_area.shape.x, 
+                clickable_area.shape.y, 
                 verts_length, 
                 GFX_COLOUR_BLUE,
                 SPRITE_LAYER_GAME_WORLD, 
@@ -455,7 +603,7 @@ void editor_state_update(EditorState* editor_state, GameState* game_state, Memor
             Vector2 normal;
             f32 depth;
             bool overlaps = polygon_overlaps_point_scalar(
-                clickable_area.x, clickable_area.y, verts_length,
+                clickable_area.shape.x, clickable_area.shape.y, verts_length,
                 mouse_world_position.x, mouse_world_position.y,
                 &normal.x, &normal.y, &depth
             );
@@ -467,9 +615,9 @@ void editor_state_update(EditorState* editor_state, GameState* game_state, Memor
             BOUNDS_CHECK(idx, entity_manager->gen_id_allocator.length);
             GenId current_gid = entity_manager->gen_id_allocator.gen_ids[idx];
             
-            if(depth_layer <= editor_mouse_state->first_hit_world_entity.depth_layer){
+            if(clickable_area.depth_layer <= editor_mouse_state->first_hit_world_entity.depth_layer){
                 editor_mouse_state->first_hit_world_entity.gid = current_gid;
-                editor_mouse_state->first_hit_world_entity.depth_layer = depth_layer;
+                editor_mouse_state->first_hit_world_entity.depth_layer = clickable_area.depth_layer;
             }
                         
             // loop through all of the previously selected entities
@@ -485,18 +633,18 @@ void editor_state_update(EditorState* editor_state, GameState* game_state, Memor
                 continue;
             }
             
-            if(depth_layer >= editor_mouse_state->selected_world_entity.depth_layer){
+            if(clickable_area.depth_layer >= editor_mouse_state->selected_world_entity.depth_layer){
                 editor_mouse_state->selected_world_entity.gid = current_gid;
-                editor_mouse_state->selected_world_entity.depth_layer = depth_layer;
+                editor_mouse_state->selected_world_entity.depth_layer = clickable_area.depth_layer;
             }
         }
 
         if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)){
             // if the mouse didnt find anything to select.
-            if(editor_selected_world_entity_equals(editor_mouse_state->selected_world_entity, (EditorSelectedWorldEntity){0})){
+            if(editor_selected_world_entity_equals(editor_mouse_state->selected_world_entity, (Editor_SelectedWorldEntity){0})){
                 
                 // if the mouse did click on something.
-                if(!editor_selected_world_entity_equals(editor_mouse_state->first_hit_world_entity, (EditorSelectedWorldEntity){.gid = GENID_MAX, .depth_layer = U64_MAX})){
+                if(!editor_selected_world_entity_equals(editor_mouse_state->first_hit_world_entity, (Editor_SelectedWorldEntity){.gid = GENID_MAX, .depth_layer = U64_MAX})){
                     // go to the top of the stack.
                     editor_mouse_state->selected_world_entity = editor_mouse_state->first_hit_world_entity;
                 }
@@ -507,8 +655,8 @@ void editor_state_update(EditorState* editor_state, GameState* game_state, Memor
     }
     
     { // input handling.
-    
-        if(!editor_selected_world_entity_equals(editor_mouse_state->selected_world_entity, (EditorSelectedWorldEntity){0})){
+        
+        if(!editor_selected_world_entity_equals(editor_mouse_state->selected_world_entity, (Editor_SelectedWorldEntity){0})){
             // move the selected entity to the mouse position.
             Entity* entity;
             if(entity_manager_get_entity(*entity_manager, editor_mouse_state->selected_world_entity.gid, &entity)){

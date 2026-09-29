@@ -1,5 +1,4 @@
 #include "platform.h"
-
 #include "base_layer/base.h"
 #include "base_layer/base_cpu.c"
 #include "base_layer/base_math.c"
@@ -99,7 +98,7 @@ void app_main(){
     game_state_init(&game_state, persistent, transient, &gfx_state);
 
     // create editor state.
-    EditorState editor_state = {0};
+    Editor_State editor_state = {0};
     editor_state_init(&editor_state, persistent, &gfx_state, game_state.entity_manager.entity_length);
     
     { // load assets.

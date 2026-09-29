@@ -328,6 +328,10 @@ void input_update(){
         ASSERT(input_is_init, "input is not init");
     }
 
+    input_mouse_previous_position_x = input_mouse_position_x;
+    input_mouse_previous_position_y = input_mouse_position_y;    
+    platform_get_mouse_position(&input_mouse_position_x, &input_mouse_position_y);
+
     /*
         keys.
     */
@@ -436,4 +440,19 @@ void input_init(MemoryArena* arena){
     MEMORY_ARENA_ALLOC_ARRAY(arena, input_curr_mouse_button_state, &temp, (size_t)KEY_ENUM_SIZE);
     MEMORY_ARENA_ALLOC_ARRAY(arena, input_prev_mouse_button_state, &temp, (size_t)KEY_ENUM_SIZE);
     input_is_init = true;
+}
+
+void input_get_mouse_position(f32* out_pos_x, f32* out_pos_y){
+    *out_pos_x = input_mouse_position_x;
+    *out_pos_y = input_mouse_position_y;
+}
+
+void input_get_mouse_previous_position(f32* out_pos_x, f32* out_pos_y){
+    *out_pos_x = input_mouse_previous_position_x;
+    *out_pos_y = input_mouse_previous_position_y;
+}
+
+void input_get_mouse_delta_position(f32* out_delta_x, f32* out_delta_y){
+    *out_delta_x = input_mouse_position_x - input_mouse_previous_position_x;
+    *out_delta_y = input_mouse_position_y - input_mouse_previous_position_y;
 }

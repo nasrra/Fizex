@@ -3500,19 +3500,15 @@ void gfx_virtual_texture_set_file_path(GFX_State* ctx, String file_path, i32 vir
     string_push(dst, file_path);
 }
 
-Vector2 gfx_get_mouse_world_position(GFX_State* ctx){
-    Vector2I mouse_position_i;
-    platform_get_mouse_position(&mouse_position_i.x, &mouse_position_i.y);
-    Vector2 mouse_position = {.x = (f32)mouse_position_i.x, .y = (f32)mouse_position_i.y};
-
+Vector2 gfx_screen_to_world_position(GFX_State* ctx, Vector2 position){
     Vector2I resolution = {
         .x = ctx->final_render_texture.extents.width,
         .y = ctx->final_render_texture.extents.height
     };
-    Vector2 render_texture_position = vector2_get_relative_to_destination_rectangle(mouse_position, ctx->destination_rectangle, resolution);
+    Vector2 render_texture_position = vector2_get_relative_to_destination_rectangle(position, ctx->destination_rectangle, resolution);
 
-    f32 mouse_horizontal_factor = mouse_position.x / resolution.x;
-    f32 mouse_vertical_factor = mouse_position.y / resolution.y;
+    f32 mouse_horizontal_factor = position.x / resolution.x;
+    f32 mouse_vertical_factor = position.y / resolution.y;
 
     f32 aspect_ratio = (f32)resolution.x / (f32)resolution.y;
 
@@ -3525,9 +3521,22 @@ Vector2 gfx_get_mouse_world_position(GFX_State* ctx){
     return (Vector2){
         .x = ctx->world_camera.position.x - (camera_space_x * 0.5f) + mouse_camera_pos_x,
         .y = ctx->world_camera.position.y - (-(camera_space_y * 0.5f) + mouse_camera_pos_y)
-    };
+    };    
 }
 
+Vector2 gfx_get_mouse_world_position(GFX_State* state){
+    Vector2I mouse_position_i;
+    platform_get_mouse_position(&mouse_position_i.x, &mouse_position_i.y);
+    Vector2 mouse_position = {.x = (f32)mouse_position_i.x, .y = (f32)mouse_position_i.y};
+    return gfx_screen_to_world_position(state, mouse_position);
+}
+
+// Vector2 gfx_get_mouse_world_delta_position(GFX_State* state){
+//     Vector2I mouse_position_i;
+//     platform_get_mouse_position(&mouse_position_i.x, &mouse_position_i.y);
+//     Vector2 current_mouse_position = {.x = (f32)mouse_position_i.x, .y = (f32)mouse_position_i.y};
+//     return gfx_screen_to_world_position(state, mouse_position);
+// }
 
 
 

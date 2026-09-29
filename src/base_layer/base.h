@@ -537,7 +537,7 @@ typedef enum {
     size_t MEMORY_ARENA_PUSH_ARRAY_size = sizeof(*data) * (array_size);                         \
     size_t MEMORY_ARENA_PUSH_ARRAY_new_stride = (arena)->stride + MEMORY_ARENA_PUSH_ARRAY_size; \
     if(MEMORY_ARENA_PUSH_ARRAY_new_stride <= (arena)->size){                                    \
-        void* dst = (void*)((u8*)(arena)->ptr + (arena)->stride);                               \
+        void* dst = (void*)((char*)(arena)->ptr + (arena)->stride);                             \
         COPY_MEMORY(dst, data, MEMORY_ARENA_PUSH_ARRAY_size);                                   \
         (arena)->stride = MEMORY_ARENA_PUSH_ARRAY_new_stride;                                   \
     }                                                                                           \
@@ -558,7 +558,7 @@ typedef enum {
     size_t MEMORY_ARENA_PUSH_STRUCT_size = sizeof(data);                                            \
     size_t MEMORY_ARENA_PUSH_STRUCT_new_stride = (arena)->stride + MEMORY_ARENA_PUSH_STRUCT_size;   \
     if(MEMORY_ARENA_PUSH_STRUCT_new_stride <= (arena)->size){                                       \
-        out_dst = (void*)((u8*)(arena)->ptr + (arena)->stride);                                     \
+        out_dst = (void*)((char*)(arena)->ptr + (arena)->stride);                                   \
         COPY_MEMORY(out_dst, &(data), MEMORY_ARENA_PUSH_STRUCT_size);                               \
         (arena)->stride = MEMORY_ARENA_PUSH_STRUCT_new_stride;                                      \
     }                                                                                               \
@@ -581,13 +581,25 @@ typedef enum {
     size_t MEMORY_ARENA_ALLOC_ARRAY_size = sizeof(*out_arr_ptr) * (array_length);                   \
     size_t MEMORY_ARENA_ALLOC_ARRAY_new_stride = (arena)->stride + MEMORY_ARENA_ALLOC_ARRAY_size;   \
     if(MEMORY_ARENA_ALLOC_ARRAY_new_stride <= (arena)->size){                                       \
-        (out_arr_ptr) = (void*)((u8*)(arena)->ptr + (arena)->stride);                               \
+        (out_arr_ptr) = (void*)((char*)(arena)->ptr + (arena)->stride);                             \
         (arena)->stride = MEMORY_ARENA_ALLOC_ARRAY_new_stride;                                      \
         *(out_arr_length) = array_length;                                                           \
     }                                                                                               \
     else{                                                                                           \
         PANIC(false, "insufficient space to push data onto memory arena.");                         \
         *(out_arr_length) = 0;                                                                      \
+    }                                                                                               \
+} while(0)
+
+#define MEMORY_ARENA_ALLOC_MEMORY(arena, out_ptr, memory_size) do{                                  \
+                                                                                                    \
+    size_t MEMORY_ARENA_ALLOC_MEMORY_new_stride = (arena)->stride + ##memory_size##;                \
+    if(MEMORY_ARENA_ALLOC_MEMORY_new_stride <= (arena)->size){                                      \
+        (out_ptr) = (void*)((char*)(arena)->ptr + (arena)->stride);                                 \
+        (arena)->stride = MEMORY_ARENA_ALLOC_MEMORY_new_stride;                                     \
+    }                                                                                               \
+    else{                                                                                           \
+        PANIC(false, "insufficient space to push data onto memory arena.");                         \
     }                                                                                               \
 } while(0)
 
@@ -775,6 +787,10 @@ InputState* input_prev_key_state;
 bool* input_mouse_button_down_state;
 InputState* input_curr_mouse_button_state;
 InputState* input_prev_mouse_button_state;
+f32 input_mouse_position_x;
+f32 input_mouse_position_y;
+f32 input_mouse_previous_position_x;
+f32 input_mouse_previous_position_y;
 
 
 
@@ -892,5 +908,8 @@ input_mouse_get_position_relative(
     i32 dst_resolution_width, i32 dst_resolution_height,
     i32* out_mouse_x, i32* out_mouse_y
 );
+void input_get_mouse_position(f32* out_pos_x, f32* out_pos_y);
+void input_get_mouse_previous_position(f32* out_pos_x, f32* out_pos_y);
+void input_get_mouse_delta_position(f32* out_delta_x, f32* out_delta_y);
 
 #endif
