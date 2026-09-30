@@ -60,7 +60,7 @@ bool platform_read_file(String file_path, MemoryArena* arena);
 
     `remarks`
     this function dynamically allocates, call `platform_free_memory()` on the return pointer when no longer in use.
-    
+
     `returns`
     a pointer to the loaded data; otherwise NULL in the case of a file read failure.
 **/
@@ -76,7 +76,5 @@ void platform_print_msg(char* msg);
 
 bool platform_load_image(Image* out_image, String file_path);
 bool platform_free_image(Image* image);
-
-void platform_get_mouse_position(int* out_x, int* out_y);
 
 #endif

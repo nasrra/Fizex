@@ -4,7 +4,7 @@
     sets the global random seed to a new seed.
 
     returns:
-    the newl set seed. 
+    the newl set seed.
 */
 i32 rand_next_seed(){
     // get the current calender time.
@@ -20,9 +20,9 @@ i32 rand_next_seed(){
     i32 year    = t->tm_year+1980; // years since 1980.
 
     // Use the stack address of a local variable as entropy noise
-    i32 stack_noise; 
+    i32 stack_noise;
     i32 result = (i32)(uintptr_t)&stack_noise;
-    
+
     result += second;
     result += minute;
     result += hour;
@@ -35,13 +35,13 @@ i32 rand_next_seed(){
 }
 
 i32 rand_i32(){
-    
+
     // lazy init the first seed.
     if(base_rand_initial_state_set == false){
         rand_next_seed();
         base_rand_initial_state_set = true;
     }
-   
+
     i32 result = base_rand_state;
 	result ^= result << 13;
 	result ^= result >> 17;
@@ -78,7 +78,7 @@ bool memory_arena_partition(MemoryArena* parent, MemoryArena* out_child, u64 siz
     out_child->ptr = (u8*)(parent->ptr) + new_stride;
     out_child->size = size;
     out_child->stride = 0;
-    
+
     return true;
 }
 
@@ -104,7 +104,7 @@ GenId gen_id_make(i32 index, i32 generation){
     ASSERT(index >= 0 && index <= GENID_MAX_INDEX, "index value is out of bounds.");
     ASSERT(generation >= 0 && generation <= GENID_MAX_GENERATION, "generation value is out of bounds.");
 
-    // shift generation up by 20 bit so its the last 12 bits in the integer. 
+    // shift generation up by 20 bit so its the last 12 bits in the integer.
     result = (u32)(generation & GENID_GENERATION_MASK) << 20; // apply the mask anyways so there is no crash in release mode.
 
     // Or with the index to that the index values are the first 20 bits in the integer.
@@ -152,7 +152,7 @@ void string_clear(String* string){
 void string_push_chars(String* string, char* chars, i32 chars_length){
     i32 available_space =  (string->length - string->count);
     ASSERT(available_space >= 0, "string to small to hold characters");
-    available_space = available_space < chars_length ? available_space : chars_length; 
+    available_space = available_space < chars_length ? available_space : chars_length;
     for(i32 i = 0; i < available_space; i++){
         string->chars[string->count + i] = chars[i];
     }
@@ -229,230 +229,4 @@ i32 gen_id_allocator_is_gen_id_valid(const GenIdAllocator* allocator, GenId gen_
         return 0;
     }
     return idx;
-}
-
-void input_set_key_up(Key key){
-    ASSERT(input_is_init, "input is not init");
-    size_t index = (size_t)key;
-    BOUNDS_CHECK(index, KEY_ENUM_SIZE);
-    input_key_down_state[(size_t)key] = false;    
-}
-
-void input_set_key_down(Key key){
-    ASSERT(input_is_init, "input is not init");
-    size_t index = (size_t)key;
-    BOUNDS_CHECK(index, KEY_ENUM_SIZE);
-    input_key_down_state[(size_t)key] = true;    
-}
-
-void input_set_mouse_button_down(MouseButton button){
-    ASSERT(input_is_init, "input is not init");
-    size_t index = (size_t)button;
-    BOUNDS_CHECK(index, MOUSE_BUTTON_ENUM_SIZE);
-    input_mouse_button_down_state[(size_t)button] = true;
-}
-
-void input_set_mouse_button_up(MouseButton button){
-    ASSERT(input_is_init, "input is not init");
-    size_t index = (size_t)button;
-    BOUNDS_CHECK(index, MOUSE_BUTTON_ENUM_SIZE);
-    input_mouse_button_down_state[(size_t)button] = false;
-}
-
-bool input_is_key_pressed(Key key){
-    ASSERT(input_is_init, "input is not init");
-    size_t index = (size_t)key;
-    BOUNDS_CHECK(index, KEY_ENUM_SIZE);
-    InputState state = input_curr_key_state[index]; 
-    return state == INPUT_STATE_PRESSED || state == INPUT_STATE_JUST_PRESSED;
-}
-
-bool input_is_key_just_pressed(Key key){
-    ASSERT(input_is_init, "input is not init");
-    size_t index = (size_t)key;
-    BOUNDS_CHECK(index, KEY_ENUM_SIZE);
-    InputState state = input_curr_key_state[index]; 
-    return state == INPUT_STATE_JUST_PRESSED;
-}
-
-bool input_is_key_released(Key key){
-    ASSERT(input_is_init, "input is not init");
-    size_t index = (size_t)key;
-    BOUNDS_CHECK(index, KEY_ENUM_SIZE);
-    InputState state = input_curr_key_state[index]; 
-    return state == INPUT_STATE_RELEASED || state == INPUT_STATE_JUST_RELEASED;
-}
-
-bool input_is_key_just_released(Key key){
-    ASSERT(input_is_init, "input is not init");
-    size_t index = (size_t)key;
-    BOUNDS_CHECK(index, KEY_ENUM_SIZE);
-    InputState state = input_curr_key_state[index]; 
-    return state == INPUT_STATE_JUST_RELEASED;
-}
-
-bool input_is_mouse_button_pressed(MouseButton button){
-    ASSERT(input_is_init, "input is not init");
-    size_t index = (size_t)button;
-    BOUNDS_CHECK(index, MOUSE_BUTTON_ENUM_SIZE);
-    InputState state = input_curr_mouse_button_state[index];
-    return state == INPUT_STATE_PRESSED || state == INPUT_STATE_JUST_PRESSED;
-}
-
-bool input_is_mouse_button_just_pressed(MouseButton button){
-    ASSERT(input_is_init, "input is not init");
-    size_t index = (size_t)button;
-    BOUNDS_CHECK(index, MOUSE_BUTTON_ENUM_SIZE);
-    InputState state = input_curr_mouse_button_state[index];
-    return state == INPUT_STATE_JUST_PRESSED;
-}
-
-bool input_is_mouse_button_released(MouseButton button){
-    ASSERT(input_is_init, "input is not init");
-    size_t index = (size_t)button;
-    BOUNDS_CHECK(index, MOUSE_BUTTON_ENUM_SIZE);
-    InputState state = input_curr_mouse_button_state[index];
-    return state == INPUT_STATE_RELEASED || state == INPUT_STATE_JUST_RELEASED;
-}
-
-bool input_is_mouse_button_just_released(MouseButton button){
-    ASSERT(input_is_init, "input is not init");
-    size_t index = (size_t)button;
-    BOUNDS_CHECK(index, MOUSE_BUTTON_ENUM_SIZE);
-    InputState state = input_curr_mouse_button_state[index];
-    return state == INPUT_STATE_JUST_RELEASED;
-}
-
-void input_update(){
-    { // validation.
-        ASSERT(input_is_init, "input is not init");
-    }
-
-    input_mouse_previous_position_x = input_mouse_position_x;
-    input_mouse_previous_position_y = input_mouse_position_y;    
-    platform_get_mouse_position(&input_mouse_position_x, &input_mouse_position_y);
-
-    /*
-        keys.
-    */
-    for(size_t i = 0; i < (size_t)KEY_ENUM_SIZE; i++){
-        InputState* last = &input_curr_key_state[i];
-        InputState* next = &input_prev_key_state[i];
-        switch(input_key_down_state[i]){
-            case true:{
-                switch(*last){
-                    case INPUT_STATE_RELEASED:
-                    case INPUT_STATE_JUST_RELEASED:{
-                        *next = INPUT_STATE_JUST_PRESSED;
-                    }break;
-                    case INPUT_STATE_PRESSED:
-                    case INPUT_STATE_JUST_PRESSED:{
-                        *next = INPUT_STATE_PRESSED;
-                    }break;
-                    default:{
-                        ASSERT(0!=0, "unknown input state");
-                    }break;
-                }
-            }break;
-            case false:{
-                switch(*last){
-                    case INPUT_STATE_RELEASED:
-                    case INPUT_STATE_JUST_RELEASED:{
-                        *next = INPUT_STATE_RELEASED;
-                    }break;
-                    case INPUT_STATE_PRESSED:
-                    case INPUT_STATE_JUST_PRESSED:{
-                        *next = INPUT_STATE_JUST_RELEASED;
-                    }break;
-                    default:{
-                        ASSERT(0!=0, "unknown input state");
-                    }break;
-                }
-            }break;
-            default:{
-                ASSERT(false, "inavlid input key down state.");
-            }break;
-        }
-    }
-
-    /*
-        Mouse Buttons.
-    */
-    for(size_t i = 0; i < (size_t)MOUSE_BUTTON_ENUM_SIZE; i++){
-        InputState* last = &input_curr_mouse_button_state[i];
-        InputState* next = &input_prev_mouse_button_state[i];
-        switch(input_mouse_button_down_state[i]){
-            case true:{
-                switch(*last){
-                    case INPUT_STATE_RELEASED:
-                    case INPUT_STATE_JUST_RELEASED:{
-                        *next = INPUT_STATE_JUST_PRESSED;
-                    }break;
-                    case INPUT_STATE_PRESSED:
-                    case INPUT_STATE_JUST_PRESSED:{
-                        *next = INPUT_STATE_PRESSED;
-                    }break;
-                    default:{
-                        ASSERT(0!=0, "unknown input state");
-                    }break;
-                }
-            }break;
-            case false:{
-                switch(*last){
-                    case INPUT_STATE_RELEASED:
-                    case INPUT_STATE_JUST_RELEASED:{
-                        *next = INPUT_STATE_RELEASED;
-                    }break;
-                    case INPUT_STATE_PRESSED:
-                    case INPUT_STATE_JUST_PRESSED:{
-                        *next = INPUT_STATE_JUST_RELEASED;
-                    }break;
-                    default:{
-                        ASSERT(0!=0, "unknown input state");
-                    }break;
-                }
-            }break;
-            default:{
-                ASSERT(false, "inavlid input key down state.");
-            }break;
-        }
-    }
-
-    /*
-        swap.
-    */
-    InputState* temp_key_state = input_curr_key_state;
-    input_curr_key_state = input_prev_key_state;
-    input_prev_key_state = temp_key_state;
-    InputState* temp_mouse_button_state = input_curr_mouse_button_state;
-    input_curr_mouse_button_state = input_prev_mouse_button_state;
-    input_prev_mouse_button_state = temp_mouse_button_state;
-}
-
-void input_init(MemoryArena* arena){
-    ASSERT(!input_is_init, "attempted to init an already init input system.");
-    size_t temp;
-    MEMORY_ARENA_ALLOC_ARRAY(arena, input_key_down_state, &temp, (size_t)KEY_ENUM_SIZE);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, input_curr_key_state, &temp, (size_t)KEY_ENUM_SIZE);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, input_prev_key_state, &temp, (size_t)KEY_ENUM_SIZE);
-
-    MEMORY_ARENA_ALLOC_ARRAY(arena, input_mouse_button_down_state, &temp, (size_t)KEY_ENUM_SIZE);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, input_curr_mouse_button_state, &temp, (size_t)KEY_ENUM_SIZE);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, input_prev_mouse_button_state, &temp, (size_t)KEY_ENUM_SIZE);
-    input_is_init = true;
-}
-
-void input_get_mouse_position(f32* out_pos_x, f32* out_pos_y){
-    *out_pos_x = input_mouse_position_x;
-    *out_pos_y = input_mouse_position_y;
-}
-
-void input_get_mouse_previous_position(f32* out_pos_x, f32* out_pos_y){
-    *out_pos_x = input_mouse_previous_position_x;
-    *out_pos_y = input_mouse_previous_position_y;
-}
-
-void input_get_mouse_delta_position(f32* out_delta_x, f32* out_delta_y){
-    *out_delta_x = input_mouse_position_x - input_mouse_previous_position_x;
-    *out_delta_y = input_mouse_position_y - input_mouse_previous_position_y;
 }

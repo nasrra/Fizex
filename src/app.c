@@ -4,6 +4,7 @@
 #include "base_layer/base_math.c"
 #include "base_layer/base_algorithms.c"
 #include "base_layer/base_structures.c"
+#include "input/input.h"
 #include "renderer/gfx.c"
 #include "fizx/fizx.c"
 #include "fizx/fizx_draw.c"
@@ -32,7 +33,7 @@ void app_main(){
     MemoryArena* transient = platform_get_transient_memory();
 
     input_init(persistent);
-    
+
     WindowContext* window_ctx = platform_window_create(WINDOW_WIDTH, WINDOW_HEIGHT);
     GFX_State gfx_state = {0};
     { // init gfx
@@ -49,14 +50,14 @@ void app_main(){
         for(i32 i = 0; i < font_texture_init_info.virtual_textures_length; i++){
             font_texture_init_info.virtual_textures[i] = i+1;
         }
-    
+
         /**
             image textures.
         **/
         GFX_ImageTexturesInitInfo* image_textures_init_info;
         i32 image_textures_init_info_length;
         MEMORY_ARENA_ALLOC_ARRAY(transient, image_textures_init_info, &image_textures_init_info_length, 5);
-    
+
         BOUNDS_CHECK(0, image_textures_init_info_length);
         image_textures_init_info[0] = (GFX_ImageTexturesInitInfo){.width = 150, .height = 150, .max_textures = 16};
         BOUNDS_CHECK(1, image_textures_init_info_length);
@@ -67,7 +68,7 @@ void app_main(){
         image_textures_init_info[3] = (GFX_ImageTexturesInitInfo){.width = 16, .height = 16, .max_textures = 24};
         BOUNDS_CHECK(4, image_textures_init_info_length);
         image_textures_init_info[4] = (GFX_ImageTexturesInitInfo){.width = 1028, .height = 1028, .max_textures = 4};
-    
+
         /**
             context.
         **/
@@ -84,7 +85,7 @@ void app_main(){
             .graphics_pipeline_shader_file_path = (String){.chars = "assets/shader.wgsl", .length = 18},
             .max_sprites = 512
         };
-    
+
         gfx_state_init(&gfx_state, gfx_init_info, persistent, transient, window_ctx);
         gfx_orthographic_camera_init(&gfx_state.world_camera, GFX_CoordinateSpace_Cartesian, (Vector3){.y = 5.0f, .z = -1.0f}, 0.01f, 100.0f, 22.0f);
         gfx_orthographic_camera_init(&gfx_state.screen_camera, GFX_CoordinateSpace_Rasterised, (Vector3){.z = -1.0f}, 0.01f, 1028.0f, 1080.0f);
@@ -92,7 +93,7 @@ void app_main(){
         gfx_state.clay_game_ui_ctx = gfx_clay_create_context(MEGABYTE(8), WINDOW_WIDTH, WINDOW_HEIGHT);
         gfx_state.clay_editor_ui_ctx = gfx_clay_create_context(MEGABYTE(8), WINDOW_WIDTH, WINDOW_HEIGHT);
     }
-    
+
     // create game state.
     GameState game_state = {0};
     game_state_init(&game_state, persistent, transient, &gfx_state);
@@ -100,7 +101,7 @@ void app_main(){
     // create editor state.
     Editor_State editor_state = {0};
     editor_state_init(&editor_state, persistent, &gfx_state, game_state.entity_manager.entity_length);
-    
+
     { // load assets.
 
         String file_path = {0};
@@ -112,41 +113,41 @@ void app_main(){
             string_push_chars(&file_path, "assets/sprites/test-sheet.png", 29);
             gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_TEST_SHEET);
             gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_TEST_SHEET);
-        
+
             string_clear(&file_path);
             string_push_chars(&file_path, "assets/sprites/sling_shot.png", 29);
             gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_SLING_SHOT);
             gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_SLING_SHOT);
-        
+
             string_clear(&file_path);
             string_push_chars(&file_path, "assets/sprites/wood block.png", 29);
             gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_WOOD_BLOCK);
-            gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_WOOD_BLOCK);        
+            gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_WOOD_BLOCK);
 
             string_clear(&file_path);
             string_push_chars(&file_path, "assets/fonts/PixelOperatorSC-Bold.ttf", 37);
             gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_FONT);
             gfx_load_font_texture(&gfx_state, transient, VIRTUAL_TEXTURE_ID_FONT, 24, 32, 12);
-    
-        }    
-        
-        { // load level.
-            string_clear(&file_path);
-            string_push_chars(&file_path, "assets/saved.scsv", 17);
-            load_lvl(&game_state.entity_manager, file_path);    
+
         }
-        
+
+        { // load level.
+            // string_clear(&file_path);
+            // string_push_chars(&file_path, "assets/saved.scsv", 17);
+            // load_lvl(&game_state.entity_manager, file_path);
+        }
+
     }
-        
+
     // floor entity.
     Transform2D floor_transform = TRANSFORM2D_IDENTITY;
     GenId level_gid = entity_spawn_level_root(&game_state.entity_manager, (String){.chars = "level 0", .length = 7, .count = 7}, TRANSFORM2D_IDENTITY, 0);
-        
-        
+
+
     bool in_editor_mode = false;
-    
+
     { // update loop
-    
+
         u128 prev_process_tick_in_mili  = 0;
         f32 previous_time_in_seconds    = 0.0f;
         f32 fixed_update_accumulator    = 0.0f;
@@ -163,33 +164,33 @@ void app_main(){
                 platform_window_update(window_ctx);
                 input_update();
                 if(input_is_key_just_pressed(KEY_F1)){
-                    in_editor_mode = !in_editor_mode; 
+                    in_editor_mode = !in_editor_mode;
                 }
             }
-                
+
             { // game update.
-            
+
                 game_state_preupdate(&game_state, delta_time);
                 game_state_update(&game_state, persistent, transient, delta_time, in_editor_mode);
-                game_state_late_update(&game_state, delta_time);            
+                game_state_late_update(&game_state, delta_time);
                 game_state_draw(&game_state, delta_time);
             }
-            
+
             if(in_editor_mode)
             { // editor update.
 
                 editor_state_update(&editor_state, &game_state, transient, delta_time);
             }
-            
+
             { // app end update.
                 gfx_state_draw(&gfx_state);
-                transient->stride = 0;        
+                transient->stride = 0;
             }
         }
     }
-    
+
     { // clean up.
-    
+
         platform_window_context_free(window_ctx);
     }
 }

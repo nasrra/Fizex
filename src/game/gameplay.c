@@ -82,14 +82,14 @@ typedef struct{
     Transform2D spawn_transform;
     /*
         the gid of the spawned entity.
-        
+
         `remarks`
         this field should be populated with valid data after the entity has been allocated in the entity manager.
     */
     GenId entity_gid;
-    // the id of entity to spawn's type. 
+    // the id of entity to spawn's type.
     i32 entity_type_id;
-    // the index of the entity's parent in the deserialised entity list. 
+    // the index of the entity's parent in the deserialised entity list.
     i32 parent_deserialised_entity_idx;
 } DeserialisedEntity;
 
@@ -173,7 +173,7 @@ typedef struct{
 #define VIRTUAL_TEXTURE_ID_SLING_SHOT 4
 #define VIRTUAL_TEXTURE_ID_WOOD_BLOCK 6
 
-/// 
+///
 /// Texture Views.
 ///
 #define GFX_TEXTURE_VIEW_PIG_HEALTHY (GFX_TextureView){.top_left = {692, 855}, .bot_right = {740, 901}}
@@ -217,7 +217,7 @@ bool timer_manager_init(TimerManager* manager, MemoryArena* arena, i32 timer_amo
         ASSERT(false, "already init.");
         return false;
     }
-    
+
     gen_id_allocator_init(&manager->gen_id_allocator, arena, timer_amount);
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->time_scale, &manager->length, timer_amount);
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->previous_time, &manager->length, timer_amount);
@@ -229,7 +229,7 @@ bool timer_manager_init(TimerManager* manager, MemoryArena* arena, i32 timer_amo
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->timeout_data, &manager->timeout_data_length, timeout_data_element_size * timer_amount);
     manager->timeout_data_element_size = timeout_data_element_size;
     manager->is_init = true;
-    
+
     return true;
 }
 
@@ -242,26 +242,26 @@ TimerHandle timer_manager_timer_start(TimerManager* manager, f32 start_time, f32
     if(handle == 0){
         return handle;
     }
-    
+
     if(timeout_data_size > manager->timeout_data_element_size){
         ASSERT(false, "attempted to alloc timer data that has a size greater than the allocated maximum size.");
         return handle;
     }
-    
+
     i32 idx = gen_id_get_index(handle);
-    
+
     // set timer callback data.
     size_t timeout_data_idx = idx * manager->timeout_data_element_size;
     BOUNDS_CHECK(timeout_data_idx, manager->timeout_data_length);
     COPY_MEMORY(manager->timeout_data + timeout_data_idx, timeout_data, timeout_data_size);
-    
+
     // set the timer state.
     manager->current_time[idx] = start_time;
     manager->previous_time[idx] = 0.0f;
     manager->is_ticking[idx] = TIMER_MANAGER_IS_TICKING_TRUE;
     manager->has_started[idx] = TIMER_MANAGER_HAS_STARTED_TRUE;
     manager->timeout_function[idx] = timer_timeout_function;
-    
+
     return handle;
 }
 
@@ -278,7 +278,7 @@ bool timer_manager_timer_stop_unsafe(TimerManager* manager, i32 timer_idx){
     manager->is_ticking[timer_idx]          = TIMER_MANAGER_IS_TICKING_FALSE;
     manager->current_time[timer_idx]        = 0.0f;
     manager->previous_time[timer_idx]       = 0.0f;
-    manager->timeout_function[timer_idx]    = NULL; 
+    manager->timeout_function[timer_idx]    = NULL;
     gen_id_allocator_dealloc_unsafe(&manager->gen_id_allocator, timer_idx);
     return true;
 }
@@ -291,7 +291,7 @@ bool timer_manager_timer_stop(TimerManager* manager, TimerHandle handle){
     i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, handle);
     if(!idx){
         return false;
-    }    
+    }
     return timer_manager_timer_stop_unsafe(manager, idx);
 }
 
@@ -303,7 +303,7 @@ bool timer_manager_timer_pause(TimerManager* manager, TimerHandle handle){
     i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, handle);
     if(!idx){
         return false;
-    }    
+    }
     BOUNDS_CHECK(idx, manager->length);
     if(manager->has_started[idx] == TIMER_MANAGER_HAS_STARTED_FALSE){
         return false;
@@ -320,11 +320,11 @@ bool timer_manager_timer_resume(TimerManager* manager, TimerHandle handle){
     i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, handle);
     if(!idx){
         return false;
-    }    
+    }
     BOUNDS_CHECK(idx, manager->length);
     if(manager->has_started[idx] == TIMER_MANAGER_HAS_STARTED_FALSE){
         return false;
-    }    
+    }
     manager->is_ticking[idx] = TIMER_MANAGER_IS_TICKING_TRUE;
     return true;
 }
@@ -362,7 +362,7 @@ bool timer_manager_timer_has_started(TimerManager manager, TimerHandle handle){
     i32 idx = gen_id_allocator_is_gen_id_valid(&manager.gen_id_allocator, handle);
     if(!idx){
         return false;
-    }    
+    }
     BOUNDS_CHECK(idx, manager.length);
     return manager.has_started[idx] == TIMER_MANAGER_HAS_STARTED_TRUE;
 }
@@ -375,11 +375,11 @@ bool timer_manager_timer_is_ticking(TimerManager manager, TimerHandle handle){
     i32 idx = gen_id_allocator_is_gen_id_valid(&manager.gen_id_allocator, handle);
     if(!idx){
         return false;
-    }    
+    }
     BOUNDS_CHECK(idx, manager.length);
     if(manager.has_started[idx] == TIMER_MANAGER_HAS_STARTED_FALSE){
         return false;
-    }  
+    }
     return manager.is_ticking[idx] == TIMER_MANAGER_IS_TICKING_TRUE;
 }
 
@@ -391,7 +391,7 @@ bool timer_manager_timer_set_time_scale(TimerManager* manager, TimerHandle handl
     i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, handle);
     if(!idx){
         return false;
-    }    
+    }
     BOUNDS_CHECK(idx, manager->length);
     manager->time_scale[idx] = time_scale;
     return true;
@@ -405,7 +405,7 @@ f32 timer_manager_timer_get_delta_tick_time(TimerManager manager, TimerHandle ha
     i32 idx = gen_id_allocator_is_gen_id_valid(&manager.gen_id_allocator, handle);
     if(!idx){
         return 0.0f;
-    }    
+    }
     BOUNDS_CHECK(idx, manager.length);
     return ABS(manager.previous_time[idx] - manager.current_time[idx]);
 }
@@ -418,9 +418,9 @@ GenId entity_manager_alloc_entity(EntityManager* manager, GenId parent){
     if(gid == 0){
         return gid;
     }
-    
+
     i32 idx = gen_id_get_index(gid);
-    
+
     if(parent == 0){
         if(!intrusive_list_add_root(&manager->entity_hierarchy, idx)){
             ASSERT(false, "failed to insert entity into entity hierarchy.");
@@ -436,7 +436,7 @@ GenId entity_manager_alloc_entity(EntityManager* manager, GenId parent){
             gid = 0;
         }
     }
-    
+
     return gid;
 }
 
@@ -447,7 +447,7 @@ void entity_manager_dealloc_entity_data_unsafe(EntityManager* manager, i32 idx){
     if(entity->physics_body_gid){
         fizx_body_dealloc(&manager->fizx_state, entity->physics_body_gid);
     }
-    
+
     if(entity->sprite_gid){
         gfx_dealloc_sprite(manager->gfx_state, entity->sprite_gid);
     }
@@ -468,7 +468,7 @@ bool entity_manager_dealloc_entity(EntityManager* manager, GenId gid){
 
     // TODO:
     // may want to add functionality later so the user can deallocate an entity independently from its children.
-    
+
     // NOTE:
     // the on_dealloc callback for this calls entity_manager_dealloc_entity_data_unsafe.
     if(!intrusive_list_remove_node_and_children(&manager->entity_hierarchy, idx, manager)){
@@ -481,7 +481,7 @@ bool entity_manager_get_entity(EntityManager manager, GenId entity_gid, Entity**
     i32 idx = gen_id_allocator_is_gen_id_valid(&manager.gen_id_allocator, entity_gid);
     if(!idx){
         return false;
-    }    
+    }
     BOUNDS_CHECK(idx, manager.entity_length);
     *out_entity = &manager.entity[idx];
     return true;
@@ -517,8 +517,8 @@ GenId entity_spawn_red_bird(EntityManager* entity_manager, String name, Transfor
     {
         string_clear(&entity->name);
         string_push(&entity->name, name);
-         
-        entity->type_id = EntityTypeId_RedBird; 
+
+        entity->type_id = EntityTypeId_RedBird;
         entity->transform = transform;
         entity->is_physics_body = true;
 
@@ -558,8 +558,8 @@ GenId entity_spawn_yellow_bird(EntityManager* entity_manager, String name, Trans
     {
         string_clear(&entity->name);
         string_push(&entity->name, name);
-        
-        entity->type_id = EntityTypeId_YellowBird; 
+
+        entity->type_id = EntityTypeId_YellowBird;
         entity->transform = transform;
         entity->is_physics_body = true;
 
@@ -609,7 +609,7 @@ GenId entity_spawn_wood_block(EntityManager* entity_manager, String name, Transf
         Transform2D shape_transform = TRANSFORM2D_IDENTITY;
         entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, shape_transform, FIZX_ShapeBehaviour_Dynamic, &entity_gid, PHYSICS_LAYER_ENVIRONMENT, square, material, true);
-        
+
         GFX_TextureView texture_view = {.bot_right = {.x = 150, .y = 150}};
         entity->is_sprite = true;
         entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
@@ -632,26 +632,26 @@ GenId entity_spawn_invisible_wall(EntityManager* entity_manager, String name, Tr
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     entity_manager_get_entity(*entity_manager, entity_gid, &entity);
-    {        
+    {
         string_clear(&entity->name);
         string_push(&entity->name, name);
-        
+
         entity->type_id = EntityTypeId_InvisibleWall;
-        
+
         Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
         FIZX_Material material = {.static_friction = 1.0f, .kinetic_friction = 1.0f, .density = 22.6f, .restitution = 0.0f};
         Transform2D shape_transform = TRANSFORM2D_IDENTITY;
         entity->is_physics_body = true;
         entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, transform, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(
-            &entity_manager->fizx_state, 
-            entity->physics_body_gid, 
-            shape_transform, 
-            FIZX_ShapeBehaviour_Kinematic, 
-            &entity_gid, 
-            PHYSICS_LAYER_ENVIRONMENT, 
-            square, 
-            material, 
+            &entity_manager->fizx_state,
+            entity->physics_body_gid,
+            shape_transform,
+            FIZX_ShapeBehaviour_Kinematic,
+            &entity_gid,
+            PHYSICS_LAYER_ENVIRONMENT,
+            square,
+            material,
             true
         );
     }
@@ -664,7 +664,7 @@ GenId entity_spawn_level_root(EntityManager* entity_manager, String name, Transf
     entity_manager_get_entity(*entity_manager, entity_gid, &entity);
     {
         entity->type_id = EntityTypeId_LevelRoot;
-        string_push(&entity->name, name); 
+        string_push(&entity->name, name);
     }
     return entity_gid;
 }
@@ -690,7 +690,7 @@ void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
     if((info.source_layer & PHYSICS_LAYER_PLAYER) == 0){
         return;
     }
-    
+
     Entity* entity;
     if(!entity_manager_get_entity(*ctx->entity_manager, *entity_gid, &entity)){
         ASSERT(false, "failed to get entity.");
@@ -705,7 +705,7 @@ void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
 
     ASSERT(entity->is_health, "entity doesnt use health.");
     entity->health -= 1;
-    
+
     if(entity->health <= 0){
         entity_manager_dealloc_entity(ctx->entity_manager, *entity_gid);
         ctx->entity_manager->alive_enemies-=1;
@@ -717,14 +717,14 @@ void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
         gfx_sprite_set_texture_view(ctx->entity_manager->gfx_state, entity->sprite_gid, GFX_TEXTURE_VIEW_PIG_CRITICAL);
     }
     else if(entity->health <= 2){
-        gfx_sprite_set_texture_view(ctx->entity_manager->gfx_state, entity->sprite_gid, GFX_TEXTURE_VIEW_PIG_HURT);        
+        gfx_sprite_set_texture_view(ctx->entity_manager->gfx_state, entity->sprite_gid, GFX_TEXTURE_VIEW_PIG_HURT);
     }
-    
+
     PigInvincibleTimerTimeoutContext timeout_data = {
         .entity_manager = ctx->entity_manager,
         .entity_gid = *entity_gid
     };
-    
+
     entity->is_invincible = true;
     timer_manager_timer_start(&ctx->entity_manager->timer_manager, 0.675f, 1.0f, pig_invincible_timer_timeout, &timeout_data, sizeof(timeout_data));
 }
@@ -736,8 +736,8 @@ GenId entity_spawn_pig(EntityManager* entity_manager, String name, Transform2D t
     {
         string_clear(&entity->name);
         string_push(&entity->name, name);
-        
-        entity->type_id = EntityTypeId_Pig; 
+
+        entity->type_id = EntityTypeId_Pig;
         entity->transform = transform;
         entity->is_physics_body = true;
 
@@ -798,7 +798,7 @@ void load_lvl(EntityManager* entity_manager, String file_path){
 
         BOUNDS_CHECK(entity_manager->deserialised_entity_count, entity_manager->deserialised_entity_length);
         deserialised_entity = &entity_manager->deserialised_entity[entity_manager->deserialised_entity_count-1];
-    
+
         // NOTE:
         // this can corrupt the stack, as sscanf doesnt bounds check at all for name strings.
         // be very careful here, if the program nukes itself when loadiing saved data, this is probs why.
@@ -838,19 +838,19 @@ void load_lvl(EntityManager* entity_manager, String file_path){
         if(lines_read == 8){
             switch(deserialised_entity->entity_type_id){
                 case EntityTypeId_RedBird:{
-                    deserialised_entity->entity_gid 
+                    deserialised_entity->entity_gid
                         = entity_spawn_red_bird(entity_manager, name, deserialised_entity->spawn_transform, parent_gid);
                 }break;
                 case EntityTypeId_YellowBird:{
-                    deserialised_entity->entity_gid 
+                    deserialised_entity->entity_gid
                         = entity_spawn_yellow_bird(entity_manager, name, deserialised_entity->spawn_transform, parent_gid);
                 }break;
                 case EntityTypeId_WoodBlock:{
-                    deserialised_entity->entity_gid 
+                    deserialised_entity->entity_gid
                         = entity_spawn_wood_block(entity_manager, name, deserialised_entity->spawn_transform, parent_gid);
                 }break;
                 case EntityTypeId_InvisibleWall:{
-                    deserialised_entity->entity_gid 
+                    deserialised_entity->entity_gid
                         = entity_spawn_invisible_wall(entity_manager, name, deserialised_entity->spawn_transform, parent_gid);
                 }break;
                 case EntityTypeId_Pig:{
@@ -869,26 +869,26 @@ void load_lvl(EntityManager* entity_manager, String file_path){
         }
         else{
             break;
-        }        
+        }
     }
     platform_free_memory(raw_file);
 }
 
 void entity_manager_init(
-    EntityManager* manager, MemoryArena* arena, GFX_State* gfx_state, 
+    EntityManager* manager, MemoryArena* arena, GFX_State* gfx_state,
     i32 entity_amount, i32 physics_body_amount, i32 timer_timeout_data_size
 ){
     ASSERT(!manager->is_init, "already init.");
-    
+
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->entity, &manager->entity_length, entity_amount);
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->deserialised_entity, &manager->deserialised_entity_length, entity_amount);
     manager->deserialised_entity_count = 0;
-    
+
     for(i32 i = 0; i < entity_amount; i++){
         Entity* entity = &manager->entity[i];
         string_init(&entity->name, arena, ENTITY_NAME_LENGTH);
     }
-    
+
     gen_id_allocator_init(&manager->gen_id_allocator, arena, entity_amount);
     intrusive_list_init(&manager->entity_hierarchy, arena, entity_amount, false);
     manager->entity_hierarchy.on_dealloc_callback = entity_on_entity_hierarchy_dealloc;
@@ -903,9 +903,9 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
     ASSERT(!game_state->is_init, "already init.");
 
     game_state->time_scale = 1.0f;
-    
+
     i32 entity_amount = 2048;
-    i32 physics_body_amount = 128;    
+    i32 physics_body_amount = 128;
     i32 timeout_data_element_size = 512;
 
     game_state->entity_manager.fizx_draw_state = (FIZX_DrawInfo){
@@ -955,10 +955,10 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
     FIZX_State* fizx_state = &entity_manager->fizx_state;
 
     // retrieve necessary data.
-    Vector2 mouse_world_position = gfx_get_mouse_world_position(gfx_state);    
+    Vector2 mouse_world_position = gfx_get_mouse_world_position(gfx_state);
 
     { // update fizx draw state.
-    
+
         if(input_is_key_just_pressed(KEY_1)){
             fizx_draw_state->draw_bvh_branches = !fizx_draw_state->draw_bvh_branches;
         }
@@ -969,12 +969,12 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             fizx_draw_state->draw_body_shapes = !fizx_draw_state->draw_body_shapes;
         }
         if(input_is_key_just_pressed(KEY_4)){
-            fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info; 
+            fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
         }
     }
 
     { // time management.
-        
+
         if(input_is_key_pressed(KEY_SPACE)){
             game_state->time_scale = 0.0f;
         }
@@ -984,14 +984,14 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         else{
             game_state->time_scale = 1.0f;
         }
-        
+
         delta_time *= game_state->time_scale;
         timer_manager_update(timer_manager, delta_time);
     }
 
 
     { // fixed update.
-        
+
         fixed_update_accumulator += delta_time;
         if(fixed_update_accumulator > DELTA_TIME_ACCUMULATOR_SLOW_DOWN){
             fixed_update_accumulator = DELTA_TIME_ACCUMULATOR_SLOW_DOWN;
@@ -1008,10 +1008,10 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
     }
 
     { // move camera.
-        
+
         f32 camera_speed = 1.0f * delta_time * gfx_state->world_camera.orthographic_size;
         bool x = input_is_key_pressed(KEY_RIGHT);
-        if(input_is_key_pressed(KEY_DOWN))  {gfx_state->world_camera.position.y -= camera_speed;}    
+        if(input_is_key_pressed(KEY_DOWN))  {gfx_state->world_camera.position.y -= camera_speed;}
         if(input_is_key_pressed(KEY_Q))     {gfx_state->world_camera.orthographic_size -= gfx_state->world_camera.orthographic_size * 1.0f * delta_time;}
         if(input_is_key_pressed(KEY_E))     {gfx_state->world_camera.orthographic_size += gfx_state->world_camera.orthographic_size * 1.0f * delta_time;}
         if(input_is_key_pressed(KEY_RIGHT)) {gfx_state->world_camera.position.x += camera_speed;}
@@ -1021,7 +1021,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
 
     if(!in_editor_mode)
     { // player game update.
-        
+
         if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)){
             for(i32 e_idx = 0; e_idx < entity_manager->entity_length; e_idx++){
                 Entity* entity = &entity_manager->entity[e_idx];
@@ -1036,27 +1036,27 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                 }
             }
         }
-        
+
         Vector2 impulse_magnitude;
-        
+
         if(game_state->mouse_state.clicked_entity_idx){
             i32 entity_idx = game_state->mouse_state.clicked_entity_idx;
             BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
             Entity* entity = &entity_manager->entity[entity_idx];
             Vector2 position_diff = vector2_sub(game_state->mouse_state.clicked_entity_initial_position, mouse_world_position);
-            
+
             position_diff = vector2_clamp_to_radius(position_diff, PLAYER_MOUSE_MAX_DRAW_RADIUS);
-            impulse_magnitude = vector2_mul_val(position_diff, PLAYER_MOUSE_LAUNCH_FORCE); 
-            
+            impulse_magnitude = vector2_mul_val(position_diff, PLAYER_MOUSE_LAUNCH_FORCE);
+
             Vector2 new_position = vector2_sub(game_state->mouse_state.clicked_entity_initial_position, position_diff);
-                
+
             entity->transform.position = new_position;
             fizx_body_set_global_position(fizx_state, entity->physics_body_gid, new_position);
         }
-        
+
         if(input_is_mouse_button_just_released(MOUSE_BUTTON_LEFT)){
             if(game_state->mouse_state.clicked_entity_idx > 0){
-                i32 entity_idx = game_state->mouse_state.clicked_entity_idx; 
+                i32 entity_idx = game_state->mouse_state.clicked_entity_idx;
                 BOUNDS_CHECK(entity_idx, game_state->entity_manager.entity_length);
                 Entity* entity = &entity_manager->entity[entity_idx];
                 fizx_body_set_active(fizx_state, entity->physics_body_gid, true);
@@ -1067,10 +1067,10 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         }
     }
 
-    { 
+    {
         for(i32 i = 0; i < entity_manager->entity_length; i++){
             Entity* entity = &entity_manager->entity[i];
-            
+
             if(entity->is_physics_body){
                 if(fizx_body_is_active(fizx_state, entity->physics_body_gid)){
                     Transform2D transform;
@@ -1078,11 +1078,11 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                         entity->transform.position = transform.position;
                         entity->transform.rotation = transform.rotation;
                         entity->transform.cosine = transform.cosine;
-                        entity->transform.sine = transform.sine; 
+                        entity->transform.sine = transform.sine;
                     }
                 }
             }
-            
+
             if(entity->is_sprite){
                 Transform2D sprite_transform = transform2d_transform(entity->sprite_local_transform, entity->transform);
                 gfx_sprite_set_transform(gfx_state, entity->sprite_gid, sprite_transform);
@@ -1092,11 +1092,11 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
 }
 
 void game_state_late_update(GameState* game_state, f32 delta_time){
-    
+
     // hoisting invariance.
     EntityManager* entity_manager = &game_state->entity_manager;
     GFX_State* gfx_state = entity_manager->gfx_state;
-    
+
     /**
         NOTE:
         this might have to be swapped for the final render target resolution, maybe idk.
@@ -1130,7 +1130,7 @@ void game_state_late_update(GameState* game_state, f32 delta_time){
 }
 
 void game_state_draw(GameState* game_state, f32 delta_time){
-    
+
     EntityManager* entity_manager = &game_state->entity_manager;
     GFX_State* gfx_state = entity_manager->gfx_state;
     FIZX_State* fizx_state = &entity_manager->fizx_state;
@@ -1141,11 +1141,11 @@ void game_state_draw(GameState* game_state, f32 delta_time){
     entity_manager_debug_draw(*entity_manager, delta_time);
 
     Vector2I mouse_backbuffer_position;
-    platform_get_mouse_position(&mouse_backbuffer_position.x, &mouse_backbuffer_position.y);                                
+    input_get_mouse_position(&mouse_backbuffer_position.x, &mouse_backbuffer_position.y);
 
     Clay_SetCurrentContext(gfx_state->clay_game_ui_ctx);
     gfx_clay_begin_layout(
-        gfx_state, (Vector2I){.x = gfx_state->window_ctx->width, .y = gfx_state->window_ctx->height}, mouse_backbuffer_position, delta_time, 
+        gfx_state, (Vector2I){.x = gfx_state->window_ctx->width, .y = gfx_state->window_ctx->height}, mouse_backbuffer_position, delta_time,
         input_is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
     );
     // gfx_clay_test_layout(&entity_manager);

@@ -8,12 +8,12 @@
 @REM     - userenv.lib
 @REM
 @REM     xcopy doc:
-@REM     
+@REM
 @REM     /E copies all sub directories, including empty ones.
 @REM     /I assumes destination is a directory (avoids a prompt whne the destination doesn't exist).
 @REM     /Y suppresses "overwrite" confirmation prompts.
-@REM  
+@REM
 
-mkdir build & cd src & cl /Zi /W3 /WX /I vendors\freetype /Fo:..\build\ /Fd:..\build\ /Fe:..\build\app.exe app_win32.c app.c base_layer\base.c user32.lib Gdi32.lib ws2_32.lib ntdll.lib userenv.lib vendors\webgpu\wgpu_native.lib vendors\freetype\freetype-x64.lib & xcopy /E /I /Y "..\assets" "..\build\assets"
-@REM mkdir build & cd src & cl /O2 /Oi /GL /DNDEBUG /MD /W3 /WX 
+mkdir build & cd src & cl /Zi /W3 /WX /I vendors\freetype /Fo:..\build\ /Fd:..\build\ /Fe:..\build\app.exe app_win32.c app.c base_layer\base.c input/input.c user32.lib Gdi32.lib ws2_32.lib ntdll.lib userenv.lib vendors\webgpu\wgpu_native.lib vendors\freetype\freetype-x64.lib & xcopy /E /I /Y "..\assets" "..\build\assets"
+@REM mkdir build & cd src & cl /O2 /Oi /GL /DNDEBUG /MD /W3 /WX
 @REM  & call cd ..\build & app.exe

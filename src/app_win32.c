@@ -4,7 +4,6 @@
 #include "app.h"
 #include "stdint.h"
 #include "platform.h"
-#include "base_layer/base.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "vendors/stb/stb_image.h"
@@ -51,10 +50,7 @@ Define this in the header file:
 
 MemoryArena persistent_memory;
 MemoryArena transient_memory;
-u128 win32_global_process_start_time;
-i32 mouse_x;
-i32 mouse_y;
-
+long long win32_global_process_start_time;
 
 /*====================
     private functions.
@@ -160,25 +156,10 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
         case WM_RBUTTONDOWN:{input_set_mouse_button_down(MOUSE_BUTTON_RIGHT);}break;
         case WM_RBUTTONUP:{input_set_mouse_button_up(MOUSE_BUTTON_RIGHT);}break;
         case WM_MOUSEMOVE:{
-            mouse_x = GET_X_LPARAM(l_param);
-            mouse_y = GET_Y_LPARAM(l_param);
+            int32_t mouse_x = GET_X_LPARAM(l_param);
+            int32_t mouse_y = GET_Y_LPARAM(l_param);
+            input_set_mouse_position(mouse_x, mouse_y);
         };break;
-
-        // case WM_PAINT:{
-        //     PAINTSTRUCT paint;
-        //     HDC device_ctx = BeginPaint(window, &paint);
-
-        //     /*
-        //         all painting occurs here...
-        //     */
-        //     LONG x = paint.rcPaint.left;
-        //     LONG y = paint.rcPaint.top;
-        //     LONG width = paint.rcPaint.right - paint.rcPaint.left;
-        //     LONG height = paint.rcPaint.bottom - paint.rcPaint.top;
-        //     PatBlt(device_ctx, x, y, width, height, BLACKNESS);
-        //     EndPaint(window, &paint);
-        // }break;
-
         default:{
             result = DefWindowProc(window, message, w_param, l_param);
         }break;
@@ -187,13 +168,13 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
     return result;
 }
 
-u128 platform_get_system_tick(){
+long long platform_get_system_tick(){
     LARGE_INTEGER time;
     QueryPerformanceCounter(&time);
-    return (u128)time.QuadPart;
+    return (long long)time.QuadPart;
 }
 
-u128 platform_get_proccess_tick(){
+long long platform_get_proccess_tick(){
     return platform_get_system_tick() - win32_global_process_start_time;
 }
 
@@ -256,7 +237,7 @@ MemoryArena* platform_get_transient_memory(){
     return &transient_memory;
 }
 
-WindowContext* platform_window_create(i32 width, i32 height){
+WindowContext* platform_window_create(int32_t width, int32_t height){
     WindowContext* ctx = (WindowContext*)platform_alloc_memory(sizeof(WindowContext));
 
     HWND window_handle = NULL;
@@ -285,8 +266,8 @@ WindowContext* platform_window_create(i32 width, i32 height){
             to be within the requested size.
         **/
         AdjustWindowRectEx(&window_rect, window_style, FALSE, 0);
-        i32 adjusted_width = window_rect.right - window_rect.left;
-        i32 adjusted_height = window_rect.bottom - window_rect.top;
+        int32_t adjusted_width = window_rect.right - window_rect.left;
+        int32_t adjusted_height = window_rect.bottom - window_rect.top;
 
         window_handle = CreateWindowEx(
             0,
@@ -350,7 +331,7 @@ bool platform_load_file_into_memory_arena(String file_path, MemoryArena* arena){
         convert to null terminated string.
     **/
     char* null_terminated_file_path;
-    i32 null_terminated_file_path_length;
+    int32_t null_terminated_file_path_length;
     MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.length+1);
     COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
     null_terminated_file_path[file_path.length] = '\0';
@@ -405,7 +386,7 @@ void* platform_load_file(String file_path, size_t* out_buffer_size){
         convert to null terminated string.
     **/
     char* null_terminated_file_path;
-    i32 null_terminated_file_path_length;
+    int32_t null_terminated_file_path_length;
     MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.length+1);
     COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
     null_terminated_file_path[file_path.length] = '\0';
@@ -457,12 +438,12 @@ void* platform_load_file(String file_path, size_t* out_buffer_size){
     return buffer;
 }
 
-i32 platform_write_file(String file_path, void* data, size_t data_size, FileWriteType write_type){
+int32_t platform_write_file(String file_path, void* data, size_t data_size, FileWriteType write_type){
     /**
         convert to null terminated string.
     **/
     char* null_terminated_file_path;
-    i32 null_terminated_file_path_length;
+    int32_t null_terminated_file_path_length;
     MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.length+1);
     COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
     null_terminated_file_path[file_path.length] = '\0';
@@ -521,7 +502,7 @@ bool platform_delete_file(String file_path){
         convert to null terminated string.
     **/
     char* null_terminated_file_path;
-    i32 null_terminated_file_path_length;
+    int32_t null_terminated_file_path_length;
     MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.length+1);
     COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
     null_terminated_file_path[file_path.length] = '\0';
@@ -542,9 +523,9 @@ void platform_print_msg(char* msg){
 
 bool platform_load_image(Image* out_image, String file_path){
     ASSERT(out_image->pixel == NULL, "image already init.");
-    i32 comp;
+    int32_t comp;
     // 4 channels for RGBA always being output.
-    i32 desired_channels = 4;
+    int32_t desired_channels = 4;
     size_t buffer_size = (file_path.length + 1) * sizeof(char);
     void* buffer = platform_alloc_memory(buffer_size);
     ZERO_MEMORY(buffer, buffer_size);
@@ -569,9 +550,4 @@ bool platform_free_image(Image* image){
     // zero out image once free;
     *image = (Image){0};
     return true;
-}
-
-void platform_get_mouse_position(int* out_x, int* out_y){
-    *out_x = mouse_x;
-    *out_y = mouse_y;
 }
