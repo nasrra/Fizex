@@ -110,6 +110,7 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
                 case 'E':           {input_set_key_down(KEY_E);}break;
                 case 'F':           {input_set_key_down(KEY_F);}break;
                 case 'Q':           {input_set_key_down(KEY_Q);}break;
+                case 'R':           {input_set_key_down(KEY_R);}break;
                 case 'S':           {input_set_key_down(KEY_S);}break;
                 case 'W':           {input_set_key_down(KEY_W);}break;
                 case VK_RIGHT:      {input_set_key_down(KEY_RIGHT);}break;
@@ -141,6 +142,7 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
                 case 'E':           {input_set_key_up(KEY_E);}break;
                 case 'F':           {input_set_key_up(KEY_F);}break;
                 case 'Q':           {input_set_key_up(KEY_Q);}break;
+                case 'R':           {input_set_key_up(KEY_R);}break;
                 case 'S':           {input_set_key_up(KEY_S);}break;
                 case 'W':           {input_set_key_up(KEY_W);}break;
                 case VK_RIGHT:      {input_set_key_up(KEY_RIGHT);}break;
@@ -159,7 +161,10 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
             int32_t mouse_x = GET_X_LPARAM(l_param);
             int32_t mouse_y = GET_Y_LPARAM(l_param);
             input_set_mouse_position(mouse_x, mouse_y);
-        };break;
+        }break;
+        case WM_MOUSEWHEEL:{
+            input_increment_mouse_scroll_wheel_value((int32_t)GET_WHEEL_DELTA_WPARAM(w_param));
+        }break;
         default:{
             result = DefWindowProc(window, message, w_param, l_param);
         }break;

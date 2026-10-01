@@ -5,7 +5,6 @@
 
 
 
-
 ///
 /// types.
 ///
@@ -1011,9 +1010,10 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
 
         f32 camera_speed = 1.0f * delta_time * gfx_state->world_camera.orthographic_size;
         bool x = input_is_key_pressed(KEY_RIGHT);
+
+        gfx_state->world_camera.orthographic_size -= gfx_state->world_camera.orthographic_size * (f32)input_get_mouse_scroll_wheel_delta_value() * delta_time * 0.1f;
+
         if(input_is_key_pressed(KEY_DOWN))  {gfx_state->world_camera.position.y -= camera_speed;}
-        if(input_is_key_pressed(KEY_Q))     {gfx_state->world_camera.orthographic_size -= gfx_state->world_camera.orthographic_size * 1.0f * delta_time;}
-        if(input_is_key_pressed(KEY_E))     {gfx_state->world_camera.orthographic_size += gfx_state->world_camera.orthographic_size * 1.0f * delta_time;}
         if(input_is_key_pressed(KEY_RIGHT)) {gfx_state->world_camera.position.x += camera_speed;}
         if(input_is_key_pressed(KEY_LEFT))  {gfx_state->world_camera.position.x -= camera_speed;}
         if(input_is_key_pressed(KEY_UP))    {gfx_state->world_camera.position.y += camera_speed;}

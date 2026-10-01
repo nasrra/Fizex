@@ -206,7 +206,11 @@ input_mouse_get_position_relative(
 );
 void input_set_mouse_position(i32 pos_x, i32 pos_y);
 void input_get_mouse_position(i32* out_pos_x, i32* out_pos_y);
-void input_get_mouse_previous_position(i32* out_pos_x, i32* out_pos_y);
 void input_get_mouse_delta_position(i32* out_delta_x, i32* out_delta_y);
+
+i32 input_get_mouse_scoll_wheel_value();
+i32 input_get_mouse_scroll_wheel_delta_value();
+void input_set_mouse_scroll_wheel_value(i32 value);
+void input_increment_mouse_scroll_wheel_value(i32 scroll_amount);
 
 #endif

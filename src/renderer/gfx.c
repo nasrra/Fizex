@@ -1994,8 +1994,8 @@ void gfx_final_render_target_init(GFX_Texture* texture, WGPUDevice device, u32 w
         TODO: (nich s)
         format of the final render target needs to be dynamically set based on the surface window's format.
     **/
-    // WGPUTextureFormat format = WGPUTextureFormat_RGBA8UnormSrgb;
-    WGPUTextureFormat format = WGPUTextureFormat_BGRA8UnormSrgb;
+    WGPUTextureFormat format = WGPUTextureFormat_RGBA8UnormSrgb;
+    // WGPUTextureFormat format = WGPUTextureFormat_BGRA8UnormSrgb;
     WGPUTextureUsage usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_TextureBinding;
     WGPUTextureAspect aspect = WGPUTextureAspect_All;
     gfx_texture_init(texture, device, format, usage, aspect, width, height);
@@ -3564,12 +3564,22 @@ Vector2 gfx_get_mouse_world_position(GFX_State* state){
     return gfx_screen_to_world_position(state, mouse_position);
 }
 
-// Vector2 gfx_get_mouse_world_delta_position(GFX_State* state){
-//     Vector2I mouse_position_i;
-//     platform_get_mouse_position(&mouse_position_i.x, &mouse_position_i.y);
-//     Vector2 current_mouse_position = {.x = (f32)mouse_position_i.x, .y = (f32)mouse_position_i.y};
-//     return gfx_screen_to_world_position(state, mouse_position);
-// }
+Vector2 gfx_get_mouse_delta_world_position(GFX_State* state){
+    
+    // get current frame's mouse world position.
+    Vector2I mouse_screen_position;
+    input_get_mouse_position(&mouse_screen_position.x, &mouse_screen_position.y);
+    Vector2 mouse_world_position = gfx_screen_to_world_position(state, vector2i_to_vector2(mouse_screen_position));
+    
+    // get previous frame's mouse world position.
+    Vector2I mouse_delta_screen_position;
+    input_get_mouse_delta_position(&mouse_delta_screen_position.x, &mouse_delta_screen_position.y);
+    Vector2I mouse_previous_screen_position = vector2i_add(mouse_delta_screen_position, mouse_screen_position);
+    Vector2 mouse_previous_world_position = gfx_screen_to_world_position(state, vector2i_to_vector2(mouse_previous_screen_position));
+            
+    return vector2_sub(mouse_previous_world_position, mouse_world_position);
+}
+
 
 
 

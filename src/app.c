@@ -15,8 +15,8 @@
     defines.
 ====================**//**/
 
-#define WINDOW_WIDTH 1920 / 2
-#define WINDOW_HEIGHT 1080 / 2
+#define WINDOW_WIDTH 1920
+#define WINDOW_HEIGHT 1080
 #define GFX_DEFAULT_WIREFRAME_THICKNESS 0.05f
 
 /**====================
@@ -135,9 +135,9 @@ void app_main(){
         }
 
         { // load level.
-            // string_clear(&file_path);
-            // string_push_chars(&file_path, "assets/saved.scsv", 17);
-            // load_lvl(&game_state.entity_manager, file_path);
+            string_clear(&file_path);
+            string_push_chars(&file_path, "assets/saved.scsv", 17);
+            load_lvl(&game_state.entity_manager, file_path);
         }
 
     }
@@ -176,7 +176,6 @@ void app_main(){
                 game_state_preupdate(&game_state, delta_time);
                 game_state_update(&game_state, persistent, transient, delta_time, in_editor_mode);
                 game_state_late_update(&game_state, delta_time);
-                game_state_draw(&game_state, delta_time);
             }
 
             if(in_editor_mode)
@@ -186,9 +185,11 @@ void app_main(){
             }
 
             { // app end update.
+                game_state_draw(&game_state, delta_time);
                 gfx_state_draw(&gfx_state);
                 transient->stride = 0;
             }
+            
         }
     }
 

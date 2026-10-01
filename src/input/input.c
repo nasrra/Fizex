@@ -16,10 +16,17 @@ InputState* input_prev_key_state;
 bool* input_mouse_button_down_state;
 InputState* input_curr_mouse_button_state;
 InputState* input_prev_mouse_button_state;
+
 i32 input_mouse_position_x;
 i32 input_mouse_position_y;
-i32 input_mouse_previous_position_x;
-i32 input_mouse_previous_position_y;
+i32 input_mouse_delta_position_x;
+i32 input_mouse_delta_position_y;
+i32 input_mouse_previous_delta_position_x;
+i32 input_mouse_previous_delta_position_y;
+
+i32 input_mouse_scroll_wheel_value;
+i32 input_mouse_scroll_wheel_delta_value;
+i32 input_mouse_scroll_wheel_previous_delta_value;
 
 
 
@@ -124,13 +131,37 @@ bool input_is_mouse_button_just_released(MouseButton button){
 }
 
 void input_update(){
+
     { // validation.
         ASSERT(input_is_init, "input is not init");
     }
+    
+    { // handle_delta_values();
 
-    input_mouse_previous_position_x = input_mouse_position_x;
-    input_mouse_previous_position_y = input_mouse_position_y;
-    // note that the platform layer is responsible for setting the input current mouse position.
+        if(input_mouse_previous_delta_position_x == input_mouse_delta_position_x){
+            input_mouse_previous_delta_position_x = 0;
+            input_mouse_delta_position_x = 0;
+        }
+        else{
+            input_mouse_previous_delta_position_x = input_mouse_delta_position_x;
+        }
+    
+        if(input_mouse_previous_delta_position_y == input_mouse_delta_position_y){
+            input_mouse_previous_delta_position_y = 0;
+            input_mouse_delta_position_y = 0;
+        }
+        else{
+            input_mouse_previous_delta_position_y = input_mouse_delta_position_y;
+        }
+    
+        if(input_mouse_scroll_wheel_previous_delta_value == input_mouse_scroll_wheel_delta_value){
+            input_mouse_scroll_wheel_delta_value = 0;
+            input_mouse_scroll_wheel_previous_delta_value = 0;
+        }
+        else{
+            input_mouse_scroll_wheel_previous_delta_value = input_mouse_scroll_wheel_delta_value;
+        }
+    }
 
     /*
         keys.
@@ -242,22 +273,48 @@ void input_init(MemoryArena* arena){
     input_is_init = true;
 }
 
-void input_set_mouse_position(i32 pos_x, i32 pos_y){
-    input_mouse_position_x = pos_x;
-    input_mouse_position_y = pos_y;
-}
+
+///
+/// mouse position.
+///
+
 
 void input_get_mouse_position(i32* out_pos_x, i32* out_pos_y){
     *out_pos_x = input_mouse_position_x;
     *out_pos_y = input_mouse_position_y;
 }
 
-void input_get_mouse_previous_position(i32* out_pos_x, i32* out_pos_y){
-    *out_pos_x = input_mouse_previous_position_x;
-    *out_pos_y = input_mouse_previous_position_y;
+void input_get_mouse_delta_position(i32* out_delta_x, i32* out_delta_y){
+    *out_delta_x = input_mouse_delta_position_x;
+    *out_delta_y = input_mouse_delta_position_y;
 }
 
-void input_get_mouse_delta_position(i32* out_delta_x, i32* out_delta_y){
-    *out_delta_x = input_mouse_position_x - input_mouse_previous_position_x;
-    *out_delta_y = input_mouse_position_y - input_mouse_previous_position_y;
+void input_set_mouse_position(i32 pos_x, i32 pos_y){
+    input_mouse_delta_position_x = pos_x - input_mouse_position_x;
+    input_mouse_delta_position_y = pos_y - input_mouse_position_y;
+    input_mouse_position_x = pos_x;
+    input_mouse_position_y = pos_y;
+}
+
+
+///
+/// mouse wheel.
+///
+
+
+i32 input_get_mouse_scoll_wheel_value(){
+    return input_mouse_scroll_wheel_value;
+}
+
+i32 input_get_mouse_scroll_wheel_delta_value(){
+    return input_mouse_scroll_wheel_delta_value;
+}
+
+void input_set_mouse_scroll_wheel_value(i32 value){
+    input_mouse_scroll_wheel_delta_value = value - input_mouse_scroll_wheel_value;
+    input_mouse_scroll_wheel_value = value;
+}
+
+void input_increment_mouse_scroll_wheel_value(i32 scroll_amount){
+    input_set_mouse_scroll_wheel_value(input_get_mouse_scoll_wheel_value() + scroll_amount);
 }

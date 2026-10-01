@@ -46,6 +46,12 @@ typedef struct{
 } Editor_EntityManager;
 
 typedef struct{
+    // the positional offset to apply to the selected game entity when dragging it around with the mouse. 
+    Vector2 selected_game_entity_positional_offset;
+    bool is_clicking_selected_game_entity;
+} Editor_MouseStateMoveBehaviourState;
+
+typedef struct{
     // the entity_id of the entity to spawn.
     EntityTypeId entity_to_spawn;
     GenId entity_to_spawn_parent_gid;
@@ -55,6 +61,7 @@ typedef struct{
     Editor_SelectedGameEntity first_hit_game_entity;
     Editor_SelectedGameEntity selected_game_entity;
     Editor_SelectedGameEntity* previously_selected_game_entity;
+    Editor_MouseStateMoveBehaviourState move_behaviour_state;
     i32 previously_selected_game_entity_length;
     i32 previously_selected_game_entity_count;
     Clay_ElementId selected_ui_entity;
@@ -106,6 +113,9 @@ static i32 gfx_clay_element_id = 0;
 #define EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH 4
 
 #define EDITOR_MAX_STRING_LENGTH 64
+
+#define EDITOR_ENTTY_CLICKABLE_AREA_PASSIVE_COLOUR (GFX_Colour){.r = 0.25f, .g = 0.25f, .b = 0.25f, .a = 1.0f}
+#define EDITOR_ENTTY_CLICKABLE_AREA_ACTIVE_COLOUR  (GFX_Colour){.r = 0.5f, .g = 0.5f, .b = 0.5f, .a = 1.0f}
 
 #define EDITOR_MOUSE_BEHAVIOUR_NAVIGATE_KEYBINDING KEY_Q
 #define EDITOR_MOUSE_BEHAVIOUR_MOVE_KEYBINDING KEY_W
@@ -631,19 +641,6 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                     preferred_transform = game_entity->transform;
                     editor_entity->clickable_area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
                 }
-
-                // draw the clickable area.
-                i32 sprite_depth = 0;
-                gfx_draw_wire_poly(
-                    editor_gfx_state,
-                    editor_entity->clickable_area.shape.x,
-                    editor_entity->clickable_area.shape.y,
-                    EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH,
-                    GFX_COLOUR_BLUE,
-                    SPRITE_LAYER_GAME_WORLD,
-                    sprite_depth,
-                    SPRITE_MATERIAL_DEBUG
-                );
             }
         }
     }
@@ -827,12 +824,91 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 }
             }break;
             case Editor_MouseStateBehaviour_Move:{
-                // move the selected entity to the mouse position.
-                Entity* entity;
-                if(entity_manager_get_entity(*game_entity_manager, editor_mouse_state->selected_game_entity.gid, &entity)){
-                    entity->transform.position = mouse_world_position;
+                
+                Entity* game_entity;
+                if(!entity_manager_get_entity(*game_entity_manager, editor_mouse_state->selected_game_entity.gid, &game_entity)){
+                    // failed to retrieve selected entity data.
+                    break;
+                }
+                
+                gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_LIGHT_BLUE, game_entity->transform.position, VECTOR2_UP, 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+                gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_PINK, game_entity->transform.position, VECTOR2_RIGHT, 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);                
+                
+                i32 entity_idx = gen_id_get_index(editor_mouse_state->selected_game_entity.gid);
+                BOUNDS_CHECK(entity_idx, editor_entity_manager->entity_length);
+                Editor_EntityImmediateModeData* editor_entity = &editor_entity_manager->entity[entity_idx];
+
+                // check if we have just clicked the entity.
+                if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)){
+                    Vector2 normal;
+                    f32 depth;
+                    bool overlaps = 
+                        polygon_overlaps_point_scalar(
+                            editor_entity->clickable_area.shape.x, editor_entity->clickable_area.shape.y,
+                            EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH,
+                            mouse_world_position.x, mouse_world_position.y,
+                            &normal.x, &normal.y, &depth
+                        );
+                    
+                    // store the on click information.
+                    if(overlaps){
+                        editor_mouse_state->move_behaviour_state.selected_game_entity_positional_offset 
+                            = vector2_sub(game_entity->transform.position, mouse_world_position);
+                        editor_mouse_state->move_behaviour_state.is_clicking_selected_game_entity = true;
+                    } 
+                }
+                else if(input_is_mouse_button_just_released(MOUSE_BUTTON_LEFT)){
+                    editor_mouse_state->move_behaviour_state.is_clicking_selected_game_entity = false;
+                }
+                
+                // dont do anything if we are not clicking the entity at all.
+                if(!editor_mouse_state->move_behaviour_state.is_clicking_selected_game_entity){
+                    break;
+                }
+                
+                
+                // drag the selected entity with the mouse if we are clicking down.
+                if(input_is_mouse_button_pressed(MOUSE_BUTTON_LEFT)){                                            
+                    Vector2 new_position = vector2_add(mouse_world_position, editor_mouse_state->move_behaviour_state.selected_game_entity_positional_offset);
+                    game_entity->transform.position = new_position;                    
                 }
             }break;
+        }
+        
+        
+        // debug_gizmos();
+        {
+        
+            // note:
+            // this is fine, as state isnt retained; this data is immediate mode.
+            i32 selected_game_entity_idx = -1;
+            if(editor_mouse_state_has_selected_game_entity(editor_mouse_state)){
+                selected_game_entity_idx = gen_id_get_index(editor_mouse_state->selected_game_entity.gid);
+            }
+            
+        
+            for(i32 i = 0; i < editor_entity_manager->entity_length; i++){
+                BOUNDS_CHECK(i, editor_entity_manager->entity_is_valid_length);
+                if(!editor_entity_manager->entity_is_valid[i]){
+                    continue;
+                }
+                
+                Editor_EntityImmediateModeData* editor_entity = &editor_entity_manager->entity[i];
+                
+                // draw the clickable area.                
+                i32 sprite_depth = 100;
+                gfx_draw_wire_poly(
+                    editor_gfx_state,
+                    editor_entity->clickable_area.shape.x,
+                    editor_entity->clickable_area.shape.y,
+                    EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH,
+                    selected_game_entity_idx == i ? EDITOR_ENTTY_CLICKABLE_AREA_ACTIVE_COLOUR : EDITOR_ENTTY_CLICKABLE_AREA_PASSIVE_COLOUR,
+                    SPRITE_LAYER_EDITOR_WORLD,
+                    sprite_depth,
+                    SPRITE_MATERIAL_DEBUG
+                );
+            
+            }
         }
     }
 }

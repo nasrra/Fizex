@@ -400,10 +400,39 @@ Vector3 vector3_clamp_to_radius(Vector3 v, f32 radius){
 
 
 
+///
+/// functions: Vector2I
+///
 
-/**====================
-    functions: Vector2
-====================**//**/
+
+
+
+bool vector2i_equals(Vector2I lhs, Vector2I rhs){
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+
+Vector2I vector2i_add(Vector2I lhs, Vector2I rhs){
+    lhs.x += rhs.x;
+    lhs.y += rhs.y;
+    return lhs;
+}
+
+Vector2I vector2i_sub(Vector2I lhs, Vector2I rhs){
+    lhs.x -= rhs.x;
+    lhs.y -= rhs.y;
+    return lhs;
+}
+
+Vector2 vector2i_to_vector2(Vector2I vector){
+    return (Vector2){.x = (f32)vector.x, .y = (f32)vector.y};
+}
+
+
+
+
+///
+/// functions: Vector2
+///
 
 
 
@@ -595,34 +624,6 @@ Vector2 vector2_clamp_to_radius(Vector2 v, f32 radius){
 
 
 
-
-/*
-    functions: Vector2I
-*/
-
-
-
-
-Vector2I vector2_addi(Vector2I lhs, Vector2I rhs){
-    lhs.x += rhs.x;
-    lhs.y += rhs.y;
-    return lhs;
-}
-
-Vector2I vector2_subi(Vector2I lhs, Vector2I rhs){
-    lhs.x -= rhs.x;
-    lhs.y -= rhs.y;
-    return lhs;
-}
-
-
-
-
-
-
-
-
-
 Vector2 vector3_to_vector2(Vector3 v){
     return (Vector2){v.x, v.y};
 }
@@ -655,10 +656,6 @@ Vector3 rotate_vector3(Vector3 v, Quaternion q){
     result = vector3_add(result, cross1);
     result = vector3_add(result, cross2);
     return result;
-}
-
-bool equal_vector2i(Vector2I lhs, Vector2I rhs){
-    return lhs.x == rhs.x && lhs.y == rhs.y;
 }
 
 Aabb aabb_vector2_add(Aabb aabb, Vector2 vector){
