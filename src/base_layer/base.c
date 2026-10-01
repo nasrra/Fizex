@@ -163,6 +163,20 @@ void string_push(String* dst, String src){
     string_push_chars(dst, src.chars, src.count);
 }
 
+/*
+    pops the last character of a string.
+    
+    `returns`
+    the popped character; otherwise '\0' if it failed.
+*/
+char string_pop(String* string){
+    if(string->count <= 0 || string->count > string->length){
+        return '\0';
+    }
+    string->count-=1;
+    return string->chars[string->count+1];
+}
+
 void gen_id_allocator_init(GenIdAllocator* allocator, MemoryArena* arena, i32 length){
     ASSERT(!allocator->is_init, "already initialised.");
     ASSERT(length <= GEN_ID_ALLOCATOR_MAX_LENGTH && length >= GEN_ID_ALLOCATOR_MIN_LENGTH, "length out of bounds");

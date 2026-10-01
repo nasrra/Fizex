@@ -33,7 +33,9 @@ void app_main(){
     MemoryArena* persistent = platform_get_persistent_memory();
     MemoryArena* transient = platform_get_transient_memory();
 
-    input_init(persistent);
+    f32 latest_active_key_print_delay = 0.25f;
+    f32 latest_active_key_print_rate = 0.05f;
+    input_init(persistent, latest_active_key_print_delay, latest_active_key_print_rate);
 
     WindowContext* window_ctx = platform_window_create(WINDOW_WIDTH, WINDOW_HEIGHT);
     GFX_State gfx_state = {0};
@@ -165,8 +167,8 @@ void app_main(){
 
             { // app begin update.
                 platform_window_update(window_ctx);
-                input_update();
-                if(input_is_key_just_pressed(KEY_F1)){
+                input_update(delta_time);
+                if(input_is_key_just_pressed(Key_F1)){
                     in_editor_mode = !in_editor_mode;
                 }
             }

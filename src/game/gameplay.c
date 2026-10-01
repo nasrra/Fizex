@@ -957,26 +957,26 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
 
     { // update fizx draw state.
 
-        if(input_is_key_just_pressed(KEY_1)){
-            fizx_draw_state->draw_bvh_branches = !fizx_draw_state->draw_bvh_branches;
-        }
-        if(input_is_key_just_pressed(KEY_2)){
-            fizx_draw_state->draw_bvh_leaves = !fizx_draw_state->draw_bvh_leaves;
-        }
-        if(input_is_key_just_pressed(KEY_3)){
-            fizx_draw_state->draw_body_shapes = !fizx_draw_state->draw_body_shapes;
-        }
-        if(input_is_key_just_pressed(KEY_4)){
-            fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
-        }
+        // if(input_is_key_just_pressed(Key_1)){
+        //     fizx_draw_state->draw_bvh_branches = !fizx_draw_state->draw_bvh_branches;
+        // }
+        // if(input_is_key_just_pressed(Key_2)){
+        //     fizx_draw_state->draw_bvh_leaves = !fizx_draw_state->draw_bvh_leaves;
+        // }
+        // if(input_is_key_just_pressed(Key_3)){
+        //     fizx_draw_state->draw_body_shapes = !fizx_draw_state->draw_body_shapes;
+        // }
+        // if(input_is_key_just_pressed(Key_4)){
+        //     fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
+        // }
     }
 
     { // time management.
 
-        if(input_is_key_pressed(KEY_SPACE)){
+        if(input_is_key_pressed(Key_Space)){
             game_state->time_scale = 0.0f;
         }
-        else if(input_is_key_pressed(KEY_F)) {
+        else if(input_is_key_pressed(Key_F)) {
             game_state->time_scale = 0.1f;
         }
         else{
@@ -1008,20 +1008,20 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
     { // move camera.
 
         f32 camera_speed = 1.0f * delta_time * gfx_state->world_camera.orthographic_size;
-        bool x = input_is_key_pressed(KEY_RIGHT);
+        bool x = input_is_key_pressed(Key_Right);
 
         gfx_state->world_camera.orthographic_size -= gfx_state->world_camera.orthographic_size * (f32)input_get_mouse_scroll_wheel_delta_value() * delta_time * 0.1f;
 
-        if(input_is_key_pressed(KEY_DOWN))  {gfx_state->world_camera.position.y -= camera_speed;}
-        if(input_is_key_pressed(KEY_RIGHT)) {gfx_state->world_camera.position.x += camera_speed;}
-        if(input_is_key_pressed(KEY_LEFT))  {gfx_state->world_camera.position.x -= camera_speed;}
-        if(input_is_key_pressed(KEY_UP))    {gfx_state->world_camera.position.y += camera_speed;}
+        if(input_is_key_pressed(Key_Down))  {gfx_state->world_camera.position.y -= camera_speed;}
+        if(input_is_key_pressed(Key_Right)) {gfx_state->world_camera.position.x += camera_speed;}
+        if(input_is_key_pressed(Key_Left))  {gfx_state->world_camera.position.x -= camera_speed;}
+        if(input_is_key_pressed(Key_Up))    {gfx_state->world_camera.position.y += camera_speed;}
     }
 
     if(!in_editor_mode)
     { // player game update.
 
-        if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)){
+        if(input_is_mouse_button_just_pressed(MouseButton_Left)){
             for(i32 e_idx = 0; e_idx < entity_manager->entity_length; e_idx++){
                 Entity* entity = &entity_manager->entity[e_idx];
                 Aabb world_aabb = aabb_translate(entity->clickable_aabb, entity->transform.position);
@@ -1053,7 +1053,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             fizx_body_set_global_position(fizx_state, entity->physics_body_gid, new_position);
         }
 
-        if(input_is_mouse_button_just_released(MOUSE_BUTTON_LEFT)){
+        if(input_is_mouse_button_just_released(MouseButton_Left)){
             if(game_state->mouse_state.clicked_entity_idx > 0){
                 i32 entity_idx = game_state->mouse_state.clicked_entity_idx;
                 BOUNDS_CHECK(entity_idx, game_state->entity_manager.entity_length);
@@ -1145,7 +1145,7 @@ void game_state_draw(GameState* game_state, f32 delta_time){
     Clay_SetCurrentContext(gfx_state->clay_game_ui_ctx);
     gfx_clay_begin_layout(
         gfx_state, (Vector2I){.x = gfx_state->window_ctx->width, .y = gfx_state->window_ctx->height}, mouse_backbuffer_position, delta_time,
-        input_is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+        input_is_mouse_button_pressed(MouseButton_Left)
     );
     // gfx_clay_test_layout(&entity_manager);
     gfx_clay_end_layout(gfx_state, delta_time, SPRITE_LAYER_GAME_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
