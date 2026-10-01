@@ -366,17 +366,6 @@ void gfx_clay_entity_spawner_layout(Editor_State* editor_state, GameState* game_
         f32 button_height = 1.0f;
 
         GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
-            GFX_CLAY_BUTTON(CLAY_STRING("Red Bird"), button_width, button_height, editor_select_red_bird_button_on_hover, editor_state);
-            GFX_CLAY_BUTTON(CLAY_STRING("Yellow Bird"), button_width, button_height, editor_select_yellow_bird_button_on_hover, editor_state);
-            GFX_CLAY_BUTTON(CLAY_STRING("Wood Block"), button_width, button_height, editor_select_wood_block_button_on_hover, editor_state);
-            GFX_CLAY_BUTTON(CLAY_STRING("Pig"), button_width, button_height, editor_select_pig_button_on_hover, editor_state);
-            SaveLevelButtonOnHoverContext ctx = {.editor_state = editor_state, .game_state = game_state};
-            void* ctx_ptr;
-            MEMORY_ARENA_PUSH_STRUCT(transient, ctx, ctx_ptr);
-            GFX_CLAY_BUTTON(CLAY_STRING("Save Level"), button_width, button_height, editor_on_hover_save_level_button, ctx_ptr);
-        }
-
-        GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
             for(i32 i = 1; i < entity_manager->entity_hierarchy.root_index_count; i++){
                 i32 idx = entity_manager->entity_hierarchy.root_index[i];
                 BOUNDS_CHECK(idx, entity_manager->entity_length);
@@ -386,11 +375,26 @@ void gfx_clay_entity_spawner_layout(Editor_State* editor_state, GameState* game_
                     .editor_state = editor_state,
                     .level_root_entity_gid = entity_manager->gen_id_allocator.gen_ids[idx]
                 };
-                void* ctx_ptr;
+                SelectLevelButtonOnHoverContext* ctx_ptr;
                 MEMORY_ARENA_PUSH_STRUCT(transient, ctx, ctx_ptr);
-
                 GFX_CLAY_BUTTON(name, button_width, button_height, editor_on_hover_select_level_button, ctx_ptr);
             }
+        }
+
+        GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+            GFX_CLAY_BUTTON(CLAY_STRING("Red Bird"), button_width, button_height, editor_select_red_bird_button_on_hover, editor_state);
+            GFX_CLAY_BUTTON(CLAY_STRING("Yellow Bird"), button_width, button_height, editor_select_yellow_bird_button_on_hover, editor_state);
+            GFX_CLAY_BUTTON(CLAY_STRING("Wood Block"), button_width, button_height, editor_select_wood_block_button_on_hover, editor_state);
+            GFX_CLAY_BUTTON(CLAY_STRING("Pig"), button_width, button_height, editor_select_pig_button_on_hover, editor_state);
+        }
+
+        GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+            // for some reason this only works down here?
+            // the save button user data gets corrupted for some reason when above the the earlier button container?
+            SaveLevelButtonOnHoverContext ctx = {.editor_state = editor_state, .game_state = game_state};
+            SaveLevelButtonOnHoverContext* ctx_ptr;
+            MEMORY_ARENA_PUSH_STRUCT(transient, ctx, ctx_ptr);
+            GFX_CLAY_BUTTON(CLAY_STRING("Save Level"), button_width, button_height, editor_on_hover_save_level_button, ctx_ptr);
         }
     }
 }
