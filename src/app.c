@@ -17,6 +17,7 @@
 
 #define WINDOW_WIDTH 1920 / 2
 #define WINDOW_HEIGHT 1080 / 2
+#define GFX_DEFAULT_WIREFRAME_THICKNESS 0.05f
 
 /**====================
     functions
@@ -83,13 +84,15 @@ void app_main(){
             .final_render_texture_width = WINDOW_WIDTH,
             .final_render_texture_height = WINDOW_HEIGHT,
             .graphics_pipeline_shader_file_path = (String){.chars = "assets/shader.wgsl", .length = 18},
-            .max_sprites = 512
+            .max_sprites = 512,
+            .draw_wireframe_thickness = GFX_DEFAULT_WIREFRAME_THICKNESS,
+            .draw_circle_vertex_count = 24,
+            .draw_arrow_prong_max_length = 0.5f
         };
 
         gfx_state_init(&gfx_state, gfx_init_info, persistent, transient, window_ctx);
         gfx_orthographic_camera_init(&gfx_state.world_camera, GFX_CoordinateSpace_Cartesian, (Vector3){.y = 5.0f, .z = -1.0f}, 0.01f, 100.0f, 22.0f);
         gfx_orthographic_camera_init(&gfx_state.screen_camera, GFX_CoordinateSpace_Rasterised, (Vector3){.z = -1.0f}, 0.01f, WINDOW_WIDTH, WINDOW_HEIGHT);
-        gfx_global_wireframe_thickness = 0.05f;
         gfx_state.clay_game_ui_ctx = gfx_clay_create_context(MEGABYTE(8), WINDOW_WIDTH, WINDOW_HEIGHT);
         gfx_state.clay_editor_ui_ctx = gfx_clay_create_context(MEGABYTE(8), WINDOW_WIDTH, WINDOW_HEIGHT);
     }
@@ -132,9 +135,9 @@ void app_main(){
         }
 
         { // load level.
-            string_clear(&file_path);
-            string_push_chars(&file_path, "assets/saved.scsv", 17);
-            load_lvl(&game_state.entity_manager, file_path);
+            // string_clear(&file_path);
+            // string_push_chars(&file_path, "assets/saved.scsv", 17);
+            // load_lvl(&game_state.entity_manager, file_path);
         }
 
     }

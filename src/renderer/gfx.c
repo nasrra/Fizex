@@ -321,9 +321,10 @@ typedef struct{
         The order of the textures determines their binding value within the shader.
         E.g, texture index 0 = @binding(0), texture index 1 = @binding(1), etc ...
     */
+    GFX_FontTextureInitInfo font_textures_init_info;
+    String graphics_pipeline_shader_file_path;
     GFX_ImageTexturesInitInfo* image_textures_init_infos;
     i32 image_textures_init_infos_length;
-    GFX_FontTextureInitInfo font_textures_init_info;
     i32 max_file_path_length;
     i32 max_virtual_textures;
     u32 max_user_uniform_buffer_size_in_bytes;
@@ -331,7 +332,12 @@ typedef struct{
     u32 final_render_texture_width;
     u32 final_render_texture_height;
     i32 max_sprites;
-    String graphics_pipeline_shader_file_path;
+    // the thickness of the line segments for wireframe drawings.
+    f32 draw_wireframe_thickness;
+    // the amount of vertices used when drawing a circle.
+    f32 draw_circle_vertex_count;
+    // the maximum length for the 'prongs'/'head' of a drawn arrow.
+    f32 draw_arrow_prong_max_length;
 } GFX_StateInitInfo;
 
 typedef struct {
@@ -394,6 +400,12 @@ typedef struct{
     WindowContext* window_ctx;
     Clay_Context* clay_game_ui_ctx;
     Clay_Context* clay_editor_ui_ctx;
+    // the thickness of the line segments for wireframe drawings.
+    f32 draw_wireframe_thickness;
+    // the amount of vertices used when drawing a circle.
+    f32 draw_circle_vertex_count;
+    // the maximum length for the 'prongs'/'head' of a drawn arrow.
+    f32 draw_arrow_prong_max_length;
     bool is_init;
 } GFX_State;
 
@@ -566,13 +578,6 @@ typedef struct{
     As the camera is not expected to rotate or move from its fixed position; this is okay.
 **/
 DEFINE_QUICKSORT_STRUCT(GFX_DeviceSprite, u64, .depth_layer, quicksort_device_sprite);
-
-/**====================
-    globals.
-====================**//**/
-
-f32 gfx_global_wireframe_thickness = 4;
-f32 gfx_global_circle_vertice_count = 24;
 
 
 
@@ -2873,6 +2878,12 @@ void gfx_state_init(
         state->user_uniform_buffer, state->user_storage_buffer, state->sprite_manager.sprite_buffer,
         info.max_user_uniform_buffer_size_in_bytes, info.max_user_storage_buffer_size_in_bytes
     );
+
+    // set drawing variables.
+    state->draw_wireframe_thickness = info.draw_wireframe_thickness;
+    state->draw_circle_vertex_count = info.draw_circle_vertex_count;
+    state->draw_arrow_prong_max_length = info.draw_arrow_prong_max_length;
+
     state->is_init = true;
 
     gfx_update_render_destination_rectangle(state);
@@ -3211,7 +3222,7 @@ void gfx_camera_update_projection_matrix(GFX_Camera* camera, f32 surface_aspect_
     }
 }
 
-void gfx_draw_line_2d(GFX_State* state, GFX_Colour colour, Vector2 start, Vector2 end, u32 layer, u32 depth, i32 material, f32 thickness){
+void gfx_draw_line(GFX_State* state, GFX_Colour colour, Vector2 start, Vector2 end, u32 layer, u32 depth, i32 material, f32 thickness){
     ASSERT(state->is_init, "renderer context has not been init.");
     Transform2D transform = TRANSFORM2D_IDENTITY;
     transform = transform2d_rotate(transform, vector2_get_angle_between_points(start, end));
@@ -3230,13 +3241,13 @@ void gfx_draw_line_2d(GFX_State* state, GFX_Colour colour, Vector2 start, Vector
 }
 
 void gfx_draw_wire_circle(GFX_State* state, Circle shape, GFX_Colour colour, u32 layer, u32 depth, i32 material){
-    f32 rotation = TAU / gfx_global_circle_vertice_count;
+    f32 rotation = TAU / state->draw_circle_vertex_count;;
     f32 sin = f32_sin(rotation);
     f32 cos = f32_cos(rotation);
     f32 start_x = shape.x;
     f32 start_y = shape.y + shape.radius;
 
-    for(i32 i = 0; i < gfx_global_circle_vertice_count; i++){
+    for(i32 i = 0; i < state->draw_circle_vertex_count; i++){
         // remove the circle position as rotation must be around the origin.
         f32 rel_x = start_x - shape.x;
         f32 rel_y = start_y - shape.y;
@@ -3245,20 +3256,20 @@ void gfx_draw_wire_circle(GFX_State* state, Circle shape, GFX_Colour colour, u32
         f32 end_y = sin * rel_x + cos * rel_y + shape.y;
         Vector2 start = {.x = start_x, .y = start_y};
         Vector2 end = {.x = end_x, .y = end_y};
-        gfx_draw_line_2d(state, colour, start, end, layer, depth, material, gfx_global_wireframe_thickness);
+        gfx_draw_line(state, colour, start, end, layer, depth, material, state->draw_wireframe_thickness);
         // iterate around the circle.
         start_x = end_x;
         start_y = end_y;
     }
 }
 
-void gfx_draw_wire_poly(GFX_State* ctx, f32* vertices_x, f32* vertices_y, i32 vertices_length, GFX_Colour colour, u32 layer, u32 depth, i32 material){
+void gfx_draw_wire_poly(GFX_State* state, f32* vertices_x, f32* vertices_y, i32 vertices_length, GFX_Colour colour, u32 layer, u32 depth, i32 material){
     i32 next_index;
     for(i32 start_index = 0; start_index < vertices_length; start_index++){
         next_index = (start_index + 1) % vertices_length;
         Vector2 start = {.x = vertices_x[start_index], .y = vertices_y[start_index]};
         Vector2 end = {.x = vertices_x[next_index], .y = vertices_y[next_index]};
-        gfx_draw_line_2d(ctx, colour, start, end, layer, depth, material, gfx_global_wireframe_thickness);
+        gfx_draw_line(state, colour, start, end, layer, depth, material, state->draw_wireframe_thickness);
     }
 }
 
@@ -3290,10 +3301,32 @@ void gfx_draw_wire_rect(GFX_State* state, Rectangle shape, GFX_Colour colour, u3
     Vector2 bottom_left = {.x = left_x, .y = bottom_y};
     Vector2 bottom_right = {.x = right_x, .y = bottom_y};
 
-    gfx_draw_line_2d(state, colour, top_left, top_right, layer, depth, material, gfx_global_wireframe_thickness);
-    gfx_draw_line_2d(state, colour, top_right, bottom_right, layer, depth, material, gfx_global_wireframe_thickness);
-    gfx_draw_line_2d(state, colour, bottom_right, bottom_left, layer, depth, material, gfx_global_wireframe_thickness);
-    gfx_draw_line_2d(state, colour, bottom_left, top_left, layer, depth, material, gfx_global_wireframe_thickness);
+    gfx_draw_line(state, colour, top_left, top_right, layer, depth, material, state->draw_wireframe_thickness);
+    gfx_draw_line(state, colour, top_right, bottom_right, layer, depth, material, state->draw_wireframe_thickness);
+    gfx_draw_line(state, colour, bottom_right, bottom_left, layer, depth, material, state->draw_wireframe_thickness);
+    gfx_draw_line(state, colour, bottom_left, top_left, layer, depth, material, state->draw_wireframe_thickness);
+}
+
+void gfx_draw_arrow(GFX_State* state, GFX_Colour colour, Vector2 origin, Vector2 direction, f32 length, u32 layer, u32 depth, i32 material){
+    f32 prong_length = CLAMP(length * 0.2f, 0, state->draw_arrow_prong_max_length);
+    Vector2 end_point;
+    Vector2 prong_direction;
+    Vector2 prong_end_point;
+
+    // main line.
+    direction = vector2_normalise(direction);
+    end_point = vector2_add(origin, vector2_mul_val(direction, length));
+    gfx_draw_line(state, colour, origin, end_point, layer, depth, material, state->draw_wireframe_thickness);
+
+    // prong 1.
+    prong_direction = vector2_rotate(direction, 2.55f);
+    prong_end_point = vector2_add(end_point, vector2_mul_val(prong_direction, prong_length));
+    gfx_draw_line(state, colour, end_point, prong_end_point, layer, depth, material, state->draw_wireframe_thickness);
+
+    // prong 2.
+    prong_direction = vector2_rotate(direction, -2.55f);
+    prong_end_point = vector2_add(end_point, vector2_mul_val(prong_direction, prong_length));
+    gfx_draw_line(state, colour, end_point, prong_end_point, layer, depth, material, state->draw_wireframe_thickness);
 }
 
 void gfx_write_to_texture_array(

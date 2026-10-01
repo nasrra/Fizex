@@ -174,8 +174,8 @@ typedef struct{
 #define VECTOR2_ONE ((Vector2){1.0f, 1.0f})
 #define VECTOR2_UP ((Vector2){0.0f, 1.0f})
 #define VECTOR2_DOWN ((Vector2){0.0f, -1.0f})
-#define VECTOR2_LEFT ((Vector2)){-1.0f, 0.0f})
-#define VECTOR2_RIGHT ((Vector2)){1.0f, 0.0f})
+#define VECTOR2_LEFT ((Vector2){-1.0f, 0.0f})
+#define VECTOR2_RIGHT ((Vector2){1.0f, 0.0f})
 #define VECTOR3_RIGHT ((Vector3){1.0f, 0.0f, 0.0f})
 #define VECTOR3_UP ((Vector3){0.0f, 1.0f, 0.0f})
 #define VECTOR3_FORWARD ((Vector3){0.0f, 0.0f, 1.0f})
@@ -291,20 +291,20 @@ Transform2D matrix4x4_to_transform2d(Matrix4x4 matrix){
 
     f32* m = matrix.m;
     Transform2D transform = TRANSFORM2D_IDENTITY;
-    
+
     // column 0 `length` is the horizontal scale.
     transform.scale.x = f32_sqrt(m[0]*m[0] + m[1]*m[1]);
     transform.scale.y = f32_sqrt(m[4]*m[4] + m[5]*m[5]);
-    
+
     // undo the scale to get pure rotation back
     if(transform.scale.y > -F32_MAX){
         transform.cosine = m[0] / transform.scale.x;
         transform.sine = m[1] / transform.scale.y;
     }
-    
+
     transform.position.x = m[12];
     transform.position.y = m[13];
-    
+
     return transform;
 }
 
@@ -452,6 +452,11 @@ void vector2_normalise_scalar(f32 x, f32 y, f32* n_x, f32* n_y){
     *n_y = y * inv_len;
 }
 
+Vector2 vector2_normalise(Vector2 vector){
+    vector2_normalise_scalar(vector.x, vector.y, &vector.x, &vector.y);
+    return vector;
+}
+
 inline f32 vector2_cross_scalar(f32 lhs_x, f32 lhs_y, f32 rhs_x, f32 rhs_y){
     return lhs_x * rhs_y - lhs_y * rhs_x;
 }
@@ -492,6 +497,14 @@ void vector2_transform_scalar(
     // Translation:
     *out_x = rx + transform_position_x;
     *out_y = ry + transform_position_y;
+}
+
+Vector2 vector2_rotate(Vector2 vector, f32 radians){
+    f32 sin = f32_sin(radians);
+    f32 cos = f32_cos(radians);
+    vector.x = (vector.x * cos) - (vector.y * sin);
+    vector.y = (vector.x * sin) + (vector.y * cos);
+    return vector;
 }
 
 Vector2 vector2_unary(Vector2 val){
@@ -1380,17 +1393,17 @@ PolygonRectangle transform2d_to_polygon_rectangle_centered_origin(Transform2D tr
         .x = {-0.5f, 0.5f, 0.5f, -0.5f},
         .y = {0.5f, 0.5f, -0.5f, -0.5f}
     };
-        
+
     for(i32 i = 0; i < 4; i++){
         vector2_transform_scalar(
             poly_rect.x[i], poly_rect.y[i],
-            transform.scale.x, transform.scale.y, 
+            transform.scale.x, transform.scale.y,
             transform.cosine, transform.sine,
             transform.position.x, transform.position.y,
             &poly_rect.x[i], &poly_rect.y[i]
         );
     }
-    
+
     return poly_rect;
 }
 
@@ -1399,11 +1412,11 @@ PolygonRectangle transform2d_to_polygon_rectangle_top_left_origin(Transform2D tr
         .x = {0.0f, 1.0f, 1.0f, 0.0f},
         .y = {0.0f, 0.0f, -1.0f, -1.0f}
     };
-        
+
     for(i32 i = 0; i < 4; i++){
         vector2_transform_scalar(
             poly_rect.x[i], poly_rect.y[i],
-            transform.scale.x, transform.scale.y, 
+            transform.scale.x, transform.scale.y,
             transform.cosine, transform.sine,
             transform.position.x, transform.position.y,
             &poly_rect.x[i], &poly_rect.y[i]
