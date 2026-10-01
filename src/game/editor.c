@@ -18,6 +18,25 @@ typedef struct{
 } Editor_SelectedWorldEntity;
 
 typedef struct{
+    PolygonRectangle shape;
+    u64 depth_layer;
+}Editor_EntityClickableArea;
+
+// note that this is per-frame data; and should be considered stale
+// beyond the frame boundary. hence the name suffix: immediate mode.
+typedef struct{
+    Editor_EntityClickableArea clickable_area;
+} Editor_EntityImmediateModeData;
+
+typedef struct{
+    Editor_EntityImmediateModeData* entity;
+    bool* entity_is_valid;
+    i32 entity_length;
+    i32 entity_is_valid_length;
+    bool is_init;
+} Editor_EntityManager;
+
+typedef struct{
     // the entity_id of the entity to spawn.
     EntityTypeId entity_to_spawn;
     GenId entity_to_spawn_parent_gid;
@@ -31,14 +50,10 @@ typedef struct{
 } Editor_MouseState;
 
 typedef struct{
-    PolygonRectangle shape;
-    u64 depth_layer;
-}Editor_EntityClickableArea;
-
-typedef struct{
     Editor_MouseState mouse_state;
     String ui_input_scratch_space;
     GFX_State* gfx_state;
+    Editor_EntityManager entity_manager;
     bool is_init;
 } Editor_State;
 
@@ -71,6 +86,10 @@ static i32 gfx_clay_element_id = 0;
 ///
 
 
+
+
+// the length of the clickable area struct's vertex arrays.
+#define EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH 4
 
 #define EDITOR_MAX_STRING_LENGTH 64
 
@@ -180,6 +199,12 @@ CLAY(                                                                           
 
 
 
+void editor_entity_manager_init(Editor_EntityManager* entity_manager, MemoryArena* arena, i32 entity_amount){
+    MEMORY_ARENA_ALLOC_ARRAY(arena, entity_manager->entity, &entity_manager->entity_length, entity_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, entity_manager->entity_is_valid, &entity_manager->entity_is_valid_length, entity_amount);
+    entity_manager->is_init = true;
+}
+
 void editor_state_init(Editor_State* state, MemoryArena* arena, GFX_State* gfx_state, i32 entity_amount){
     ASSERT(!state->is_init, "already init.");
     state->mouse_state = (Editor_MouseState){0};
@@ -189,6 +214,7 @@ void editor_state_init(Editor_State* state, MemoryArena* arena, GFX_State* gfx_s
     string_init(&state->ui_input_scratch_space, arena, EDITOR_MAX_STRING_LENGTH);
     state->mouse_state.previously_selected_world_entity_count = 0;
     state->gfx_state = gfx_state;
+    editor_entity_manager_init(&state->entity_manager, arena, entity_amount);
     state->is_init = true;
 }
 
@@ -472,48 +498,15 @@ bool editor_selected_world_entity_equals(Editor_SelectedWorldEntity a, Editor_Se
     return a.gid == b.gid && a.depth_layer == b.depth_layer;
 }
 
-Editor_EntityClickableArea editor_get_entity_clickable_area(EntityManager* entity_manager, Entity entity){
-    Transform2D preferred_transform = {0};
-    Editor_EntityClickableArea area = {0};
-
-    // is a sprite.
-    if(gfx_sprite_get_transform(*entity_manager->gfx_state, entity.sprite_gid, &preferred_transform)){
-        // this is okay, as it is inferred that the spritethe get transfrom
-        GFX_SpriteOrigin sprite_origin;
-        if(!gfx_sprite_get_sprite_origin(*entity_manager->gfx_state, entity.sprite_gid, &sprite_origin)){
-            preferred_transform = entity.transform;
-            area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
-        }
-
-        switch(sprite_origin){
-            default:
-                ASSERT(false, "unknown sprite origin");
-            case GFX_SpriteOrigin_Center:{
-                area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
-            }break;
-            case GFX_SpriteOrigin_TopLeft:{
-                area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
-            }break;
-        }
-        gfx_sprite_get_depth_layer(entity_manager->gfx_state, entity.sprite_gid, &area.depth_layer);
-    }
-
-    // is not a sprite.
-    else{
-        preferred_transform = entity.transform;
-        area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
-    }
-
-    return area;
-}
-
 void editor_state_update(Editor_State* editor_state, GameState* game_state, MemoryArena* transient, f32 delta_time){
 
     // hoisting invariance.
-    GFX_State* editor_gfx_state = editor_state->gfx_state;
-    EntityManager* entity_manager = &game_state->entity_manager;
-    GFX_State* game_gfx_state = entity_manager->gfx_state;
-    Editor_MouseState* editor_mouse_state = &editor_state->mouse_state;
+    Editor_EntityManager*   editor_entity_manager = &editor_state->entity_manager;
+    Editor_MouseState*      editor_mouse_state = &editor_state->mouse_state;
+    GFX_State*              editor_gfx_state = editor_state->gfx_state;
+
+    EntityManager*          game_entity_manager = &game_state->entity_manager;
+    GFX_State*              game_gfx_state = game_entity_manager->gfx_state;
 
     // retrieve necessary data.
     Vector2 mouse_world_position = gfx_get_mouse_world_position(game_gfx_state);
@@ -544,12 +537,71 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
         gfx_clay_end_layout(editor_gfx_state, delta_time, SPRITE_LAYER_GAME_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
     }
 
-    { // entity selecting.
+    { // retrieve_entity_immeidate_mode_data();
 
-        i32 verts_length = 4;
-        u32 sprite_depth = 0;
-        u64 depth_layer = 0;
-        Editor_EntityClickableArea clickable_area;
+        // clear previous frame's stale data.
+        ZERO_MEMORY(editor_entity_manager->entity_is_valid, sizeof(bool) * editor_entity_manager->entity_is_valid_length);
+
+        for(i32 idx = 0; idx < game_entity_manager->entity_length; idx++){
+            if(!entity_manager_is_entity_allocated_unsafe(*game_entity_manager, idx)){
+                continue;
+            }
+            BOUNDS_CHECK(idx, editor_entity_manager->entity_length);
+            editor_state->entity_manager.entity_is_valid[idx] = true;
+            Editor_EntityImmediateModeData* editor_entity = &editor_entity_manager->entity[idx];
+            Entity* game_entity = &game_entity_manager->entity[idx];
+
+            { // get_clickable_area();
+
+                editor_entity->clickable_area = (Editor_EntityClickableArea){0};
+                Transform2D preferred_transform = {0};
+                // note that we infer this is a sprite; no need to check 'is_sprite' flag or 'sprite_gid'.
+                if(gfx_sprite_get_transform(*game_gfx_state, game_entity->sprite_gid, &preferred_transform)){
+
+                    GFX_SpriteOrigin sprite_origin;
+
+                    // falback to entity transform if we failed to get the sprite origin.
+                    if(!gfx_sprite_get_sprite_origin(*game_gfx_state, game_entity->sprite_gid, &sprite_origin)){
+                        preferred_transform = game_entity->transform;
+                        editor_entity->clickable_area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+                    }
+
+                    switch(sprite_origin){
+                        default:
+                            ASSERT(false, "unknown sprite origin");
+                        case GFX_SpriteOrigin_Center:{
+                            editor_entity->clickable_area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+                        }break;
+                        case GFX_SpriteOrigin_TopLeft:{
+                            editor_entity->clickable_area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+                        }break;
+                    }
+                    gfx_sprite_get_depth_layer(game_gfx_state, game_entity->sprite_gid, &editor_entity->clickable_area.depth_layer);
+                }
+
+                // is not a sprite.
+                else{
+                    preferred_transform = game_entity->transform;
+                    editor_entity->clickable_area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+                }
+
+                // draw the clickable area.
+                i32 sprite_depth = 0;
+                gfx_draw_wire_poly(
+                    editor_gfx_state,
+                    editor_entity->clickable_area.shape.x,
+                    editor_entity->clickable_area.shape.y,
+                    EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH,
+                    GFX_COLOUR_BLUE,
+                    SPRITE_LAYER_GAME_WORLD,
+                    sprite_depth,
+                    SPRITE_MATERIAL_DEBUG
+                );
+            }
+        }
+    }
+
+    { // entity selecting.
 
         if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_RIGHT)){
 
@@ -574,76 +626,62 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
             editor_mouse_state->selected_world_entity = (Editor_SelectedWorldEntity){0};
         }
 
-        for(i32 idx = 0; idx < entity_manager->entity_length; idx++){
-            if(!entity_manager_is_entity_allocated_unsafe(*entity_manager, idx)){
-                continue;
-            }
-            Entity* entity = &entity_manager->entity[idx];
+        // only attempt selction of a game entity if the mouse isnt on a editor
+        // ui widget and the left button has just been pressed.
+        if(
+            !editor_state->mouse_state.hovering_element &&
+            input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)
+        ){
 
-            // get the relevant transform of the entity,
-            // using either its sprite's, or the entity,s if the is no sprite allocated.
+            for(i32 idx = 0; idx < editor_entity_manager->entity_length; idx++){
 
-            clickable_area = editor_get_entity_clickable_area(entity_manager, *entity);
-            // draw the clickable area.
-            gfx_draw_wire_poly(
-                editor_gfx_state,
-                clickable_area.shape.x,
-                clickable_area.shape.y,
-                verts_length,
-                GFX_COLOUR_BLUE,
-                SPRITE_LAYER_GAME_WORLD,
-                sprite_depth,
-                SPRITE_MATERIAL_DEBUG
-            );
+                if(!editor_entity_manager->entity_is_valid[idx]){
+                    continue;
+                }
 
-            if(editor_state->mouse_state.hovering_element==true){
-                continue;
-            }
+                Editor_EntityImmediateModeData* entity = &editor_entity_manager->entity[idx];
 
-            if(!input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)){
-                continue;
-            }
+                Vector2 normal;
+                f32 depth;
+                bool overlaps = polygon_overlaps_point_scalar(
+                    entity->clickable_area.shape.x, entity->clickable_area.shape.y,
+                    EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH,
+                    mouse_world_position.x, mouse_world_position.y,
+                    &normal.x, &normal.y, &depth
+                );
 
-            Vector2 normal;
-            f32 depth;
-            bool overlaps = polygon_overlaps_point_scalar(
-                clickable_area.shape.x, clickable_area.shape.y, verts_length,
-                mouse_world_position.x, mouse_world_position.y,
-                &normal.x, &normal.y, &depth
-            );
+                if(!overlaps){
+                    continue;
+                }
 
-            if(!overlaps){
-                continue;
-            }
+                // get the game entity vertically associated with this editor entity.
+                BOUNDS_CHECK(idx, game_entity_manager->gen_id_allocator.length);
+                GenId current_gid = game_entity_manager->gen_id_allocator.gen_ids[idx];
 
-            BOUNDS_CHECK(idx, entity_manager->gen_id_allocator.length);
-            GenId current_gid = entity_manager->gen_id_allocator.gen_ids[idx];
+                if(entity->clickable_area.depth_layer <= editor_mouse_state->first_hit_world_entity.depth_layer){
+                    editor_mouse_state->first_hit_world_entity.gid = current_gid;
+                    editor_mouse_state->first_hit_world_entity.depth_layer = entity->clickable_area.depth_layer;
+                }
 
-            if(clickable_area.depth_layer <= editor_mouse_state->first_hit_world_entity.depth_layer){
-                editor_mouse_state->first_hit_world_entity.gid = current_gid;
-                editor_mouse_state->first_hit_world_entity.depth_layer = clickable_area.depth_layer;
-            }
+                // loop through all of the previously selected entities
+                // and skip this one if it was previously selected.
+                bool is_previously_selected = false;
+                for(i32 j = 0; j < editor_mouse_state->previously_selected_world_entity_count; j++){
+                    if(current_gid == editor_mouse_state->previously_selected_world_entity[j].gid){
+                        is_previously_selected = true;
+                        break;
+                    }
+                }
+                if(is_previously_selected){
+                    continue;
+                }
 
-            // loop through all of the previously selected entities
-            // and skip this one if it was previously selected.
-            bool is_previously_selected = false;
-            for(i32 j = 0; j < editor_mouse_state->previously_selected_world_entity_count; j++){
-                if(current_gid == editor_mouse_state->previously_selected_world_entity[j].gid){
-                    is_previously_selected = true;
-                    break;
+                if(entity->clickable_area.depth_layer >= editor_mouse_state->selected_world_entity.depth_layer){
+                    editor_mouse_state->selected_world_entity.gid = current_gid;
+                    editor_mouse_state->selected_world_entity.depth_layer = entity->clickable_area.depth_layer;
                 }
             }
-            if(is_previously_selected){
-                continue;
-            }
 
-            if(clickable_area.depth_layer >= editor_mouse_state->selected_world_entity.depth_layer){
-                editor_mouse_state->selected_world_entity.gid = current_gid;
-                editor_mouse_state->selected_world_entity.depth_layer = clickable_area.depth_layer;
-            }
-        }
-
-        if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)){
             // if the mouse didnt find anything to select.
             if(editor_selected_world_entity_equals(editor_mouse_state->selected_world_entity, (Editor_SelectedWorldEntity){0})){
 
@@ -663,7 +701,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
         if(!editor_selected_world_entity_equals(editor_mouse_state->selected_world_entity, (Editor_SelectedWorldEntity){0})){
             // move the selected entity to the mouse position.
             Entity* entity;
-            if(entity_manager_get_entity(*entity_manager, editor_mouse_state->selected_world_entity.gid, &entity)){
+            if(entity_manager_get_entity(*game_entity_manager, editor_mouse_state->selected_world_entity.gid, &entity)){
                 entity->transform.position = mouse_world_position;
             }
         }
@@ -687,7 +725,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
             switch(editor_state->mouse_state.entity_to_spawn){
                 case EntityTypeId_RedBird:{
                     entity_spawn_red_bird(
-                        entity_manager,
+                        game_entity_manager,
                         (String){.chars = "spawned red bird", .length = 16, .count = 16},
                         spawn_transform,
                         editor_state->mouse_state.entity_to_spawn_parent_gid
@@ -695,7 +733,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 }break;
                 case EntityTypeId_YellowBird:{
                     entity_spawn_yellow_bird(
-                        entity_manager,
+                        game_entity_manager,
                         (String){.chars = "spawned yellow bird", .length = 19, .count = 19},
                         spawn_transform,
                         editor_state->mouse_state.entity_to_spawn_parent_gid
@@ -703,7 +741,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 }break;
                 case EntityTypeId_WoodBlock:{
                     entity_spawn_wood_block(
-                        entity_manager,
+                        game_entity_manager,
                         (String){.chars = "spawned wood block", .length = 18, .count = 18},
                         spawn_transform,
                         editor_state->mouse_state.entity_to_spawn_parent_gid
@@ -711,7 +749,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 }break;
                 case EntityTypeId_LevelRoot:{
                     entity_spawn_level_root(
-                        entity_manager,
+                        game_entity_manager,
                         (String){.chars = "spawned level", .length = 16, .count = 16},
                         spawn_transform,
                         editor_state->mouse_state.entity_to_spawn_parent_gid
@@ -719,7 +757,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 }break;
                 case EntityTypeId_Pig:{
                     entity_spawn_pig(
-                        entity_manager,
+                        game_entity_manager,
                         (String){.chars = "spawned pig", .length = 11, .count = 11},
                         spawn_transform,
                         editor_state->mouse_state.entity_to_spawn_parent_gid);
