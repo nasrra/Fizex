@@ -5,6 +5,8 @@
 */
 
 
+
+
 ///
 /// types.
 ///
@@ -12,10 +14,17 @@
 
 
 
+typedef enum{
+    Editor_MouseStateBehaviour_Navigate, // general purpose: used for navigation, selection and spawning entities.
+    Editor_MouseStateBehaviour_Move,
+    Editor_MouseStateBehaviour_Scale,
+    Editor_MouseStateBehaviour_Rotate
+} Editor_MouseStateBehaviour;
+
 typedef struct{
     u64 depth_layer;
     GenId gid;
-} Editor_SelectedWorldEntity;
+} Editor_SelectedGameEntity;
 
 typedef struct{
     PolygonRectangle shape;
@@ -40,12 +49,16 @@ typedef struct{
     // the entity_id of the entity to spawn.
     EntityTypeId entity_to_spawn;
     GenId entity_to_spawn_parent_gid;
-    Editor_SelectedWorldEntity first_hit_world_entity;
-    Editor_SelectedWorldEntity selected_world_entity;
-    Editor_SelectedWorldEntity* previously_selected_world_entity;
-    i32 previously_selected_world_entity_length;
-    i32 previously_selected_world_entity_count;
+
+    // whether or not the selected entity was just set this update tick.
+    Editor_MouseStateBehaviour behaviour;
+    Editor_SelectedGameEntity first_hit_game_entity;
+    Editor_SelectedGameEntity selected_game_entity;
+    Editor_SelectedGameEntity* previously_selected_game_entity;
+    i32 previously_selected_game_entity_length;
+    i32 previously_selected_game_entity_count;
     Clay_ElementId selected_ui_entity;
+
     bool hovering_element;
 } Editor_MouseState;
 
@@ -66,6 +79,7 @@ typedef struct{
     Editor_State* editor_state;
     GenId level_root_entity_gid;
 } SelectLevelButtonOnHoverContext;
+
 
 
 
@@ -92,6 +106,11 @@ static i32 gfx_clay_element_id = 0;
 #define EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH 4
 
 #define EDITOR_MAX_STRING_LENGTH 64
+
+#define EDITOR_MOUSE_BEHAVIOUR_NAVIGATE_KEYBINDING KEY_Q
+#define EDITOR_MOUSE_BEHAVIOUR_MOVE_KEYBINDING KEY_W
+#define EDITOR_MOUSE_BEHAVIOUR_SCALE_KEYBINDING KEY_E
+#define EDITOR_MOUSE_BEHAVIOUR_ROTATE_KEYBINDING KEY_R
 
 #define GFX_CLAY_WIDGET_COLOUR (Clay_Color){.r = 10, .g = 10, .b = 20, .a = 128}
 
@@ -209,10 +228,10 @@ void editor_state_init(Editor_State* state, MemoryArena* arena, GFX_State* gfx_s
     ASSERT(!state->is_init, "already init.");
     state->mouse_state = (Editor_MouseState){0};
     MEMORY_ARENA_ALLOC_ARRAY(
-        arena, state->mouse_state.previously_selected_world_entity, &state->mouse_state.previously_selected_world_entity_length, entity_amount
+        arena, state->mouse_state.previously_selected_game_entity, &state->mouse_state.previously_selected_game_entity_length, entity_amount
     );
     string_init(&state->ui_input_scratch_space, arena, EDITOR_MAX_STRING_LENGTH);
-    state->mouse_state.previously_selected_world_entity_count = 0;
+    state->mouse_state.previously_selected_game_entity_count = 0;
     state->gfx_state = gfx_state;
     editor_entity_manager_init(&state->entity_manager, arena, entity_amount);
     state->is_init = true;
@@ -437,7 +456,7 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
             editor_state->mouse_state.hovering_element = true;
         }
 
-        GenId entity_gid = editor_state->mouse_state.selected_world_entity.gid;
+        GenId entity_gid = editor_state->mouse_state.selected_game_entity.gid;
         if(entity_gid != 0){
             i32 idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, entity_gid);
             if(idx){
@@ -494,9 +513,37 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
     }
 }
 
-bool editor_selected_world_entity_equals(Editor_SelectedWorldEntity a, Editor_SelectedWorldEntity b){
+
+
+
+///
+/// functions: Editor_MouseState
+///
+
+
+
+
+bool editor_selected_game_entity_equals(Editor_SelectedGameEntity a, Editor_SelectedGameEntity b){
     return a.gid == b.gid && a.depth_layer == b.depth_layer;
 }
+
+bool editor_mouse_state_has_selected_game_entity(Editor_MouseState* mouse_state){
+    return !editor_selected_game_entity_equals(mouse_state->selected_game_entity, (Editor_SelectedGameEntity){0});
+}
+
+void editor_mouse_state_set_selected_game_entity(Editor_MouseState* mouse_state, Editor_SelectedGameEntity entity){
+    mouse_state->selected_game_entity = entity;
+}
+
+
+
+
+///
+/// functions: Editor_State
+///
+
+
+
 
 void editor_state_update(Editor_State* editor_state, GameState* game_state, MemoryArena* transient, f32 delta_time){
 
@@ -539,7 +586,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
 
     { // retrieve_entity_immeidate_mode_data();
 
-        // clear previous frame's stale data.
+        // clear previous tick's stale data.
         ZERO_MEMORY(editor_entity_manager->entity_is_valid, sizeof(bool) * editor_entity_manager->entity_is_valid_length);
 
         for(i32 idx = 0; idx < game_entity_manager->entity_length; idx++){
@@ -601,169 +648,191 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
         }
     }
 
-    { // entity selecting.
 
-        if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_RIGHT)){
+    { // input_handling();
 
-            /*
-                this is here in the very astronomially low case that  entities are deallocated enough times
-                an reallocated, stacking ontop of eachother (whilst clicking them); which could cause a buffer overflow.
-                DO NOT REMOVE THIS!!!
-            */
-            if(editor_mouse_state->previously_selected_world_entity_count == editor_mouse_state->previously_selected_world_entity_length){
-                editor_mouse_state->previously_selected_world_entity_count = 0;
-            }
-
-            if(editor_mouse_state->selected_world_entity.gid != 0){
-                ARRAY_PUSH(
-                    editor_mouse_state->previously_selected_world_entity,
-                    editor_mouse_state->previously_selected_world_entity_length,
-                    &editor_mouse_state->previously_selected_world_entity_count,
-                    editor_mouse_state->selected_world_entity
-                );
-            }
-            editor_mouse_state->first_hit_world_entity = (Editor_SelectedWorldEntity){.gid = GENID_MAX, .depth_layer = U64_MAX};
-            editor_mouse_state->selected_world_entity = (Editor_SelectedWorldEntity){0};
+        if(input_is_key_just_pressed(EDITOR_MOUSE_BEHAVIOUR_NAVIGATE_KEYBINDING)){
+            editor_mouse_state->behaviour = Editor_MouseStateBehaviour_Navigate;
+        }
+        if(input_is_key_just_pressed(EDITOR_MOUSE_BEHAVIOUR_MOVE_KEYBINDING)){
+            editor_mouse_state->behaviour = Editor_MouseStateBehaviour_Move;
+        }
+        if(input_is_key_just_pressed(EDITOR_MOUSE_BEHAVIOUR_SCALE_KEYBINDING)){
+            editor_mouse_state->behaviour = Editor_MouseStateBehaviour_Scale;
+        }
+        if(input_is_key_just_pressed(EDITOR_MOUSE_BEHAVIOUR_ROTATE_KEYBINDING)){
+            editor_mouse_state->behaviour = Editor_MouseStateBehaviour_Rotate;
         }
 
-        // only attempt selction of a game entity if the mouse isnt on a editor
-        // ui widget and the left button has just been pressed.
-        if(
-            !editor_state->mouse_state.hovering_element &&
-            input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)
-        ){
+        switch(editor_mouse_state->behaviour){
+            case Editor_MouseStateBehaviour_Navigate:{
 
-            for(i32 idx = 0; idx < editor_entity_manager->entity_length; idx++){
+                { // entity_selecting();
 
-                if(!editor_entity_manager->entity_is_valid[idx]){
-                    continue;
-                }
+                    if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)){
 
-                Editor_EntityImmediateModeData* entity = &editor_entity_manager->entity[idx];
+                        /*
+                            this is here in the very astronomically low case that  entities are deallocated enough times
+                            an reallocated, stacking ontop of eachother (whilst clicking them); which could cause a buffer overflow.
+                            DO NOT REMOVE THIS!!!
+                        */
+                        if(editor_mouse_state->previously_selected_game_entity_count == editor_mouse_state->previously_selected_game_entity_length){
+                            editor_mouse_state->previously_selected_game_entity_count = 0;
+                        }
 
-                Vector2 normal;
-                f32 depth;
-                bool overlaps = polygon_overlaps_point_scalar(
-                    entity->clickable_area.shape.x, entity->clickable_area.shape.y,
-                    EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH,
-                    mouse_world_position.x, mouse_world_position.y,
-                    &normal.x, &normal.y, &depth
-                );
+                        if(editor_mouse_state->selected_game_entity.gid != 0){
+                            ARRAY_PUSH(
+                                editor_mouse_state->previously_selected_game_entity,
+                                editor_mouse_state->previously_selected_game_entity_length,
+                                &editor_mouse_state->previously_selected_game_entity_count,
+                                editor_mouse_state->selected_game_entity
+                            );
+                        }
+                        editor_mouse_state->first_hit_game_entity           = (Editor_SelectedGameEntity){.gid = GENID_MAX, .depth_layer = U64_MAX};
+                        editor_mouse_state->selected_game_entity            = (Editor_SelectedGameEntity){0};
+                    }
 
-                if(!overlaps){
-                    continue;
-                }
+                    // only attempt selction of a game entity if the mouse isnt on a editor
+                    // ui widget, the left button has just been pressed, and we havent already selected an entity.
+                    if(
+                        !editor_state->mouse_state.hovering_element &&
+                        input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT) &&
+                        !editor_mouse_state_has_selected_game_entity(editor_mouse_state)
+                    ){
 
-                // get the game entity vertically associated with this editor entity.
-                BOUNDS_CHECK(idx, game_entity_manager->gen_id_allocator.length);
-                GenId current_gid = game_entity_manager->gen_id_allocator.gen_ids[idx];
+                        for(i32 idx = 0; idx < editor_entity_manager->entity_length; idx++){
 
-                if(entity->clickable_area.depth_layer <= editor_mouse_state->first_hit_world_entity.depth_layer){
-                    editor_mouse_state->first_hit_world_entity.gid = current_gid;
-                    editor_mouse_state->first_hit_world_entity.depth_layer = entity->clickable_area.depth_layer;
-                }
+                            if(!editor_entity_manager->entity_is_valid[idx]){
+                                continue;
+                            }
 
-                // loop through all of the previously selected entities
-                // and skip this one if it was previously selected.
-                bool is_previously_selected = false;
-                for(i32 j = 0; j < editor_mouse_state->previously_selected_world_entity_count; j++){
-                    if(current_gid == editor_mouse_state->previously_selected_world_entity[j].gid){
-                        is_previously_selected = true;
-                        break;
+                            Editor_EntityImmediateModeData* entity = &editor_entity_manager->entity[idx];
+
+                            Vector2 normal;
+                            f32 depth;
+                            bool overlaps = polygon_overlaps_point_scalar(
+                                entity->clickable_area.shape.x, entity->clickable_area.shape.y,
+                                EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH,
+                                mouse_world_position.x, mouse_world_position.y,
+                                &normal.x, &normal.y, &depth
+                            );
+
+                            if(!overlaps){
+                                continue;
+                            }
+
+                            // get the game entity vertically associated with this editor entity.
+                            BOUNDS_CHECK(idx, game_entity_manager->gen_id_allocator.length);
+                            GenId current_gid = game_entity_manager->gen_id_allocator.gen_ids[idx];
+
+                            if(entity->clickable_area.depth_layer <= editor_mouse_state->first_hit_game_entity.depth_layer){
+                                Editor_SelectedGameEntity first_hit_game_entity = {.gid = current_gid, .depth_layer = entity->clickable_area.depth_layer};
+                                editor_mouse_state->first_hit_game_entity = first_hit_game_entity;
+                            }
+
+                            // loop through all of the previously selected entities
+                            // and skip this one if it was previously selected.
+                            bool is_previously_selected = false;
+                            for(i32 j = 0; j < editor_mouse_state->previously_selected_game_entity_count; j++){
+                                if(current_gid == editor_mouse_state->previously_selected_game_entity[j].gid){
+                                    is_previously_selected = true;
+                                    break;
+                                }
+                            }
+                            if(is_previously_selected){
+                                continue;
+                            }
+
+                            if(entity->clickable_area.depth_layer >= editor_mouse_state->selected_game_entity.depth_layer){
+                                Editor_SelectedGameEntity selected_game_entity = {.gid = current_gid, .depth_layer = entity->clickable_area.depth_layer};
+                                editor_mouse_state_set_selected_game_entity(editor_mouse_state, selected_game_entity);
+                            }
+                        }
+
+                        // if the mouse didnt find anything to select.
+                        if(!editor_mouse_state_has_selected_game_entity(editor_mouse_state)){
+
+                            // if the mouse did click on something.
+                            if(!editor_selected_game_entity_equals(editor_mouse_state->first_hit_game_entity, (Editor_SelectedGameEntity){.gid = GENID_MAX, .depth_layer = U64_MAX})){
+                                // go to the top of the stack.
+                                editor_mouse_state_set_selected_game_entity(editor_mouse_state, editor_mouse_state->first_hit_game_entity);
+                            }
+                            // if the mouse didn't click on anything, clear the stack entirely.
+                            editor_mouse_state->previously_selected_game_entity_count = 0;
+                        }
                     }
                 }
-                if(is_previously_selected){
-                    continue;
+
+
+                // handle entity spawning if we are not moving a selected entity around.
+                if(
+                    !editor_mouse_state_has_selected_game_entity(editor_mouse_state) &&
+                    input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)
+                ){
+                    if(editor_state->mouse_state.hovering_element==true){
+                        return;
+                    }
+
+                    // check if mouse is within clickable area.
+                    // get entity sprite layer; fallback to using id's if both are the same.
+
+                    Transform2D spawn_transform = TRANSFORM2D_IDENTITY;
+                    spawn_transform.position = mouse_world_position; // we use the game state's gfx_state; just in case.
+
+                    if(editor_state->mouse_state.entity_to_spawn_parent_gid == 0){
+                        return;
+                    }
+
+                    switch(editor_state->mouse_state.entity_to_spawn){
+                        case EntityTypeId_RedBird:{
+                            entity_spawn_red_bird(
+                                game_entity_manager,
+                                (String){.chars = "spawned red bird", .length = 16, .count = 16},
+                                spawn_transform,
+                                editor_state->mouse_state.entity_to_spawn_parent_gid
+                            );
+                        }break;
+                        case EntityTypeId_YellowBird:{
+                            entity_spawn_yellow_bird(
+                                game_entity_manager,
+                                (String){.chars = "spawned yellow bird", .length = 19, .count = 19},
+                                spawn_transform,
+                                editor_state->mouse_state.entity_to_spawn_parent_gid
+                            );
+                        }break;
+                        case EntityTypeId_WoodBlock:{
+                            entity_spawn_wood_block(
+                                game_entity_manager,
+                                (String){.chars = "spawned wood block", .length = 18, .count = 18},
+                                spawn_transform,
+                                editor_state->mouse_state.entity_to_spawn_parent_gid
+                            );
+                        }break;
+                        case EntityTypeId_LevelRoot:{
+                            entity_spawn_level_root(
+                                game_entity_manager,
+                                (String){.chars = "spawned level", .length = 16, .count = 16},
+                                spawn_transform,
+                                editor_state->mouse_state.entity_to_spawn_parent_gid
+                            );
+                        }break;
+                        case EntityTypeId_Pig:{
+                            entity_spawn_pig(
+                                game_entity_manager,
+                                (String){.chars = "spawned pig", .length = 11, .count = 11},
+                                spawn_transform,
+                                editor_state->mouse_state.entity_to_spawn_parent_gid);
+                        }break;
+                    }
                 }
-
-                if(entity->clickable_area.depth_layer >= editor_mouse_state->selected_world_entity.depth_layer){
-                    editor_mouse_state->selected_world_entity.gid = current_gid;
-                    editor_mouse_state->selected_world_entity.depth_layer = entity->clickable_area.depth_layer;
+            }break;
+            case Editor_MouseStateBehaviour_Move:{
+                // move the selected entity to the mouse position.
+                Entity* entity;
+                if(entity_manager_get_entity(*game_entity_manager, editor_mouse_state->selected_game_entity.gid, &entity)){
+                    entity->transform.position = mouse_world_position;
                 }
-            }
-
-            // if the mouse didnt find anything to select.
-            if(editor_selected_world_entity_equals(editor_mouse_state->selected_world_entity, (Editor_SelectedWorldEntity){0})){
-
-                // if the mouse did click on something.
-                if(!editor_selected_world_entity_equals(editor_mouse_state->first_hit_world_entity, (Editor_SelectedWorldEntity){.gid = GENID_MAX, .depth_layer = U64_MAX})){
-                    // go to the top of the stack.
-                    editor_mouse_state->selected_world_entity = editor_mouse_state->first_hit_world_entity;
-                }
-                // if the mouse didn't click on anything.
-                editor_mouse_state->previously_selected_world_entity_count = 0;
-            }
+            }break;
         }
-    }
-
-    { // input handling.
-
-        if(!editor_selected_world_entity_equals(editor_mouse_state->selected_world_entity, (Editor_SelectedWorldEntity){0})){
-            // move the selected entity to the mouse position.
-            Entity* entity;
-            if(entity_manager_get_entity(*game_entity_manager, editor_mouse_state->selected_world_entity.gid, &entity)){
-                entity->transform.position = mouse_world_position;
-            }
-        }
-
-        // handle entity spawning if we are not moving a selected entity around.
-        else if(input_is_mouse_button_just_pressed(MOUSE_BUTTON_LEFT)){
-            if(editor_state->mouse_state.hovering_element==true){
-                return;
-            }
-
-            // check if mouse is within clickable area.
-            // get entity sprite layer; fallback to using id's if both are the same.
-
-            Transform2D spawn_transform = TRANSFORM2D_IDENTITY;
-            spawn_transform.position = mouse_world_position; // we use the game state's gfx_state; just in case.
-
-            if(editor_state->mouse_state.entity_to_spawn_parent_gid == 0){
-                return;
-            }
-
-            switch(editor_state->mouse_state.entity_to_spawn){
-                case EntityTypeId_RedBird:{
-                    entity_spawn_red_bird(
-                        game_entity_manager,
-                        (String){.chars = "spawned red bird", .length = 16, .count = 16},
-                        spawn_transform,
-                        editor_state->mouse_state.entity_to_spawn_parent_gid
-                    );
-                }break;
-                case EntityTypeId_YellowBird:{
-                    entity_spawn_yellow_bird(
-                        game_entity_manager,
-                        (String){.chars = "spawned yellow bird", .length = 19, .count = 19},
-                        spawn_transform,
-                        editor_state->mouse_state.entity_to_spawn_parent_gid
-                    );
-                }break;
-                case EntityTypeId_WoodBlock:{
-                    entity_spawn_wood_block(
-                        game_entity_manager,
-                        (String){.chars = "spawned wood block", .length = 18, .count = 18},
-                        spawn_transform,
-                        editor_state->mouse_state.entity_to_spawn_parent_gid
-                    );
-                }break;
-                case EntityTypeId_LevelRoot:{
-                    entity_spawn_level_root(
-                        game_entity_manager,
-                        (String){.chars = "spawned level", .length = 16, .count = 16},
-                        spawn_transform,
-                        editor_state->mouse_state.entity_to_spawn_parent_gid
-                    );
-                }break;
-                case EntityTypeId_Pig:{
-                    entity_spawn_pig(
-                        game_entity_manager,
-                        (String){.chars = "spawned pig", .length = 11, .count = 11},
-                        spawn_transform,
-                        editor_state->mouse_state.entity_to_spawn_parent_gid);
-                }break;
-            }
-        }
-
     }
 }
