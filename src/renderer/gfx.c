@@ -1027,6 +1027,60 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
 
 ///
 
+/// sprite_position.
+
+    void gfx_sprite_set_position_unsafe(GFX_State* state, i32 sprite_idx, Vector2 position){
+        GFX_SpriteManager* sprite_manager = &state->sprite_manager;
+        BOUNDS_CHECK(sprite_idx, sprite_manager->device_sprite_length);
+        GFX_DeviceSprite* sprite = &sprite_manager->device_sprite[sprite_idx];
+        Vector3 position3d = {.x = position.x, .y = position.y};
+        sprite->transform = matrix4x4_set_translation(sprite->transform, position3d);
+    }
+
+    bool gfx_sprite_set_position(GFX_State* state, GenId sprite_gid, Vector2 position){
+        i32 idx = gen_id_allocator_is_gen_id_valid(&state->sprite_manager.gen_id_allocator, sprite_gid);
+        if(!idx){
+            return false;
+        }
+        gfx_sprite_set_position_unsafe(state, idx, position);
+        return true;
+    }
+
+    void gfx_sprite_string_set_position_unsafe(GFX_State* state, i32 sprite_idx, Vector2 position){
+        GFX_SpriteManager* sprites = &state->sprite_manager;
+        i32 first_idx = sprite_idx;
+        i32 idx = first_idx;
+        while(true){
+            BOUNDS_CHECK(idx, sprites->host_sprite_length);
+            GFX_HostSprite* sprite = &sprites->host_sprite[idx];
+
+            // set the position.
+            gfx_sprite_set_position_unsafe(state, idx, position);
+
+            // next loop iteration preperation.
+            idx = sprite->next_in_chain;
+            if(idx == first_idx){
+                break;
+            }
+        }
+    }
+
+    bool gfx_sprite_string_set_position(GFX_State* state, GenId sprite_gid, Vector2 position){
+        i32 first_idx = gen_id_allocator_is_gen_id_valid(&state->sprite_manager.gen_id_allocator, sprite_gid);
+        if(!first_idx){
+            return false;
+        }
+        BOUNDS_CHECK(first_idx, state->sprite_manager.host_sprite_length);
+        if(!gfx_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
+            ASSERT(false, "sprite is not within a sprite-chain.");
+            return false;
+        }
+        gfx_sprite_string_set_position_unsafe(state, first_idx, position);
+        return true;
+    }
+
+///
+
 /// sprite layer.
 
     u32 gfx_sprite_get_layer_unsafe(GFX_State* state, i32 sprite_idx){

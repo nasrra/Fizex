@@ -626,7 +626,6 @@ GenId entity_spawn_wood_block(EntityManager* entity_manager, String name, Transf
     return entity_gid;
 }
 
-
 GenId entity_spawn_invisible_wall(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
@@ -1150,4 +1149,37 @@ void game_state_draw(GameState* game_state, f32 delta_time){
     );
     // gfx_clay_test_layout(&entity_manager);
     gfx_clay_end_layout(gfx_state, delta_time, SPRITE_LAYER_GAME_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
+}
+
+
+
+
+///
+/// functions: Entity.
+///
+
+
+
+
+bool entity_set_position(EntityManager* manager, GenId entity_gid, Vector2 position){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, entity_gid);
+    if(!idx){
+        return false;
+    }
+    
+    BOUNDS_CHECK(idx, manager->entity_length);
+    Entity* entity = &manager->entity[idx];
+    
+    entity->transform.position = position;
+    
+    if(entity->is_sprite){
+        gfx_sprite_set_position(manager->gfx_state, entity->sprite_gid, position);
+    }
+    
+    if(entity->is_physics_body){
+        // TODO: may need to check this in the future, havent tested it.
+        fizx_body_set_global_position(&manager->fizx_state, entity->physics_body_gid, position);
+    }
+
+    return true;
 }

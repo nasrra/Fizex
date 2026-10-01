@@ -1007,6 +1007,19 @@ Matrix4x4 matrix4x4_translate_by_vector3(Matrix4x4 matrix, Vector3 vector){
 }
 
 /*
+    Sets the translation components of a a matrix4x4
+
+    `remarks`
+    The matrix must be in left hand side format.
+*/
+Matrix4x4 matrix4x4_set_translation(Matrix4x4 matrix, Vector3 position){
+    matrix.m[12] = position.x;
+    matrix.m[13] = position.y;
+    matrix.m[14] = position.z;
+    return matrix;
+}
+
+/*
     Applies a translation to a matrix4x4
 
     `remarks`

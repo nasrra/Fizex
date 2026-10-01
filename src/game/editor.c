@@ -866,11 +866,10 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                     break;
                 }
                 
-                
                 // drag the selected entity with the mouse if we are clicking down.
                 if(input_is_mouse_button_pressed(MOUSE_BUTTON_LEFT)){                                            
                     Vector2 new_position = vector2_add(mouse_world_position, editor_mouse_state->move_behaviour_state.selected_game_entity_positional_offset);
-                    game_entity->transform.position = new_position;                    
+                    entity_set_position(game_entity_manager, editor_mouse_state->selected_game_entity.gid, new_position);
                 }
             }break;
         }
