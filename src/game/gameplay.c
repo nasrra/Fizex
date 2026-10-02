@@ -523,7 +523,8 @@ GenId entity_spawn_red_bird(EntityManager* entity_manager, String name, Transfor
         FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 2.0f, .restitution = 0.0f};
 
         Transform2D shape_transform = TRANSFORM2D_IDENTITY;
-        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, false);
+        f32 drag = 0.1f;
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, drag, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, shape_transform, FIZX_ShapeBehaviour_Dynamic, &entity_gid, PHYSICS_LAYER_PLAYER, square, material, true);
         fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, false);
 
@@ -564,7 +565,8 @@ GenId entity_spawn_yellow_bird(EntityManager* entity_manager, String name, Trans
         FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 1.0f, .restitution = 0.0f};
 
         Transform2D shape_transform = TRANSFORM2D_IDENTITY;
-        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, false);
+        f32 drag = 0.05f;
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, drag, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, shape_transform, FIZX_ShapeBehaviour_Dynamic, &entity_gid, PHYSICS_LAYER_PLAYER, square, material, true);
         fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, false);
 
@@ -604,7 +606,8 @@ GenId entity_spawn_wood_block(EntityManager* entity_manager, String name, Transf
         FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 22.6f, .restitution = 0.0f};
 
         Transform2D shape_transform = TRANSFORM2D_IDENTITY;
-        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, false);
+        f32 drag = 0.75f;
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, drag, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, shape_transform, FIZX_ShapeBehaviour_Dynamic, &entity_gid, PHYSICS_LAYER_ENVIRONMENT, square, material, true);
 
         GFX_TextureView texture_view = {.bot_right = {.x = 150, .y = 150}};
@@ -638,7 +641,8 @@ GenId entity_spawn_invisible_wall(EntityManager* entity_manager, String name, Tr
         FIZX_Material material = {.static_friction = 1.0f, .kinetic_friction = 1.0f, .density = 22.6f, .restitution = 0.0f};
         Transform2D shape_transform = TRANSFORM2D_IDENTITY;
         entity->is_physics_body = true;
-        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, transform, false);
+        f32 drag = 0.0f;
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, transform, drag, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(
             &entity_manager->fizx_state,
             entity->physics_body_gid,
@@ -754,7 +758,8 @@ GenId entity_spawn_pig(EntityManager* entity_manager, String name, Transform2D t
         FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 1.0f, .restitution = 0.0f};
 
         Transform2D shape_transform = TRANSFORM2D_IDENTITY;
-        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, false);
+        f32 drag = 0.33f;
+        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, drag, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(&entity_manager->fizx_state, entity->physics_body_gid, shape_transform, FIZX_ShapeBehaviour_Dynamic, &entity_gid, PHYSICS_LAYER_ENEMY, square, material, true);
         fizx_shape_set_on_enter_callback(&entity_manager->fizx_state, pig_fizx_shape_on_enter_callback, entity_shape_gid);
 

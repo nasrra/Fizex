@@ -418,13 +418,9 @@ Vector2 vector2i_to_vector2(Vector2I vector){
 }
 
 
-
-
 ///
 /// functions: Vector2
 ///
-
-
 
 
 inline bool vector2_equals(Vector2 a, Vector2 b){

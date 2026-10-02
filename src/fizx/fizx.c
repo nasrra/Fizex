@@ -388,6 +388,15 @@ typedef struct{
     i32 displaced_this_sub_step_count;
 
     /*
+        the linear drag power value.
+        
+        `remarks`
+        Elements are accessed via `entity_idx`.
+    */    
+    f32* linear_drag;
+    i32 linear_drag_length;
+
+    /*
         The user defined data for a body entity.
     
         `remarks`
@@ -1468,11 +1477,9 @@ inline bool collision_manifold_shape_has_collisions(FIZX_CollisionManifold manif
 }
 
 
-
-
-/**====================
-    functions: FIZX_Soa_Entity.
-====================**//**/
+///
+/// functions: FIZX_Soa_Entity.
+///
 
 
 i32 fizx_entity_get_layer(FIZX_State* state, i32 entity_idx){
@@ -1532,6 +1539,7 @@ void fizx_soa_entity_init(FIZX_Soa_Entity* soa, MemoryArena* arena, i32 length, 
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->user_data, &soa->user_data_length, user_data_size * length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->layer, &soa->layer_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->mask, &soa->mask_length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->linear_drag, &soa->linear_drag_length, length);
     soa->user_data_element_size = user_data_size;
 }
 
@@ -2280,7 +2288,7 @@ bool fizx_shape_dealloc(FIZX_State* state, GenId gid, bool recalculate_body_cent
     `returns`:
     A gen-id handle to the allocated body; note that it returns zero when failing to allocate a body.
 **/
-GenId fizx_body_alloc(FIZX_State* state, Transform2D global_transform, bool gravity_affected){
+GenId fizx_body_alloc(FIZX_State* state, Transform2D global_transform, f32 linear_drag, bool gravity_affected){
     GenId gid = gen_id_allocator_alloc(&state->gen_id_allocator);
     ASSERT(gid != (GenId){0}, "memory limit hit");
     i32 body_idx = gen_id_get_index(gid);
@@ -2301,6 +2309,7 @@ GenId fizx_body_alloc(FIZX_State* state, Transform2D global_transform, bool grav
     state->entities.inverse_mass[body_idx] = 0;
     state->entities.entity_type[body_idx] = FIZX_EntityType_Body;
     state->entities.gravity_affected[body_idx] = gravity_affected;
+    state->entities.linear_drag[body_idx] = linear_drag;
     fizx_body_clear_forces_and_velocities_unsafe(state, body_idx);
 
     bool added_root = intrusive_list_add_root(&state->body_hierarchy, body_idx);
@@ -3346,6 +3355,8 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                 bool gravity_affected = state->entities.gravity_affected[body_index];
                 BOUNDS_CHECK(body_index, state->entities.angular_velocity_length);
                 f32 ang_vel = state->entities.angular_velocity[body_index];
+                BOUNDS_CHECK(body_index, state->entities.linear_drag_length);
+                f32 linear_drag = state->entities.linear_drag[body_index];
 
                 if(gravity_affected){
                     *lin_vel_x += gravity.x;
@@ -3382,19 +3393,51 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                     *body_pos_x = rotated_x + com_x;
                     *body_pos_y = rotated_y + com_y;
                 }
-
-                /**
-                    apply linear velocity translation.
-                **/
-                {
+                
+                { // apply_linear_drag();
+                
+                    f32 drag = linear_drag * delta_time;
+                    
+                    if(*lin_vel_x != 0.0f){
+                        f32 pre_velocity_x = *lin_vel_x;
+                        f32 direction_x_factor = pre_velocity_x < 0 ? 1.0f : -1.0f;
+                        f32 new_velocity_x = pre_velocity_x + (direction_x_factor * drag);
+                        // the to the right.
+                        if(direction_x_factor > 0.0f){                        
+                            // clamp the velocity if it has over shot or reached its end.
+                            *lin_vel_x = new_velocity_x >= 0.0f ? 0.0f : new_velocity_x;
+                        }
+                        // the drag pushes to the left.
+                        else{
+                            // clamp the velocity if it has over shot or reached its end.
+                            *lin_vel_x = new_velocity_x <= 0.0f ? 0.0f : new_velocity_x;
+                        }                
+                    }
+                    
+                    if(*lin_vel_y != 0.0f){
+                        f32 pre_velocity_y = *lin_vel_y;
+                        f32 direction_y_factor = pre_velocity_y < 0 ? 1.0f : -1.0f;
+                        f32 new_velocity_y = pre_velocity_y + (direction_y_factor * drag);
+                        // the drag pushes to the up.
+                        if(direction_y_factor > 0.0f){
+                            // clamp the velocity if it has over shot or reached its end.
+                            *lin_vel_y = new_velocity_y >= 0.0f ? 0.0f : new_velocity_y;
+                        }
+                        // the drag pushes to the down.
+                        else{
+                            // clamp the velocity if it has over shot or reached its end.
+                            *lin_vel_y = new_velocity_y <= 0.0f ? 0.0f : new_velocity_y;
+                        }                
+                    }
+                }
+                
+                { // apply_linear_velocity_translation();
+                
                     *body_pos_x += *lin_vel_x * delta_time;
                     *body_pos_y += *lin_vel_y * delta_time;
                 }
-
-                /**
-                    apply displacements
-                **/
-                {
+                    
+                { // apply_displacements();
                     BOUNDS_CHECK(body_index, state->entities.shape_collision_displacement.length);
 
                     f32* displacement_x = &state->entities.shape_collision_displacement.x[body_index];
