@@ -190,8 +190,7 @@ void app_main(){
                 game_state_draw(&game_state, delta_time);
                 gfx_state_draw(&gfx_state);
                 transient->stride = 0;
-            }
-            
+            }            
         }
     }
 

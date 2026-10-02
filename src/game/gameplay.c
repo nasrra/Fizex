@@ -1007,16 +1007,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
     }
 
     { // move camera.
-
-        f32 camera_speed = 1.0f * delta_time * gfx_state->world_camera.orthographic_size;
-        bool x = input_is_key_pressed(Key_Right);
-
         gfx_state->world_camera.orthographic_size -= gfx_state->world_camera.orthographic_size * (f32)input_get_mouse_scroll_wheel_delta_value() * delta_time * 0.1f;
-
-        if(input_is_key_pressed(Key_Down))  {gfx_state->world_camera.position.y -= camera_speed;}
-        if(input_is_key_pressed(Key_Right)) {gfx_state->world_camera.position.x += camera_speed;}
-        if(input_is_key_pressed(Key_Left))  {gfx_state->world_camera.position.x -= camera_speed;}
-        if(input_is_key_pressed(Key_Up))    {gfx_state->world_camera.position.y += camera_speed;}
     }
 
     if(!in_editor_mode)

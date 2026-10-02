@@ -222,4 +222,8 @@ char input_get_latest_active_key_character();
 i32 input_get_latest_active_key_print_count();
 Key input_get_latest_active_key();
 
+bool input_is_middle_mouse_down();
+void input_set_middle_mouse_down();
+void input_set_middle_mouse_up();
+
 #endif

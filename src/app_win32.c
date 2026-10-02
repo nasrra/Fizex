@@ -171,6 +171,12 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
         case WM_MOUSEWHEEL:{
             input_increment_mouse_scroll_wheel_value((int32_t)GET_WHEEL_DELTA_WPARAM(w_param));
         }break;
+        case WM_MBUTTONDOWN:{
+            input_set_middle_mouse_down();
+        }break;
+        case WM_MBUTTONUP:{
+            input_set_middle_mouse_up();
+        }break;
         default:{
             result = DefWindowProc(window, message, w_param, l_param);
         }break;

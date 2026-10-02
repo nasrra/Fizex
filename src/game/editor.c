@@ -771,9 +771,19 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
             }
             
             if(!editor_state->mouse_state.hovering_element){
+            
+                if(input_is_middle_mouse_down()){
+                    f32 camera_speed = 0.334f * delta_time * game_gfx_state->world_camera.orthographic_size;
+                    Vector2I delta_mouse_position_i; 
+                    input_get_mouse_delta_position(&delta_mouse_position_i.x, &delta_mouse_position_i.y);
+                    Vector2 delta_mouse_position = vector2_mul_val(vector2i_to_vector2(delta_mouse_position_i), camera_speed);
+                    delta_mouse_position.x = -delta_mouse_position.x;
+                    game_gfx_state->world_camera.position = vector3_add(game_gfx_state->world_camera.position, vector2_to_vector3(delta_mouse_position));
+                }
+
                 switch(editor_mouse_state->behaviour){
                     case Editor_MouseStateBehaviour_Navigate:{
-        
+            
                         { // entity_selecting();
         
                             if(input_is_mouse_button_just_pressed(MouseButton_Left)){
