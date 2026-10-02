@@ -1700,14 +1700,16 @@ void fizx_shape_category_set_to_collider(i32* category){
 }
 
 
-
-
-/**====================
-    functions: Entity.
-====================**//**/
+///
+/// functions: Entity.
+///
 
 
 
+i32 fizx_shape_get_parent_unsafe(FIZX_State state, i32 shape_idx){
+    BOUNDS_CHECK(shape_idx, state.body_hierarchy.length);
+    return state.body_hierarchy.node[shape_idx].parent;
+}
 
 bool fizx_shape_set_on_enter_callback(FIZX_State* state, FIZX_CollisionCallback callback, GenId shape_gid){
     i32 idx = fizx_validate_shape_gen_id(state, shape_gid);
@@ -2025,19 +2027,19 @@ bool fizx_body_set_global_position(FIZX_State* state, GenId body_gid, Vector2 po
     return true;
 }
 
-Vector2 fizx_body_get_linear_velocity_unsafe(FIZX_State* state, i32 body_idx){
-    Soa_Vector2* soa = &state->entities.linear_velocity;
+Vector2 fizx_body_get_linear_velocity_unsafe(FIZX_State state, i32 body_idx){
+    Soa_Vector2* soa = &state.entities.linear_velocity;
     BOUNDS_CHECK(body_idx, soa->length);
     return (Vector2){.x = soa->x[body_idx], .y = soa->y[body_idx]};
 }
 
-Vector2 fizx_body_get_linear_velocity(FIZX_State* state, GenId body_gid){
-    i32 idx = fizx_validate_body_gen_id(state, body_gid);
+Vector2 fizx_body_get_linear_velocity(FIZX_State state, GenId body_gid){
+    i32 idx = fizx_validate_body_gen_id(&state, body_gid);
     if(idx == 0){
         ASSERT(false, "not a body gid");
         return (Vector2){0};
     }
-    if(!fizx_body_is_active_unsafe(state, idx)){
+    if(!fizx_body_is_active_unsafe(&state, idx)){
         return (Vector2){0};
     }
     return fizx_body_get_linear_velocity_unsafe(state, idx);

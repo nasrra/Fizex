@@ -43,7 +43,7 @@ typedef struct{
     GenId physics_body_gid;
     Aabb clickable_aabb;
     EntityTypeId type_id;
-    i32 health;
+    f32 health;
     bool is_sprite;
     bool is_health;
     bool is_clickable;
@@ -152,8 +152,6 @@ typedef struct{
     this is so that two fixed update steps are never called at a single time.
 **/
 #define DELTA_TIME_ACCUMULATOR_SLOW_DOWN 0.0333147881012903f
-
-
 
 ///
 /// Physics layers.
@@ -697,24 +695,31 @@ void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
         return;
     }
 
-    // Vector2 velocity = fizx_body_get_linear_velocity_unsafe(ctx->entity_manager->fizx_state, info.target_entity_idx);
-    // f32 magnitude = vector2_len(velocity);
-    // f32 damage = magnitude
+    i32 source_body_idx = fizx_shape_get_parent_unsafe(ctx->entity_manager->fizx_state, info.source_entity_idx);
+    if(!source_body_idx){
+        ASSERT(false, "failed to retrieve body idx.");
+        return;
+    }
+
+    Vector2 velocity = fizx_body_get_linear_velocity_unsafe(ctx->entity_manager->fizx_state, source_body_idx);
+    f32 magnitude = vector2_len(velocity);
+    f32 damage = magnitude / ((PLAYER_MOUSE_LAUNCH_FORCE * 0.5f) * PLAYER_MOUSE_MAX_DRAW_RADIUS);
+    damage = CLAMP(damage, 0.0f, 1.0f);
 
     ASSERT(entity->is_health, "entity doesnt use health.");
-    entity->health -= 1;
+    entity->health -= damage;
 
-    if(entity->health <= 0){
+    if(entity->health <= 0.0f){
         entity_manager_dealloc_entity(ctx->entity_manager, *entity_gid);
         ctx->entity_manager->alive_enemies-=1;
         if(ctx->entity_manager->alive_enemies <= 0){
             platform_output_message("WIN!");
         }
     }
-    else if(entity->health <= 1){
+    else if(entity->health <= 1.0f){
         gfx_sprite_set_texture_view(ctx->entity_manager->gfx_state, entity->sprite_gid, GFX_TEXTURE_VIEW_PIG_CRITICAL);
     }
-    else if(entity->health <= 2){
+    else if(entity->health <= 2.0f){
         gfx_sprite_set_texture_view(ctx->entity_manager->gfx_state, entity->sprite_gid, GFX_TEXTURE_VIEW_PIG_HURT);
     }
 
@@ -722,6 +727,12 @@ void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
         .entity_manager = ctx->entity_manager,
         .entity_gid = *entity_gid
     };
+
+    char* chars = (char[256]){0};
+    // i32 written = snprintf(chars, 256, "%f", entity->health);
+    i32 written = snprintf(chars, 256, "%f", damage);
+    chars[written] = '\n';
+    platform_output_message(chars);
 
     entity->is_invincible = true;
     timer_manager_timer_start(&ctx->entity_manager->timer_manager, 0.675f, 1.0f, pig_invincible_timer_timeout, &timeout_data, sizeof(timeout_data));
