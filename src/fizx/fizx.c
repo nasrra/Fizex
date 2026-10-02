@@ -395,6 +395,15 @@ typedef struct{
     */    
     f32* linear_drag;
     i32 linear_drag_length;
+    
+    /*
+        the angular drag power value.
+        
+        `remarks`
+        Elements are accessed via `entity_idx`.
+    */
+    f32* angular_drag;
+    i32 angular_drag_length;
 
     /*
         The user defined data for a body entity.
@@ -1540,6 +1549,7 @@ void fizx_soa_entity_init(FIZX_Soa_Entity* soa, MemoryArena* arena, i32 length, 
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->layer, &soa->layer_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->mask, &soa->mask_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->linear_drag, &soa->linear_drag_length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->angular_drag, &soa->angular_drag_length, length);
     soa->user_data_element_size = user_data_size;
 }
 
@@ -2288,7 +2298,7 @@ bool fizx_shape_dealloc(FIZX_State* state, GenId gid, bool recalculate_body_cent
     `returns`:
     A gen-id handle to the allocated body; note that it returns zero when failing to allocate a body.
 **/
-GenId fizx_body_alloc(FIZX_State* state, Transform2D global_transform, f32 linear_drag, bool gravity_affected){
+GenId fizx_body_alloc(FIZX_State* state, Transform2D global_transform, f32 linear_drag, f32 angular_drag, bool gravity_affected){
     GenId gid = gen_id_allocator_alloc(&state->gen_id_allocator);
     ASSERT(gid != (GenId){0}, "memory limit hit");
     i32 body_idx = gen_id_get_index(gid);
@@ -2310,6 +2320,8 @@ GenId fizx_body_alloc(FIZX_State* state, Transform2D global_transform, f32 linea
     state->entities.entity_type[body_idx] = FIZX_EntityType_Body;
     state->entities.gravity_affected[body_idx] = gravity_affected;
     state->entities.linear_drag[body_idx] = linear_drag;
+    state->entities.angular_drag[body_idx] = angular_drag;
+    
     fizx_body_clear_forces_and_velocities_unsafe(state, body_idx);
 
     bool added_root = intrusive_list_add_root(&state->body_hierarchy, body_idx);
@@ -3333,30 +3345,32 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
             for(i32 i = 1; i < state->body_hierarchy.root_index_count; i++){ // skip the Nil.
 
                 BOUNDS_CHECK(i, state->body_hierarchy.length);
-                i32 body_index = state->body_hierarchy.root_index[i];
-                BOUNDS_CHECK(body_index, state->body_hierarchy.length);
-                if(state->body_hierarchy.node[body_index].is_active == false){
+                i32 body_idx = state->body_hierarchy.root_index[i];
+                BOUNDS_CHECK(body_idx, state->body_hierarchy.length);
+                if(state->body_hierarchy.node[body_idx].is_active == false){
                     continue;
                 }
 
-                BOUNDS_CHECK(body_index, state->entities.global_transform.length);
-                f32* body_pos_x     = &state->entities.global_transform.position.x[body_index];
-                f32* body_pos_y     = &state->entities.global_transform.position.y[body_index];
-                f32* body_sine      = &state->entities.global_transform.sine[body_index];
-                f32* body_cosine    = &state->entities.global_transform.cosine[body_index];
-                f32* body_scale_x   = &state->entities.global_transform.scale.x[body_index];
-                f32* body_scale_y   = &state->entities.global_transform.scale.y[body_index];
-                BOUNDS_CHECK(body_index, state->entities.linear_velocity.length);
-                f32* lin_vel_x      = &state->entities.linear_velocity.x[body_index];
-                f32* lin_vel_y      = &state->entities.linear_velocity.y[body_index];
-                BOUNDS_CHECK(body_index, state->entities.mass_length);
-                f32* mass           = &state->entities.mass[body_index];
-                BOUNDS_CHECK(body_index, state->entities.gravity_affected_length);
-                bool gravity_affected = state->entities.gravity_affected[body_index];
-                BOUNDS_CHECK(body_index, state->entities.angular_velocity_length);
-                f32 ang_vel = state->entities.angular_velocity[body_index];
-                BOUNDS_CHECK(body_index, state->entities.linear_drag_length);
-                f32 linear_drag = state->entities.linear_drag[body_index];
+                BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
+                f32* body_pos_x         = &state->entities.global_transform.position.x[body_idx];
+                f32* body_pos_y         = &state->entities.global_transform.position.y[body_idx];
+                f32* body_sine          = &state->entities.global_transform.sine[body_idx];
+                f32* body_cosine        = &state->entities.global_transform.cosine[body_idx];
+                f32* body_scale_x       = &state->entities.global_transform.scale.x[body_idx];
+                f32* body_scale_y       = &state->entities.global_transform.scale.y[body_idx];
+                BOUNDS_CHECK(body_idx, state->entities.linear_velocity.length);
+                f32* lin_vel_x          = &state->entities.linear_velocity.x[body_idx];
+                f32* lin_vel_y          = &state->entities.linear_velocity.y[body_idx];
+                BOUNDS_CHECK(body_idx, state->entities.mass_length);
+                f32* mass               = &state->entities.mass[body_idx];
+                BOUNDS_CHECK(body_idx, state->entities.gravity_affected_length);
+                bool gravity_affected   = state->entities.gravity_affected[body_idx];
+                BOUNDS_CHECK(body_idx, state->entities.angular_velocity_length);
+                f32* ang_vel            = &state->entities.angular_velocity[body_idx];
+                BOUNDS_CHECK(body_idx, state->entities.linear_drag_length);
+                f32 linear_drag         = state->entities.linear_drag[body_idx];
+                BOUNDS_CHECK(body_idx, state->entities.angular_drag_length);
+                f32 angular_drag        = state->entities.angular_drag[body_idx];
 
                 if(gravity_affected){
                     *lin_vel_x += gravity.x;
@@ -3364,26 +3378,44 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                 }
 
                 if(*mass > 0){
-                    BOUNDS_CHECK(body_index, state->entities.force.length);
+                    BOUNDS_CHECK(body_idx, state->entities.force.length);
                     f32 mass_factor = *mass * delta_time;
-                    *lin_vel_x += state->entities.force.x[body_index] / mass_factor;
-                    *lin_vel_y += state->entities.force.y[body_index] / mass_factor;
+                    *lin_vel_x += state->entities.force.x[body_idx] / mass_factor;
+                    *lin_vel_y += state->entities.force.y[body_idx] / mass_factor;
                 }
-
-                /**
-                    rotate body around center of mass.
-                **/
-                if(ang_vel != 0.0f){
+                
+                { // apply_angular_drag();
+                
+                    f32 drag = angular_drag * delta_time;
+                    
+                    if(*ang_vel != 0.0f){
+                        f32 prev_ang_vel = *ang_vel;
+                        f32 direction_factor_x = prev_ang_vel < 0.0f ? 1.0f : -1.0f;
+                        f32 new_ang_vel = prev_ang_vel + (drag * direction_factor_x);
+                        
+                        // clockwise rotation.
+                        if(direction_factor_x > 0.0f){
+                            *ang_vel = new_ang_vel >= 0.0f ? 0.0f : new_ang_vel;
+                        }
+                        // anti-clockwise rotation.   
+                        else{
+                            *ang_vel = new_ang_vel <= 0.0f ? 0.0f : new_ang_vel;
+                        }
+                    }
+                }                
+                
+                // rotate_body_around_center_of_mass();
+                if(*ang_vel != 0.0f){
                     // apply rotation.
-                    f32 rot_amt = ang_vel * delta_time;
+                    f32 rot_amt = *ang_vel * delta_time;
                     rotor_multiply(*body_sine, *body_cosine, rot_amt, body_sine, body_cosine);
 
                     // offset the body in relation to the center of mass.
                     f32 rot_cos = f32_cos(rot_amt);
                     f32 rot_sin = f32_sin(rot_amt);
-                    BOUNDS_CHECK(body_index, state->entities.local_center_of_mass.length);
-                    f32 com_x = *body_pos_x + state->entities.local_center_of_mass.x[body_index];
-                    f32 com_y = *body_pos_y + state->entities.local_center_of_mass.y[body_index];
+                    BOUNDS_CHECK(body_idx, state->entities.local_center_of_mass.length);
+                    f32 com_x = *body_pos_x + state->entities.local_center_of_mass.x[body_idx];
+                    f32 com_y = *body_pos_y + state->entities.local_center_of_mass.y[body_idx];
 
                     // translate to origin.
                     f32 com_offset_x = *body_pos_x - com_x;
@@ -3400,7 +3432,7 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                     
                     if(*lin_vel_x != 0.0f){
                         f32 pre_velocity_x = *lin_vel_x;
-                        f32 direction_x_factor = pre_velocity_x < 0 ? 1.0f : -1.0f;
+                        f32 direction_x_factor = pre_velocity_x < 0.0f ? 1.0f : -1.0f;
                         f32 new_velocity_x = pre_velocity_x + (direction_x_factor * drag);
                         // the to the right.
                         if(direction_x_factor > 0.0f){                        
@@ -3438,23 +3470,22 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                 }
                     
                 { // apply_displacements();
-                    BOUNDS_CHECK(body_index, state->entities.shape_collision_displacement.length);
+                
+                    BOUNDS_CHECK(body_idx, state->entities.shape_collision_displacement.length);
 
-                    f32* displacement_x = &state->entities.shape_collision_displacement.x[body_index];
+                    f32* displacement_x = &state->entities.shape_collision_displacement.x[body_idx];
                     *body_pos_x += *displacement_x;
                     *displacement_x = 0;
 
-                    f32* displacement_y = &state->entities.shape_collision_displacement.y[body_index];
+                    f32* displacement_y = &state->entities.shape_collision_displacement.y[body_idx];
                     *body_pos_y += *displacement_y;
                     *displacement_y = 0;
                 }
 
-                /**
-                    move and rotate body's shapes.
-                **/
-                {
-                    BOUNDS_CHECK(body_index, state->body_hierarchy.length);
-                    IntrusiveListNode* node = &state->body_hierarchy.node[body_index];
+                { // move_and_roate_body_shapes();
+                
+                    BOUNDS_CHECK(body_idx, state->body_hierarchy.length);
+                    IntrusiveListNode* node = &state->body_hierarchy.node[body_idx];
                     i32 body_first_shape_idx = node->first_child;
                     if(body_first_shape_idx != 0){
                         i32 shape_idx = body_first_shape_idx;
