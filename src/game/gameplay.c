@@ -805,7 +805,7 @@ void load_lvl(EntityManager* entity_manager, String file_path){
         deserialised_entity->spawn_transform = TRANSFORM2D_IDENTITY;
         lines_read = sscanf(
             file_data,
-            "%[^;]%n;%i;%i;%f;%f;%f;%f;%f;%n",
+            "%[^;]%n;%i;%i;%f;%f;%f;%f;%f;%f;%n",
             name.chars,
             &name.count,
             &deserialised_entity->entity_type_id,
@@ -814,7 +814,8 @@ void load_lvl(EntityManager* entity_manager, String file_path){
             &deserialised_entity->spawn_transform.position.y,
             &deserialised_entity->spawn_transform.scale.x,
             &deserialised_entity->spawn_transform.scale.y,
-            &deserialised_entity->spawn_transform.rotation,
+            &deserialised_entity->spawn_transform.sine,
+            &deserialised_entity->spawn_transform.cosine,
             &bytes_consumed
         );
 
@@ -833,7 +834,7 @@ void load_lvl(EntityManager* entity_manager, String file_path){
         ? 0
         : entity_manager->deserialised_entity[parent_idx].entity_gid;
 
-        if(lines_read == 8){
+        if(lines_read == 9){
             switch(deserialised_entity->entity_type_id){
                 case EntityTypeId_RedBird:{
                     deserialised_entity->entity_gid
@@ -1075,7 +1076,6 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                     Transform2D transform;
                     if(fizx_body_get_transform(fizx_state, entity->physics_body_gid, &transform)){
                         entity->transform.position = transform.position;
-                        entity->transform.rotation = transform.rotation;
                         entity->transform.cosine = transform.cosine;
                         entity->transform.sine = transform.sine;
                     }
@@ -1181,5 +1181,22 @@ bool entity_set_position(EntityManager* manager, GenId entity_gid, Vector2 posit
         fizx_body_set_global_position(&manager->fizx_state, entity->physics_body_gid, position);
     }
 
+    return true;
+}
+
+bool entity_set_transform(EntityManager* manager, GenId entity_gid, Transform2D transform){
+    Entity* entity;
+    if(!entity_manager_get_entity(*manager, entity_gid, &entity)){
+        return false;
+    }
+    entity->transform = transform;
+    
+    if(entity->is_sprite){
+        gfx_sprite_set_transform(manager->gfx_state, entity->sprite_gid, transform);
+    }
+    
+    if(entity->is_physics_body){
+        fizx_body_set_global_transform(&manager->fizx_state, entity->physics_body_gid, transform);
+    }
     return true;
 }

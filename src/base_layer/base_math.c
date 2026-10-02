@@ -96,11 +96,6 @@ typedef struct{
     Vector2 scale;
     f32 sine;
     f32 cosine;
-    /**
-        `remarks`
-        this value is in radians.
-    **/
-    f32 rotation;
 } Transform2D;
 
 typedef struct{
@@ -108,11 +103,6 @@ typedef struct{
     Soa_Vector2 scale;
     f32* sine;
     f32* cosine;
-    /**
-        `remarks`
-        the stored values are in radians.
-    **/
-    f32* rotation;
     i32 length;
     bool is_init;
 } Soa_Transform2D;
@@ -297,9 +287,9 @@ Transform2D matrix4x4_to_transform2d(Matrix4x4 matrix){
     transform.scale.y = f32_sqrt(m[4]*m[4] + m[5]*m[5]);
 
     // undo the scale to get pure rotation back
-    if(transform.scale.y > -F32_MAX){
+    if(transform.scale.y > F32_MIN){
         transform.cosine = m[0] / transform.scale.x;
-        transform.sine = m[1] / transform.scale.y;
+        transform.sine = m[1] / transform.scale.x;
     }
 
     transform.position.x = m[12];
@@ -1386,13 +1376,16 @@ void soa_vector2_reset_count(Soa_Vector2* soa){
 
 
 
-Transform2D transform2d_make(Vector2 position, Vector2 scale, f32 rotation){
+f32 transform2d_get_rotation_radians(Transform2D transform){
+    return atan2f(transform.sine, transform.cosine);
+}
+
+Transform2D transform2d_make(Vector2 position, Vector2 scale, f32 rotation_radians){
     return (Transform2D){
         .position = position,
         .scale = scale,
-        .rotation = rotation,
-        .sine = f32_sin(rotation),
-        .cosine = f32_cos(rotation)
+        .sine = f32_sin(rotation_radians),
+        .cosine = f32_cos(rotation_radians)
     };
 }
 
@@ -1485,7 +1478,6 @@ bool soa_transform2d_init(Soa_Transform2D* soa, MemoryArena* arena, i32 length){
     soa_vector2_init(&soa->scale, arena, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->sine, &soa->length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->cosine, &soa->length, length);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->rotation, &soa->length, length);
     return true;
 }
 
@@ -1495,15 +1487,14 @@ Transform2D soa_transform2d_copy_elem(Soa_Transform2D* soa, i32 index){
         .position = {.x = soa->position.x[index], .y = soa->position.y[index]},
         .scale    = {.x = soa->scale.x[index], .y = soa->scale.y[index]},
         .sine       = soa->sine[index],
-        .cosine     = soa->cosine[index],
-        .rotation   = soa->rotation[index]
+        .cosine     = soa->cosine[index]
     };
     return dst;
 }
 
 void soa_transform2d_insert_scalar(
     Soa_Transform2D* soa, i32 elem_index, f32 pos_x, f32 pos_y,
-    f32 scale_x, f32 scale_y, f32 sin, f32 cos, f32 rot_radians
+    f32 scale_x, f32 scale_y, f32 sin, f32 cos
 ){
     BOUNDS_CHECK(elem_index, soa->position.length);
     soa->position.x[elem_index] = pos_x;
@@ -1518,27 +1509,24 @@ void soa_transform2d_insert_scalar(
 
     BOUNDS_CHECK(elem_index, soa->length);
     soa->cosine[elem_index] = cos;
-
-    BOUNDS_CHECK(elem_index, soa->length);
-    soa->rotation[elem_index] = rot_radians;
 }
 
 void soa_transform2d_insert(Soa_Transform2D* soa, Transform2D transform, i32 elem_index){
     soa_transform2d_insert_scalar(
         soa, elem_index, transform.position.x, transform.position.y,
-        transform.scale.x, transform.scale.y, transform.sine, transform.cosine, transform.rotation
+        transform.scale.x, transform.scale.y, transform.sine, transform.cosine
     );
 }
 
 Transform2D transform2d_rotate(Transform2D transform, f32 radians){
-    transform.rotation += radians;
-    transform.sine = f32_sin(transform.rotation);
-    transform.cosine = f32_cos(transform.rotation);
+    f32 rotation = radians + transform2d_get_rotation_radians(transform);
+    transform.sine = f32_sin(rotation);
+    transform.cosine = f32_cos(rotation);
     return transform;
 }
 
 Transform3D transform2d_to_transform3d(Transform2D transform){
-    f32 half = transform.rotation * 0.5f;
+    f32 half = transform2d_get_rotation_radians(transform) * 0.5f;
     Transform3D result =  {
         .position = {transform.position.x, transform.position.y, 0.0f},
         .scale = {transform.scale.x, transform.scale.y, 1.0f},
@@ -1554,9 +1542,9 @@ Transform3D transform2d_to_transform3d(Transform2D transform){
     `rhs` is applied to `lhs`.
 **/
 void transform2d_transform_scalar(
-    f32 lhs_pos_x, f32 lhs_pos_y, f32 lhs_scale_x, f32 lhs_scale_y, f32 lhs_sin, f32 lhs_cos, f32 lhs_rotation,
-    f32 rhs_pos_x, f32 rhs_pos_y, f32 rhs_scale_x, f32 rhs_scale_y, f32 rhs_sin, f32 rhs_cos, f32 rhs_rotation,
-    f32* out_pos_x, f32* out_pos_y, f32* out_scale_x, f32* out_scale_y, f32* out_sin, f32* out_cos, f32* out_rotation
+    f32 lhs_pos_x, f32 lhs_pos_y, f32 lhs_scale_x, f32 lhs_scale_y, f32 lhs_sin, f32 lhs_cos,
+    f32 rhs_pos_x, f32 rhs_pos_y, f32 rhs_scale_x, f32 rhs_scale_y, f32 rhs_sin, f32 rhs_cos,
+    f32* out_pos_x, f32* out_pos_y, f32* out_scale_x, f32* out_scale_y, f32* out_sin, f32* out_cos
 ){
     // scale the local offset relative to the world.
     f32 scaled_x = lhs_pos_x * rhs_scale_x;
@@ -1587,15 +1575,14 @@ void transform2d_transform_scalar(
     **/
     *out_sin = (lhs_sin * rhs_cos) + (lhs_cos * rhs_sin);
     *out_cos = (lhs_cos * rhs_cos) + (lhs_sin * rhs_sin);
-    *out_rotation = lhs_rotation + rhs_rotation;
 }
 
 Transform2D transform2d_transform(Transform2D lhs, Transform2D rhs){
     Transform2D out;
     transform2d_transform_scalar(
-        lhs.position.x, lhs.position.y, lhs.scale.x, lhs.scale.y, lhs.sine, lhs.cosine, lhs.rotation,
-        rhs.position.x, rhs.position.y, rhs.scale.x, rhs.scale.y, rhs.sine, rhs.cosine, rhs.rotation,
-        &out.position.x, &out.position.y, &out.scale.x, &out.scale.y, &out.sine, &out.cosine, &out.rotation
+        lhs.position.x, lhs.position.y, lhs.scale.x, lhs.scale.y, lhs.sine, lhs.cosine,
+        rhs.position.x, rhs.position.y, rhs.scale.x, rhs.scale.y, rhs.sine, rhs.cosine,
+        &out.position.x, &out.position.y, &out.scale.x, &out.scale.y, &out.sine, &out.cosine
     );
     return out;
 }
@@ -1614,14 +1601,13 @@ Transform2D transform3d_to_transform2d(Transform3D transform){
     result.scale.y = transform.scale.y;
     result.sine = f32_sin(rot_rad);
     result.cosine = f32_cos(rot_rad);
-    result.rotation = rot_rad;
     return result;
 }
 
 void transform_scalar_transform2d(
-    f32 lhs_pos_x, f32 lhs_pos_y, f32 lhs_scale_x, f32 lhs_scale_y, f32 lhs_sine, f32 lhs_cosine, f32 lhs_rot_radii,
-    f32 rhs_pos_x, f32 rhs_pos_y, f32 rhs_scale_x, f32 rhs_scale_y, f32 rhs_sine, f32 rhs_cosine, f32 rhs_rot_radii,
-    f32* out_pos_x, f32* out_pos_y, f32* out_scale_x, f32* out_scale_y, f32* out_sine, f32* out_cosine, f32* out_rot_radii
+    f32 lhs_pos_x, f32 lhs_pos_y, f32 lhs_scale_x, f32 lhs_scale_y, f32 lhs_sine, f32 lhs_cosine,
+    f32 rhs_pos_x, f32 rhs_pos_y, f32 rhs_scale_x, f32 rhs_scale_y, f32 rhs_sine, f32 rhs_cosine,
+    f32* out_pos_x, f32* out_pos_y, f32* out_scale_x, f32* out_scale_y, f32* out_sine, f32* out_cosine
 ){
     // scale the local offset relative to the world.
     f32 sx = lhs_pos_x * rhs_scale_x;
@@ -1648,15 +1634,14 @@ void transform_scalar_transform2d(
     //          cos(a + b) = cos(a)cos(b) - sin(a)sin(b)
     *out_sine = (lhs_sine * rhs_cosine) + (lhs_cosine * rhs_sine);
     *out_cosine = (lhs_cosine * rhs_cosine) + (lhs_sine * rhs_sine);
-    *out_rot_radii = lhs_rot_radii + rhs_rot_radii;
 }
 
 Transform2D transform_transform2d(Transform2D lhs, Transform2D rhs){
     Transform2D res;
     transform_scalar_transform2d(
-        lhs.position.x, lhs.position.y, lhs.scale.x, lhs.scale.y, lhs.sine, lhs.cosine, lhs.rotation,
-        rhs.position.x, rhs.position.y, rhs.scale.x, rhs.scale.y, rhs.sine, rhs.cosine, rhs.rotation,
-        &res.position.x, &res.position.y, &res.scale.x, &res.scale.y, &res.sine, &res.cosine, &res.rotation
+        lhs.position.x, lhs.position.y, lhs.scale.x, lhs.scale.y, lhs.sine, lhs.cosine,
+        rhs.position.x, rhs.position.y, rhs.scale.x, rhs.scale.y, rhs.sine, rhs.cosine,
+        &res.position.x, &res.position.y, &res.scale.x, &res.scale.y, &res.sine, &res.cosine
     );
     return res;
 }

@@ -2446,9 +2446,9 @@ void fizx_shape_init_finalise(
     BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
     Soa_Transform2D* global_transforms = &state->entities.global_transform;
     transform2d_transform_scalar(
-        local_transform.position.x, local_transform.position.y, local_transform.scale.x, local_transform.scale.y, local_transform.sine, local_transform.cosine, local_transform.rotation,
-        global_transforms->position.x[body_idx], global_transforms->position.y[body_idx], global_transforms->scale.x[body_idx], global_transforms->scale.y[body_idx], global_transforms->sine[body_idx], global_transforms->cosine[body_idx], global_transforms->rotation[body_idx],
-        &global_transforms->position.x[shape_idx], &global_transforms->position.y[shape_idx], &global_transforms->scale.x[shape_idx], &global_transforms->scale.y[shape_idx], &global_transforms->sine[shape_idx], &global_transforms->cosine[shape_idx], &global_transforms->rotation[shape_idx]
+        local_transform.position.x, local_transform.position.y, local_transform.scale.x, local_transform.scale.y, local_transform.sine, local_transform.cosine,
+        global_transforms->position.x[body_idx], global_transforms->position.y[body_idx], global_transforms->scale.x[body_idx], global_transforms->scale.y[body_idx], global_transforms->sine[body_idx], global_transforms->cosine[body_idx],
+        &global_transforms->position.x[shape_idx], &global_transforms->position.y[shape_idx], &global_transforms->scale.x[shape_idx], &global_transforms->scale.y[shape_idx], &global_transforms->sine[shape_idx], &global_transforms->cosine[shape_idx]
     );
     fizx_shape_set_local_transform_unsafe(state, shape_idx, local_transform);
 
@@ -3327,7 +3327,6 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                 f32* body_pos_y     = &state->entities.global_transform.position.y[body_index];
                 f32* body_sine      = &state->entities.global_transform.sine[body_index];
                 f32* body_cosine    = &state->entities.global_transform.cosine[body_index];
-                f32* body_rotation  = &state->entities.global_transform.rotation[body_index];
                 f32* body_scale_x   = &state->entities.global_transform.scale.x[body_index];
                 f32* body_scale_y   = &state->entities.global_transform.scale.y[body_index];
                 BOUNDS_CHECK(body_index, state->entities.linear_velocity.length);
@@ -3359,7 +3358,6 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                     // apply rotation.
                     f32 rot_amt = ang_vel * delta_time;
                     rotor_multiply(*body_sine, *body_cosine, rot_amt, body_sine, body_cosine);
-                    *body_rotation = f32_atan2(*body_sine, *body_cosine);
 
                     // offset the body in relation to the center of mass.
                     f32 rot_cos = f32_cos(rot_amt);
@@ -3418,14 +3416,12 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                                 state->entities.local_transform.position.x[shape_idx],    state->entities.local_transform.position.y[shape_idx],
                                 state->entities.local_transform.scale.x[shape_idx],       state->entities.local_transform.scale.y[shape_idx],
                                 state->entities.local_transform.sine[shape_idx],          state->entities.local_transform.cosine[shape_idx],
-                                state->entities.local_transform.rotation[shape_idx],
 
-                                *body_pos_x, *body_pos_y, *body_scale_x, *body_scale_y, *body_sine, *body_cosine, *body_rotation,
+                                *body_pos_x, *body_pos_y, *body_scale_x, *body_scale_y, *body_sine, *body_cosine,
 
                                 &state->entities.global_transform.position.x[shape_idx],  &state->entities.global_transform.position.y[shape_idx],
                                 &state->entities.global_transform.scale.x[shape_idx],     &state->entities.global_transform.scale.y[shape_idx],
-                                &state->entities.global_transform.sine[shape_idx],        &state->entities.global_transform.cosine[shape_idx],
-                                &state->entities.global_transform.rotation[shape_idx]
+                                &state->entities.global_transform.sine[shape_idx],        &state->entities.global_transform.cosine[shape_idx]
                             );
 
                             BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
