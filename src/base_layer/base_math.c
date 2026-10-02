@@ -611,9 +611,6 @@ Vector2 vector2_clamp_to_radius(Vector2 v, f32 radius){
     return v;
 }
 
-
-
-
 Vector2 vector3_to_vector2(Vector3 v){
     return (Vector2){v.x, v.y};
 }

@@ -2221,6 +2221,12 @@ void fizx_body_integrate_shape_properties_unsafe(FIZX_State* state, i32 body_idx
 **/
 void fizx_shape_dealloc_unsafe(FIZX_State* state, i32 shape_idx, bool recalculate_body_center_of_mass){
     BOUNDS_CHECK(shape_idx, state->entities.category_length);
+    
+    // reset callbacks.
+    state->entities.shape_on_enter_callback[shape_idx] = (FIZX_CollisionCallback){0};
+    state->entities.shape_on_sustain_callback[shape_idx] = (FIZX_CollisionCallback){0};
+    state->entities.shape_on_exit_callback[shape_idx] = (FIZX_CollisionCallback){0};
+
     i32 category = state->entities.category[shape_idx];
 
     // decrement the category counter in the state.

@@ -864,7 +864,7 @@ void load_lvl(EntityManager* entity_manager, String file_path){
                     ASSERT(false, "unknown entity type id.");
                 }break;
             }
-            file_data += bytes_consumed;
+            file_data += bytes_consumed + 1; // add 1 to account for the new line character.
         }
         else{
             break;

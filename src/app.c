@@ -150,6 +150,7 @@ void app_main(){
 
 
     bool in_editor_mode = false;
+    Key last_editor_key_pressed = Key_None;
 
     { // update loop
 
@@ -169,7 +170,26 @@ void app_main(){
                 platform_window_update(window_ctx);
                 input_update(delta_time);
                 if(input_is_key_just_pressed(Key_F1)){
-                    in_editor_mode = !in_editor_mode;
+                    if(last_editor_key_pressed == Key_F1){
+                        in_editor_mode = false;
+                        last_editor_key_pressed = Key_None;
+                    }
+                    else{
+                        in_editor_mode = true; 
+                        editor_state.menu = Editor_Menu_EntitySpawner;
+                        last_editor_key_pressed = Key_F1;
+                    }
+                }
+                else if(input_is_key_just_pressed(Key_F2)){
+                    if(last_editor_key_pressed == Key_F2){
+                        in_editor_mode = false;
+                        last_editor_key_pressed = Key_None;
+                    }
+                    else{
+                        in_editor_mode = true; 
+                        editor_state.menu = Editor_Menu_EntityInspector;
+                        last_editor_key_pressed = Key_F2;
+                    }
                 }
             }
 

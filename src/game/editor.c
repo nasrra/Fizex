@@ -27,6 +27,11 @@ typedef enum{
     Editor_ButtonDataStorageType_String
 } Editor_ButtonDataStorageType;
 
+typedef enum{
+    Editor_Menu_EntitySpawner,  
+    Editor_Menu_EntityInspector
+} Editor_Menu;
+
 typedef struct{
     // the type of data stored that the button is displaying.
     Editor_ButtonDataStorageType data_storage_type;
@@ -87,6 +92,7 @@ typedef struct{
     String ui_input_scratch_space;
     GFX_State* gfx_state;
     Editor_EntityManager entity_manager;
+    Editor_Menu menu;
     bool is_typing;
     bool is_init;
 } Editor_State;
@@ -139,7 +145,7 @@ static i32 gfx_clay_element_id = 0;
 #define EDITOR_MAX_STRING_LENGTH 64
 
 #define EDITOR_ENTTY_CLICKABLE_AREA_PASSIVE_COLOUR (GFX_Colour){.r = 0.25f, .g = 0.25f, .b = 0.25f, .a = 1.0f}
-#define EDITOR_ENTTY_CLICKABLE_AREA_ACTIVE_COLOUR  (GFX_Colour){.r = 0.5f, .g = 0.5f, .b = 0.5f, .a = 1.0f}
+#define EDITOR_ENTTY_CLICKABLE_AREA_ACTIVE_COLOUR  (GFX_Colour){.r = 0.77f, .g = 0.77f, .b = 0.77f, .a = 1.0f}
 
 #define EDITOR_MOUSE_BEHAVIOUR_NAVIGATE_KEYBINDING Key_Q
 #define EDITOR_MOUSE_BEHAVIOUR_MOVE_KEYBINDING Key_W
@@ -656,8 +662,15 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
             editor_gfx_state, (Vector2I){.x = editor_gfx_state->window_ctx->width, .y = editor_gfx_state->window_ctx->height}, mouse_backbuffer_position, delta_time,
             input_is_mouse_button_pressed(MouseButton_Left)
         );
-        // gfx_clay_entity_spawner_layout(editor_state, game_state, transient);
-        gfx_clay_entity_inspector_layout(editor_state, game_state, transient);
+        
+        switch(editor_state->menu){
+            case Editor_Menu_EntitySpawner:{
+                gfx_clay_entity_spawner_layout(editor_state, game_state, transient);
+            }break;
+            case Editor_Menu_EntityInspector:{
+                gfx_clay_entity_inspector_layout(editor_state, game_state, transient);
+            }break;
+        }
         gfx_clay_end_layout(editor_gfx_state, delta_time, SPRITE_LAYER_GAME_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
     }
 
@@ -768,6 +781,9 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
             }
             if(input_is_key_just_pressed(EDITOR_MOUSE_BEHAVIOUR_ROTATE_KEYBINDING)){
                 editor_mouse_state->behaviour = Editor_MouseStateBehaviour_Rotate;
+            }
+            if(input_is_key_just_pressed(Key_D)){
+                entity_manager_dealloc_entity(game_entity_manager, editor_mouse_state->selected_game_entity.gid);                 
             }
             
             if(!editor_state->mouse_state.hovering_element){

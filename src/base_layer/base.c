@@ -224,7 +224,7 @@ bool gen_id_allocator_dealloc(GenIdAllocator* allocator, GenId gen_id){
 
     // do nothing if the gen index is stale.
     BOUNDS_CHECK(index, allocator->length);
-    if(allocator->gen_ids[index] != gen_id){
+    if(gen_id == 0 || allocator->gen_ids[index] != gen_id){
         return false;
     }
 
