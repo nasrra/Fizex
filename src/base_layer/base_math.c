@@ -2642,7 +2642,7 @@ bool polygon_overlaps_circle_scalar(
     // this is so that the resolution code will always push A out of B
     // and not push the two i32o each other when a smaller depth is found when
     // looping through rect B.
-    if(vector2_dot_scalar(dist_x, dist_x, *out_normal_x,  *out_normal_y) >= 0){
+    if(vector2_dot_scalar(dist_x, dist_y, *out_normal_x,  *out_normal_y) >= 0){
         *out_normal_x *= -1.0f;
         *out_normal_y *= -1.0f;
     }

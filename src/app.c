@@ -68,9 +68,9 @@ void app_main(){
         BOUNDS_CHECK(2, image_textures_init_info_length);
         image_textures_init_info[2] = (GFX_ImageTexturesInitInfo){.width = 640, .height = 360, .max_textures = 2};
         BOUNDS_CHECK(3, image_textures_init_info_length);
-        image_textures_init_info[3] = (GFX_ImageTexturesInitInfo){.width = 16, .height = 16, .max_textures = 24};
+        image_textures_init_info[3] = (GFX_ImageTexturesInitInfo){.width = 1028, .height = 1028, .max_textures = 3};
         BOUNDS_CHECK(4, image_textures_init_info_length);
-        image_textures_init_info[4] = (GFX_ImageTexturesInitInfo){.width = 1028, .height = 1028, .max_textures = 4};
+        image_textures_init_info[4] = (GFX_ImageTexturesInitInfo){.width = 2048, .height = 2048, .max_textures = 4};
 
         /**
             context.
@@ -110,30 +110,18 @@ void app_main(){
     { // load assets.
 
         String file_path = {0};
-        string_init(&file_path, transient, 48);
+        string_init(&file_path, transient, 512);
 
         { // load textures.
-
             string_clear(&file_path);
-            string_push_chars(&file_path, "assets/sprites/test-sheet.png", 29);
-            gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_TEST_SHEET);
-            gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_TEST_SHEET);
-
-            string_clear(&file_path);
-            string_push_chars(&file_path, "assets/sprites/sling_shot.png", 29);
-            gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_SLING_SHOT);
-            gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_SLING_SHOT);
-
-            string_clear(&file_path);
-            string_push_chars(&file_path, "assets/sprites/wood block.png", 29);
-            gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_WOOD_BLOCK);
-            gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_WOOD_BLOCK);
+            string_push_chars(&file_path, "assets/sprites/GameBoard.png", 28);
+            gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_GAME_BOARD);
+            gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_GAME_BOARD);
 
             string_clear(&file_path);
             string_push_chars(&file_path, "assets/fonts/PixelOperatorSC-Bold.ttf", 37);
             gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_FONT);
             gfx_load_font_texture(&gfx_state, transient, VIRTUAL_TEXTURE_ID_FONT, 24, 32, 12);
-
         }
 
         { // load level.

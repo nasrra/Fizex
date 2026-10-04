@@ -110,7 +110,7 @@ typedef struct{
     f32* restitution;
     i32 length;
     bool is_init;
-} FIZX_Soa_FIZX_Material;
+} FIZX_Soa_Material;
 
 typedef enum {
 
@@ -232,7 +232,7 @@ typedef struct{
         `remarks`
         Elements are accessed via `entity_idx`.
     **/
-    FIZX_Soa_FIZX_Material material;
+    FIZX_Soa_Material material;
     /**
         the angular velocities for all rigidentities.
 
@@ -805,13 +805,13 @@ void fizx_material_init(FIZX_Material* material, f32 static_friction, f32 kinema
 
 
 /**====================
-    functions: FIZX_Soa_FIZX_Material.
+    functions: FIZX_Soa_Material.
 ====================**//**/
 
 
 
 
-void fizx_soa_material_init(FIZX_Soa_FIZX_Material* soa, MemoryArena* arena, i32 length){
+void fizx_soa_material_init(FIZX_Soa_Material* soa, MemoryArena* arena, i32 length){
     ASSERT(!soa->is_init, "soa already init.");
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->static_friction, &soa->length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->kinetic_friction, &soa->length, length);
@@ -820,7 +820,7 @@ void fizx_soa_material_init(FIZX_Soa_FIZX_Material* soa, MemoryArena* arena, i32
     soa->is_init = true;
 }
 
-void fizx_soa_material_insert(FIZX_Soa_FIZX_Material* soa, f32 static_friction, f32 kinetic_friction, f32 density, f32 restitution, i32 insert_index){
+void fizx_soa_material_insert(FIZX_Soa_Material* soa, f32 static_friction, f32 kinetic_friction, f32 density, f32 restitution, i32 insert_index){
     FIZX_ASSERT_KINETIC_FRICTION_IN_RANGE(kinetic_friction);
     FIZX_ASSERT_STATIC_FRICTION_IN_RANGE(static_friction, kinetic_friction);
     FIZX_ASSERT_DENSITY_IN_RANGE(density);
@@ -980,7 +980,9 @@ inline void fizx_resolve_rigid_collisions(
             resolve rigid collision rotational
         **/
         if(owner_rotational_response || other_rotational_response){
-            f32 restitution = MIN(owner_restitution, other_restitution);
+            // f32 restitution = MIN(owner_restitution, other_restitution);
+            // note: this is okay as it is assumed that restitution is between 0 and 1.
+            f32 restitution = (owner_restitution + other_restitution) * 0.5f;
 
             for(i32 j = 0; j < contact_points_count; j++){
                 f32 contact_point_x = contact_points_x_scratch_space[j];
@@ -1093,7 +1095,9 @@ inline void fizx_resolve_rigid_collisions(
                 if(magnitude > 0){
                     continue;
                 }
-                f32 restitution = MIN(owner_restitution, other_restitution);
+                // f32 restitution = MIN(owner_restitution, other_restitution);
+                // note: this is okay as it is assumed that restitution is between 0 and 1.
+                f32 restitution = (owner_restitution + other_restitution) * 0.5f;
                 f32 impulse_magnitude = -(1.0f + restitution) * magnitude;
                 impulse_magnitude /= owner_inverse_mass + other_inverse_mass;
                 // divide by the contact point count to ensure that impulse is evenly spread across all contact points.
@@ -1128,7 +1132,7 @@ inline void fizx_resolve_rigid_collisions(
         /**
             resolve rigid collision friction.
         **/
-        {
+        {   
             /**
                 get an approximation of the friction values.
                 this is faster than the actual physics way.
@@ -1170,6 +1174,24 @@ inline void fizx_resolve_rigid_collisions(
                 f32 tangent_y = relative_velocity_y - relative_dot_normal * inverse_normal_y;
 
                 if(f32_nearly_equal((tangent_x * tangent_x) + (tangent_y * tangent_y), 0, 1e-12f)){
+                    
+                    /**
+                        if there's no sideways motion between the two bodies (a head-on hit),
+                        we skip friction for this contact point.
+                    
+                        but the friction step reuses the same arrays as the bounce step.
+                        skipping without clearing them means the leftover bounce push is still
+                        sitting there, and gets applied a second time as if it were friction.
+                        that's what launches the body.
+                    
+                        so: zero the impulse before skipping.
+                    
+                        note: you could clear the two arrays before the loop, but the above problem only 
+                        arises here, so its more concise this way, instead of saying "hey these arrays should be cleared"
+                        at the start; this directly outlines WHY it should be cleared.
+                    **/
+                    impulses_x_scratch_space[j] = 0;
+                    impulses_y_scratch_space[j] = 0;
                     continue;
                 }
 

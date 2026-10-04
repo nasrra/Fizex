@@ -427,18 +427,19 @@ char input_get_latest_active_key_character(){
     bool capslock = input_key_down_state[(size_t)Key_Capslock];
     switch(input_latest_active_key){
         default:
-        case Key_None:   return '\0';
-        case Key_1:      return shift ? '!' : '1';
-        case Key_2:      return shift ? '@' : '2';
-        case Key_3:      return shift ? '#' : '3';
-        case Key_4:      return shift ? '$' : '4';
-        case Key_5:      return shift ? '%' : '5';
-        case Key_6:      return shift ? '^' : '6';
-        case Key_7:      return shift ? '&' : '7';
-        case Key_8:      return shift ? '*' : '8';
-        case Key_9:      return shift ? '(' : '9';
-        case Key_0:      return shift ? ')' : '0';
-        case Key_Period: return shift ? '>' : '.';
+        case Key_None:      return '\0';
+        case Key_1:         return !shift ? '1' : '!';
+        case Key_2:         return !shift ? '2' : '@';
+        case Key_3:         return !shift ? '3' : '#';
+        case Key_4:         return !shift ? '4' : '$';
+        case Key_5:         return !shift ? '5' : '%';
+        case Key_6:         return !shift ? '6' : '^';
+        case Key_7:         return !shift ? '7' : '&';
+        case Key_8:         return !shift ? '8' : '*';
+        case Key_9:         return !shift ? '9' : '(';
+        case Key_0:         return !shift ? '0' : ')';
+        case Key_Period:    return !shift ? '.' : '>';
+        case Key_Minus:     return !shift ? '-' : '_';
     }
 }
 

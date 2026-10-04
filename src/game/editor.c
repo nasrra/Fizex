@@ -114,6 +114,11 @@ typedef struct{
     GenId level_root_entity_gid;
 } SelectLevelButtonOnHoverContext;
 
+typedef struct{
+    Editor_State* editor_state;
+    EntityTypeId entity_type_id;
+} Editor_SpawnEntityButtonOnHoverContext;
+
 
 
 
@@ -214,6 +219,13 @@ CLAY(                                                                           
     Clay_OnHover(on_hover_callback, on_hover_user_data);                                                                            \
     CLAY_TEXT(clay_string_name, GFX_CLAY_TEXT_CONFIG);                                                                              \
 }
+
+#define GFX_CLAY_SPAWN_ENTITY_BUTTON(_clay_string_name, _horizontal_percent_size, _vertical_percent_size, _transient_arena, _editor_state, _entity_type_id)do{      \
+    Editor_SpawnEntityButtonOnHoverContext GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx = {.editor_state = _editor_state, .entity_type_id = _entity_type_id};                   \
+    void* GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx_ptr;                                                                                                                     \
+    MEMORY_ARENA_PUSH_STRUCT(_transient_arena, GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx, GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx_ptr);                                             \
+    GFX_CLAY_BUTTON(_clay_string_name, _horizontal_percent_size, _vertical_percent_size, editor_spawn_entity_button_on_hover, GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx_ptr);\
+}while(0)                                                                                                                                                           \
 
 /*
     `typed example`
@@ -322,32 +334,11 @@ void editor_input_field_on_hover(Clay_ElementId element_id, Clay_PointerData poi
     }
 }
 
-void editor_select_red_bird_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    Editor_State* editor_state = (Editor_State*)user_data;
+void editor_spawn_entity_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    Editor_SpawnEntityButtonOnHoverContext* ctx = (Editor_SpawnEntityButtonOnHoverContext*)user_data;
     if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        editor_state->mouse_state.entity_to_spawn = EntityTypeId_RedBird;
-    }
-}
-
-void editor_select_yellow_bird_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    Editor_State* editor_state = (Editor_State*)user_data;
-    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        editor_state->mouse_state.entity_to_spawn = EntityTypeId_YellowBird;
-    }
-}
-
-void editor_select_wood_block_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    Editor_State* editor_state = (Editor_State*)user_data;
-    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        editor_state->mouse_state.entity_to_spawn = EntityTypeId_WoodBlock;
-    }
-}
-
-void editor_select_pig_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    Editor_State* editor_state = (Editor_State*)user_data;
-    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        editor_state->mouse_state.entity_to_spawn = EntityTypeId_Pig;
-    }
+        ctx->editor_state->mouse_state.entity_to_spawn = ctx->entity_type_id;
+    }    
 }
 
 void editor_save_level_entity_recurssive(
@@ -457,7 +448,8 @@ void editor_on_hover_save_level_button(Clay_ElementId element_id, Clay_PointerDa
             .length = LEVEL_FILE_LINE_LENGTH
         };
         char* char_scratch_space = (char[512]){0};
-        String file_path = {.chars = "assets/saved.scsv", .length = 17, .count = 17};
+        // String file_path = {.chars = "assets/saved.scsv", .length = 17, .count = 17};
+        String file_path = {.chars = "../assets/saved.scsv", .length = 20, .count = 20};
         platform_delete_file(file_path);
 
         editor_save_level_entity_recurssive(
@@ -510,10 +502,24 @@ void gfx_clay_entity_spawner_layout(Editor_State* editor_state, GameState* game_
         }
 
         GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
-            GFX_CLAY_BUTTON(CLAY_STRING("Red Bird"), button_width, button_height, editor_select_red_bird_button_on_hover, editor_state);
-            GFX_CLAY_BUTTON(CLAY_STRING("Yellow Bird"), button_width, button_height, editor_select_yellow_bird_button_on_hover, editor_state);
-            GFX_CLAY_BUTTON(CLAY_STRING("Wood Block"), button_width, button_height, editor_select_wood_block_button_on_hover, editor_state);
-            GFX_CLAY_BUTTON(CLAY_STRING("Pig"), button_width, button_height, editor_select_pig_button_on_hover, editor_state);
+            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Wall"), button_width, button_height, transient, editor_state, EntityTypeId_Wall);
+            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Cue"), button_width, button_height, transient, editor_state, EntityTypeId_BallCue);
+            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball One"), button_width, button_height, transient, editor_state, EntityTypeId_BallOne);
+            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Two"), button_width, button_height, transient, editor_state, EntityTypeId_BallTwo);
+            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Three"), button_width, button_height, transient, editor_state, EntityTypeId_BallThree);
+        }
+        
+        GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Four"), button_width, button_height, transient, editor_state, EntityTypeId_BallFour);
+            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Five"), button_width, button_height, transient, editor_state, EntityTypeId_BallFive);
+            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Six"), button_width, button_height, transient, editor_state, EntityTypeId_BallSix);
+            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Seven"), button_width, button_height, transient, editor_state, EntityTypeId_BallSeven);
+            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Eight"), button_width, button_height, transient, editor_state, EntityTypeId_BallEight);
+        }
+
+        GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Nine"), button_width, button_height, transient, editor_state, EntityTypeId_BallNine);
+            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Zero"), button_width, button_height, transient, editor_state, EntityTypeId_BallZero);
         }
 
         GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
@@ -570,7 +576,7 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                 // position-y.
                 position_y_string.length = snprintf((char*)position_y_string.chars, max_chars, "%f", entity->transform.position.y);
                 ASSERT(position_y_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Position Y"), position_x_string, 0.75f, 0.05f, editor_state, (void*)(&entity->transform.position.y), Editor_ButtonDataStorageType_F32, transient);
+                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Position Y"), position_y_string, 0.75f, 0.05f, editor_state, (void*)(&entity->transform.position.y), Editor_ButtonDataStorageType_F32, transient);
                 
                 // scale-x.
                 scale_x_string.length = snprintf((char*)scale_x_string.chars, max_chars, "%f", entity->transform.scale.x);
@@ -913,47 +919,13 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                                 return;
                             }
         
-                            switch(editor_state->mouse_state.entity_to_spawn){
-                                case EntityTypeId_RedBird:{
-                                    entity_spawn_red_bird(
-                                        game_entity_manager,
-                                        (String){.chars = "spawned red bird", .length = 16, .count = 16},
-                                        spawn_transform,
-                                        editor_state->mouse_state.entity_to_spawn_parent_gid
-                                    );
-                                }break;
-                                case EntityTypeId_YellowBird:{
-                                    entity_spawn_yellow_bird(
-                                        game_entity_manager,
-                                        (String){.chars = "spawned yellow bird", .length = 19, .count = 19},
-                                        spawn_transform,
-                                        editor_state->mouse_state.entity_to_spawn_parent_gid
-                                    );
-                                }break;
-                                case EntityTypeId_WoodBlock:{
-                                    entity_spawn_wood_block(
-                                        game_entity_manager,
-                                        (String){.chars = "spawned wood block", .length = 18, .count = 18},
-                                        spawn_transform,
-                                        editor_state->mouse_state.entity_to_spawn_parent_gid
-                                    );
-                                }break;
-                                case EntityTypeId_LevelRoot:{
-                                    entity_spawn_level_root(
-                                        game_entity_manager,
-                                        (String){.chars = "spawned level", .length = 16, .count = 16},
-                                        spawn_transform,
-                                        editor_state->mouse_state.entity_to_spawn_parent_gid
-                                    );
-                                }break;
-                                case EntityTypeId_Pig:{
-                                    entity_spawn_pig(
-                                        game_entity_manager,
-                                        (String){.chars = "spawned pig", .length = 11, .count = 11},
-                                        spawn_transform,
-                                        editor_state->mouse_state.entity_to_spawn_parent_gid);
-                                }break;
-                            }
+                            entity_spawn(
+                                game_entity_manager, 
+                                editor_mouse_state->entity_to_spawn,
+                                (String){.chars = "entity", .length = 6, .count = 6}, 
+                                spawn_transform, 
+                                editor_state->mouse_state.entity_to_spawn_parent_gid
+                            );        
                         }
                     }break;
                     case Editor_MouseStateBehaviour_Move:{
