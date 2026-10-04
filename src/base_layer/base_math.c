@@ -1286,6 +1286,9 @@ Matrix4x4 transform3d_to_matrix4x4(Transform3D transform){
 }
 
 
+///
+/// functions: FsSoa_Vector2
+///
 
 
 bool fssoa_vector2_init(FsSoa_Vector2* soa, MemoryArena* arena, i32 chunk_stride, i32 chunk_length){
@@ -1329,6 +1332,23 @@ void fssoa_vector2_clear_chunk_count(FsSoa_Vector2* soa, i32 chunk_index){
     soa->chunk_count[chunk_index] = 0;
 }
 
+void fssoa_vector2_clear_chunk(FsSoa_Vector2* soa, i32 chunk_idx){
+    i32 element_idx = chunk_idx * soa->chunk_stride;
+    BOUNDS_CHECK(element_idx, soa->x_length);
+    BOUNDS_CHECK(element_idx + soa->chunk_stride - 1, soa->x_length);
+    BOUNDS_CHECK(element_idx, soa->y_length);
+    BOUNDS_CHECK(element_idx + soa->chunk_stride - 1, soa->y_length);
+    ZERO_MEMORY(soa->x + element_idx, sizeof(*soa->x) * soa->chunk_stride);
+    ZERO_MEMORY(soa->y + element_idx, sizeof(*soa->y) * soa->chunk_stride);
+    fssoa_vector2_clear_chunk_count(soa, chunk_idx);
+}
+
+
+///
+/// functions: Soa_Vector2
+///
+
+
 void soa_vector2_init(Soa_Vector2* soa, MemoryArena* arena, i32 length){
     ASSERT(!soa->is_init, "already init");
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->x, &soa->length, length);
@@ -1356,6 +1376,12 @@ bool soa_vector2_push(Soa_Vector2* soa, f32 x, f32 y){
 
 void soa_vector2_reset_count(Soa_Vector2* soa){
     soa->count = 0;
+}
+
+void soa_vector2_clear_element(Soa_Vector2* soa, i32 elem_idx){
+    BOUNDS_CHECK(elem_idx, soa->length);
+    soa->x[elem_idx] = 0;
+    soa->y[elem_idx] = 0;
 }
 
 
@@ -1528,6 +1554,14 @@ Transform3D transform2d_to_transform3d(Transform2D transform){
     return result;
 }
 
+void soa_transform2d_clear_element(Soa_Transform2D* soa, i32 elem_idx){
+    soa_vector2_clear_element(&soa->position, elem_idx);
+    soa_vector2_clear_element(&soa->scale, elem_idx);
+    BOUNDS_CHECK(elem_idx, soa->length);
+    soa->sine[elem_idx] = 0.0f;
+    soa->cosine[elem_idx] = 0.0f;
+}
+
 /**
     Offsets a transform2d by another.
 
@@ -1681,6 +1715,12 @@ Vector2 closest_point_line_segmenet(Vector2 line_start, Vector2 line_end, Vector
     return result;
 }
 
+
+///
+/// functions: Soa_Aabb.
+///
+
+
 void soa_aabb_init(Soa_Aabb* soa, MemoryArena* arena, i32 length){
     ASSERT(!soa->is_init, "already init");
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->max_x, &soa->length, length);
@@ -1721,6 +1761,15 @@ void soa_aabb_calculate_centroids(Soa_Aabb* soa, f32* out_x, f32* out_y){
 
     simd_f32_add(out_y, soa->max_y, soa->min_y, soa->length, 0);
     simd_f32_mul_val(out_y, out_y, 0.5f, soa->length, 0);
+}
+
+void soa_aabb_clear_element(Soa_Aabb* soa, i32 elem_idx){
+    
+    BOUNDS_CHECK(elem_idx, soa->length);
+    soa->min_x[elem_idx] = 0;
+    soa->min_y[elem_idx] = 0;
+    soa->max_x[elem_idx] = 0;
+    soa->max_y[elem_idx] = 0;
 }
 
 

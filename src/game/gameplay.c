@@ -34,7 +34,8 @@ typedef enum{
     EntityTypeId_BallSeven      = 10,
     EntityTypeId_BallEight      = 11,
     EntityTypeId_BallNine       = 12,
-    EntityTypeId_BallZero       = 13
+    EntityTypeId_BallZero       = 13,
+    EntityTypeId_Pocket         = 14
 } EntityTypeId;
 
 typedef struct{
@@ -166,9 +167,8 @@ typedef struct{
 ///
 
 #define PHYSICS_LAYER_ALL I32_MAX
-#define PHYSICS_LAYER_PLAYER (1 << 1)
-#define PHYSICS_LAYER_ENEMY (1 << 2)
-#define PHYSICS_LAYER_ENVIRONMENT (1 << 3)
+#define PHYSICS_LAYER_BALL (1 << 1)
+#define PHYSICS_LAYER_ENVIRONMENT (1 << 2)
 
 ///
 /// Virtual Texture ID.
@@ -191,6 +191,7 @@ typedef struct{
 #define TEXTURE_VIEW_BALL_EIGHT (GFX_TextureView){.top_left = {1152, 0}, .bot_right = {1280, 128}}
 #define TEXTURE_VIEW_BALL_NINE  (GFX_TextureView){.top_left = {1280, 0}, .bot_right = {1408, 128}}
 #define TEXTURE_VIEW_BALL_ZERO  (GFX_TextureView){.top_left = {1408, 0}, .bot_right = {1536, 128}}
+#define TEXTURE_VIEW_POCKET     (GFX_TextureView){.top_left = {128, 0}, .bot_right = {256, 128}}
 
 #define FONT_HEIGHT_IN_PIXELS 48
 
@@ -521,58 +522,135 @@ void entity_manager_debug_draw(EntityManager manager, f32 delta_time){
 #endif
 }
 
+void pocket_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
+    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
+    GenId* source_entity_gid = (GenId*)info.source_user_data;
+    
+    if((info.source_layer & PHYSICS_LAYER_BALL) == 0){
+        return;
+    }
+    
+    entity_manager_dealloc_entity(ctx->entity_manager, *source_entity_gid); 
+    platform_output_message("foo!");
+}
+
+GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
+    GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
+    Entity* entity;
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
+        
+        entity->type_id = EntityTypeId_Pocket;
+        string_push(&entity->name, name);
+        entity->transform = transform;
+        
+        { // physics_body_alloc();
+        
+            entity->is_physics_body = true;
+            Circle physics_shape = {.radius = 0.55f};
+            Transform2D physics_shape_transform = TRANSFORM2D_IDENTITY;
+            f32 linear_drag = 0.0f;
+            f32 angular_drag = 0.0f;
+            bool gravity_affected = false;
+            void* shape_user_data = &entity_gid;
+            entity->physics_body_gid = fizx_body_alloc(
+                &entity_manager->fizx_state,
+                entity->transform,
+                linear_drag,
+                angular_drag,
+                gravity_affected
+            );
+            GenId shape_gid = fizx_circle_collider_alloc(
+                &entity_manager->fizx_state,
+                entity->physics_body_gid,
+                physics_shape_transform,
+                FIZX_ShapeBehaviour_Trigger,
+                shape_user_data,
+                PHYSICS_LAYER_ENVIRONMENT,
+                physics_shape
+            );
+            fizx_shape_set_on_enter_callback(
+                &entity_manager->fizx_state,
+                shape_gid,
+                pocket_fizx_shape_on_enter_callback
+            );
+        }
+        
+        { // sprite_alloc();
+            
+            entity->is_sprite = true;
+            entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
+            entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
+            gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, TEXTURE_VIEW_POCKET);
+            gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
+            gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
+            gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
+            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 0.34f, .g = 0.34f, .b = 0.34f, .a = 1.0f});
+            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+            gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
+        }           
+    }
+    return entity_gid;
+}
+
 GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
     // clickable entity (angry bird).
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     entity_manager_get_entity(*entity_manager, entity_gid, &entity);
     {
-        string_clear(&entity->name);
         string_push(&entity->name, name);
-
         entity->type_id = EntityTypeId_BallCue;
         entity->transform = transform;
-        entity->is_physics_body = true;
 
-        Circle circle = {.radius = 0.55f};
+        { // physics_body_alloc();
+
+            entity->is_physics_body = true;
+            Circle circle = {.radius = 0.55f};
+            Transform2D shape_transform = TRANSFORM2D_IDENTITY;
+            entity->physics_body_gid = fizx_body_alloc(
+                &entity_manager->fizx_state, 
+                entity->transform, 
+                BALL_FIZX_BODY_LINEAR_DRAG, 
+                BALL_FIZX_BODY_ANGULAR_DRAG, 
+                false
+            );
+            fizx_circle_rigid_alloc(
+                &entity_manager->fizx_state, 
+                entity->physics_body_gid, 
+                shape_transform, 
+                FIZX_ShapeBehaviour_Dynamic, 
+                &entity_gid, 
+                PHYSICS_LAYER_BALL, 
+                circle, 
+                BALL_FIZX_SHAPE_MATERIAL, 
+                true
+            );
+            fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, false);    
+        }
+
+        { // set_is_clickable();
         
-        Transform2D shape_transform = TRANSFORM2D_IDENTITY;
-        entity->physics_body_gid = fizx_body_alloc(
-            &entity_manager->fizx_state, 
-            entity->transform, 
-            BALL_FIZX_BODY_LINEAR_DRAG, 
-            BALL_FIZX_BODY_ANGULAR_DRAG, 
-            false
-        );
-        GenId entity_shape_gid = fizx_circle_rigid_alloc(
-            &entity_manager->fizx_state, 
-            entity->physics_body_gid, 
-            shape_transform, 
-            FIZX_ShapeBehaviour_Dynamic, 
-            &entity_gid, 
-            PHYSICS_LAYER_PLAYER, 
-            circle, 
-            BALL_FIZX_SHAPE_MATERIAL, 
-            true
-        );
-        
-        fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, false);
+            entity->is_clickable = true;
+            entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};        
+        }
 
-        entity->is_clickable = true;
-        entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
+        { // sprite_alloc();
 
-        entity->is_sprite = true;
-        entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
-        entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
-        gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
-        gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, TEXTURE_VIEW_BALL_CUE);
-        gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
-        gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
-        gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
-        gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
-        gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
-        gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
-        gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
+            entity->is_sprite = true;
+            entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
+            entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
+            gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, TEXTURE_VIEW_BALL_CUE);
+            gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
+            gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
+            gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
+            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
+            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+            gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
+        }
     }
     return entity_gid;
 }
@@ -792,7 +870,7 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, String name, Trans
             shape_transform, 
             FIZX_ShapeBehaviour_Dynamic, 
             &entity_gid, 
-            PHYSICS_LAYER_ENEMY, 
+            PHYSICS_LAYER_BALL, 
             circle, 
             BALL_FIZX_SHAPE_MATERIAL, 
             true
@@ -902,6 +980,9 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String n
         }break;
         case EntityTypeId_BallZero:{
             return entity_spawn_ball_zero(entity_manager, name, transform, parent_gid);
+        }break;
+        case EntityTypeId_Pocket:{
+            return entity_spawn_pocket(entity_manager, name, transform, parent_gid);
         }break;
     }
 }

@@ -2,6 +2,7 @@
     TODO: (nich s)
     - add entity type checks to body and shape functions.
     - deallocating bodies COULD fail at collidsion detection bvh indexing.
+    - change shape user data from deep copying, should instead be just a pointer, user space handles life times.
 **/
 
 
@@ -48,6 +49,8 @@ typedef enum{
     <see cref="PhysicsSystem.FormatCategorisedOverlaps(Howl.CategorisedLeafOverlaps, System.Span{int}, System.Span{int})"/>.
 **/
 typedef enum{
+    FIZX_ShapeCategory_None,
+    _FIZX_ShapeCategory_Padding_0,
     FIZX_ShapeCategory_DynRigPolygon,
     FIZX_ShapeCategory_DynRigCircle,
     FIZX_ShapeCategory_TriRigPolygon,
@@ -99,6 +102,7 @@ typedef enum{
 } FIZX_ContactState;
 
 typedef enum{
+    FIZX_ShapeType_None,
     FIZX_ShapeType_Circle,
     FIZX_ShapeType_Rectangle
 } FIZX_ShapeType;
@@ -117,7 +121,6 @@ typedef enum {
     FIZX_MovementStepConfig_LinearVelocityOnly,
     FIZX_MovementStepConfig_DisplacementOnly,
     FIZX_MovementStepConfig_Full
-
 } FIZX_MovementStepConfig;
 
 typedef enum {
@@ -306,14 +309,6 @@ typedef struct{
     f32* inverse_rotational_inertia;
     i32 inverse_rotational_inertia_length;
     /**
-        The generations of all entities.
-
-        `remarks`
-        Elements are accessed via `entity_idx`.
-    **/
-    i32* generation;
-    i32 generation_length;
-    /**
         The categories of all shapes.
 
         `remarks`
@@ -328,8 +323,8 @@ typedef struct{
         `remarks`
         Elements are accessed via `entity_idx`
     **/
-    i32* bvh_leaf_index;
-    i32 bvh_leaf_index_length;
+    i32* bvh_leaf_idx;
+    i32 bvh_leaf_idx_length;
     /**
         The padding of all shapes to apply to their AABB when inserted into the bvh..
 
@@ -637,9 +632,9 @@ typedef struct{
             COLLISION_DETECTION_owner_leaf_idx = info.owner_leaf_index[COLLISION_DETECTION_i];                                              \
             COLLISION_DETECTION_other_leaf_idx = info.other_leaf_index[COLLISION_DETECTION_i];                                              \
         }                                                                                                                                   \
-        BOUNDS_CHECK(COLLISION_DETECTION_owner_leaf_idx, entities.bvh_leaf_index_length);                                                   \
-        i32 COLLISION_DETECTION_owner_bvh_idx = entities.bvh_leaf_index[COLLISION_DETECTION_owner_leaf_idx];                                \
-        i32 COLLISION_DETECTION_other_bvh_idx = entities.bvh_leaf_index[COLLISION_DETECTION_other_leaf_idx];                                \
+        BOUNDS_CHECK(COLLISION_DETECTION_owner_leaf_idx, entities.bvh_leaf_idx_length);                                                   \
+        i32 COLLISION_DETECTION_owner_bvh_idx = entities.bvh_leaf_idx[COLLISION_DETECTION_owner_leaf_idx];                                \
+        i32 COLLISION_DETECTION_other_bvh_idx = entities.bvh_leaf_idx[COLLISION_DETECTION_other_leaf_idx];                                \
                                                                                                                                             \
         bool COLLISION_DETECTION_broad_phase = fizx_collision_detection_broad_phase(                                                        \
             body_hierarchy, entities.aabb, COLLISION_DETECTION_owner_bvh_idx, COLLISION_DETECTION_other_bvh_idx                             \
@@ -802,13 +797,9 @@ void fizx_material_init(FIZX_Material* material, f32 static_friction, f32 kinema
 }
 
 
-
-
-/**====================
-    functions: FIZX_Soa_Material.
-====================**//**/
-
-
+///
+/// functions: FIZX_Soa_Material.
+///
 
 
 void fizx_soa_material_init(FIZX_Soa_Material* soa, MemoryArena* arena, i32 length){
@@ -831,6 +822,14 @@ void fizx_soa_material_insert(FIZX_Soa_Material* soa, f32 static_friction, f32 k
     soa->kinetic_friction[insert_index] = kinetic_friction;
     soa->density[insert_index] = density;
     soa->restitution[insert_index] = restitution;
+}
+
+void fizx_soa_material_clear_element(FIZX_Soa_Material* soa, i32 elem_idx){
+    BOUNDS_CHECK(elem_idx, soa->length);
+    soa->static_friction[elem_idx] = 0.0f;
+    soa->kinetic_friction[elem_idx] = 0.0f;
+    soa->density[elem_idx] = 0.0f;
+    soa->restitution[elem_idx] = 0.0f;
 }
 
 
@@ -1556,9 +1555,8 @@ void fizx_soa_entity_init(FIZX_Soa_Entity* soa, MemoryArena* arena, i32 length, 
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->global_radius, &soa->global_radius_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->rotational_inertia, &soa->rotational_inertia_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->inverse_rotational_inertia, &soa->inverse_rotational_inertia_length, length);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->generation, &soa->generation_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->category, &soa->category_length, length);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->bvh_leaf_index, &soa->bvh_leaf_index_length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->bvh_leaf_idx, &soa->bvh_leaf_idx_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->bvh_leaf_padding, &soa->bvh_leaf_padding_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->shape_type, &soa->shape_type_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->rotational_response, &soa->rotational_response_length, length);
@@ -1632,7 +1630,7 @@ void fizx_soa_entity_transform_shape_vertices(FIZX_Soa_Entity* soa, i32 shape_id
 
     switch (shape_type){
         default:{
-            ASSERT(false, "shape not implemented");
+            ASSERT(false, "invalid shape");
         }break;
         case FIZX_ShapeType_Rectangle:{
             // set the new min and max vectors.
@@ -1751,7 +1749,7 @@ i32 fizx_shape_get_parent_unsafe(FIZX_State state, i32 shape_idx){
     return state.body_hierarchy.node[shape_idx].parent;
 }
 
-bool fizx_shape_set_on_enter_callback(FIZX_State* state, FIZX_CollisionCallback callback, GenId shape_gid){
+bool fizx_shape_set_on_enter_callback(FIZX_State* state, GenId shape_gid, FIZX_CollisionCallback callback){
     i32 idx = fizx_validate_shape_gen_id(state, shape_gid);
     if(idx == 0){
         ASSERT(false, "invalid shape gid");
@@ -1762,7 +1760,7 @@ bool fizx_shape_set_on_enter_callback(FIZX_State* state, FIZX_CollisionCallback 
     return true;
 }
 
-bool fizx_shape_set_on_sustain_callback(FIZX_State* state, FIZX_CollisionCallback callback, GenId shape_gid){
+bool fizx_shape_set_on_sustain_callback(FIZX_State* state, GenId shape_gid, FIZX_CollisionCallback callback){
     i32 idx = fizx_validate_shape_gen_id(state, shape_gid);
     if(idx == 0){
         ASSERT(false, "invalid shape gid");
@@ -1773,7 +1771,7 @@ bool fizx_shape_set_on_sustain_callback(FIZX_State* state, FIZX_CollisionCallbac
     return true;
 }
 
-bool fizx_shape_set_on_exit_callback(FIZX_State* state, FIZX_CollisionCallback callback, GenId shape_gid){
+bool fizx_shape_set_on_exit_callback(FIZX_State* state, GenId shape_gid, FIZX_CollisionCallback callback){
     i32 idx = fizx_validate_shape_gen_id(state, shape_gid);
     if(idx == 0){
         ASSERT(false, "invalid shape gid");
@@ -1784,7 +1782,7 @@ bool fizx_shape_set_on_exit_callback(FIZX_State* state, FIZX_CollisionCallback c
     return true;
 }
 
-bool fizx_shape_clear_on_enter_callback(FIZX_State* state, FIZX_CollisionCallback callback, GenId shape_gid){
+bool fizx_shape_clear_on_enter_callback(FIZX_State* state, GenId shape_gid){
     i32 idx = fizx_validate_shape_gen_id(state, shape_gid);
     if(idx == 0){
         ASSERT(false, "invalid shape gid");
@@ -1795,7 +1793,7 @@ bool fizx_shape_clear_on_enter_callback(FIZX_State* state, FIZX_CollisionCallbac
     return true;
 }
 
-bool fizx_shape_clear_on_sustain_callback(FIZX_State* state, FIZX_CollisionCallback callback, GenId shape_gid){
+bool fizx_shape_clear_on_sustain_callback(FIZX_State* state, GenId shape_gid){
     i32 idx = fizx_validate_shape_gen_id(state, shape_gid);
     if(idx == 0){
         ASSERT(false, "invalid shape gid");
@@ -1806,7 +1804,7 @@ bool fizx_shape_clear_on_sustain_callback(FIZX_State* state, FIZX_CollisionCallb
     return true;
 }
 
-bool fizx_shape_clear_on_exit_callback(FIZX_State* state, FIZX_CollisionCallback callback, GenId shape_gid){
+bool fizx_shape_clear_on_exit_callback(FIZX_State* state, GenId shape_gid){
     i32 idx = fizx_validate_shape_gen_id(state, shape_gid);
     if(idx == 0){
         ASSERT(false, "invalid shape gid");
@@ -1829,6 +1827,25 @@ void fizx_shape_set_local_transform_unsafe(FIZX_State* state, i32 shape_idx, Tra
     state->entities.local_transform.sine[shape_idx] = transform.sine;
 }
 
+void fizx_entity_clear_collision_information_unsafe(FIZX_State* state, i32 entity_idx){
+    BOUNDS_CHECK(entity_idx, state->collision_manifold.active_index.chunk_count_length);
+    i32* collision_count = &state->collision_manifold.active_index.chunk_count[entity_idx];
+    i32 start_offset = fixed_stride_array_get_element_idx(entity_idx, state->collision_manifold.collider_stride, 0);
+    i32* active_collisions = (i32*)state->collision_manifold.active_index.data;
+    for(i32 i = 0; i < *collision_count; i++){
+        
+        i32 idx = start_offset + i;
+        
+        BOUNDS_CHECK(idx, state->collision_manifold.active_index.data_length);
+        i32 collision_idx = active_collisions[idx];
+        
+        BOUNDS_CHECK(collision_idx, state->collision_manifold.active_phase_length);
+        state->collision_manifold.active_phase[collision_idx] = 0;
+    }
+    ZERO_MEMORY(active_collisions + start_offset, sizeof(i32) * *collision_count);
+    *collision_count = 0;
+}
+
 void fizx_shape_set_active_unsafe(FIZX_State* state, i32 shape_idx, bool is_active){
 
     // set the shape to inactive within the hierarchy.
@@ -1836,29 +1853,11 @@ void fizx_shape_set_active_unsafe(FIZX_State* state, i32 shape_idx, bool is_acti
     state->body_hierarchy.node[shape_idx].is_active = false;
     
     /**
-        TODO:
-        MAKE CLEARING A SHAPE'S COLLISION INFORMATION INTO A FUNCTION.
-    **/
-    /**
         clear all collision information because stale collision/contact states should not be 
         brought forward, when re-enabling the shape. 
     **/
     if(is_active == false){
-        i32* collision_count = &state->collision_manifold.active_index.chunk_count[shape_idx];
-        i32 start_offset = fixed_stride_array_get_element_idx(shape_idx, state->collision_manifold.collider_stride, 0);
-        i32* active_collisions = (i32*)state->collision_manifold.active_index.data;
-        for(i32 i = 0; i < *collision_count; i++){
-            
-            i32 idx = start_offset + i;
-            
-            BOUNDS_CHECK(idx, state->collision_manifold.active_index.data_length);
-            i32 collision_idx = active_collisions[idx];
-            
-            BOUNDS_CHECK(collision_idx, state->collision_manifold.active_phase_length);
-            state->collision_manifold.active_phase[collision_idx] = 0;
-        }
-        ZERO_MEMORY(active_collisions + start_offset, sizeof(i32) * *collision_count);
-        *collision_count = 0;
+        fizx_entity_clear_collision_information_unsafe(state, shape_idx);
     }
 }
 
@@ -1984,13 +1983,13 @@ bool fizx_body_set_local_transform(FIZX_State* state, GenId body_gid, Transform2
 void fizx_body_set_global_transform_unsafe(FIZX_State* state, i32 body_idx, Transform2D transform){
     // set the body transform.    
     BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
-    state->entities.global_transform.position.x[body_idx] = transform.position.x;
-    state->entities.global_transform.position.y[body_idx] = transform.position.y;
-    state->entities.global_transform.scale.x[body_idx] = transform.scale.x;
-    state->entities.global_transform.scale.y[body_idx] = transform.scale.y;
-    state->entities.global_transform.cosine[body_idx] = transform.cosine;
-    state->entities.global_transform.sine[body_idx] = transform.sine;
-
+    state->entities.global_transform.position.x[body_idx]   = transform.position.x;
+    state->entities.global_transform.position.y[body_idx]   = transform.position.y;
+    state->entities.global_transform.scale.x[body_idx]      = transform.scale.x;
+    state->entities.global_transform.scale.y[body_idx]      = transform.scale.y;
+    state->entities.global_transform.cosine[body_idx]       = transform.cosine;
+    state->entities.global_transform.sine[body_idx]         = transform.sine;
+    
     // set its shape(s) transform(s).
     BOUNDS_CHECK(body_idx, state->body_hierarchy.length);
     IntrusiveListNode* node = &state->body_hierarchy.node[body_idx];
@@ -2005,10 +2004,14 @@ void fizx_body_set_global_transform_unsafe(FIZX_State* state, i32 body_idx, Tran
         BOUNDS_CHECK(shape_idx, state->entities.local_transform.length);
         state->entities.global_transform.position.x[shape_idx]    = state->entities.local_transform.position.x[shape_idx] + transform.position.x;
         state->entities.global_transform.position.y[shape_idx]    = state->entities.local_transform.position.y[shape_idx] + transform.position.y;
-        state->entities.global_transform.scale.x[shape_idx]       = state->entities.local_transform.scale.x[shape_idx] + transform.scale.x;
-        state->entities.global_transform.scale.y[shape_idx]       = state->entities.local_transform.scale.y[shape_idx] + transform.scale.y;
+        state->entities.global_transform.scale.x[shape_idx]       = state->entities.local_transform.scale.x[shape_idx] * transform.scale.x;
+        state->entities.global_transform.scale.y[shape_idx]       = state->entities.local_transform.scale.y[shape_idx] * transform.scale.y;
         state->entities.global_transform.cosine[shape_idx]        = state->entities.local_transform.cosine[shape_idx] + transform.cosine;
         state->entities.global_transform.sine[shape_idx]          = state->entities.local_transform.sine[shape_idx] + transform.sine;
+        BOUNDS_CHECK(shape_idx, state->entities.base_radius_length);
+        f32 global_radius = state->entities.base_radius[shape_idx] * MAX(state->entities.global_transform.scale.x[shape_idx], state->entities.global_transform.scale.y[shape_idx]);
+        BOUNDS_CHECK(shape_idx, state->entities.global_radius_length);
+        state->entities.global_radius[shape_idx]                  = global_radius; 
     
         BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
         shape_idx = state->body_hierarchy.node[shape_idx].next_sibling;
@@ -2257,60 +2260,152 @@ void fizx_body_integrate_shape_properties_unsafe(FIZX_State* state, i32 body_idx
 
 }
 
-/**
+/*
     `remarks`:
-    stale id and entity type checks are not enforced; the entity index will always go through the deallocation procedure.
-**/
-void fizx_shape_dealloc_unsafe(FIZX_State* state, i32 shape_idx, bool recalculate_body_center_of_mass){
-    BOUNDS_CHECK(shape_idx, state->entities.category_length);
+    -   stale id and entity type checks are not enforced; the entity index will always go through the deallocation procedure.
+    -   note that when deallocating shapes: recalculation of the shape body's center of mass should be done by calling 
+        `fizx_body_integrate_shape_properties_unsafe(state, body_idx);` after the deallocation of the shape. 
+*/
+void fizx_entity_clear_unsafe(FIZX_State* state, i32 entity_idx){
     
-    // reset callbacks.
-    state->entities.shape_on_enter_callback[shape_idx] = (FIZX_CollisionCallback){0};
-    state->entities.shape_on_sustain_callback[shape_idx] = (FIZX_CollisionCallback){0};
-    state->entities.shape_on_exit_callback[shape_idx] = (FIZX_CollisionCallback){0};
+    { // clear_vertex_data();
+        fssoa_vector2_clear_chunk(&state->entities.base_vertex, entity_idx);
+        fssoa_vector2_clear_chunk(&state->entities.global_vertex, entity_idx);
+    }
+    
+    { // clear_transform_data();
+        soa_transform2d_clear_element(&state->entities.local_transform, entity_idx);
+        soa_transform2d_clear_element(&state->entities.global_transform, entity_idx);
+    }
+    
+    { // clear_vector2s();
 
-    i32 category = state->entities.category[shape_idx];
-
-    // decrement the category counter in the state.
-    switch (category){
-        case FIZX_ShapeCategory_DynRigPolygon: {state->polygon_rigid_count.dynamic -= 1;} break;
-        case FIZX_ShapeCategory_DynRigCircle: {state->circle_rigid_count.dynamic -= 1;} break;
-
-        case FIZX_ShapeCategory_TriRigPolygon: {state->polygon_rigid_count.trigger -= 1;} break;
-        case FIZX_ShapeCategory_TriRigCircle: {state->circle_rigid_count.trigger -= 1;} break;
-
-        case FIZX_ShapeCategory_KinRigPolygon: {state->polygon_rigid_count.kinematic -= 1;} break;
-        case FIZX_ShapeCategory_KinRigCircle: {state->circle_rigid_count.kinematic -= 1;} break;
-
-        case FIZX_ShapeCategory_DynColPolygon: {state->polygon_collider_count.dynamic -= 1;} break;
-        case FIZX_ShapeCategory_DynColCircle: {state->circle_collider_count.dynamic -= 1;} break;
-
-        case FIZX_ShapeCategory_TriColPolygon: {state->polygon_collider_count.trigger -= 1;} break;
-        case FIZX_ShapeCategory_TriColCircle: {state->circle_collider_count.trigger -= 1;} break;
-
-        case FIZX_ShapeCategory_KinColPolygon: {state->polygon_collider_count.kinematic -= 1;} break;
-        case FIZX_ShapeCategory_KinColCircle: {state->circle_collider_count.kinematic -= 1;} break;
-
-        default: {ASSERT(false, "unknwon category.");} break;
+        soa_vector2_clear_element(&state->entities.previous_step_position, entity_idx);
+        soa_vector2_clear_element(&state->entities.force, entity_idx);
+        soa_vector2_clear_element(&state->entities.linear_velocity, entity_idx);
+        soa_vector2_clear_element(&state->entities.centroid, entity_idx);
+        soa_vector2_clear_element(&state->entities.local_center_of_mass, entity_idx);
+        soa_vector2_clear_element(&state->entities.shape_collision_displacement, entity_idx);
+    }
+    
+    { // clear f32s
+        BOUNDS_CHECK(entity_idx, state->entities.angular_velocity_length);
+        state->entities.angular_velocity[entity_idx] = 0.0f;
+        BOUNDS_CHECK(entity_idx, state->entities.mass_length);
+        state->entities.mass[entity_idx] = 0.0f;
+        BOUNDS_CHECK(entity_idx, state->entities.inverse_mass_length);
+        state->entities.inverse_mass[entity_idx] = 0.0f;
+        BOUNDS_CHECK(entity_idx, state->entities.base_width_length);
+        state->entities.base_width[entity_idx] = 0.0f;
+        BOUNDS_CHECK(entity_idx, state->entities.base_height_length);
+        state->entities.base_height[entity_idx] = 0.0f;
+        BOUNDS_CHECK(entity_idx, state->entities.base_radius_length);
+        state->entities.base_radius[entity_idx] = 0.0f;
+        BOUNDS_CHECK(entity_idx, state->entities.global_radius_length);
+        state->entities.global_radius[entity_idx] = 0.0f;
+        BOUNDS_CHECK(entity_idx, state->entities.rotational_inertia_length);
+        state->entities.rotational_inertia[entity_idx] = 0.0f;
+        BOUNDS_CHECK(entity_idx, state->entities.inverse_rotational_inertia_length);
+        state->entities.inverse_rotational_inertia[entity_idx] = 0.0f;
+        BOUNDS_CHECK(entity_idx, state->entities.inverse_rotational_inertia_length);
+        state->entities.inverse_rotational_inertia[entity_idx] = 0.0f;
+        BOUNDS_CHECK(entity_idx, state->entities.bvh_leaf_padding_length);
+        state->entities.bvh_leaf_padding[entity_idx] = 0.0f;
+        BOUNDS_CHECK(entity_idx, state->entities.linear_drag_length);
+        state->entities.linear_drag[entity_idx] = 0.0f;
+        BOUNDS_CHECK(entity_idx, state->entities.angular_drag_length);
+        state->entities.angular_drag[entity_idx] = 0.0f;
+    }
+    
+    { // clear bools.
+        BOUNDS_CHECK(entity_idx, state->entities.gravity_affected_length);
+        state->entities.gravity_affected[entity_idx] = false;
+        BOUNDS_CHECK(entity_idx, state->entities.rotational_response_length);
+        state->entities.rotational_response[entity_idx] = false;    
+        
     }
 
-    fizx_shape_set_active_unsafe(state, shape_idx, false);
-    intrusive_list_remove_node(&state->body_hierarchy, shape_idx, NULL);
-    gen_id_allocator_dealloc_unsafe(&state->gen_id_allocator, shape_idx);
-    if(recalculate_body_center_of_mass){
-        BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
-        i32 body_idx = state->body_hierarchy.node[shape_idx].parent;
-        fizx_body_integrate_shape_properties_unsafe(state, body_idx);
+    { // clear i32s.
+
+        BOUNDS_CHECK(entity_idx, state->entities.bvh_leaf_idx_length);
+        state->entities.bvh_leaf_idx[entity_idx] = 0;
+        BOUNDS_CHECK(entity_idx, state->entities.category_length);
+        state->entities.category[entity_idx] = 0;
+        BOUNDS_CHECK(entity_idx, state->entities.entity_type_length);
+        state->entities.entity_type[entity_idx] = 0;
+        BOUNDS_CHECK(entity_idx, state->entities.layer_length);
+        state->entities.layer[entity_idx] = 0;
+        BOUNDS_CHECK(entity_idx, state->entities.mask_length);
+        state->entities.mask[entity_idx] = 0;
     }
+    
+    { // others();
+        soa_aabb_clear_element(&state->entities.aabb, entity_idx);    
+        fizx_soa_material_clear_element(&state->entities.material, entity_idx);
+        
+        BOUNDS_CHECK(entity_idx, state->entities.shape_type_length);
+        state->entities.shape_type[entity_idx] = FIZX_ShapeType_None;
+            
+        i32 user_data_idx = entity_idx * state->entities.user_data_element_size;          
+        BOUNDS_CHECK(user_data_idx, state->entities.user_data_length);
+        BOUNDS_CHECK(user_data_idx + state->entities.user_data_element_size - 1, state->entities.user_data_length);
+        ZERO_MEMORY(state->entities.user_data + user_data_idx, sizeof(*state->entities.user_data) * state->entities.user_data_element_size);
+    }
+    
+    { // clear_callback_data();
+    
+        state->entities.shape_on_enter_callback[entity_idx] = (FIZX_CollisionCallback){0};
+        state->entities.shape_on_sustain_callback[entity_idx] = (FIZX_CollisionCallback){0};
+        state->entities.shape_on_exit_callback[entity_idx] = (FIZX_CollisionCallback){0};
+    }
+
+    { // decrement_the_category_counter_in_the_state();
+
+
+        i32 category = state->entities.category[entity_idx];
+        switch (category){
+    
+            default: {ASSERT(false, "invalid category.");} break;
+    
+            case FIZX_ShapeCategory_None: {} break; // do nothing.
+    
+            case FIZX_ShapeCategory_DynRigPolygon: {state->polygon_rigid_count.dynamic -= 1;} break;
+            case FIZX_ShapeCategory_DynRigCircle: {state->circle_rigid_count.dynamic -= 1;} break;
+    
+            case FIZX_ShapeCategory_TriRigPolygon: {state->polygon_rigid_count.trigger -= 1;} break;
+            case FIZX_ShapeCategory_TriRigCircle: {state->circle_rigid_count.trigger -= 1;} break;
+    
+            case FIZX_ShapeCategory_KinRigPolygon: {state->polygon_rigid_count.kinematic -= 1;} break;
+            case FIZX_ShapeCategory_KinRigCircle: {state->circle_rigid_count.kinematic -= 1;} break;
+    
+            case FIZX_ShapeCategory_DynColPolygon: {state->polygon_collider_count.dynamic -= 1;} break;
+            case FIZX_ShapeCategory_DynColCircle: {state->circle_collider_count.dynamic -= 1;} break;
+    
+            case FIZX_ShapeCategory_TriColPolygon: {state->polygon_collider_count.trigger -= 1;} break;
+            case FIZX_ShapeCategory_TriColCircle: {state->circle_collider_count.trigger -= 1;} break;
+    
+            case FIZX_ShapeCategory_KinColPolygon: {state->polygon_collider_count.kinematic -= 1;} break;
+            case FIZX_ShapeCategory_KinColCircle: {state->circle_collider_count.kinematic -= 1;} break;
+        } 
+    }
+        
+    // deallocate all collision information about the entity.
+    fizx_entity_clear_collision_information_unsafe(state, entity_idx);
+    
+    // remove from hierarchy.
+    intrusive_list_remove_node(&state->body_hierarchy, entity_idx, NULL);
+    
+    // book keeping.
+    gen_id_allocator_dealloc_unsafe(&state->gen_id_allocator, entity_idx);
 }
 
 bool fizx_shape_dealloc(FIZX_State* state, GenId gid, bool recalculate_body_center_of_mass){
     i32 idx = fizx_validate_shape_gen_id(state, gid);
-    if(idx == 0){
+    if(!idx){
         ASSERT(false, "not a shape gid");
         return false;
     }
-    fizx_shape_dealloc_unsafe(state, idx, recalculate_body_center_of_mass);
+    fizx_entity_clear_unsafe(state, idx);
     return true;
 }
 
@@ -2361,7 +2456,6 @@ GenId fizx_body_alloc(FIZX_State* state, Transform2D global_transform, f32 linea
     stale id and entity type checks are not enforced; the `body_idx` will always go through the deallocation procedure.
 **/
 void fizx_body_dealloc_unsafe(FIZX_State* state, i32 body_idx){
-    gen_id_allocator_dealloc_unsafe(&state->gen_id_allocator, body_idx);
     /**
         deallocate all shapes.
         note the reverse order and starting deallocation at the last child.
@@ -2379,17 +2473,14 @@ void fizx_body_dealloc_unsafe(FIZX_State* state, i32 body_idx){
             if(shape_idx == previous_shape_idx){
                 break;
             }
-            fizx_shape_dealloc_unsafe(state, shape_idx, false);
+            fizx_entity_clear_unsafe(state, shape_idx);
             previous_shape_idx = shape_idx;
             BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
             shape_idx = node[shape_idx].previous_sibling;
         }
     }
 
-    intrusive_list_remove_node(&state->body_hierarchy, body_idx, NULL);
-    BOUNDS_CHECK(body_idx, state->entities.gravity_affected_length);
-    state->entities.gravity_affected[body_idx] = false;
-    fizx_body_set_active_unsafe(state, body_idx, false);
+    fizx_entity_clear_unsafe(state, body_idx);
 }
 
 bool fizx_body_dealloc(FIZX_State* state, GenId gid){
@@ -2408,6 +2499,7 @@ i32 fizx_shape_set_category_unsafe(FIZX_State* state, FIZX_ShapeType shape_type,
     i32* category = &state->entities.category[shape_idx];
 
     switch(shape_type){
+        default:{ASSERT(false, "invalid shape.");}break;
         case FIZX_ShapeType_Rectangle:{
             switch(behaviour){
                 case FIZX_ShapeBehaviour_Dynamic: {*category = is_rigid? FIZX_ShapeCategory_DynRigPolygon : FIZX_ShapeCategory_DynColPolygon;} break;
@@ -2424,7 +2516,6 @@ i32 fizx_shape_set_category_unsafe(FIZX_State* state, FIZX_ShapeType shape_type,
                 default:{ASSERT(false, "unknown shape behaviour.");}break;
             }
         }break;
-        default:{ASSERT(false, "unknown shape category.");}break;
     }
     return *category;
 }
@@ -2565,6 +2656,10 @@ GenId fizx_circle_collider_alloc(FIZX_State* state, GenId body_gid, Transform2D 
         state->entities.inverse_mass[shape_idx] = 0;
         BOUNDS_CHECK(shape_idx, state->entities.base_radius_length);
         state->entities.base_radius[shape_idx] = shape.radius;
+        BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
+        f32 global_radius = MAX(state->entities.global_transform.scale.x[shape_idx], state->entities.global_transform.scale.y[shape_idx]) * shape.radius;
+        BOUNDS_CHECK(shape_idx, state->entities.global_radius_length);
+        state->entities.global_radius[shape_idx] = global_radius;
     }
 
     fizx_shape_init_finalise(state, local_transform, &shape.x, &shape.y, 1, shape_idx, body_idx, false);
@@ -2599,8 +2694,6 @@ GenId fizx_circle_rigid_alloc(FIZX_State* state, GenId body_gid, Transform2D loc
     // integrate properties.
     {
         BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
-        f32 global_pos_x = state->entities.global_transform.position.x[body_idx];
-        f32 global_pos_y = state->entities.global_transform.position.y[body_idx];
         f32 global_radius = MAX(state->entities.global_transform.scale.x[body_idx], state->entities.global_transform.scale.y[body_idx]) * shape.radius;
 
         BOUNDS_CHECK(shape_idx, state->entities.global_radius_length);
@@ -2735,7 +2828,7 @@ GenId fizx_rectangle_rigid_alloc(FIZX_State* state, GenId body_gid, Transform2D 
     `bvhLeafIndices`: the mapping of bvh leaf indices onto a physics body.
     `bvhCategories`: the categories of all physics bodies when being put into the bvh.
 **/
-void fizx_bvh_categorised_leaf_overlaps_format(BvhCategorisedLeafOverlaps* overlaps, i32* bvh_leaf_index, i32 bvh_leaf_index_length, i32* bvh_category, i32 bvh_category_length){
+void fizx_bvh_categorised_leaf_overlaps_format(BvhCategorisedLeafOverlaps* overlaps, i32* bvh_leaf_idx, i32 bvh_leaf_idx_length, i32* bvh_category, i32 bvh_category_length){
     i32 temp;
     i32* owner_leaf;
     i32* other_leaf;
@@ -2751,10 +2844,10 @@ void fizx_bvh_categorised_leaf_overlaps_format(BvhCategorisedLeafOverlaps* overl
                 owner_leaf = &info.owner_leaf_index[w];
                 other_leaf = &info.other_leaf_index[w];
 
-                BOUNDS_CHECK(*owner_leaf, bvh_leaf_index_length);
-                owner_index = bvh_leaf_index[*owner_leaf];
-                BOUNDS_CHECK(*other_leaf, bvh_leaf_index_length);
-                other_index = bvh_leaf_index[*other_leaf];
+                BOUNDS_CHECK(*owner_leaf, bvh_leaf_idx_length);
+                owner_index = bvh_leaf_idx[*owner_leaf];
+                BOUNDS_CHECK(*other_leaf, bvh_leaf_idx_length);
+                other_index = bvh_leaf_idx[*other_leaf];
 
                 BOUNDS_CHECK(owner_index, bvh_category_length);
                 owner_category = bvh_category[owner_index];
@@ -3223,8 +3316,8 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                     i32 leaf_idx = state->bvh.leaves.count;
                     soa_bvh_leaf_push(&state->bvh.leaves, min_x, min_y, max_x, max_y, cx, cy, category);
     
-                    BOUNDS_CHECK(leaf_idx, state->entities.bvh_leaf_index_length);
-                    state->entities.bvh_leaf_index[leaf_idx] = shape_idx;
+                    BOUNDS_CHECK(leaf_idx, state->entities.bvh_leaf_idx_length);
+                    state->entities.bvh_leaf_idx[leaf_idx] = shape_idx;
                 }
     
                 shape_idx = shape_node->next_sibling;
@@ -3238,7 +3331,7 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
         bvh_construct_tree(&state->bvh);
 
         bvh_get_overlaps(state->bvh, &state->overlaps_scratch_buffer);
-        fizx_bvh_categorised_leaf_overlaps_format(&state->overlaps_scratch_buffer, state->entities.bvh_leaf_index, state->entities.bvh_leaf_index_length, state->entities.category, state->entities.category_length);
+        fizx_bvh_categorised_leaf_overlaps_format(&state->overlaps_scratch_buffer, state->entities.bvh_leaf_idx, state->entities.bvh_leaf_idx_length, state->entities.category, state->entities.category_length);
     }
 
     /**
