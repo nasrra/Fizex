@@ -522,7 +522,7 @@ void entity_manager_debug_draw(EntityManager manager, f32 delta_time){
 #endif
 }
 
-void pocket_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
+void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
     GenId* source_entity_gid = (GenId*)info.source_user_data;
     
@@ -530,8 +530,10 @@ void pocket_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_dat
         return;
     }
     
-    entity_manager_dealloc_entity(ctx->entity_manager, *source_entity_gid); 
-    platform_output_message("foo!");
+    if(info.depth >= 0.85f){
+        entity_manager_dealloc_entity(ctx->entity_manager, *source_entity_gid); 
+        platform_output_message("foo!");
+    }    
 }
 
 GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
@@ -568,10 +570,10 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
                 PHYSICS_LAYER_ENVIRONMENT,
                 physics_shape
             );
-            fizx_shape_set_on_enter_callback(
+            fizx_shape_set_on_sustain_callback(
                 &entity_manager->fizx_state,
                 shape_gid,
-                pocket_fizx_shape_on_enter_callback
+                pocket_fizx_shape_on_sustain_callback
             );
         }
         

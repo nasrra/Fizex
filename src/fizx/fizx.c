@@ -2656,13 +2656,15 @@ GenId fizx_circle_collider_alloc(FIZX_State* state, GenId body_gid, Transform2D 
         state->entities.inverse_mass[shape_idx] = 0;
         BOUNDS_CHECK(shape_idx, state->entities.base_radius_length);
         state->entities.base_radius[shape_idx] = shape.radius;
-        BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
-        f32 global_radius = MAX(state->entities.global_transform.scale.x[shape_idx], state->entities.global_transform.scale.y[shape_idx]) * shape.radius;
-        BOUNDS_CHECK(shape_idx, state->entities.global_radius_length);
-        state->entities.global_radius[shape_idx] = global_radius;
     }
 
     fizx_shape_init_finalise(state, local_transform, &shape.x, &shape.y, 1, shape_idx, body_idx, false);
+    
+    BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
+    f32 global_radius = MAX(state->entities.global_transform.scale.x[shape_idx], state->entities.global_transform.scale.y[shape_idx]) * shape.radius;
+    BOUNDS_CHECK(shape_idx, state->entities.global_radius_length);
+    state->entities.global_radius[shape_idx] = global_radius;
+
     return gid;
 }
 
@@ -2693,11 +2695,6 @@ GenId fizx_circle_rigid_alloc(FIZX_State* state, GenId body_gid, Transform2D loc
 
     // integrate properties.
     {
-        BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
-        f32 global_radius = MAX(state->entities.global_transform.scale.x[body_idx], state->entities.global_transform.scale.y[body_idx]) * shape.radius;
-
-        BOUNDS_CHECK(shape_idx, state->entities.global_radius_length);
-        state->entities.global_radius[shape_idx] = global_radius;
 
         BOUNDS_CHECK(shape_idx, state->entities.material.length);
         f32 mass = state->entities.material.density[shape_idx] * circle_get_area_scalar(shape.radius);
@@ -2714,6 +2711,11 @@ GenId fizx_circle_rigid_alloc(FIZX_State* state, GenId body_gid, Transform2D loc
     }
 
     fizx_shape_init_finalise(state, local_transform, &shape.x, &shape.y, 1, shape_idx, body_idx, true);
+
+    BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
+    f32 global_radius = MAX(state->entities.global_transform.scale.x[shape_idx], state->entities.global_transform.scale.y[shape_idx]) * shape.radius;
+    BOUNDS_CHECK(shape_idx, state->entities.global_radius_length);
+    state->entities.global_radius[shape_idx] = global_radius;
 
     return gid;
 }
