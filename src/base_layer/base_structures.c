@@ -834,12 +834,15 @@ inline void bvh_categorised_leaf_overlaps_clear(BvhCategorisedLeafOverlaps* over
 /**
 
     Gets the overlap info between two categories.
+        
 
     `returns`
-    the data that overlaps between the two categories.
+    -   the data that overlaps between the two categories.
+    -   Note that the BvhOverlapInfo `ower_leaf_index` is the highest value category between `category_a` and `category_b`
+        E.g, if `category_a` is 2 and `category_b` is 3, `owner_leaf_index` will be `category_b` data and `other_leaf_index` will be `category_a` data.  
 **/
-BvhOverlapInfo bvh_categorised_leaf_overlaps_get_overlaps(BvhCategorisedLeafOverlaps overlaps, i32 main_category, i32 sub_category){
-    i32 element_index = categorised_overlap_array_get_element_index(main_category, sub_category, overlaps.categories_triangular_sum);
+BvhOverlapInfo bvh_categorised_leaf_overlaps_get_overlaps(BvhCategorisedLeafOverlaps overlaps, i32 category_a, i32 category_b){
+    i32 element_index = categorised_overlap_array_get_element_index(category_a, category_b, overlaps.categories_triangular_sum);
 
     BOUNDS_CHECK(element_index, overlaps.sub_category_start_index_length);
     i32 start_index = overlaps.sub_category_start_index[element_index];

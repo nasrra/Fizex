@@ -123,6 +123,10 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                     };
                     gfx_draw_wire_circle(gfx, shape, colour, info.sprite_layer, info.sprite_depth, info.material_idx);
                 }
+                else if(fizx_shape_category_is_line(category)){
+                    fizx_shape_get_vertices_unsafe(state.entities.global_vertex, shape_idx, &poly_vert_x, &poly_vert_y, &poly_vert_length);
+                    gfx_draw_wire_poly(gfx, poly_vert_x, poly_vert_y, poly_vert_length, colour, info.sprite_layer, info.sprite_depth, info.material_idx);
+                }
                 else{
                     ASSERT(false, "unknown shape category (shape type)");
                 }

@@ -203,9 +203,11 @@ typedef struct{
 #define ABS(val) ((val) < 0 ? (-(val)) : (val))
 #define CLAMP(val, min, max) ((val) < min ? (min) : ((val) > max ? (max) : (val)))
 
-/*========================================
-    functions
-========================================*//**/
+
+///
+/// functions: f32
+///
+
 
 bool f32_nearly_equal(f32 a, f32 b, f32 epsilon){
     /**
@@ -229,192 +231,96 @@ f32 f32_sin(f32 val){
     return sinf(val);
 }
 
-f64 f64_sin(f64 val){
-    return sin(val);
-}
-
 f32 f32_cos(f32 val){
     return cosf(val);
-}
-
-f64 f64_cos(f64 val){
-    return cos(val);
 }
 
 f32 f32_tan(f32 val){
     return tanf(val);
 }
 
-f64 f64_tan(f64 val){
-    return tan(val);
-}
-
 f32 f32_sqrt(f32 val){
     return sqrtf(val);
-}
-
-f64 f64_sqrt(f64 val){
-    return sqrt(val);
 }
 
 f32 f32_atan2(f32 y, f32 x){
     return atan2f(y, x);
 }
 
+/*
+    A rotation update using complex number multiplication (rotors)
+    and a 4th order Taylor Series expansion for delta trigonometry.
+
+    Remarks:
+    This is significantly faster then Vector.SinCos as it avoids
+    heavy transcendental instructions.
+
+    `Accuracy`: High for theta < 90 degrees (1.57 radian) per step.
+    `Stability`: Includes a renormalization pass to prevent f32ing-poi32 drift
+    (scaling/shrinking) over time.
+
+    Parameters:
+    `sin`: the current sine values.</param>
+    `cos`: the current cosing values.</param>
+    `theta`: the angular change in radians: E.g. (angularVelocity * deltaTime).</param>
+    `new_sine`: output for updated sine values.</param>
+    `new_cosine`: oputput for updated cosine values.</param>
+*/
+void rotor_multiply(f32 sine, f32 cosine, f32 theta, f32* new_sine, f32* new_cosine){
+    f32 theta_sqrd = theta * theta;
+
+    // Get Sin/Cos of theta (Small Angle Approximation)
+    f32 sine_delta = theta * (1 - (theta_sqrd * ONE_SIXTH));
+    f32 cosine_delta = 1 - (theta_sqrd * 0.5f) + (theta_sqrd * theta_sqrd * ONE_TWENTY_FOURTH);
+
+    // Complex Multiplication (identity math)
+    // next sin = sin(a)cos(b) + cos(a)sin(b)
+    f32 next_sine = (sine * cosine_delta) + (cosine * sine_delta);
+    // next cos = cos(a)cos(b) - sin(a)sin(b)
+    f32 next_cosine = (cosine * cosine_delta) - (sine * sine_delta);
+
+    // renormalise.
+    // Note: f32ing-poi32 numbers are imprecise, which accumulates the more they
+    // are operated on. Renormalizing (the inv leng part) force the length back
+    // to 1.0, so it doesnt drift and squish or enlargen undeterministically.
+    f32 dot = (next_sine * next_sine) + (next_cosine * next_cosine);
+    f32 inv_len = 1 / sqrtf(dot);
+
+    // --- NAN PROTECTION ---
+    // Define a tiny epsilon to avoid division by zero.
+    if (isnan(inv_len) || 1e-10f > inv_len)
+    {
+        return;
+    }
+
+    *new_sine = next_sine * inv_len;
+    *new_cosine = next_cosine * inv_len;
+}
+
+
+///
+/// functions: f64
+///
+
+
+f64 f64_sin(f64 val){
+    return sin(val);
+}
+
+f64 f64_cos(f64 val){
+    return cos(val);
+}
+
+f64 f64_tan(f64 val){
+    return tan(val);
+}
+
+f64 f64_sqrt(f64 val){
+    return sqrt(val);
+}
+
 f64 f64_atan2(f64 y, f64 x){
     return atan2(y, x);
-}
-
-f32 vector2_dot_scalar(f32 lhs_x, f32 lhs_y, f32 rhs_x, f32 rhs_y){
-    return (lhs_x * rhs_x) + (lhs_y * rhs_y);
-}
-
-f32 vector3_dot_scalar(f32 lhs_x, f32 lhs_y, f32 lhs_z, f32 rhs_x, f32 rhs_y, f32 rhs_z){
-    return (lhs_x * rhs_x) + (lhs_y * rhs_y) + (lhs_z * rhs_z);
-}
-
-f32 vector3_dot(Vector3 lhs, Vector3 rhs){
-    return vector3_dot_scalar(lhs.x, lhs.y, lhs.z, rhs.x, rhs.y, rhs.z);
-}
-
-Transform2D matrix4x4_to_transform2d(Matrix4x4 matrix){
-
-    f32* m = matrix.m;
-    Transform2D transform = TRANSFORM2D_IDENTITY;
-
-    // column 0 `length` is the horizontal scale.
-    transform.scale.x = f32_sqrt(m[0]*m[0] + m[1]*m[1]);
-    transform.scale.y = f32_sqrt(m[4]*m[4] + m[5]*m[5]);
-
-    // undo the scale to get pure rotation back
-    if(transform.scale.y > F32_MIN){
-        transform.cosine = m[0] / transform.scale.x;
-        transform.sine = m[1] / transform.scale.x;
-    }
-
-    transform.position.x = m[12];
-    transform.position.y = m[13];
-
-    return transform;
-}
-
-Matrix4x4 matrix4x4_mul(Matrix4x4 lhs, Matrix4x4 rhs){
-    Matrix4x4 dst = {0};
-    f32* d = dst.m;
-    f32* l = lhs.m;
-    f32* r = rhs.m;
-
-    d[0]  = (l[0] * r[0]) + (l[4] * r[1]) + (l[8]  * r[2]) + (l[12] * r[3]);
-    d[1]  = (l[1] * r[0]) + (l[5] * r[1]) + (l[9]  * r[2]) + (l[13] * r[3]);
-    d[2]  = (l[2] * r[0]) + (l[6] * r[1]) + (l[10] * r[2]) + (l[14] * r[3]);
-    d[3]  = (l[3] * r[0]) + (l[7] * r[1]) + (l[11] * r[2]) + (l[15] * r[3]);
-
-    d[4]  = (l[0] * r[4]) + (l[4] * r[5]) + (l[8]  * r[6]) + (l[12] * r[7]);
-    d[5]  = (l[1] * r[4]) + (l[5] * r[5]) + (l[9]  * r[6]) + (l[13] * r[7]);
-    d[6]  = (l[2] * r[4]) + (l[6] * r[5]) + (l[10] * r[6]) + (l[14] * r[7]);
-    d[7]  = (l[3] * r[4]) + (l[7] * r[5]) + (l[11] * r[6]) + (l[15] * r[7]);
-
-    d[8]  = (l[0] * r[8]) + (l[4] * r[9]) + (l[8]  * r[10]) + (l[12] * r[11]);
-    d[9]  = (l[1] * r[8]) + (l[5] * r[9]) + (l[9]  * r[10]) + (l[13] * r[11]);
-    d[10] = (l[2] * r[8]) + (l[6] * r[9]) + (l[10] * r[10]) + (l[14] * r[11]);
-    d[11] = (l[3] * r[8]) + (l[7] * r[9]) + (l[11] * r[10]) + (l[15] * r[11]);
-
-    d[12] = (l[0] * r[12]) + (l[4] * r[13]) + (l[8]  * r[14]) + (l[12] * r[15]);
-    d[13] = (l[1] * r[12]) + (l[5] * r[13]) + (l[9]  * r[14]) + (l[13] * r[15]);
-    d[14] = (l[2] * r[12]) + (l[6] * r[13]) + (l[10] * r[14]) + (l[14] * r[15]);
-    d[15] = (l[3] * r[12]) + (l[7] * r[13]) + (l[11] * r[14]) + (l[15] * r[15]);
-
-    return dst;
-}
-
-Vector3 vector3_sub(Vector3 lhs, Vector3 rhs){
-    lhs.x -= rhs.x;
-    lhs.y -= rhs.y;
-    lhs.z -= rhs.z;
-    return lhs;
-}
-
-Vector3 vector3_add(Vector3 lhs, Vector3 rhs){
-    lhs.x += rhs.x;
-    lhs.y += rhs.y;
-    lhs.z += rhs.z;
-    return lhs;
-}
-
-Vector3 vector3_mul(Vector3 lhs, Vector3 rhs){
-    lhs.x *= rhs.x;
-    lhs.y *= rhs.y;
-    lhs.z *= rhs.z;
-    return lhs;
-}
-
-Vector3 vector3_mul_val(Vector3 lhs, f32 rhs){
-    lhs.x *= rhs;
-    lhs.y *= rhs;
-    lhs.z *= rhs;
-    return lhs;
-}
-
-Vector3 vector3_div(Vector3 lhs, Vector3 rhs){
-    lhs.x /= rhs.x;
-    lhs.y /= rhs.y;
-    lhs.z /= rhs.z;
-    return lhs;
-}
-
-Vector3 vector3_div_val(Vector3 lhs, f32 rhs){
-    lhs.x /= rhs;
-    lhs.y /= rhs;
-    lhs.z /= rhs;
-    return lhs;
-}
-
-f32 vector3_len_sqrd(Vector3 vector){
-    return (vector.x * vector.x) + (vector.y * vector.y) + (vector.z * vector.z);
-}
-
-f32 vector3_len(Vector3 vector){
-    f32 sqrd = vector3_len_sqrd(vector);
-    return sqrd == 0.0f ? 0.0f : f32_sqrt(sqrd);
-}
-
-Vector3 vector3_clamp_to_radius(Vector3 v, f32 radius){
-    f32 sqr_len = vector3_len_sqrd(v);
-    if(sqr_len > radius * radius){
-        f32 len = f32_sqrt(sqr_len);
-        v = vector3_div_val(v, len);        // normalize
-        v = vector3_mul_val(v, radius);     // scale to radius
-    }
-    return v;
-}
-
-
-
-///
-/// functions: Vector2I
-///
-
-
-
-
-bool vector2i_equals(Vector2I lhs, Vector2I rhs){
-    return lhs.x == rhs.x && lhs.y == rhs.y;
-}
-
-Vector2I vector2i_add(Vector2I lhs, Vector2I rhs){
-    lhs.x += rhs.x;
-    lhs.y += rhs.y;
-    return lhs;
-}
-
-Vector2I vector2i_sub(Vector2I lhs, Vector2I rhs){
-    lhs.x -= rhs.x;
-    lhs.y -= rhs.y;
-    return lhs;
-}
-
-Vector2 vector2i_to_vector2(Vector2I vector){
-    return (Vector2){.x = (f32)vector.x, .y = (f32)vector.y};
 }
 
 
@@ -423,17 +329,29 @@ Vector2 vector2i_to_vector2(Vector2I vector){
 ///
 
 
+f32 vector2_dot_scalar(f32 lhs_x, f32 lhs_y, f32 rhs_x, f32 rhs_y){
+    return (lhs_x * rhs_x) + (lhs_y * rhs_y);
+}
+
 inline bool vector2_equals(Vector2 a, Vector2 b){
     return a.x == b.x && a.y == b.y;
 }
 
-f32 vector2_len_sqrd(Vector2 vector){
-    return (vector.x * vector.x) + (vector.y * vector.y);
+inline f32 vector2_len_sqrd_scalar(f32 x, f32 y){
+     return (x * x) + (y * y);
 }
 
-f32 vector2_len(Vector2 vector){
-    f32 sqrd = vector2_len_sqrd(vector);
+inline f32 vector2_len_sqrd(Vector2 vector){
+    return vector2_len_sqrd_scalar(vector.x, vector.y);
+}
+
+inline f32 vector2_len_scalar(f32 x, f32 y){
+    f32 sqrd = vector2_len_sqrd_scalar(x, y);
     return sqrd == 0.0f ? 0.0f : f32_sqrt(sqrd);
+}
+
+inline f32 vector2_len(Vector2 vector){
+    return vector2_len_scalar(vector.x, vector.y);
 }
 
 Vector2 vector2_get_relative_to_destination_rectangle(Vector2 vector, Rectangle dst_rect, Vector2I dst_resolution){
@@ -607,6 +525,115 @@ Vector2 vector2_clamp_to_radius(Vector2 v, f32 radius){
     return v;
 }
 
+
+///
+/// functions: Vector2I
+///
+
+
+
+
+bool vector2i_equals(Vector2I lhs, Vector2I rhs){
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+
+Vector2I vector2i_add(Vector2I lhs, Vector2I rhs){
+    lhs.x += rhs.x;
+    lhs.y += rhs.y;
+    return lhs;
+}
+
+Vector2I vector2i_sub(Vector2I lhs, Vector2I rhs){
+    lhs.x -= rhs.x;
+    lhs.y -= rhs.y;
+    return lhs;
+}
+
+Vector2 vector2i_to_vector2(Vector2I vector){
+    return (Vector2){.x = (f32)vector.x, .y = (f32)vector.y};
+}
+
+
+///
+/// functions: Vector3
+///
+
+
+f32 vector3_dot_scalar(f32 lhs_x, f32 lhs_y, f32 lhs_z, f32 rhs_x, f32 rhs_y, f32 rhs_z){
+    return (lhs_x * rhs_x) + (lhs_y * rhs_y) + (lhs_z * rhs_z);
+}
+
+f32 vector3_dot(Vector3 lhs, Vector3 rhs){
+    return vector3_dot_scalar(lhs.x, lhs.y, lhs.z, rhs.x, rhs.y, rhs.z);
+}
+
+Vector3 vector3_sub(Vector3 lhs, Vector3 rhs){
+    lhs.x -= rhs.x;
+    lhs.y -= rhs.y;
+    lhs.z -= rhs.z;
+    return lhs;
+}
+
+Vector3 vector3_add(Vector3 lhs, Vector3 rhs){
+    lhs.x += rhs.x;
+    lhs.y += rhs.y;
+    lhs.z += rhs.z;
+    return lhs;
+}
+
+Vector3 vector3_mul(Vector3 lhs, Vector3 rhs){
+    lhs.x *= rhs.x;
+    lhs.y *= rhs.y;
+    lhs.z *= rhs.z;
+    return lhs;
+}
+
+Vector3 vector3_mul_val(Vector3 lhs, f32 rhs){
+    lhs.x *= rhs;
+    lhs.y *= rhs;
+    lhs.z *= rhs;
+    return lhs;
+}
+
+Vector3 vector3_div(Vector3 lhs, Vector3 rhs){
+    lhs.x /= rhs.x;
+    lhs.y /= rhs.y;
+    lhs.z /= rhs.z;
+    return lhs;
+}
+
+Vector3 vector3_div_val(Vector3 lhs, f32 rhs){
+    lhs.x /= rhs;
+    lhs.y /= rhs;
+    lhs.z /= rhs;
+    return lhs;
+}
+
+f32 vector3_len_sqrd(Vector3 vector){
+    return (vector.x * vector.x) + (vector.y * vector.y) + (vector.z * vector.z);
+}
+
+f32 vector3_len(Vector3 vector){
+    f32 sqrd = vector3_len_sqrd(vector);
+    return sqrd == 0.0f ? 0.0f : f32_sqrt(sqrd);
+}
+
+Vector3 vector3_clamp_to_radius(Vector3 v, f32 radius){
+    f32 sqr_len = vector3_len_sqrd(v);
+    if(sqr_len > radius * radius){
+        f32 len = f32_sqrt(sqr_len);
+        v = vector3_div_val(v, len);        // normalize
+        v = vector3_mul_val(v, radius);     // scale to radius
+    }
+    return v;
+}
+
+
+///
+/// functions: Vector3
+///
+
+
 Vector2 vector3_to_vector2(Vector3 v){
     return (Vector2){v.x, v.y};
 }
@@ -622,7 +649,7 @@ Vector3 cross_vector3(Vector3 a, Vector3 b){
 /*
     Rotates a Vector around the origin (0,0,0), by a quaternion rotation.
 */
-Vector3 rotate_vector3(Vector3 v, Quaternion q){
+Vector3 vector3_rotate(Vector3 v, Quaternion q){
     Vector3 q_v;
     q_v.x = q.x;
     q_v.y = q.y;
@@ -641,7 +668,7 @@ Vector3 rotate_vector3(Vector3 v, Quaternion q){
     return result;
 }
 
-Aabb aabb_vector2_add(Aabb aabb, Vector2 vector){
+Aabb aabb_add_vector2(Aabb aabb, Vector2 vector){
     aabb.min_x += vector.x;
     aabb.min_y += vector.y;
     aabb.max_x += vector.x;
@@ -649,7 +676,7 @@ Aabb aabb_vector2_add(Aabb aabb, Vector2 vector){
     return aabb;
 }
 
-Aabb aabb_vector2_sub(Aabb aabb, Vector2 vector){
+Aabb aabb_sub_vector2(Aabb aabb, Vector2 vector){
     aabb.min_x -= vector.x;
     aabb.min_y -= vector.y;
     aabb.max_x -= vector.x;
@@ -657,64 +684,13 @@ Aabb aabb_vector2_sub(Aabb aabb, Vector2 vector){
     return aabb;
 }
 
-bool equal_aabb(Aabb a, Aabb b){
+bool aabb_equals(Aabb a, Aabb b){
     return
     a.min_x == b.min_x
     && a.min_y == b.min_y
     && a.max_x == b.max_x
     && a.max_y == b.max_y;
 }
-
-/*
-    A rotation update using complex number multiplication (rotors)
-    and a 4th order Taylor Series expansion for delta trigonometry.
-
-    Remarks:
-    This is significantly faster then Vector.SinCos as it avoids
-    heavy transcendental instructions.
-
-    `Accuracy`: High for theta < 90 degrees (1.57 radian) per step.
-    `Stability`: Includes a renormalization pass to prevent f32ing-poi32 drift
-    (scaling/shrinking) over time.
-
-    Parameters:
-    `sin`: the current sine values.</param>
-    `cos`: the current cosing values.</param>
-    `theta`: the angular change in radians: E.g. (angularVelocity * deltaTime).</param>
-    `new_sine`: output for updated sine values.</param>
-    `new_cosine`: oputput for updated cosine values.</param>
-*/
-void rotor_multiply(f32 sine, f32 cosine, f32 theta, f32* new_sine, f32* new_cosine){
-    f32 theta_sqrd = theta * theta;
-
-    // Get Sin/Cos of theta (Small Angle Approximation)
-    f32 sine_delta = theta * (1 - (theta_sqrd * ONE_SIXTH));
-    f32 cosine_delta = 1 - (theta_sqrd * 0.5f) + (theta_sqrd * theta_sqrd * ONE_TWENTY_FOURTH);
-
-    // Complex Multiplication (identity math)
-    // next sin = sin(a)cos(b) + cos(a)sin(b)
-    f32 next_sine = (sine * cosine_delta) + (cosine * sine_delta);
-    // next cos = cos(a)cos(b) - sin(a)sin(b)
-    f32 next_cosine = (cosine * cosine_delta) - (sine * sine_delta);
-
-    // renormalise.
-    // Note: f32ing-poi32 numbers are imprecise, which accumulates the more they
-    // are operated on. Renormalizing (the inv leng part) force the length back
-    // to 1.0, so it doesnt drift and squish or enlargen undeterministically.
-    f32 dot = (next_sine * next_sine) + (next_cosine * next_cosine);
-    f32 inv_len = 1 / sqrtf(dot);
-
-    // --- NAN PROTECTION ---
-    // Define a tiny epsilon to avoid division by zero.
-    if (isnan(inv_len) || 1e-10f > inv_len)
-    {
-        return;
-    }
-
-    *new_sine = next_sine * inv_len;
-    *new_cosine = next_cosine * inv_len;
-}
-
 
 /*
     Calculates the sum of all i32egers from <c><paramref name="n"/></c> to 1.
@@ -781,6 +757,474 @@ void rotate_radians(f32 increment, f32 src_radians, f32* dst_radians, f32* out_s
     *dst_radians = src_radians + increment;
     *out_sine = f32_sin(src_radians);
     *out_cosine = f32_cos(src_radians);
+}
+
+
+///
+/// functions: LineSegment
+///
+
+
+void line_segment_closest_point_scalar(
+    f32 line_start_x, f32 line_start_y, f32 line_end_x, f32 line_end_y,
+    f32 query_point_x, f32 query_point_y, f32* out_closest_point_x, f32* out_closest_point_y
+){
+    f32 line_dist_x = line_end_x - line_start_x;
+    f32 line_dist_y = line_end_y - line_start_y;
+    f32 point_dist_x = query_point_x - line_start_x;
+    f32 point_dist_y = query_point_y - line_start_y;
+
+    f32 projection = vector2_dot_scalar(point_dist_x, point_dist_y, line_dist_x, line_dist_y);
+
+    // move the point distance along the line segment.
+    f32 delta = projection / len_sqrd_f32(line_dist_x, line_dist_y);
+
+    if(delta <= 0){
+        *out_closest_point_x = line_start_x;
+        *out_closest_point_y = line_start_y;
+    }
+    else if(delta >= 1){
+        *out_closest_point_x = line_end_x;
+        *out_closest_point_y = line_end_y;
+    }
+    else{
+        *out_closest_point_x = line_start_x + line_dist_x * delta;
+        *out_closest_point_y = line_start_y + line_dist_y * delta;
+    }
+}
+
+/*
+    calculates the closest point along a line segmenet towards the query point.
+*/
+Vector2 line_segmenet_closest_point(Vector2 line_start, Vector2 line_end, Vector2 query_point){
+    Vector2 result;
+    line_segment_closest_point_scalar(
+        line_start.x, line_start.y,
+        line_end.x, line_end.y,
+        query_point.x, query_point.y,
+        &result.x, &result.y
+    );
+    return result;
+}
+
+void line_segment_project_point(
+    f32 line_start_x, f32 line_start_y,
+    f32 line_end_x, f32 line_end_y,
+    f32 point_x, f32 point_y,
+    f32* out_x, f32* out_y
+){
+    f32 ab_x = line_end_x - line_start_x; 
+    f32 ab_y = line_end_y - line_start_y;
+    f32 ap_x = point_x - line_start_x;
+    f32 ap_y = point_y - line_start_y;
+    
+    f32 ab_len_sqrd = ab_x * ab_x + ab_y * ab_y;
+    if(ab_len_sqrd <= 0.0f){
+        *out_x = line_start_x;
+        *out_y = line_start_y;
+    }
+    
+    f32 ap_len_sqrd = ap_x * ap_x + ap_y * ap_y;
+    // t = how far along the 'ab' projection lands; 0 at line_start, 1 at line_end.
+    f32 t = ap_len_sqrd / ab_len_sqrd;
+    CLAMP(t, 0.0f, 1.0f);
+    
+    *out_x = line_start_x + ab_x * t;
+    *out_y = line_start_y + ab_y * t;
+}
+
+/*
+    `remarks`
+    -   it is assumed that line vertex arrays both have a length of two. 
+*/
+bool line_segment_overlaps_polygon(
+    f32 line_start_x, f32 line_start_y,
+    f32 line_end_x, f32 line_end_y,
+    f32* poly_vert_x, f32* poly_vert_y, i32 poly_vert_length,
+    f32 epsilon,
+    f32* out_enter_point_x, f32* out_enter_point_y, 
+    f32* out_exit_point_x, f32* out_exit_point_y,
+    bool* out_has_enter_point, bool* out_has_exit_point,
+    f32* out_normal_x, f32* out_normal_y,
+    f32* out_depth
+){
+
+    /*
+        `remarks`
+        this was copied from Claude; i have absolutely no idea
+        how any of this works :)))
+    */
+
+    f32 d_x = line_end_x - line_start_x;
+    f32 d_y = line_end_y - line_start_y;
+    f32 d_len = f32_sqrt(vector2_dot_scalar(d_x, d_y, d_x, d_y));
+    *out_has_enter_point = false;
+    *out_has_exit_point = false;
+    *out_normal_x = 0.0f;
+    *out_normal_y = 0.0f;
+    *out_depth = 0.0f;
+    
+    f32 enter_normal_x  = 0.0f;
+    f32 enter_normal_y  = 0.0f;
+    f32 enter_distance  = 0.0f;
+    f32 enter_denom     = 0.0f;
+    
+    f32 exit_normal_x  = 0.0f;
+    f32 exit_normal_y  = 0.0f;
+    f32 exit_distance  = 0.0f;
+    f32 exit_denom     = 0.0f;
+    
+    bool has_flat_edge = false;
+    f32 flat_normal_x = 0.0f;
+    f32 flat_normal_y = 0.0f;
+
+    f32 t_enter = -F32_MAX;
+    f32 t_exit = F32_MAX;
+    
+    for(i32 i = 0 ; i < poly_vert_length; i++){
+    
+        // get polygon edge.        
+        f32 edge_start_x = poly_vert_x[i];
+        f32 edge_start_y = poly_vert_y[i];
+        i32 j = (i + 1) % poly_vert_length;
+        f32 edge_end_x = poly_vert_x[j]; 
+        f32 edge_end_y = poly_vert_y[j];
+        f32 edge_x = edge_end_x - edge_start_x;
+        f32 edge_y = edge_end_y - edge_start_y;
+        
+        // get perpendicular.
+        f32 perp_x = -edge_y;
+        f32 perp_y = edge_x;
+        // in the case of counter-clock wise winding of verts:
+        // use the below code instead:
+        //  f32 perp_x = edge_y;
+        //  f32 perp_y = -edge_x;
+        
+        f32 perp_len = vector2_len_scalar(perp_x, perp_y);
+        if(perp_len == 0.0f){ // degenerate edge.
+            continue;
+        }
+        perp_x /= perp_len;
+        perp_y /= perp_len;
+        
+        // dist is the signed distance from the line segment start point.
+        // a positive value means this is the line segment's start point is outside  
+        f32 dist = vector2_dot_scalar(perp_x, perp_y, line_start_x - edge_start_x, line_start_y - edge_start_y);
+        
+        // `denom` is how fast `dist` changes per unit `t`.
+        // negative means the segment is moving against the outward normal,
+        // so it is heading inward. Positive means its heading outward. 
+        f32 denom = vector2_dot_scalar(perp_x, perp_y, d_x, d_y);
+    
+        // as the perpendicular vector is a unit vector, this means that:
+        //  denom = d_len * cos(angle between perpendicular and `d`)
+        // 
+        // we should test whether the cosine is nearly 0, meaning the segment is nearly perpendicular
+        // to the normal; therfore parallel to the edge. Then the segment never crosses
+        // this plane, so there is no 't' to compute. Only on ething matters: which side is it on? 
+        
+        if(ABS(denom) <= epsilon * d_len){
+            if(dist > epsilon){
+                return false;
+            }
+            
+            // when parallel and lying on the polygon's edge (within epsilon): remember this edge's
+            // normal. The neighbouring edges do the clipping, so this edge would
+            // otherwise never contribute a normal.
+            if(dist >= -epsilon){
+                has_flat_edge = true;
+                flat_normal_x = perp_x;
+                flat_normal_y = perp_y;
+            }
+            continue;
+        }
+        
+        f32 t = -dist / denom;
+        if(denom < 0.0f){
+            // the line is heading into the polygon.
+            if(t > t_enter){
+                // this edge is now the latest entry, so store its normal and plane values.
+                t_enter = t;
+                enter_normal_x  = perp_x;
+                enter_normal_y  = perp_y;
+                enter_distance  = dist;
+                enter_denom     = denom;
+            }     
+        }   
+        else{
+            // the line is heading out of the polygon.
+            if(t < t_exit){
+                // this edge is now the earliest exit, so store its normal and plane values.
+                t_exit = t;
+                exit_normal_x   = perp_x;
+                exit_normal_y   = perp_y;
+                exit_distance   = dist;
+                exit_denom      = denom;
+            }
+        }
+        
+        // if the last polygon edge we enter through cames after the first edge the line left through
+        // the inside space is empty, mand the line misses the polygon. This lets us bail out early instead
+        // of checking the remaining edges. The added epsilon value keeps corner-grazing hits, hwere the
+        // two polygon eges are nearly equal, from being rejected by rounding errors / floating point inprecisions.
+        if(t_enter > t_exit + epsilon){
+            return false;
+        }
+    }
+            
+    if(t_enter > 1.0f || t_exit < 0.0f){
+        return false;
+    }
+    
+    // the enter/exit point code was missing, so the has_enter/has_exit flags were never set
+    // to true, and the normal selection below always took the same branch.
+    // t_enter/t_exit must keep their UNCLAMPED values here, since the checks depend on them.
+    if(t_enter >= 0.0f){
+        *out_enter_point_x = line_start_x + d_x * t_enter;
+        *out_enter_point_y = line_start_y + d_y * t_enter;
+        *out_has_enter_point = true;
+    }
+    if(t_exit <= 1.0f){
+        *out_exit_point_x = line_start_x + d_x * t_exit;
+        *out_exit_point_y = line_start_y + d_y * t_exit;
+        *out_has_exit_point = true;
+    }
+    
+    // the line segment lies flat on one of the polygon's edges: use that edge's normal, with no penetration.
+    // This must come before the enter/exit normal, which would otherwise give a neighbouring edge's normal.
+    if(has_flat_edge){
+        *out_normal_x = flat_normal_x;
+        *out_normal_y = flat_normal_y;
+        *out_depth = 0.0f;
+        return true;
+    }
+    
+    f32 t_start = MAX(t_enter, 0.0f);
+    f32 t_end   = MIN(t_exit,  1.0f);
+    
+    // pick the surface to report. Use the entry edge if the line segment entered
+    // through it, or if there is no exit edge either (fully inside). Otherwise the
+    // segment started inside, so use the edge it leaves through.
+    f32 normal_dist;
+    f32 normal_denom;
+    if(*out_has_enter_point || !*out_has_exit_point){
+        *out_normal_x   = enter_normal_x; 
+        *out_normal_y   = enter_normal_y; 
+        normal_dist     = enter_distance; 
+        normal_denom    = enter_denom;
+    }
+    else{
+        *out_normal_x   = exit_normal_x; 
+        *out_normal_y   = exit_normal_y; 
+        normal_dist     = exit_distance; 
+        normal_denom    = exit_denom;
+    }
+    
+    // signed distance of both inside points to the chosen edge's plane
+    // (negative = inside). This reuses the plane equation `dist + denom * t`
+    // from the loop, so there are no extra square roots.
+    f32 dist_a = normal_dist + normal_denom * t_start;
+    f32 dist_b = normal_dist + normal_denom * t_end;
+
+    // depth is how far the deepest inside point is past the chosen edge's plane,
+    // which is the distance to push out along the normal.
+    f32 push = -MIN(dist_a, dist_b);
+    *out_depth = MAX(push, 0.0f);
+    
+    // ricochet direction of the line's travel off the surface.
+    f32 dir_x = line_end_x - line_start_x;
+    f32 dir_y = line_end_y - line_start_y;
+    f32 dir_len = f32_sqrt(dir_x * dir_x + dir_y * dir_y);
+    if(dir_len > 0.0f){
+        dir_x /= dir_len;
+        dir_y /= dir_len;
+    }
+
+    f32 d_dot_n   = dir_x * *out_normal_x + dir_y * *out_normal_y;
+    *out_normal_x = dir_x - 2.0f * d_dot_n * *out_normal_x;
+    *out_normal_y = dir_y - 2.0f * d_dot_n * *out_normal_y;    
+    
+    return true;
+}
+
+bool line_segment_overlaps_circle(
+    f32 line_start_x, f32 line_start_y,
+    f32 line_end_x, f32 line_end_y,
+    f32 circle_x, f32 circle_y, f32 circle_radius,
+    f32 epsilon,
+    f32* out_enter_point_x, f32* out_enter_point_y,
+    f32* out_exit_point_x, f32* out_exit_point_y,
+    bool* out_has_enter_point, bool* out_has_exit_point,
+    f32* out_normal_x, f32* out_normal_y,
+    f32* out_depth
+){
+
+    /*
+        `remarks`
+        this was copied from Claude; i have absolutely no idea
+        how any of this works :)))
+    */
+
+    *out_has_enter_point = false;
+    *out_has_exit_point = false;
+    *out_normal_x = 0.0f;
+    *out_normal_y = 0.0f;
+    *out_depth = 0.0f;
+    if(circle_radius < 0.0f){
+        return false;
+    }
+    
+    f32 d_x = line_end_x - line_start_x;
+    f32 d_y = line_end_y - line_start_y;
+    
+    /* 
+    a point on the line segment is on the cirlce when the distance
+    from the center equals the radius: for |start + d*t - center|^2 = r^2
+    Let f = start - center. Expanding gives |f + d*t|^2 = r^2, which becomes:
+    (d*d) t^2 + 2(f*d) t + (f*f - r^2) = 0
+    */    
+
+    // quadratic coefficients 
+    f32 a = vector2_dot_scalar(d_x, d_y, d_x, d_y);
+    if(a <= 0.0f){ // zero length segment.
+        return false;
+    }
+    
+    // vector from circle center to segment start.
+    f32 f_x = line_start_x - circle_x;
+    f32 f_y = line_start_y - circle_y;
+
+    f32 b = vector2_dot_scalar(f_x, f_y, d_x, d_y);                      // "half-b" form
+    f32 c = vector2_dot_scalar(f_x, f_y, f_x, f_y) - circle_radius * circle_radius; // <= 0 means start is inside
+
+    // disc = a * (r^2 - h^2), where h is the distance from the circle center to the infinite line.
+    // dividing by `a` gives a tolerance in distance-squared units, so a grazing line isn't
+    // rejected by floating point error.
+    f32 disc = b * b - a * c;
+    if(disc < -epsilon * a){
+        return false; // the line misses the circle.
+    }
+    if(disc < 0.0f){
+        disc = 0.0f;  // grazing: treat as a single tangent point.
+    }
+
+    f32 root = f32_sqrt(disc);
+    f32 t_enter = (-b - root) / a;
+    f32 t_exit  = (-b + root) / a;
+
+    // the inside interval must overlap the segment's 0..1 range.
+    if(t_enter > 1.0f || t_exit < 0.0f){
+        return false;
+    }
+
+    if(t_enter >= 0.0f){
+        *out_enter_point_x = line_start_x + d_x * t_enter;
+        *out_enter_point_y = line_start_y + d_y * t_enter;
+        *out_has_enter_point = true;
+    }
+    if(t_exit <= 1.0f){
+        *out_exit_point_x = line_start_x + d_x * t_exit;
+        *out_exit_point_y = line_start_y + d_y * t_exit;
+        *out_has_exit_point = true;
+    }
+    
+    // find the point on the segment closest to the circle's center.
+    // "-b / a" is where the infinite line is closest to the center; clamp it onto the segment.
+    f32 t_closest = CLAMP(-b / a, 0.0f, 1.0f);
+
+    // vector from the circle's center to that closest point.
+    f32 offset_x = f_x + d_x * t_closest;
+    f32 offset_y = f_y + d_y * t_closest;
+    f32 offset_len = f32_sqrt(vector2_dot_scalar(offset_x, offset_y, offset_x, offset_y));
+
+    if(offset_len > epsilon){
+        // normal points from the circle's center out through the closest point.
+        f32 inv_offset_len = 1.0f / offset_len; 
+        *out_normal_x = offset_x * inv_offset_len;
+        *out_normal_y = offset_y * inv_offset_len;
+        // depth is how far the closest point is inside the circle's surface.
+        // Never negative, because the overlap test above guarantees offset_len <= radius (+ tolerance).
+        *out_depth = MAX(circle_radius - offset_len, 0.0f);
+    }
+    else{
+        // the segment passes through the circle's center, so there is no unique direction.
+        // Fall back to the segment's perpendicular, and push the full radius.
+        f32 inv_d_len = 1.0f / f32_sqrt(a);
+        *out_normal_x = -d_y * inv_d_len;
+        *out_normal_y =  d_x * inv_d_len;
+        *out_depth = circle_radius;
+    }
+
+    // ricochet direction of the line's travel off the surface.
+    f32 dir_x = line_end_x - line_start_x;
+    f32 dir_y = line_end_y - line_start_y;
+    f32 dir_len = f32_sqrt(dir_x * dir_x + dir_y * dir_y);
+    if(dir_len > 0.0f){
+        dir_x /= dir_len;
+        dir_y /= dir_len;
+    }
+
+    f32 d_dot_n   = dir_x * *out_normal_x + dir_y * *out_normal_y;
+    *out_normal_x = dir_x - 2.0f * d_dot_n * *out_normal_x;
+    *out_normal_y = dir_y - 2.0f * d_dot_n * *out_normal_y;    
+
+    return true;
+}
+
+
+///
+/// functions: Matrix4x4
+///
+
+
+Transform2D matrix4x4_to_transform2d(Matrix4x4 matrix){
+
+    f32* m = matrix.m;
+    Transform2D transform = TRANSFORM2D_IDENTITY;
+
+    // column 0 `length` is the horizontal scale.
+    transform.scale.x = f32_sqrt(m[0]*m[0] + m[1]*m[1]);
+    transform.scale.y = f32_sqrt(m[4]*m[4] + m[5]*m[5]);
+
+    // undo the scale to get pure rotation back
+    if(transform.scale.y > F32_MIN){
+        transform.cosine = m[0] / transform.scale.x;
+        transform.sine = m[1] / transform.scale.x;
+    }
+
+    transform.position.x = m[12];
+    transform.position.y = m[13];
+
+    return transform;
+}
+
+Matrix4x4 matrix4x4_mul(Matrix4x4 lhs, Matrix4x4 rhs){
+    Matrix4x4 dst = {0};
+    f32* d = dst.m;
+    f32* l = lhs.m;
+    f32* r = rhs.m;
+
+    d[0]  = (l[0] * r[0]) + (l[4] * r[1]) + (l[8]  * r[2]) + (l[12] * r[3]);
+    d[1]  = (l[1] * r[0]) + (l[5] * r[1]) + (l[9]  * r[2]) + (l[13] * r[3]);
+    d[2]  = (l[2] * r[0]) + (l[6] * r[1]) + (l[10] * r[2]) + (l[14] * r[3]);
+    d[3]  = (l[3] * r[0]) + (l[7] * r[1]) + (l[11] * r[2]) + (l[15] * r[3]);
+
+    d[4]  = (l[0] * r[4]) + (l[4] * r[5]) + (l[8]  * r[6]) + (l[12] * r[7]);
+    d[5]  = (l[1] * r[4]) + (l[5] * r[5]) + (l[9]  * r[6]) + (l[13] * r[7]);
+    d[6]  = (l[2] * r[4]) + (l[6] * r[5]) + (l[10] * r[6]) + (l[14] * r[7]);
+    d[7]  = (l[3] * r[4]) + (l[7] * r[5]) + (l[11] * r[6]) + (l[15] * r[7]);
+
+    d[8]  = (l[0] * r[8]) + (l[4] * r[9]) + (l[8]  * r[10]) + (l[12] * r[11]);
+    d[9]  = (l[1] * r[8]) + (l[5] * r[9]) + (l[9]  * r[10]) + (l[13] * r[11]);
+    d[10] = (l[2] * r[8]) + (l[6] * r[9]) + (l[10] * r[10]) + (l[14] * r[11]);
+    d[11] = (l[3] * r[8]) + (l[7] * r[9]) + (l[11] * r[10]) + (l[15] * r[11]);
+
+    d[12] = (l[0] * r[12]) + (l[4] * r[13]) + (l[8]  * r[14]) + (l[12] * r[15]);
+    d[13] = (l[1] * r[12]) + (l[5] * r[13]) + (l[9]  * r[14]) + (l[13] * r[15]);
+    d[14] = (l[2] * r[12]) + (l[6] * r[13]) + (l[10] * r[14]) + (l[14] * r[15]);
+    d[15] = (l[3] * r[12]) + (l[7] * r[13]) + (l[11] * r[14]) + (l[15] * r[15]);
+
+    return dst;
 }
 
 /*
@@ -1085,13 +1529,9 @@ Vector3 matrix4x4_get_scale(Matrix4x4 matrix){
 }
 
 
-
-
-/**
-    functions: Quaternion
-**/
-
-
+///
+/// functions: Quaternion
+///
 
 
 Quaternion quaternion_normalise(Quaternion q){
@@ -1215,13 +1655,9 @@ Quaternion quaternion_get_rotation_between_points(Vector3 point_a, Vector3 point
 }
 
 
-
-
-/*
-    functions: Transform3D
-*/
-
-
+///
+/// functions: Transform3D
+///
 
 
 Transform3D transform3d_transform(Transform3D lhs, Transform3D rhs){
@@ -1232,7 +1668,7 @@ Transform3D transform3d_transform(Transform3D lhs, Transform3D rhs){
     result.rotation = quaternion_mul(lhs.rotation, rhs.rotation);
     // combine positions (order matters: scale->rotate->translate).
     Vector3 sp = vector3_mul(lhs.position, rhs.scale);
-    result.position = rotate_vector3(sp, rhs.rotation);
+    result.position = vector3_rotate(sp, rhs.rotation);
     result.position = vector3_add(result.position, rhs.position);
     return result;
 }
@@ -1385,14 +1821,9 @@ void soa_vector2_clear_element(Soa_Vector2* soa, i32 elem_idx){
 }
 
 
-
-
-/**====================
-    functions: Transform2D.
-====================**//**/
-
-
-
+///
+/// functions: Transform2D.
+///
 
 
 f32 transform2d_get_rotation_radians(Transform2D transform){
@@ -1673,48 +2104,6 @@ Transform2D transform_transform2d(Transform2D lhs, Transform2D rhs){
     return res;
 }
 
-void line_segment_closest_point_scalar(
-    f32 line_start_x, f32 line_start_y, f32 line_end_x, f32 line_end_y,
-    f32 query_point_x, f32 query_point_y, f32* out_closest_point_x, f32* out_closest_point_y
-){
-    f32 line_dist_x = line_end_x - line_start_x;
-    f32 line_dist_y = line_end_y - line_start_y;
-    f32 point_dist_x = query_point_x - line_start_x;
-    f32 point_dist_y = query_point_y - line_start_y;
-
-    f32 projection = vector2_dot_scalar(point_dist_x, point_dist_y, line_dist_x, line_dist_y);
-
-    // move the point distance along the line segment.
-    f32 delta = projection / len_sqrd_f32(line_dist_x, line_dist_y);
-
-    if(delta <= 0){
-        *out_closest_point_x = line_start_x;
-        *out_closest_point_y = line_start_y;
-    }
-    else if(delta >= 1){
-        *out_closest_point_x = line_end_x;
-        *out_closest_point_y = line_end_y;
-    }
-    else{
-        *out_closest_point_x = line_start_x + line_dist_x * delta;
-        *out_closest_point_y = line_start_y + line_dist_y * delta;
-    }
-}
-
-/*
-    calculates the closest point along a line segmenet towards the query point.
-*/
-Vector2 closest_point_line_segmenet(Vector2 line_start, Vector2 line_end, Vector2 query_point){
-    Vector2 result;
-    line_segment_closest_point_scalar(
-        line_start.x, line_start.y,
-        line_end.x, line_end.y,
-        query_point.x, query_point.y,
-        &result.x, &result.y
-    );
-    return result;
-}
-
 
 ///
 /// functions: Soa_Aabb.
@@ -1773,13 +2162,9 @@ void soa_aabb_clear_element(Soa_Aabb* soa, i32 elem_idx){
 }
 
 
-
-
-/**
-    functions: Aabb.
-**/
-
-
+///
+/// functions: Aabb.
+///
 
 
 f32 aabb_get_height(Aabb aabb){

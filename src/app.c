@@ -86,7 +86,7 @@ void app_main(){
             .final_render_texture_width = WINDOW_WIDTH,
             .final_render_texture_height = WINDOW_HEIGHT,
             .graphics_pipeline_shader_file_path = (String){.chars = "assets/shader.wgsl", .length = 18},
-            .max_sprites = 512,
+            .max_sprites = 1024,
             .draw_wireframe_thickness = GFX_DEFAULT_WIREFRAME_THICKNESS,
             .draw_circle_vertex_count = 24,
             .draw_arrow_prong_max_length = 0.5f

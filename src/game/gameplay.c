@@ -134,7 +134,7 @@ typedef struct{
 /// Definitions.
 ///
 
-#define BALL_FIZX_SHAPE_MATERIAL (FIZX_Material) {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 1.7f, .restitution = 0.334f}
+#define BALL_FIZX_SHAPE_MATERIAL (FIZX_Material) {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 1.7f, .restitution = 0.334f, .rotational_response = true}
 #define BALL_FIZX_BODY_LINEAR_DRAG 0.5f
 #define BALL_FIZX_BODY_ANGULAR_DRAG 0.5f
 
@@ -169,6 +169,7 @@ typedef struct{
 #define PHYSICS_LAYER_ALL I32_MAX
 #define PHYSICS_LAYER_BALL (1 << 1)
 #define PHYSICS_LAYER_ENVIRONMENT (1 << 2)
+#define PHYSICS_LAYER_RAYCAST (1 << 3)
 
 ///
 /// Virtual Texture ID.
@@ -596,6 +597,25 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
     return entity_gid;
 }
 
+void raycast_on_sustain_callback(FIZX_CollisionInfo info, void* user_data){
+    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
+    Circle shape;
+    Vector2 contact_point = {.x = info.first_contact_point_x, .y = info.first_contact_point_y};
+    Vector2 normal = {.x = info.normal_x, .y = info.normal_y};
+    Vector2 end = vector2_add(contact_point, normal); 
+    gfx_draw_line(ctx->entity_manager->gfx_state, GFX_COLOUR_WHITE, contact_point, end, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
+    if(info.two_contact_points){
+        shape =  (Circle){.x = info.first_contact_point_x, .y = info.first_contact_point_y, .radius = 0.33f}; 
+        gfx_draw_wire_circle(ctx->entity_manager->gfx_state, shape, GFX_COLOUR_BLUE, SPRITE_LAYER_EDITOR_WORLD, 1, SPRITE_MATERIAL_DEBUG);
+        shape = (Circle){.x = info.second_contact_point_x, .y = info.second_contact_point_y, .radius = 0.33f}; 
+        gfx_draw_wire_circle(ctx->entity_manager->gfx_state, shape, GFX_COLOUR_ORANGE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+    }
+    else{
+        shape =  (Circle){.x = info.first_contact_point_x, .y = info.first_contact_point_y, .radius = 0.33f}; 
+        gfx_draw_wire_circle(ctx->entity_manager->gfx_state, shape, GFX_COLOUR_ORANGE, SPRITE_LAYER_GAME_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+    }
+}
+
 GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
     // clickable entity (angry bird).
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
@@ -626,9 +646,20 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
                 &entity_gid, 
                 PHYSICS_LAYER_BALL, 
                 circle, 
-                BALL_FIZX_SHAPE_MATERIAL, 
-                true
+                BALL_FIZX_SHAPE_MATERIAL 
             );
+            GenId raycast = fizx_line_collider_alloc(
+                &entity_manager->fizx_state, 
+                entity->physics_body_gid, 
+                shape_transform, 
+                FIZX_ShapeBehaviour_Trigger, 
+                &entity_gid, 
+                PHYSICS_LAYER_RAYCAST, 
+                (Vector2){0},
+                VECTOR2_UP,
+                2.0f
+            );
+            fizx_shape_set_on_sustain_callback(&entity_manager->fizx_state, raycast, raycast_on_sustain_callback);
             fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, false);    
         }
 
@@ -685,8 +716,7 @@ GenId entity_spawn_wall(EntityManager* entity_manager, String name, Transform2D 
             &entity_gid, 
             PHYSICS_LAYER_ENVIRONMENT, 
             square, 
-            material, 
-            false
+            material
         );
 
         entity->is_sprite = true;
@@ -874,8 +904,7 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, String name, Trans
             &entity_gid, 
             PHYSICS_LAYER_BALL, 
             circle, 
-            BALL_FIZX_SHAPE_MATERIAL, 
-            true
+            BALL_FIZX_SHAPE_MATERIAL 
         );
 
         entity->is_health = true;
@@ -1124,6 +1153,7 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
         .wireframe_thickness            = 0.005f,
         .material_idx                   = SPRITE_MATERIAL_DEBUG,
         .draw_body_shapes               = true
+        // .draw_collision_info            = true
     };
 
     entity_manager_init(&game_state->entity_manager, persistent, gfx_state, entity_amount, physics_body_amount, timeout_data_element_size);
