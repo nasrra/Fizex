@@ -162,7 +162,7 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                 Circle shape = {
                     .x = state.entities.centroid.x[shape_idx],
                     .y = state.entities.centroid.y[shape_idx],
-                    .radius = 0.1f
+                    .radius = 0.05f
                 };
 
                 gfx_draw_wire_circle(gfx, shape, info.colour_centroid, info.sprite_layer, info.sprite_depth, info.material_idx);
@@ -301,6 +301,14 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
             if(owner_idx > other_idx){
                 continue;
             }
+
+            Circle owner_location_gizmo = {
+                .x = state.entities.centroid.x[owner_idx],
+                .y = state.entities.centroid.y[owner_idx],
+                .radius = 0.25f
+            };
+
+            gfx_draw_wire_circle(gfx, owner_location_gizmo, GFX_COLOUR_PINK, info.sprite_layer, info.sprite_depth, info.material_idx);
 
             // get normal data.
             BOUNDS_CHECK(collision_idx, state.collision_manifold.normal.length);

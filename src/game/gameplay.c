@@ -526,28 +526,28 @@ void entity_manager_debug_draw(EntityManager manager, f32 delta_time){
 void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
     GenId* source_entity_gid = (GenId*)info.source_user_data;
-    
+
     if((info.source_layer & PHYSICS_LAYER_BALL) == 0){
         return;
     }
-    
+
     if(info.depth >= 0.85f){
-        entity_manager_dealloc_entity(ctx->entity_manager, *source_entity_gid); 
-        platform_output_message("foo!");
-    }    
+        // entity_manager_dealloc_entity(ctx->entity_manager, *source_entity_gid);
+        // platform_output_message("foo!");
+    }
 }
 
 GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
-        
+
         entity->type_id = EntityTypeId_Pocket;
         string_push(&entity->name, name);
         entity->transform = transform;
-        
+
         { // physics_body_alloc();
-        
+
             entity->is_physics_body = true;
             Circle physics_shape = {.radius = 0.55f};
             Transform2D physics_shape_transform = TRANSFORM2D_IDENTITY;
@@ -577,9 +577,9 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
                 pocket_fizx_shape_on_sustain_callback
             );
         }
-        
+
         { // sprite_alloc();
-            
+
             entity->is_sprite = true;
             entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
             entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
@@ -592,28 +592,28 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
             gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
-        }           
+        }
     }
     return entity_gid;
 }
 
 void raycast_on_sustain_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    Circle shape;
     Vector2 contact_point = {.x = info.first_contact_point_x, .y = info.first_contact_point_y};
     Vector2 normal = {.x = info.normal_x, .y = info.normal_y};
-    Vector2 end = vector2_add(contact_point, normal); 
+    Vector2 end = vector2_add(contact_point, normal);
     gfx_draw_line(ctx->entity_manager->gfx_state, GFX_COLOUR_WHITE, contact_point, end, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
-    if(info.two_contact_points){
-        shape =  (Circle){.x = info.first_contact_point_x, .y = info.first_contact_point_y, .radius = 0.33f}; 
-        gfx_draw_wire_circle(ctx->entity_manager->gfx_state, shape, GFX_COLOUR_BLUE, SPRITE_LAYER_EDITOR_WORLD, 1, SPRITE_MATERIAL_DEBUG);
-        shape = (Circle){.x = info.second_contact_point_x, .y = info.second_contact_point_y, .radius = 0.33f}; 
-        gfx_draw_wire_circle(ctx->entity_manager->gfx_state, shape, GFX_COLOUR_ORANGE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
-    }
-    else{
-        shape =  (Circle){.x = info.first_contact_point_x, .y = info.first_contact_point_y, .radius = 0.33f}; 
-        gfx_draw_wire_circle(ctx->entity_manager->gfx_state, shape, GFX_COLOUR_ORANGE, SPRITE_LAYER_GAME_WORLD, 0, SPRITE_MATERIAL_DEBUG);
-    }
+    // Circle shape;
+    // if(info.two_contact_points){
+    //     shape =  (Circle){.x = info.first_contact_point_x, .y = info.first_contact_point_y, .radius = 0.33f};
+    //     gfx_draw_wire_circle(ctx->entity_manager->gfx_state, shape, GFX_COLOUR_BLUE, SPRITE_LAYER_EDITOR_WORLD, 1, SPRITE_MATERIAL_DEBUG);
+    //     shape = (Circle){.x = info.second_contact_point_x, .y = info.second_contact_point_y, .radius = 0.33f};
+    //     gfx_draw_wire_circle(ctx->entity_manager->gfx_state, shape, GFX_COLOUR_ORANGE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+    // }
+    // else{
+    //     shape =  (Circle){.x = info.first_contact_point_x, .y = info.first_contact_point_y, .radius = 0.33f};
+    //     gfx_draw_wire_circle(ctx->entity_manager->gfx_state, shape, GFX_COLOUR_ORANGE, SPRITE_LAYER_GAME_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+    // }
 }
 
 GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
@@ -632,41 +632,42 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
             Circle circle = {.radius = 0.55f};
             Transform2D shape_transform = TRANSFORM2D_IDENTITY;
             entity->physics_body_gid = fizx_body_alloc(
-                &entity_manager->fizx_state, 
-                entity->transform, 
-                BALL_FIZX_BODY_LINEAR_DRAG, 
-                BALL_FIZX_BODY_ANGULAR_DRAG, 
+                &entity_manager->fizx_state,
+                entity->transform,
+                BALL_FIZX_BODY_LINEAR_DRAG,
+                BALL_FIZX_BODY_ANGULAR_DRAG,
                 false
             );
             fizx_circle_rigid_alloc(
-                &entity_manager->fizx_state, 
-                entity->physics_body_gid, 
-                shape_transform, 
-                FIZX_ShapeBehaviour_Dynamic, 
-                &entity_gid, 
-                PHYSICS_LAYER_BALL, 
-                circle, 
-                BALL_FIZX_SHAPE_MATERIAL 
+                &entity_manager->fizx_state,
+                entity->physics_body_gid,
+                shape_transform,
+                FIZX_ShapeBehaviour_Dynamic,
+                &entity_gid,
+                PHYSICS_LAYER_BALL,
+                circle,
+                BALL_FIZX_SHAPE_MATERIAL
             );
             GenId raycast = fizx_line_collider_alloc(
-                &entity_manager->fizx_state, 
-                entity->physics_body_gid, 
-                shape_transform, 
-                FIZX_ShapeBehaviour_Trigger, 
-                &entity_gid, 
-                PHYSICS_LAYER_RAYCAST, 
+                &entity_manager->fizx_state,
+                entity->physics_body_gid,
+                shape_transform,
+                FIZX_ShapeBehaviour_Dynamic,
+                &entity_gid,
+                PHYSICS_LAYER_RAYCAST,
                 (Vector2){0},
-                VECTOR2_UP,
+                VECTOR2_DOWN,
                 2.0f
+                // ,BALL_FIZX_SHAPE_MATERIAL
             );
             fizx_shape_set_on_sustain_callback(&entity_manager->fizx_state, raycast, raycast_on_sustain_callback);
-            fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, false);    
+            // fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, false);
         }
 
         { // set_is_clickable();
-        
+
             entity->is_clickable = true;
-            entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};        
+            entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
         }
 
         { // sprite_alloc();
@@ -709,13 +710,13 @@ GenId entity_spawn_wall(EntityManager* entity_manager, String name, Transform2D 
         bool gravity_effected = false;
         entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, linear_drag, angular_drag, false);
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(
-            &entity_manager->fizx_state, 
-            entity->physics_body_gid, 
-            shape_transform, 
-            FIZX_ShapeBehaviour_Kinematic, 
-            &entity_gid, 
-            PHYSICS_LAYER_ENVIRONMENT, 
-            square, 
+            &entity_manager->fizx_state,
+            entity->physics_body_gid,
+            shape_transform,
+            FIZX_ShapeBehaviour_Kinematic,
+            &entity_gid,
+            PHYSICS_LAYER_ENVIRONMENT,
+            square,
             material
         );
 
@@ -822,12 +823,12 @@ void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
 #endif
 
 GenId entity_spawn_number_ball(EntityManager* entity_manager, String name, Transform2D transform, GenId parent, i32 ball_number){
-    
+
     GFX_TextureView texture_view;
     EntityTypeId type_id;
     switch(ball_number){
         default:{
-            texture_view = (GFX_TextureView){0}; 
+            texture_view = (GFX_TextureView){0};
             type_id = EntityTypeId_None;
             ASSERT(false, "invalid ball number.");
         }break;
@@ -872,7 +873,7 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, String name, Trans
             type_id = EntityTypeId_BallNine;
         }break;
     }
-    
+
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     entity_manager_get_entity(*entity_manager, entity_gid, &entity);
@@ -886,25 +887,36 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, String name, Trans
 
         Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
         Circle circle = {.radius = 0.55f};
-        
+
         Transform2D shape_transform = TRANSFORM2D_IDENTITY;
         entity->physics_body_gid = fizx_body_alloc(
-            &entity_manager->fizx_state, 
-            entity->transform, 
-            BALL_FIZX_BODY_LINEAR_DRAG, 
+            &entity_manager->fizx_state,
+            entity->transform,
+            BALL_FIZX_BODY_LINEAR_DRAG,
             BALL_FIZX_BODY_ANGULAR_DRAG,
             false
         );
-        
+
         GenId entity_shape_gid = fizx_circle_rigid_alloc(
-            &entity_manager->fizx_state, 
-            entity->physics_body_gid, 
-            shape_transform, 
-            FIZX_ShapeBehaviour_Dynamic, 
-            &entity_gid, 
-            PHYSICS_LAYER_BALL, 
-            circle, 
-            BALL_FIZX_SHAPE_MATERIAL 
+            &entity_manager->fizx_state,
+            entity->physics_body_gid,
+            shape_transform,
+            FIZX_ShapeBehaviour_Dynamic,
+            &entity_gid,
+            PHYSICS_LAYER_BALL,
+            circle,
+            BALL_FIZX_SHAPE_MATERIAL
+        );
+        GenId raycast = fizx_line_collider_alloc(
+            &entity_manager->fizx_state,
+            entity->physics_body_gid,
+            shape_transform,
+            FIZX_ShapeBehaviour_Trigger,
+            &entity_gid,
+            PHYSICS_LAYER_RAYCAST,
+            (Vector2){0},
+            VECTOR2_LEFT,
+            2.0f
         );
 
         entity->is_health = true;
@@ -990,7 +1002,7 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String n
         }break;
         case EntityTypeId_BallThree:{
             return entity_spawn_ball_three(entity_manager, name, transform, parent_gid);
-        }break;                
+        }break;
         case EntityTypeId_BallFour:{
             return entity_spawn_ball_four(entity_manager, name, transform, parent_gid);
         }break;
@@ -1149,11 +1161,13 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
         .colour_collision_other         = GFX_COLOUR_BLUE,
         .colour_collision_normal        = GFX_COLOUR_LIGHT_BLUE,
         .colour_center_of_mass          = GFX_COLOUR_ORANGE,
-        .sprite_layer                   = SPRITE_LAYER_GAME_WORLD,
+        .sprite_layer                   = SPRITE_LAYER_EDITOR_WORLD,
         .wireframe_thickness            = 0.005f,
         .material_idx                   = SPRITE_MATERIAL_DEBUG,
-        .draw_body_shapes               = true
-        // .draw_collision_info            = true
+        .draw_body_shapes               = true,
+        .draw_collision_info            = true
+        // .draw_centers_of_mass_unrotated = true
+        // .draw_bvh_leaves                = true
     };
 
     entity_manager_init(&game_state->entity_manager, persistent, gfx_state, entity_amount, physics_body_amount, timeout_data_element_size);
@@ -1188,15 +1202,15 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         // if(input_is_key_just_pressed(Key_1)){
         //     fizx_draw_state->draw_bvh_branches = !fizx_draw_state->draw_bvh_branches;
         // }
-        // if(input_is_key_just_pressed(Key_2)){
-        //     fizx_draw_state->draw_bvh_leaves = !fizx_draw_state->draw_bvh_leaves;
-        // }
+        if(input_is_key_just_pressed(Key_2)){
+            fizx_draw_state->draw_bvh_leaves = !fizx_draw_state->draw_bvh_leaves;
+        }
         if(input_is_key_just_pressed(Key_3)){
             fizx_draw_state->draw_body_shapes = !fizx_draw_state->draw_body_shapes;
         }
-        // if(input_is_key_just_pressed(Key_4)){
-        //     fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
-        // }
+        if(input_is_key_just_pressed(Key_4)){
+            fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
+        }
     }
 
     { // time management.
@@ -1384,16 +1398,16 @@ bool entity_set_position(EntityManager* manager, GenId entity_gid, Vector2 posit
     if(!idx){
         return false;
     }
-    
+
     BOUNDS_CHECK(idx, manager->entity_length);
     Entity* entity = &manager->entity[idx];
-    
+
     entity->transform.position = position;
-    
+
     if(entity->is_sprite){
         gfx_sprite_set_position(manager->gfx_state, entity->sprite_gid, position);
     }
-    
+
     if(entity->is_physics_body){
         // TODO: may need to check this in the future, havent tested it.
         fizx_body_set_global_position(&manager->fizx_state, entity->physics_body_gid, position);
@@ -1408,11 +1422,11 @@ bool entity_set_transform(EntityManager* manager, GenId entity_gid, Transform2D 
         return false;
     }
     entity->transform = transform;
-    
+
     if(entity->is_sprite){
         gfx_sprite_set_transform(manager->gfx_state, entity->sprite_gid, transform);
     }
-    
+
     if(entity->is_physics_body){
         fizx_body_set_global_transform(&manager->fizx_state, entity->physics_body_gid, transform);
     }

@@ -126,7 +126,7 @@ void app_main(){
 
         { // load level.
             string_clear(&file_path);
-            string_push_chars(&file_path, "assets/saved.scsv", 17);
+            string_push_chars(&file_path, "assets/lvl_001.scsv", 19);
             load_lvl(&game_state.entity_manager, file_path);
         }
 
@@ -163,7 +163,7 @@ void app_main(){
                         last_editor_key_pressed = Key_None;
                     }
                     else{
-                        in_editor_mode = true; 
+                        in_editor_mode = true;
                         editor_state.menu = Editor_Menu_EntitySpawner;
                         last_editor_key_pressed = Key_F1;
                     }
@@ -174,7 +174,7 @@ void app_main(){
                         last_editor_key_pressed = Key_None;
                     }
                     else{
-                        in_editor_mode = true; 
+                        in_editor_mode = true;
                         editor_state.menu = Editor_Menu_EntityInspector;
                         last_editor_key_pressed = Key_F2;
                     }
@@ -198,7 +198,7 @@ void app_main(){
                 game_state_draw(&game_state, delta_time);
                 gfx_state_draw(&gfx_state);
                 transient->stride = 0;
-            }            
+            }
         }
     }
 
