@@ -648,7 +648,8 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
                 circle,
                 BALL_FIZX_SHAPE_MATERIAL
             );
-            GenId raycast = fizx_line_collider_alloc(
+            // LOO
+            GenId raycast = fizx_line_rigid_alloc(
                 &entity_manager->fizx_state,
                 entity->physics_body_gid,
                 shape_transform,
@@ -658,7 +659,7 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
                 (Vector2){0},
                 VECTOR2_DOWN,
                 2.0f
-                // ,BALL_FIZX_SHAPE_MATERIAL
+                ,BALL_FIZX_SHAPE_MATERIAL
             );
             fizx_shape_set_on_sustain_callback(&entity_manager->fizx_state, raycast, raycast_on_sustain_callback);
             // fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, false);
@@ -702,7 +703,7 @@ GenId entity_spawn_wall(EntityManager* entity_manager, String name, Transform2D 
         entity->is_physics_body = true;
 
         Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
-        FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 22.6f, .restitution = 1.0f};
+        FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 22.6f, .restitution = 1.0f, .rotational_response = true};
 
         Transform2D shape_transform = TRANSFORM2D_IDENTITY;
         f32 linear_drag = 0.75f;
@@ -822,7 +823,7 @@ void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
 }
 #endif
 
-GenId entity_spawn_number_ball(EntityManager* entity_manager, String name, Transform2D transform, GenId parent, i32 ball_number){
+GenId entity_spawn_game_ball(EntityManager* entity_manager, String name, Transform2D transform, GenId parent, i32 ball_number){
 
     GFX_TextureView texture_view;
     EntityTypeId type_id;
@@ -907,18 +908,7 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, String name, Trans
             circle,
             BALL_FIZX_SHAPE_MATERIAL
         );
-        GenId raycast = fizx_line_collider_alloc(
-            &entity_manager->fizx_state,
-            entity->physics_body_gid,
-            shape_transform,
-            FIZX_ShapeBehaviour_Trigger,
-            &entity_gid,
-            PHYSICS_LAYER_RAYCAST,
-            (Vector2){0},
-            VECTOR2_LEFT,
-            2.0f
-        );
-
+        
         entity->is_health = true;
         entity->health = 3;
 
@@ -940,43 +930,43 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, String name, Trans
 }
 
 GenId entity_spawn_ball_one(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
-    return entity_spawn_number_ball(entity_manager, name, transform, parent, 1);
+    return entity_spawn_game_ball(entity_manager, name, transform, parent, 1);
 }
 
 GenId entity_spawn_ball_two(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
-    return entity_spawn_number_ball(entity_manager, name, transform, parent, 2);
+    return entity_spawn_game_ball(entity_manager, name, transform, parent, 2);
 }
 
 GenId entity_spawn_ball_three(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
-    return entity_spawn_number_ball(entity_manager, name, transform, parent, 3);
+    return entity_spawn_game_ball(entity_manager, name, transform, parent, 3);
 }
 
 GenId entity_spawn_ball_four(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
-    return entity_spawn_number_ball(entity_manager, name, transform, parent, 4);
+    return entity_spawn_game_ball(entity_manager, name, transform, parent, 4);
 }
 
 GenId entity_spawn_ball_five(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
-    return entity_spawn_number_ball(entity_manager, name, transform, parent, 5);
+    return entity_spawn_game_ball(entity_manager, name, transform, parent, 5);
 }
 
 GenId entity_spawn_ball_six(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
-    return entity_spawn_number_ball(entity_manager, name, transform, parent, 6);
+    return entity_spawn_game_ball(entity_manager, name, transform, parent, 6);
 }
 
 GenId entity_spawn_ball_seven(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
-    return entity_spawn_number_ball(entity_manager, name, transform, parent, 7);
+    return entity_spawn_game_ball(entity_manager, name, transform, parent, 7);
 }
 
 GenId entity_spawn_ball_eight(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
-    return entity_spawn_number_ball(entity_manager, name, transform, parent, 8);
+    return entity_spawn_game_ball(entity_manager, name, transform, parent, 8);
 }
 
 GenId entity_spawn_ball_nine(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
-    return entity_spawn_number_ball(entity_manager, name, transform, parent, 9);
+    return entity_spawn_game_ball(entity_manager, name, transform, parent, 9);
 }
 
 GenId entity_spawn_ball_zero(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
-    return entity_spawn_number_ball(entity_manager, name, transform, parent, 0);
+    return entity_spawn_game_ball(entity_manager, name, transform, parent, 0);
 }
 
 GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String name, Transform2D transform, GenId parent_gid){

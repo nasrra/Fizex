@@ -641,6 +641,9 @@ void categorised_overlap_array_push(CategorisedOverlapArray* array, const void* 
     // so it works with a strict check).
     size_t last_byte_index = ((size_t)write_index + 1) * data_size - 1;
     BOUNDS_CHECK(last_byte_index, array->data_length);
+    
+    i32 f = *(i32*)data;
+    ASSERT(f >= 0, "failed");
 
     COPY_MEMORY(&array->data[(size_t)write_index * (size_t)data_size], data, data_size);
     *count += 1;

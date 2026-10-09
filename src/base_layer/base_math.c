@@ -1136,8 +1136,8 @@ bool line_segment_overlaps_circle(
     f32 inv_d_len = 1.0f / f32_sqrt(a);
 
     // unit perpendicular to the segment.
-    f32 perp_x = -d_y * inv_d_len;
-    f32 perp_y =  d_x * inv_d_len;
+    f32 perp_x = -(-d_y * inv_d_len);
+    f32 perp_y = -( d_x * inv_d_len);
 
     if(t_raw > 0.0f && t_raw < 1.0f){
         // the circle's center projects onto the INTERIOR of the segment, so treat the
@@ -1150,13 +1150,13 @@ bool line_segment_overlaps_circle(
 
         // flip the perpendicular so it points toward the side the circle center is on.
         // (if side is exactly 0 the sign is arbitrary; perp is used as-is)
-        if(side > 0.0f){
-            perp_x = -perp_x;
-            perp_y = -perp_y;
+        if(side <= 0.0f){
+            perp_x *= -1.0f;
+            perp_y *= -1.0f;
         }
 
-        *out_normal_x = perp_x;
-        *out_normal_y = perp_y;
+        *out_normal_x = -perp_x;
+        *out_normal_y = -perp_y;
         // depth is how far the circle reaches past the line.
         *out_depth = MAX(circle_radius - ABS(side), 0.0f);
     }
@@ -1176,8 +1176,8 @@ bool line_segment_overlaps_circle(
             // CHANGED: negated. The normal now points FROM the line TOWARD the circle
             // center (a push-out direction). Before, it pointed from the center to the line.
             f32 inv_offset_len = 1.0f / offset_len;
-            *out_normal_x = -offset_x * inv_offset_len;
-            *out_normal_y = -offset_y * inv_offset_len;
+            *out_normal_x = offset_x * inv_offset_len;
+            *out_normal_y = offset_y * inv_offset_len;
             // depth is how far the endpoint is inside the circle's surface.
             *out_depth = MAX(circle_radius - offset_len, 0.0f);
         }
@@ -1188,18 +1188,19 @@ bool line_segment_overlaps_circle(
             *out_normal_y = perp_y;
             *out_depth = circle_radius;
         }
-
-        // direction of the line's travel.
-        f32 dir_x = d_x * inv_d_len; // reuses d and inv_d_len (a > 0 is guaranteed above, so no zero check needed)
-        f32 dir_y = d_y * inv_d_len;
-
-        // reflect the travel direction about the normal: r = dir - 2 (dir . n) n
-        f32 d_dot_n    = dir_x * *out_normal_x + dir_y * *out_normal_y;
-        *out_normal_x = dir_x - 2.0f * d_dot_n * *out_normal_x;
-        *out_normal_y = dir_y - 2.0f * d_dot_n * *out_normal_y;
     }
     return true;
 }
+
+
+        // // direction of the line's travel.
+        // f32 dir_x = d_x * inv_d_len; // reuses d and inv_d_len (a > 0 is guaranteed above, so no zero check needed)
+        // f32 dir_y = d_y * inv_d_len;
+
+        // // reflect the travel direction about the normal: r = dir - 2 (dir . n) n
+        // f32 d_dot_n    = dir_x * *out_normal_x + dir_y * *out_normal_y;
+        // *out_normal_x = dir_x - 2.0f * d_dot_n * *out_normal_x;
+        // *out_normal_y = dir_y - 2.0f * d_dot_n * *out_normal_y;
 
 
 ///

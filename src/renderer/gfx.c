@@ -2048,8 +2048,8 @@ void gfx_final_render_target_init(GFX_Texture* texture, WGPUDevice device, u32 w
         TODO: (nich s)
         format of the final render target needs to be dynamically set based on the surface window's format.
     **/
-    // WGPUTextureFormat format = WGPUTextureFormat_RGBA8UnormSrgb;
-    WGPUTextureFormat format = WGPUTextureFormat_BGRA8UnormSrgb;
+    WGPUTextureFormat format = WGPUTextureFormat_RGBA8UnormSrgb;
+    // WGPUTextureFormat format = WGPUTextureFormat_BGRA8UnormSrgb;
     WGPUTextureUsage usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_TextureBinding;
     WGPUTextureAspect aspect = WGPUTextureAspect_All;
     gfx_texture_init(texture, device, format, usage, aspect, width, height);
