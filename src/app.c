@@ -33,6 +33,16 @@ void app_main(){
     MemoryArena* persistent = platform_get_persistent_memory();
     MemoryArena* transient = platform_get_transient_memory();
 
+    IntrusiveList intrsuive_list = {0};
+    intrusive_list_init(&intrsuive_list, transient, 16, false);
+    intrusive_list_add_branch(&intrsuive_list, 1, 0);
+    intrusive_list_add_branch(&intrsuive_list, 2, 1);
+    intrusive_list_add_branch(&intrsuive_list, 3, 2);
+    intrusive_list_add_branch(&intrsuive_list, 4, 0);
+    intrusive_list_add_branch(&intrsuive_list, 5, 4);
+    intrusive_list_add_branch(&intrsuive_list, 6, 4);
+    intrusive_list_set_node_parent(&intrsuive_list, 4, 1);
+
     f32 latest_active_key_print_delay = 0.25f;
     f32 latest_active_key_print_rate = 0.05f;
     input_init(persistent, latest_active_key_print_delay, latest_active_key_print_rate);

@@ -1623,6 +1623,61 @@ bool intrusive_list_remove_node(IntrusiveList* list, i32 node_idx, void* user_da
     return true;
 }
 
+bool intrusive_list_set_node_parent(IntrusiveList* list, i32 node_idx, i32 parent_idx){
+
+    if(node_idx == 0){
+        ASSERT(false, "nil element");
+        return false;
+    }
+    
+    // deep copy the original node.
+    BOUNDS_CHECK(node_idx, list->length);
+    IntrusiveListNode* node = &list->node[node_idx];
+    if(!node->in_tree){
+        return false;
+    }
+
+    { // remove_node_from_tree();
+
+        i32 parent_index = node->parent;
+        i32 first_child_index = node->first_child;
+    
+        // deallocate from parent.
+        if(parent_index != 0){
+            node->parent = 0;
+            BOUNDS_CHECK(parent_index, list->length);
+            IntrusiveListNode* parent = &list->node[parent_index];
+    
+            // nil the if this is the parent's child.
+            if(parent->first_child == node_idx){
+                parent->first_child = 0;
+            }
+        }
+    
+        // deallocate from siblings.
+        if(node->next_sibling > 0 && node->previous_sibling > 0){
+            i32 next_sibling_idx = node->next_sibling;
+            BOUNDS_CHECK(next_sibling_idx, list->length);
+            IntrusiveListNode* next_sibling = &list->node[next_sibling_idx];
+            next_sibling->previous_sibling = node->previous_sibling;
+    
+            i32 previous_sibling_idx = node->previous_sibling;
+            BOUNDS_CHECK(previous_sibling_idx, list->length);
+            IntrusiveListNode* previous_sibling = &list->node[previous_sibling_idx];
+            previous_sibling->next_sibling = node->next_sibling;
+        }    
+    }    
+    
+    // set to a state which bypasses the add root/branch node checks.
+    node->in_tree   = false;
+    node->is_active = false;
+
+    // add it back - properly - into the tree; with the new parent. 
+    intrusive_list_add_branch(list, node_idx, parent_idx);
+
+    return true;
+}
+
 /**
     this is an internal function for `intrusive_list_remove_node_and_children()`
     and shouldnt be used.
@@ -1637,8 +1692,9 @@ void intrusive_list_remove_node_and_children_update_node_recursive(
     if(list->on_dealloc_callback != NULL){
         list->on_dealloc_callback(list, node_idx, user_data);
     }
+    
     *node = (IntrusiveListNode){0};
-
+    
     if(first_child_index != 0){
         intrusive_list_remove_node_and_children_update_node_recursive(list, node_idx, first_child_index, first_child_index, user_data);
     }
@@ -1728,7 +1784,9 @@ bool intrusive_list_remove_node_and_children(IntrusiveList* list, i32 node_idx, 
     if(list->on_dealloc_callback != NULL){
         list->on_dealloc_callback(list, node_idx, user_data);
     }
+    
     *node = (IntrusiveListNode){0};
+
     return true;
 }
 

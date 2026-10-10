@@ -544,6 +544,7 @@ bool entity_manager_dealloc_entity(EntityManager* manager, GenId gid){
 
     // NOTE:
     // the on_dealloc callback for this calls entity_manager_dealloc_entity_data_unsafe.
+    bool preserve_sub_tree = false;
     if(!intrusive_list_remove_node_and_children(&manager->entity_hierarchy, idx, manager)){
         ASSERT(false, "failed to remove entity from entity hierarchy.");
     }
