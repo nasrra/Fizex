@@ -263,8 +263,8 @@ typedef struct{
 ///
 
 
-void level_manager_load_level_file(LevelManager* level_manager, String file_path, LevelLoadType level_load_type);
-void level_manager_reload_world_level(LevelManager* level_manager);
+GenId level_manager_load_level_file(LevelManager* level_manager, String file_path);
+void level_manager_defer_reload_world_level(LevelManager* level_manager);
 void level_manager_defer_load_level(LevelManager* level_manager, String file_path, LevelLoadType load_type);
 
 
@@ -675,9 +675,7 @@ void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_d
         
         if(entity->type_id == EntityTypeId_BallCue){
             platform_output_message("you lose!");
-            // level_manager_reload_world_level(&ctx->game_state->level_manager);
-            String file_path = {.chars = "assets/lvl_001.scsv", .count = 19, .length = 19};
-            level_manager_defer_load_level(&ctx->game_state->level_manager, file_path, LevelLoadType_World);
+            level_manager_defer_reload_world_level(&ctx->game_state->level_manager);
         }
         
         entity_manager_dealloc_entity(&ctx->game_state->entity_manager, *source_entity_gid);
@@ -1172,7 +1170,7 @@ void level_manager_defer_load_level(LevelManager* level_manager, String file_pat
     level_manager->deferred_level_load_count++;
 }
 
-void level_manager_load_level_file(LevelManager* level_manager, String file_path, LevelLoadType level_load_type){
+GenId level_manager_load_level_file(LevelManager* level_manager, String file_path){
     
     EntityManager* entity_manager = level_manager->entity_manager;
 
@@ -1265,33 +1263,13 @@ void level_manager_load_level_file(LevelManager* level_manager, String file_path
     }
     platform_free_memory(raw_file);
     
-    switch(level_load_type){
-        default:{ASSERT(false, "unknown level load type.");}break;
-        case LevelLoadType_World:{
-            level_manager->world_root_entity_gid = entity_manager->deserialised_entity[1].entity_gid;
-            string_clear(&level_manager->world_root_entity_file_path);
-            string_push(&level_manager->world_root_entity_file_path, file_path);
-        }break;
-        case LevelLoadType_WorldEntity:{
-            ASSERT(false, "LevelLoadType_WorldEntity not setup.");
-        }break;
-        case LevelLoadType_Ui:{
-            level_manager->ui_root_entity_gid = entity_manager->deserialised_entity[1].entity_gid;
-            string_clear(&level_manager->ui_root_entity_file_path);
-            string_push(&level_manager->ui_root_entity_file_path, file_path);
-        }break;
-        case LevelLoadType_UiEntity:{
-            ASSERT(false, "LevelLoadType_UiEntity not setup.");
-        }break;
-    }
+    // return the root entity.
+    BOUNDS_CHECK(1, entity_manager->deserialised_entity_length);
+    return entity_manager->deserialised_entity[1].entity_gid;    
 }
 
-void level_manager_reload_world_level(LevelManager* level_manager){
-    entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->world_root_entity_gid);
-    char* chars = (char[256]){0};
-    String file_path = {.chars = chars, .length = 256};
-    string_push(&file_path, level_manager->world_root_entity_file_path);
-    level_manager_load_level_file(level_manager, file_path, LevelLoadType_World);
+void level_manager_defer_reload_world_level(LevelManager* level_manager){
+    level_manager_defer_load_level(level_manager, level_manager->world_root_entity_file_path, LevelLoadType_World);
 }
 
 void level_manager_update(LevelManager* level_manager){
@@ -1301,12 +1279,17 @@ void level_manager_update(LevelManager* level_manager){
         switch(ctx->load_type){
             case LevelLoadType_World:{
                 entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->world_root_entity_gid);
+                level_manager->world_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path);
+                string_clear(&level_manager->world_root_entity_file_path);
+                string_push(&level_manager->world_root_entity_file_path, ctx->file_path);
             }break;
             case LevelLoadType_Ui:{
-                entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->world_root_entity_gid);
+                entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->ui_root_entity_gid);
+                level_manager->ui_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path);
+                string_clear(&level_manager->ui_root_entity_file_path);
+                string_push(&level_manager->ui_root_entity_file_path, ctx->file_path);
             }break;
         }
-        level_manager_load_level_file(level_manager, ctx->file_path, ctx->load_type);
     }
     level_manager->deferred_level_load_count = 0;
 }
