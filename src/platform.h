@@ -77,4 +77,6 @@ void platform_print_msg(char* msg);
 bool platform_load_image(Image* out_image, String file_path);
 bool platform_free_image(Image* image);
 
+i32 platform_get_max_file_path_length();
+
 #endif

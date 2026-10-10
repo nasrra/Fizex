@@ -572,3 +572,7 @@ bool platform_free_image(Image* image){
     *image = (Image){0};
     return true;
 }
+
+i32 platform_get_max_file_path_length(){
+    return MAX_PATH; 
+}

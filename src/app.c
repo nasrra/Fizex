@@ -76,7 +76,7 @@ void app_main(){
             context.
         **/
         GFX_StateInitInfo gfx_init_info = {
-            .max_file_path_length = 256,
+            .max_file_path_length = platform_get_max_file_path_length(),
             .max_user_uniform_buffer_size_in_bytes = sizeof(Ubo),
             .max_user_storage_buffer_size_in_bytes = 4, // this should be 4 when not used for some reason idk.
             .max_virtual_textures = 1024,
@@ -110,7 +110,7 @@ void app_main(){
     { // load assets.
 
         String file_path = {0};
-        string_init(&file_path, transient, 512);
+        string_init(&file_path, transient, platform_get_max_file_path_length());
 
         { // load textures.
             string_clear(&file_path);
@@ -127,9 +127,9 @@ void app_main(){
         { // load level.
             string_clear(&file_path);
             string_push_chars(&file_path, "assets/lvl_001.scsv", 19);
-            load_lvl(&game_state.entity_manager, file_path);
+            level_manager_load_level_file(&game_state.level_manager, file_path, LevelLoadType_World);
+            // level_manager_reload_world_level(&game_state.level_manager);
         }
-
     }
 
     // floor entity.

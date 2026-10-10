@@ -4,12 +4,15 @@
 ///
 
 
-
 ///
 /// types.
 ///
 
 
+typedef struct{
+    // the amount of numbered balls still alive on the board.
+    i32 remaining_ball_count;  
+} BoardState;
 
 typedef struct{
     Matrix4x4 world_camera_matrix;
@@ -120,9 +123,45 @@ typedef struct{
     bool is_init;
 } EntityManager;
 
+typedef enum{
+    // loads the level file as the world root entity.
+    LevelLoadType_World,
+    // loads the level file as an entity and parents to the world root entity.
+    LevelLoadType_WorldEntity,
+    // loads the level file as the ui root entity.
+    LevelLoadType_Ui,
+    // loads the level file as an entity and parents to the ui root entity.
+    LevelLoadType_UiEntity
+} LevelLoadType;
+
+typedef struct{
+    String file_path;
+    LevelLoadType load_type;
+} DeferredLevelLoadContext;
+
+typedef struct{
+    EntityManager* entity_manager;
+
+    String world_root_entity_file_path;
+    // the gen-id of the entity that is the parent of all entities within the world level.
+    GenId world_root_entity_gid;
+    
+    String ui_root_entity_file_path;
+    // the gen-id of the entity that is the parent of all entities within the ui level.
+    GenId ui_root_entity_gid;
+    
+    // the queue of levels to load at an appropriate time (deffered for later).
+    DeferredLevelLoadContext* deferred_level_load;
+    i32 deferred_level_load_length;
+    i32 deferred_level_load_count;
+    
+    bool is_init;
+} LevelManager;
+
 typedef struct{
     GameMouseState mouse_state;
     EntityManager entity_manager;
+    LevelManager level_manager;
     f32 time_scale;
     bool is_init;
 } GameState;
@@ -132,11 +171,10 @@ typedef struct{
 } CollisionCallbackContext;
 
 
-
-
 ///
 /// Definitions.
 ///
+
 
 #define BALL_FIZX_SHAPE_MATERIAL (FIZX_Material) {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 1.7f, .restitution = 0.334f, .rotational_response = true}
 #define BALL_FIZX_BODY_LINEAR_DRAG 0.5f
@@ -166,9 +204,11 @@ typedef struct{
 **/
 #define DELTA_TIME_ACCUMULATOR_SLOW_DOWN 0.0333147881012903f
 
+
 ///
 /// Physics layers.
 ///
+
 
 #define PHYSICS_LAYER_ALL I32_MAX
 #define PHYSICS_LAYER_BALL (1 << 1)
@@ -218,24 +258,28 @@ typedef struct{
 #define SPRITE_MATERIAL_TEXT 3
 
 
+///
+/// forward declarations.
+///
+
+
+void level_manager_load_level_file(LevelManager* level_manager, String file_path, LevelLoadType level_load_type);
+void level_manager_reload_world_level(LevelManager* level_manager);
+void level_manager_defer_load_level(LevelManager* level_manager, String file_path, LevelLoadType load_type);
+
+
 
 ///
 /// globals.
 ///
 
 
-
-
 static f32 fixed_update_accumulator = 0.0f;
-
-
 
 
 ///
 /// Timer Manager.
 ///
-
-
 
 
 bool timer_manager_init(TimerManager* manager, MemoryArena* arena, i32 timer_amount, i32 timeout_data_element_size){
@@ -437,6 +481,9 @@ f32 timer_manager_timer_get_delta_tick_time(TimerManager manager, TimerHandle ha
 }
 
 
+///
+/// functions: EntityManager
+///
 
 
 GenId entity_manager_alloc_entity(EntityManager* manager, GenId parent){
@@ -535,6 +582,82 @@ void entity_manager_debug_draw(EntityManager manager, f32 delta_time){
 #endif
 }
 
+void entity_manager_init(
+    EntityManager* manager, MemoryArena* arena, GFX_State* gfx_state,
+    i32 entity_amount, i32 physics_body_amount, i32 timer_timeout_data_size
+){
+    ASSERT(!manager->is_init, "already init.");
+
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->entity, &manager->entity_length, entity_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->deserialised_entity, &manager->deserialised_entity_length, entity_amount);
+    manager->deserialised_entity_count = 0;
+
+    for(i32 i = 0; i < entity_amount; i++){
+        Entity* entity = &manager->entity[i];
+        string_init(&entity->name, arena, ENTITY_NAME_LENGTH);
+    }
+
+    gen_id_allocator_init(&manager->gen_id_allocator, arena, entity_amount);
+    intrusive_list_init(&manager->entity_hierarchy, arena, entity_amount, false);
+    manager->entity_hierarchy.on_dealloc_callback = entity_on_entity_hierarchy_dealloc;
+    manager->gfx_state = gfx_state;
+    fizx_state_init(&manager->fizx_state, arena, entity_amount, 4, sizeof(GenId));
+    timer_manager_init(&manager->timer_manager, arena, entity_amount, timer_timeout_data_size);
+    manager->is_init = true;
+}
+
+
+///
+/// functions: Entity.
+///
+
+
+bool entity_set_position(EntityManager* manager, GenId entity_gid, Vector2 position){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, entity_gid);
+    if(!idx){
+        return false;
+    }
+
+    BOUNDS_CHECK(idx, manager->entity_length);
+    Entity* entity = &manager->entity[idx];
+
+    entity->transform.position = position;
+
+    if(entity->is_sprite){
+        gfx_sprite_set_position(manager->gfx_state, entity->sprite_gid, position);
+    }
+
+    if(entity->is_physics_body){
+        // TODO: may need to check this in the future, havent tested it.
+        fizx_body_set_global_position(&manager->fizx_state, entity->physics_body_gid, position);
+    }
+
+    return true;
+}
+
+bool entity_set_transform(EntityManager* manager, GenId entity_gid, Transform2D transform){
+    Entity* entity;
+    if(!entity_manager_get_entity(*manager, entity_gid, &entity)){
+        return false;
+    }
+    entity->transform = transform;
+
+    if(entity->is_sprite){
+        gfx_sprite_set_transform(manager->gfx_state, entity->sprite_gid, transform);
+    }
+
+    if(entity->is_physics_body){
+        fizx_body_set_global_transform(&manager->fizx_state, entity->physics_body_gid, transform);
+    }
+    return true;
+}
+
+
+///
+/// functions: Entities.
+///
+
+
 void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
     GenId* source_entity_gid = (GenId*)info.source_user_data;
@@ -544,6 +667,18 @@ void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_d
     }
 
     if(info.depth >= 0.85f){
+        Entity* entity;
+        if(!entity_manager_get_entity(ctx->game_state->entity_manager, *source_entity_gid, &entity)){
+            return;
+        }
+        
+        if(entity->type_id == EntityTypeId_BallCue){
+            platform_output_message("you lose!");
+            // level_manager_reload_world_level(&ctx->game_state->level_manager);
+            String file_path = {.chars = "assets/lvl_001.scsv", .count = 19, .length = 19};
+            level_manager_defer_load_level(&ctx->game_state->level_manager, file_path, LevelLoadType_World);
+        }
+        
         entity_manager_dealloc_entity(&ctx->game_state->entity_manager, *source_entity_gid);
     }
 }
@@ -607,33 +742,6 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
         }
     }
     return entity_gid;
-}
-
-
-void guideline_collider_callback(FIZX_CollisionInfo info, void* user_data){
-    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    ctx->game_state->mouse_state.guideline_end_point = (Vector2){info.first_contact_point_x, info.first_contact_point_y};
-    Vector2 end = {info.first_contact_point_x + info.normal_x, info.first_contact_point_y + info.normal_y};
-    gfx_draw_line(ctx->game_state->entity_manager.gfx_state, GFX_COLOUR_ORANGE, ctx->game_state->mouse_state.guideline_end_point, end, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
-}
-
-void raycast_on_sustain_callback(FIZX_CollisionInfo info, void* user_data){
-    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    Vector2 contact_point = {.x = info.first_contact_point_x, .y = info.first_contact_point_y};
-    Vector2 normal = {.x = info.normal_x, .y = info.normal_y};
-    Vector2 end = vector2_add(contact_point, normal);
-    gfx_draw_line(ctx->game_state->entity_manager.gfx_state, GFX_COLOUR_ORANGE, contact_point, end, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
-    // Circle shape;
-    // if(info.two_contact_points){
-    //     shape =  (Circle){.x = info.first_contact_point_x, .y = info.first_contact_point_y, .radius = 0.33f};
-    //     gfx_draw_wire_circle(ctx->game_state->entity_manager->gfx_state, shape, GFX_COLOUR_BLUE, SPRITE_LAYER_EDITOR_WORLD, 1, SPRITE_MATERIAL_DEBUG);
-    //     shape = (Circle){.x = info.second_contact_point_x, .y = info.second_contact_point_y, .radius = 0.33f};
-    //     gfx_draw_wire_circle(ctx->game_state->entity_manager->gfx_state, shape, GFX_COLOUR_ORANGE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
-    // }
-    // else{
-    //     shape =  (Circle){.x = info.first_contact_point_x, .y = info.first_contact_point_y, .radius = 0.33f};
-    //     gfx_draw_wire_circle(ctx->game_state->entity_manager->gfx_state, shape, GFX_COLOUR_ORANGE, SPRITE_LAYER_GAME_WORLD, 0, SPRITE_MATERIAL_DEBUG);
-    // }
 }
 
 GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
@@ -1029,7 +1137,44 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String n
     }
 }
 
-void load_lvl(EntityManager* entity_manager, String file_path){
+
+///
+/// functions: LevelManager.
+///
+
+
+
+void level_manager_init(LevelManager* level_manager, MemoryArena* arena, EntityManager* entity_manager, i32 deferred_level_load_length){
+    
+    ASSERT(!level_manager->is_init, "level manager is already init.");
+    *level_manager = (LevelManager){0};
+    
+    i32 file_path_length = platform_get_max_file_path_length();
+    string_init(&level_manager->world_root_entity_file_path, arena, file_path_length);
+    string_init(&level_manager->ui_root_entity_file_path, arena, file_path_length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, level_manager->deferred_level_load, &level_manager->deferred_level_load_length, deferred_level_load_length);
+    for(i32 i = 0; i < deferred_level_load_length; i++){
+        string_init(&level_manager->deferred_level_load[i].file_path, arena, file_path_length);
+    }
+    
+    level_manager->entity_manager = entity_manager;
+    level_manager->is_init = false;
+}
+
+void level_manager_defer_load_level(LevelManager* level_manager, String file_path, LevelLoadType load_type){
+    i32 idx = level_manager->deferred_level_load_count;
+    BOUNDS_CHECK(idx, level_manager->deferred_level_load_length);
+    DeferredLevelLoadContext* deferred = &level_manager->deferred_level_load[idx];
+    string_clear(&deferred->file_path);
+    string_push(&deferred->file_path, file_path);
+    deferred->load_type = load_type;
+    level_manager->deferred_level_load_count++;
+}
+
+void level_manager_load_level_file(LevelManager* level_manager, String file_path, LevelLoadType level_load_type){
+    
+    EntityManager* entity_manager = level_manager->entity_manager;
+
     /*
         .scsv are .csv files that are separated with ';' instead of ','
 
@@ -1045,8 +1190,19 @@ void load_lvl(EntityManager* entity_manager, String file_path){
     DeserialisedEntity* deserialised_entity;
     i32 lines_read = 1;
     i32 bytes_consumed = 0;
+    
+    // zero the first two deserialised entities.
+    // this is to preserve the NIL as well as the first loaded entity.
+    // specifically for the first loaded entity, in the case that the 'while'
+    // loop fails on the first iteration, this ensures that the later returning of 
+    // 'entity_manager->deserialised_entity[1].entity_gid' is zero when the level cannot be loaded at all.
+    ZERO_MEMORY(entity_manager->deserialised_entity, 2);
 
-    entity_manager->deserialised_entity_count = 1; // skip the NIL.
+    // skip the NIL
+    // this is because the level files (.scsv) ordering defines what is the parent of an entity.
+    // for instance, an entity on line 12 can specify that it is the a child of the entity on line 3.
+    // 0 means that it doesnt have a parent at all. 
+    entity_manager->deserialised_entity_count = 1;
 
     while(true){
         entity_manager->deserialised_entity_count += 1;
@@ -1107,30 +1263,63 @@ void load_lvl(EntityManager* entity_manager, String file_path){
         }
     }
     platform_free_memory(raw_file);
+    
+    switch(level_load_type){
+        default:{ASSERT(false, "unknown level load type.");}break;
+        case LevelLoadType_World:{
+            level_manager->world_root_entity_gid = entity_manager->deserialised_entity[1].entity_gid;
+            string_clear(&level_manager->world_root_entity_file_path);
+            string_push(&level_manager->world_root_entity_file_path, file_path);
+        }break;
+        case LevelLoadType_WorldEntity:{
+            ASSERT(false, "LevelLoadType_WorldEntity not setup.");
+        }break;
+        case LevelLoadType_Ui:{
+            level_manager->ui_root_entity_gid = entity_manager->deserialised_entity[1].entity_gid;
+            string_clear(&level_manager->ui_root_entity_file_path);
+            string_push(&level_manager->ui_root_entity_file_path, file_path);
+        }break;
+        case LevelLoadType_UiEntity:{
+            ASSERT(false, "LevelLoadType_UiEntity not setup.");
+        }break;
+    }
 }
 
-void entity_manager_init(
-    EntityManager* manager, MemoryArena* arena, GFX_State* gfx_state,
-    i32 entity_amount, i32 physics_body_amount, i32 timer_timeout_data_size
-){
-    ASSERT(!manager->is_init, "already init.");
+void level_manager_reload_world_level(LevelManager* level_manager){
+    entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->world_root_entity_gid);
+    char* chars = (char[256]){0};
+    String file_path = {.chars = chars, .length = 256};
+    string_push(&file_path, level_manager->world_root_entity_file_path);
+    level_manager_load_level_file(level_manager, file_path, LevelLoadType_World);
+}
 
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->entity, &manager->entity_length, entity_amount);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->deserialised_entity, &manager->deserialised_entity_length, entity_amount);
-    manager->deserialised_entity_count = 0;
-
-    for(i32 i = 0; i < entity_amount; i++){
-        Entity* entity = &manager->entity[i];
-        string_init(&entity->name, arena, ENTITY_NAME_LENGTH);
+void level_manager_update(LevelManager* level_manager){
+    for(i32 i = 0; i < level_manager->deferred_level_load_count; i++){
+        BOUNDS_CHECK(i, level_manager->deferred_level_load_length);
+        DeferredLevelLoadContext* ctx = &level_manager->deferred_level_load[i];
+        switch(ctx->load_type){
+            case LevelLoadType_World:{
+                entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->world_root_entity_gid);
+            }break;
+            case LevelLoadType_Ui:{
+                entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->world_root_entity_gid);
+            }break;
+        }
+        level_manager_load_level_file(level_manager, ctx->file_path, ctx->load_type);
     }
+    level_manager->deferred_level_load_count = 0;
+}
 
-    gen_id_allocator_init(&manager->gen_id_allocator, arena, entity_amount);
-    intrusive_list_init(&manager->entity_hierarchy, arena, entity_amount, false);
-    manager->entity_hierarchy.on_dealloc_callback = entity_on_entity_hierarchy_dealloc;
-    manager->gfx_state = gfx_state;
-    fizx_state_init(&manager->fizx_state, arena, entity_amount, 4, sizeof(GenId));
-    timer_manager_init(&manager->timer_manager, arena, entity_amount, timer_timeout_data_size);
-    manager->is_init = true;
+///
+/// functions: GameState
+///
+
+
+void guideline_collider_callback(FIZX_CollisionInfo info, void* user_data){
+    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
+    ctx->game_state->mouse_state.guideline_end_point = (Vector2){info.first_contact_point_x, info.first_contact_point_y};
+    Vector2 end = {info.first_contact_point_x + info.normal_x, info.first_contact_point_y + info.normal_y};
+    gfx_draw_line(ctx->game_state->entity_manager.gfx_state, GFX_COLOUR_ORANGE, ctx->game_state->mouse_state.guideline_end_point, end, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
 }
 
 void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena* transient, GFX_State* gfx_state){
@@ -1202,10 +1391,14 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
         false
     );
     
+    level_manager_init(&game_state->level_manager, persistent, &game_state->entity_manager, 256);
+    
     game_state->is_init = true;
 }
 
 void game_state_preupdate(GameState* game_state, f32 delta_time){
+    level_manager_update(&game_state->level_manager);
+
     EntityManager* entity_manager = &game_state->entity_manager;
     for(i32 i = 0; i < entity_manager->entity_length; i++){
         Entity* entity = &entity_manager->entity[i];
@@ -1289,7 +1482,6 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                 Entity* entity = &entity_manager->entity[e_idx];
                 Aabb world_aabb = aabb_translate(entity->clickable_aabb, entity->transform.position);
                 if(aabb_overlaps_point(world_aabb, mouse_world_position)){
-                    platform_output_message("clicked entity\n");
                     if(entity->is_physics_body){
                         fizx_body_set_active(fizx_state, entity->physics_body_gid, false);
                     }
@@ -1309,7 +1501,6 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             f32 length = vector2_len(position_diff);
             Vector2 launch_direction = vector2_normalise(position_diff);
 
-
             // calculating impulse to apply to clicked entity.
             i32 entity_idx = game_state->mouse_state.clicked_entity_idx;
             BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
@@ -1318,8 +1509,15 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
 
             // setting entity position to mouse.
             Vector2 new_position = vector2_sub(game_state->mouse_state.clicked_entity_initial_position, position_diff);
-            entity->transform.position = new_position;
-            fizx_body_set_global_position(fizx_state, entity->physics_body_gid, new_position);
+            Circle launch_cursour_shape = {.x = new_position.x, .y = new_position.y, .radius = 0.1f};
+            gfx_draw_wire_circle(
+                game_state->entity_manager.gfx_state, 
+                launch_cursour_shape, 
+                GFX_COLOUR_YELLOW, 
+                SPRITE_LAYER_EDITOR_WORLD, 
+                0, 
+                SPRITE_MATERIAL_DEBUG
+            );
 
 
             // draw guideline.
@@ -1454,54 +1652,4 @@ void game_state_draw(GameState* game_state, f32 delta_time){
     );
     // gfx_clay_test_layout(&entity_manager);
     gfx_clay_end_layout(gfx_state, delta_time, SPRITE_LAYER_GAME_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
-}
-
-
-
-
-///
-/// functions: Entity.
-///
-
-
-
-
-bool entity_set_position(EntityManager* manager, GenId entity_gid, Vector2 position){
-    i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, entity_gid);
-    if(!idx){
-        return false;
-    }
-
-    BOUNDS_CHECK(idx, manager->entity_length);
-    Entity* entity = &manager->entity[idx];
-
-    entity->transform.position = position;
-
-    if(entity->is_sprite){
-        gfx_sprite_set_position(manager->gfx_state, entity->sprite_gid, position);
-    }
-
-    if(entity->is_physics_body){
-        // TODO: may need to check this in the future, havent tested it.
-        fizx_body_set_global_position(&manager->fizx_state, entity->physics_body_gid, position);
-    }
-
-    return true;
-}
-
-bool entity_set_transform(EntityManager* manager, GenId entity_gid, Transform2D transform){
-    Entity* entity;
-    if(!entity_manager_get_entity(*manager, entity_gid, &entity)){
-        return false;
-    }
-    entity->transform = transform;
-
-    if(entity->is_sprite){
-        gfx_sprite_set_transform(manager->gfx_state, entity->sprite_gid, transform);
-    }
-
-    if(entity->is_physics_body){
-        fizx_body_set_global_transform(&manager->fizx_state, entity->physics_body_gid, transform);
-    }
-    return true;
 }
