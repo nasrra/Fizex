@@ -204,7 +204,7 @@ typedef struct{
 #define I8_MAX  (127)
 #define I16_MAX (32767)
 #define I32_MAX (2147483647)
-#define I64_MAX (__INT64_C(9223372036854775807))
+#define I64_MAX 9223372036854775807LL
 
 /*
     Maximum of unsigned integral types.

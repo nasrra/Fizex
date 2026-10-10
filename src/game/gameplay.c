@@ -41,6 +41,10 @@ typedef enum{
 typedef struct{
     i32 clicked_entity_idx;
     Vector2 clicked_entity_initial_position;
+    GenId guideline_physics_body_gid;
+    GenId guideline_physics_shape_gid;
+    // the end point in world space for the guideline to draw.
+    Vector2 guideline_end_point;
 } GameMouseState;
 
 typedef struct{
@@ -124,7 +128,7 @@ typedef struct{
 } GameState;
 
 typedef struct{
-    EntityManager* entity_manager;
+    GameState* game_state;
 } CollisionCallbackContext;
 
 
@@ -170,16 +174,24 @@ typedef struct{
 #define PHYSICS_LAYER_BALL (1 << 1)
 #define PHYSICS_LAYER_ENVIRONMENT (1 << 2)
 #define PHYSICS_LAYER_RAYCAST (1 << 3)
+#define PHYSICS_LAYER_GUIDELINE (1 << 4)
+
+
 
 ///
 /// Virtual Texture ID.
 ///
+
+
 #define VIRTUAL_TEXTURE_ID_FONT 1
 #define VIRTUAL_TEXTURE_ID_GAME_BOARD 2
+
 
 ///
 /// Texture Views.
 ///
+
+
 #define TEXTURE_VIEW_WALL       (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
 #define TEXTURE_VIEW_BALL_CUE   (GFX_TextureView){.top_left = {128, 0}, .bot_right = {256, 128}}
 #define TEXTURE_VIEW_BALL_ONE   (GFX_TextureView){.top_left = {256, 0}, .bot_right = {384, 128}}
@@ -532,8 +544,7 @@ void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_d
     }
 
     if(info.depth >= 0.85f){
-        // entity_manager_dealloc_entity(ctx->entity_manager, *source_entity_gid);
-        // platform_output_message("foo!");
+        entity_manager_dealloc_entity(&ctx->game_state->entity_manager, *source_entity_gid);
     }
 }
 
@@ -567,6 +578,7 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
                 entity->physics_body_gid,
                 physics_shape_transform,
                 FIZX_ShapeBehaviour_Trigger,
+                FIZX_CollisionCallbackBehaviour_All,
                 shape_user_data,
                 PHYSICS_LAYER_ENVIRONMENT,
                 physics_shape
@@ -597,22 +609,30 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
     return entity_gid;
 }
 
+
+void guideline_collider_callback(FIZX_CollisionInfo info, void* user_data){
+    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
+    ctx->game_state->mouse_state.guideline_end_point = (Vector2){info.first_contact_point_x, info.first_contact_point_y};
+    Vector2 end = {info.first_contact_point_x + info.normal_x, info.first_contact_point_y + info.normal_y};
+    gfx_draw_line(ctx->game_state->entity_manager.gfx_state, GFX_COLOUR_ORANGE, ctx->game_state->mouse_state.guideline_end_point, end, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
+}
+
 void raycast_on_sustain_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
     Vector2 contact_point = {.x = info.first_contact_point_x, .y = info.first_contact_point_y};
     Vector2 normal = {.x = info.normal_x, .y = info.normal_y};
     Vector2 end = vector2_add(contact_point, normal);
-    gfx_draw_line(ctx->entity_manager->gfx_state, GFX_COLOUR_WHITE, contact_point, end, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
+    gfx_draw_line(ctx->game_state->entity_manager.gfx_state, GFX_COLOUR_ORANGE, contact_point, end, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
     // Circle shape;
     // if(info.two_contact_points){
     //     shape =  (Circle){.x = info.first_contact_point_x, .y = info.first_contact_point_y, .radius = 0.33f};
-    //     gfx_draw_wire_circle(ctx->entity_manager->gfx_state, shape, GFX_COLOUR_BLUE, SPRITE_LAYER_EDITOR_WORLD, 1, SPRITE_MATERIAL_DEBUG);
+    //     gfx_draw_wire_circle(ctx->game_state->entity_manager->gfx_state, shape, GFX_COLOUR_BLUE, SPRITE_LAYER_EDITOR_WORLD, 1, SPRITE_MATERIAL_DEBUG);
     //     shape = (Circle){.x = info.second_contact_point_x, .y = info.second_contact_point_y, .radius = 0.33f};
-    //     gfx_draw_wire_circle(ctx->entity_manager->gfx_state, shape, GFX_COLOUR_ORANGE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+    //     gfx_draw_wire_circle(ctx->game_state->entity_manager->gfx_state, shape, GFX_COLOUR_ORANGE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
     // }
     // else{
     //     shape =  (Circle){.x = info.first_contact_point_x, .y = info.first_contact_point_y, .radius = 0.33f};
-    //     gfx_draw_wire_circle(ctx->entity_manager->gfx_state, shape, GFX_COLOUR_ORANGE, SPRITE_LAYER_GAME_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+    //     gfx_draw_wire_circle(ctx->game_state->entity_manager->gfx_state, shape, GFX_COLOUR_ORANGE, SPRITE_LAYER_GAME_WORLD, 0, SPRITE_MATERIAL_DEBUG);
     // }
 }
 
@@ -643,26 +663,12 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
                 entity->physics_body_gid,
                 shape_transform,
                 FIZX_ShapeBehaviour_Dynamic,
+                FIZX_CollisionCallbackBehaviour_All,
                 &entity_gid,
                 PHYSICS_LAYER_BALL,
                 circle,
                 BALL_FIZX_SHAPE_MATERIAL
             );
-            // LOO
-            GenId raycast = fizx_line_rigid_alloc(
-                &entity_manager->fizx_state,
-                entity->physics_body_gid,
-                shape_transform,
-                FIZX_ShapeBehaviour_Dynamic,
-                &entity_gid,
-                PHYSICS_LAYER_RAYCAST,
-                (Vector2){0},
-                VECTOR2_DOWN,
-                2.0f
-                ,BALL_FIZX_SHAPE_MATERIAL
-            );
-            fizx_shape_set_on_sustain_callback(&entity_manager->fizx_state, raycast, raycast_on_sustain_callback);
-            // fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, false);
         }
 
         { // set_is_clickable();
@@ -715,6 +721,7 @@ GenId entity_spawn_wall(EntityManager* entity_manager, String name, Transform2D 
             entity->physics_body_gid,
             shape_transform,
             FIZX_ShapeBehaviour_Kinematic,
+            FIZX_CollisionCallbackBehaviour_All,
             &entity_gid,
             PHYSICS_LAYER_ENVIRONMENT,
             square,
@@ -766,26 +773,27 @@ void pig_invincible_timer_timeout(void* user_data){
 void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
     GenId* entity_gid = (GenId*)info.target_user_data;
+    EntityManager* entity_manager = &ctx->game_state->entity_manager;
 
     if((info.source_layer & PHYSICS_LAYER_PLAYER) == 0){
         return;
     }
 
     Entity* entity;
-    if(!entity_manager_get_entity(*ctx->entity_manager, *entity_gid, &entity)){
+    if(!entity_manager_get_entity(*entity_manager, *entity_gid, &entity)){
         ASSERT(false, "failed to get entity.");
     }
     if(entity->is_invincible){
         return;
     }
 
-    i32 source_body_idx = fizx_shape_get_parent_unsafe(ctx->entity_manager->fizx_state, info.source_entity_idx);
+    i32 source_body_idx = fizx_shape_get_parent_unsafe(entity_manager->fizx_state, info.source_entity_idx);
     if(!source_body_idx){
         ASSERT(false, "failed to retrieve body idx.");
         return;
     }
 
-    Vector2 velocity = fizx_body_get_linear_velocity_unsafe(ctx->entity_manager->fizx_state, source_body_idx);
+    Vector2 velocity = fizx_body_get_linear_velocity_unsafe(entity_manager->fizx_state, source_body_idx);
     f32 magnitude = vector2_len(velocity);
     f32 damage = magnitude / ((PLAYER_MOUSE_LAUNCH_FORCE * 0.5f) * PLAYER_MOUSE_MAX_DRAW_RADIUS);
     damage = CLAMP(damage, 0.0f, 1.0f);
@@ -801,14 +809,14 @@ void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
         }
     }
     else if(entity->health <= 1.0f){
-        gfx_sprite_set_texture_view(ctx->entity_manager->gfx_state, entity->sprite_gid, GFX_TEXTURE_VIEW_PIG_CRITICAL);
+        gfx_sprite_set_texture_view(entity_manager->gfx_state, entity->sprite_gid, GFX_TEXTURE_VIEW_PIG_CRITICAL);
     }
     else if(entity->health <= 2.0f){
-        gfx_sprite_set_texture_view(ctx->entity_manager->gfx_state, entity->sprite_gid, GFX_TEXTURE_VIEW_PIG_HURT);
+        gfx_sprite_set_texture_view(entity_manager->gfx_state, entity->sprite_gid, GFX_TEXTURE_VIEW_PIG_HURT);
     }
 
     PigInvincibleTimerTimeoutContext timeout_data = {
-        .entity_manager = ctx->entity_manager,
+        .entity_manager = entity_manager,
         .entity_gid = *entity_gid
     };
 
@@ -903,6 +911,7 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, String name, Transfo
             entity->physics_body_gid,
             shape_transform,
             FIZX_ShapeBehaviour_Dynamic,
+            FIZX_CollisionCallbackBehaviour_All,
             &entity_gid,
             PHYSICS_LAYER_BALL,
             circle,
@@ -1153,14 +1162,46 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
         .colour_center_of_mass          = GFX_COLOUR_ORANGE,
         .sprite_layer                   = SPRITE_LAYER_EDITOR_WORLD,
         .wireframe_thickness            = 0.005f,
-        .material_idx                   = SPRITE_MATERIAL_DEBUG,
-        .draw_body_shapes               = true,
-        .draw_collision_info            = true
-        // .draw_centers_of_mass_unrotated = true
+        .material_idx                   = SPRITE_MATERIAL_DEBUG
+        // .draw_body_shapes               = true,
+        // .draw_bvh_branches              = true,
         // .draw_bvh_leaves                = true
+        // .draw_collision_info            = true
     };
 
     entity_manager_init(&game_state->entity_manager, persistent, gfx_state, entity_amount, physics_body_amount, timeout_data_element_size);
+    
+    game_state->mouse_state.guideline_physics_body_gid = fizx_body_alloc(
+        &game_state->entity_manager.fizx_state, 
+        TRANSFORM2D_IDENTITY, 
+        0.0f, 
+        0.0f, 
+        false
+    );
+    
+    i32 x = 0;
+    game_state->mouse_state.guideline_physics_shape_gid = fizx_line_collider_alloc(
+        &game_state->entity_manager.fizx_state, 
+        game_state->mouse_state.guideline_physics_body_gid, 
+        TRANSFORM2D_IDENTITY,
+        FIZX_ShapeBehaviour_Trigger,
+        FIZX_CollisionCallbackBehaviour_Closest,
+        &x,
+        PHYSICS_LAYER_GUIDELINE,
+        (Vector2){0}, 
+        (Vector2){0}, 
+        0.0f
+    );
+    
+    fizx_shape_set_on_enter_callback(&game_state->entity_manager.fizx_state, game_state->mouse_state.guideline_physics_shape_gid, guideline_collider_callback);
+    fizx_shape_set_on_sustain_callback(&game_state->entity_manager.fizx_state, game_state->mouse_state.guideline_physics_shape_gid, guideline_collider_callback);
+    
+    fizx_body_set_active(
+        &game_state->entity_manager.fizx_state,
+        game_state->mouse_state.guideline_physics_body_gid,
+        false
+    );
+    
     game_state->is_init = true;
 }
 
@@ -1219,7 +1260,6 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         timer_manager_update(timer_manager, delta_time);
     }
 
-
     { // fixed update.
 
         fixed_update_accumulator += delta_time;
@@ -1229,7 +1269,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
 
         while(fixed_update_accumulator >= FIXED_DELTA_TIME){
 
-            CollisionCallbackContext collision_callback_ctx = {.entity_manager = entity_manager};
+            CollisionCallbackContext collision_callback_ctx = {.game_state = game_state};
             if(!in_editor_mode){
                 fizx_state_fixed_update(fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME, 32);
             }
@@ -1262,18 +1302,61 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         Vector2 impulse_magnitude;
 
         if(game_state->mouse_state.clicked_entity_idx){
+            
+            // get directions.
+            Vector2 position_diff = vector2_sub(game_state->mouse_state.clicked_entity_initial_position, mouse_world_position);
+            position_diff = vector2_clamp_to_radius(position_diff, PLAYER_MOUSE_MAX_DRAW_RADIUS);
+            f32 length = vector2_len(position_diff);
+            Vector2 launch_direction = vector2_normalise(position_diff);
+
+
+            // calculating impulse to apply to clicked entity.
             i32 entity_idx = game_state->mouse_state.clicked_entity_idx;
             BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
             Entity* entity = &entity_manager->entity[entity_idx];
-            Vector2 position_diff = vector2_sub(game_state->mouse_state.clicked_entity_initial_position, mouse_world_position);
-
-            position_diff = vector2_clamp_to_radius(position_diff, PLAYER_MOUSE_MAX_DRAW_RADIUS);
             impulse_magnitude = vector2_mul_val(position_diff, PLAYER_MOUSE_LAUNCH_FORCE);
 
+            // setting entity position to mouse.
             Vector2 new_position = vector2_sub(game_state->mouse_state.clicked_entity_initial_position, position_diff);
-
             entity->transform.position = new_position;
             fizx_body_set_global_position(fizx_state, entity->physics_body_gid, new_position);
+
+
+            // draw guideline.
+            gfx_draw_line(
+                game_state->entity_manager.gfx_state,
+                GFX_COLOUR_WHITE,
+                game_state->mouse_state.clicked_entity_initial_position,
+                game_state->mouse_state.guideline_end_point, 
+                SPRITE_LAYER_EDITOR_WORLD, 
+                0, 
+                SPRITE_MATERIAL_DEBUG, 
+                0.05f
+            );
+
+            fizx_body_set_active(
+                &game_state->entity_manager.fizx_state,
+                game_state->mouse_state.guideline_physics_body_gid,
+                true
+            );        
+            fizx_body_set_global_position(
+                &game_state->entity_manager.fizx_state, 
+                game_state->mouse_state.guideline_physics_body_gid, 
+                game_state->mouse_state.clicked_entity_initial_position
+            );
+            fizx_line_set_direction(
+                &game_state->entity_manager.fizx_state, 
+                game_state->mouse_state.guideline_physics_shape_gid, 
+                launch_direction, 
+                100.0f
+            );
+        }
+        else{
+            fizx_body_set_active(
+                &game_state->entity_manager.fizx_state,
+                game_state->mouse_state.guideline_physics_body_gid,
+                false
+            );        
         }
 
         if(input_is_mouse_button_just_released(MouseButton_Left)){

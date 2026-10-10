@@ -2380,11 +2380,11 @@ void polygon_calc_centroid_scalar(f32* verts_x, f32* verts_y, i32 verts_length, 
     i32 next_index;
     bool next_in_range;
 
-    if(verts_length == 2){
-        *out_centroid_x = (verts_x[0] + verts_x[1]) * 0.5f;
-        *out_centroid_y = (verts_y[0] + verts_y[1]) * 0.5f;
-        return;
-    }
+    // if(verts_length == 2){
+    //     *out_centroid_x = (verts_x[0] + verts_x[1]) * 0.5f;
+    //     *out_centroid_y = (verts_y[0] + verts_y[1]) * 0.5f;
+    //     return;
+    // }
 
     for(i32 i = 0; i < verts_length; i++){
         next_index = i + 1;
