@@ -2087,13 +2087,13 @@ bool fizx_shape_set_active(FIZX_State* state, GenId body_gid, bool is_active){
     return true;
 }
 
-void fizx_body_impulse_force_unsafe(FIZX_State* state, Vector2 force, i32 body_idx){
+void fizx_body_impulse_force_unsafe(FIZX_State* state, i32 body_idx, Vector2 force){
     BOUNDS_CHECK(body_idx, state->entities.linear_velocity.length);
     state->entities.linear_velocity.x[body_idx] += force.x;
     state->entities.linear_velocity.y[body_idx] += force.y;
 }
 
-bool fizx_body_impulse_force(FIZX_State* state, Vector2 force, GenId body_gid){
+bool fizx_body_impulse_force(FIZX_State* state, GenId body_gid, Vector2 force){
 
     i32 body_idx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, body_gid);
     if(!body_idx){
@@ -2105,7 +2105,7 @@ bool fizx_body_impulse_force(FIZX_State* state, Vector2 force, GenId body_gid){
         ASSERT(false, "not a body.");
         return false;
     }
-    fizx_body_impulse_force_unsafe(state, force, body_idx);
+    fizx_body_impulse_force_unsafe(state, body_idx, force);
     return true;
 }
 

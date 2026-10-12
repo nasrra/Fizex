@@ -171,6 +171,11 @@ typedef struct{
     GameState* game_state;
 } CollisionCallbackContext;
 
+typedef struct{
+    GenId ball_cue_physics_gid;
+    EntityManager* entity_manager;
+} BallCueFragmentationTimerTimeoutContext;
+
 
 ///
 /// Definitions.
@@ -212,10 +217,15 @@ typedef struct{
 
 
 #define PHYSICS_LAYER_ALL I32_MAX
-#define PHYSICS_LAYER_BALL (1 << 1)
+#define PHYSICS_LAYER_BALL_NUMBER (1 << 1)
 #define PHYSICS_LAYER_ENVIRONMENT (1 << 2)
 #define PHYSICS_LAYER_RAYCAST (1 << 3)
 #define PHYSICS_LAYER_GUIDELINE (1 << 4)
+#define PHYSICS_LAYER_BALL_CUE (1 << 5)
+#define PHYSICS_LAYER_BALL (PHYSICS_LAYER_BALL_CUE | PHYSICS_LAYER_BALL_NUMBER)
+
+#define BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK (PHYSICS_LAYER_BALL_CUE | PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT)
+#define BALL_CUE_FRAGMENTATION_PHYSICS_LAYER_MASK (PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT) 
 
 
 ///
@@ -787,8 +797,8 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
                 entity->transform,
                 BALL_FIZX_BODY_LINEAR_DRAG,
                 BALL_FIZX_BODY_ANGULAR_DRAG,
-                PHYSICS_LAYER_BALL,
-                PHYSICS_LAYER_ALL,
+                PHYSICS_LAYER_BALL_CUE,
+                BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK,
                 false
             );
             fizx_circle_rigid_alloc(
@@ -828,35 +838,65 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
     return entity_gid;
 }
 
+void ball_cue_fragment_timer_timeout(void* user_data){
+    BallCueFragmentationTimerTimeoutContext* ctx = (BallCueFragmentationTimerTimeoutContext*)user_data;
+    fizx_body_set_mask(&ctx->entity_manager->fizx_state, ctx->ball_cue_physics_gid, BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK);
+}
+
 void ball_cue_update(Entity* entity, GameState* game_state, f32 delta_time){
     // platform_output_message("update cue ball!\n");
     if(input_is_key_just_pressed(Key_A)){
 
         if(entity->is_physics_body){            
-            i32 mask;
-            if(fizx_body_get_mask(game_state->entity_manager.fizx_state, entity->physics_body_gid, &mask)){
-                switch(mask){
-                    default:{
-                        fizx_body_set_mask(&game_state->entity_manager.fizx_state, entity->physics_body_gid, PHYSICS_LAYER_ENVIRONMENT);
-                    }break;
-                    case PHYSICS_LAYER_ENVIRONMENT:{
-                        fizx_body_set_mask(&game_state->entity_manager.fizx_state, entity->physics_body_gid, PHYSICS_LAYER_ALL);
-                    }break;
+            fizx_body_set_mask(&game_state->entity_manager.fizx_state, entity->physics_body_gid, BALL_CUE_FRAGMENTATION_PHYSICS_LAYER_MASK);
+            BallCueFragmentationTimerTimeoutContext ctx = {
+                .ball_cue_physics_gid = entity->physics_body_gid,
+                .entity_manager = &game_state->entity_manager
+            };
+            
+            timer_manager_timer_start(&game_state->entity_manager.timer_manager, 0.334f, 1.0f, ball_cue_fragment_timer_timeout, &ctx, sizeof(ctx));
+            
+            Vector2 velocity = fizx_body_get_linear_velocity(game_state->entity_manager.fizx_state, entity->physics_body_gid);
+            Vector2 direction = vector2_normalise(velocity);
+            f32 velocity_len = vector2_len(velocity);
+            
+            { // inner_left_ball_fragment();
+
+                Vector2 new_direction = vector2_rotate(direction, -0.334f);     
+                Vector2 impulse_force = vector2_mul_val(new_direction, velocity_len);
+                
+                GenId fragment_gid = entity_spawn_ball_cue(
+                    &game_state->entity_manager, 
+                    (String){.chars = "spawned cue ball", .count = 16, .length = 16}, 
+                    entity->transform, 
+                    game_state->level_manager.world_root_entity_gid
+                );
+                
+                Entity* fragment_entity;
+                if(entity_manager_get_entity(game_state->entity_manager, fragment_gid, &fragment_entity)){
+                    fizx_body_set_mask(&game_state->entity_manager.fizx_state, fragment_entity->physics_body_gid, BALL_CUE_FRAGMENTATION_PHYSICS_LAYER_MASK);
+                    fizx_body_impulse_force(&game_state->entity_manager.fizx_state, fragment_entity->physics_body_gid, impulse_force);
                 }
             }
             
-            // Vector2 velocity = fizx_body_get_linear_velocity(game_state->entity_manager.fizx_state, entity->physics_body_gid);
-            // Vector2 direction = vector2_normalise(velocity);
-            
-            // Vector2 inner_left_direction = vector2_rotate(direction, -0.66f);     
-            // Transform2D inner_left_transform = entity->transform;
-            // inner_left_transform.position = vector2_sub(inner_left_transform.position, inner_left_direction);
-            // entity_spawn_ball_cue(
-            //     &game_state->entity_manager, 
-            //     (String){.chars = "spawned cue ball", .count = 16, .length = 16}, 
-            //     inner_left_transform, 
-            //     game_state->level_manager.world_root_entity_gid
-            // );
+            { // inner_right_ball_fragment();
+
+                Vector2 new_direction = vector2_rotate(direction, 0.334f);     
+                Vector2 impulse_force = vector2_mul_val(new_direction, velocity_len);
+                
+                GenId fragment_gid = entity_spawn_ball_cue(
+                    &game_state->entity_manager, 
+                    (String){.chars = "spawned cue ball", .count = 16, .length = 16}, 
+                    entity->transform, 
+                    game_state->level_manager.world_root_entity_gid
+                );
+                
+                Entity* fragment_entity;
+                if(entity_manager_get_entity(game_state->entity_manager, fragment_gid, &fragment_entity)){
+                    fizx_body_set_mask(&game_state->entity_manager.fizx_state, fragment_entity->physics_body_gid, BALL_CUE_FRAGMENTATION_PHYSICS_LAYER_MASK);
+                    fizx_body_impulse_force(&game_state->entity_manager.fizx_state, fragment_entity->physics_body_gid, impulse_force);
+                }
+            }
             
             // Vector2 outter_left_direction = vector2_rotate(direction, -0.99f);            
             // Transform2D outter_left_transform = entity->transform;
@@ -1088,7 +1128,7 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, String name, Transfo
             entity->transform,
             BALL_FIZX_BODY_LINEAR_DRAG,
             BALL_FIZX_BODY_ANGULAR_DRAG,
-            PHYSICS_LAYER_BALL,
+            PHYSICS_LAYER_BALL_NUMBER,
             PHYSICS_LAYER_ALL,
             false
         );
@@ -1673,7 +1713,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                 fizx_body_set_active(fizx_state, entity->physics_body_gid, true);
                 game_state->mouse_state.clicked_entity_idx = 0;
                 fizx_body_clear_forces_and_velocities(fizx_state, entity->physics_body_gid);
-                fizx_body_impulse_force(fizx_state,impulse_magnitude, entity->physics_body_gid);
+                fizx_body_impulse_force(fizx_state, entity->physics_body_gid, impulse_magnitude);
             }
         }
     }
