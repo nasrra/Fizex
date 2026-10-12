@@ -38,7 +38,8 @@ typedef enum{
     EntityTypeId_BallEight      = 11,
     EntityTypeId_BallNine       = 12,
     EntityTypeId_BallZero       = 13,
-    EntityTypeId_Pocket         = 14
+    EntityTypeId_Pocket         = 14,
+    EntityTypeId_BoostPad       = 15
 } EntityTypeId;
 
 typedef struct{
@@ -64,6 +65,7 @@ typedef struct{
     bool is_clickable;
     bool is_physics_body;
     bool is_invincible;
+    bool boost_depleted;
 } Entity;
 
 typedef void (*TimerTimeout)(void* user_data);
@@ -176,6 +178,10 @@ typedef struct{
     EntityManager* entity_manager;
 } BallCueFragmentationTimerTimeoutContext;
 
+typedef struct{
+    GenId boost_pad_entity_gid;
+    EntityManager* entity_manager;
+} BoostPadBoostDepletedTimerTimeoutContext;
 
 ///
 /// Definitions.
@@ -217,15 +223,17 @@ typedef struct{
 
 
 #define PHYSICS_LAYER_ALL I32_MAX
-#define PHYSICS_LAYER_BALL_NUMBER (1 << 1)
-#define PHYSICS_LAYER_ENVIRONMENT (1 << 2)
-#define PHYSICS_LAYER_RAYCAST (1 << 3)
-#define PHYSICS_LAYER_GUIDELINE (1 << 4)
-#define PHYSICS_LAYER_BALL_CUE (1 << 5)
+#define PHYSICS_LAYER_BALL_NUMBER       (1 << 1)
+#define PHYSICS_LAYER_ENVIRONMENT_TOP   (1 << 2)
+#define PHYSICS_LAYER_ENVIRONMENT_MID   (1 << 3)
+#define PHYSICS_LAYER_ENVIRONMENT_BOT   (1 << 4)
+#define PHYSICS_LAYER_RAYCAST           (1 << 5)
+#define PHYSICS_LAYER_GUIDELINE         (1 << 6)
+#define PHYSICS_LAYER_BALL_CUE          (1 << 7)
 #define PHYSICS_LAYER_BALL (PHYSICS_LAYER_BALL_CUE | PHYSICS_LAYER_BALL_NUMBER)
 
-#define BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK (PHYSICS_LAYER_BALL_CUE | PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT)
-#define BALL_CUE_FRAGMENTATION_PHYSICS_LAYER_MASK (PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT) 
+#define BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK (PHYSICS_LAYER_BALL_CUE | PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_ENVIRONMENT_BOT)
+#define BALL_CUE_FRAGMENTATION_PHYSICS_LAYER_MASK (PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID) 
 
 
 ///
@@ -254,6 +262,7 @@ typedef struct{
 #define TEXTURE_VIEW_BALL_EIGHT (GFX_TextureView){.top_left = {1152, 0}, .bot_right = {1280, 128}}
 #define TEXTURE_VIEW_BALL_NINE  (GFX_TextureView){.top_left = {1280, 0}, .bot_right = {1408, 128}}
 #define TEXTURE_VIEW_BALL_ZERO  (GFX_TextureView){.top_left = {1408, 0}, .bot_right = {1536, 128}}
+#define TEXTURE_VIEW_BOOST_PAD  (GFX_TextureView){.top_left = {1536, 0}, .bot_right = {1664, 128}}
 #define TEXTURE_VIEW_POCKET     (GFX_TextureView){.top_left = {128, 0}, .bot_right = {256, 128}}
 
 #define FONT_HEIGHT_IN_PIXELS 48
@@ -316,11 +325,12 @@ bool timer_manager_init(TimerManager* manager, MemoryArena* arena, i32 timer_amo
 /*
     `remarks`
     `timeout_data` is deep copied into the internal data storage.
+    `duration`: the duration - in seconds - of the timer before timing out.
 
     `returns`
     a handle to the newly started timer; otherwise 0 if allocation was unsuccessful.
 */
-TimerHandle timer_manager_timer_start(TimerManager* manager, f32 start_time, f32 time_scale, TimerTimeout timer_timeout_function, void* timeout_data, size_t timeout_data_size){
+TimerHandle timer_manager_timer_start(TimerManager* manager, f32 duration, f32 time_scale, TimerTimeout timer_timeout_function, void* timeout_data, size_t timeout_data_size){
     TimerHandle handle = gen_id_allocator_alloc(&manager->gen_id_allocator);
     if(handle == 0){
         return handle;
@@ -339,7 +349,7 @@ TimerHandle timer_manager_timer_start(TimerManager* manager, f32 start_time, f32
     COPY_MEMORY(manager->timeout_data + timeout_data_idx, timeout_data, timeout_data_size);
 
     // set the timer state.
-    manager->current_time[idx] = start_time;
+    manager->current_time[idx] = duration;
     manager->previous_time[idx] = 0.0f;
     manager->is_ticking[idx] = TIMER_MANAGER_IS_TICKING_TRUE;
     manager->has_started[idx] = TIMER_MANAGER_HAS_STARTED_TRUE;
@@ -673,6 +683,7 @@ bool entity_set_transform(EntityManager* manager, GenId entity_gid, Transform2D 
 
 
 void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_data){
+    
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
     GenId* source_entity_gid = (GenId*)info.source_user_data;
 
@@ -738,7 +749,7 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
                 entity->transform,
                 linear_drag,
                 angular_drag,
-                PHYSICS_LAYER_ENVIRONMENT,
+                PHYSICS_LAYER_ENVIRONMENT_MID,
                 PHYSICS_LAYER_ALL,
                 gravity_affected
             );
@@ -938,7 +949,7 @@ GenId entity_spawn_wall(EntityManager* entity_manager, String name, Transform2D 
             entity->transform, 
             linear_drag, 
             angular_drag, 
-            PHYSICS_LAYER_ENVIRONMENT,
+            PHYSICS_LAYER_ENVIRONMENT_MID,
             PHYSICS_LAYER_ALL,
             false
         );
@@ -1204,6 +1215,115 @@ GenId entity_spawn_ball_zero(EntityManager* entity_manager, String name, Transfo
     return entity_spawn_game_ball(entity_manager, name, transform, parent, 0);
 }
 
+void boost_pad_boost_depleted_timeout(void* user_data){
+    BoostPadBoostDepletedTimerTimeoutContext* ctx = (BoostPadBoostDepletedTimerTimeoutContext*)user_data;
+    Entity* entity;
+    if(!entity_manager_get_entity(*ctx->entity_manager, ctx->boost_pad_entity_gid, &entity)){
+        return;
+    }
+    entity->boost_depleted = false;
+}
+
+void boost_pad_on_sustain_collision_callback(FIZX_CollisionInfo info, void* user_data){
+    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
+    GenId* boost_pad_entity_gid = (GenId*)info.target_user_data;
+    GenId* ball_entity_gid = (GenId*)info.source_user_data;
+    
+    if((info.source_layer & PHYSICS_LAYER_BALL) == 0){
+        return;
+    }
+    
+    if(info.depth <= 0.334f){
+        return;
+    }
+    
+    Entity* boost_pad_entity;
+    if(!entity_manager_get_entity(ctx->game_state->entity_manager, *boost_pad_entity_gid, &boost_pad_entity)){
+        return;
+    }
+    
+    if(boost_pad_entity->boost_depleted){
+        return;
+    }
+    
+    Entity* ball_entity;
+    if(!entity_manager_get_entity(ctx->game_state->entity_manager, *ball_entity_gid, &ball_entity)){
+        return;
+    }
+    
+    Vector2 forward_direction = transform2d_get_forward_angle_vector(boost_pad_entity->transform);    
+    f32 impulse_force = 7.5f;
+    Vector2 impulse = vector2_mul_val(forward_direction, impulse_force);
+    
+    if(ball_entity->is_physics_body){
+        fizx_body_impulse_force(&ctx->game_state->entity_manager.fizx_state, ball_entity->physics_body_gid, impulse);
+        BoostPadBoostDepletedTimerTimeoutContext timer_ctx = {
+            .entity_manager = &ctx->game_state->entity_manager,
+            .boost_pad_entity_gid = *boost_pad_entity_gid
+        };
+        timer_manager_timer_start(
+            &ctx->game_state->entity_manager.timer_manager, 
+            1.0f, 
+            1.0f, 
+            boost_pad_boost_depleted_timeout,
+            &timer_ctx, 
+            sizeof(timer_ctx)
+        );
+    }
+}
+
+GenId entity_spawn_boost_pad(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
+    GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
+    Entity* entity;
+    if(!entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
+        return 0;
+    }
+    
+    string_clear(&entity->name);
+    string_push(&entity->name, name);
+    entity->transform = transform;
+    
+    f32 angular_drag = 0.0f;
+    f32 linear_drag = 0.0f;
+    
+    { // alloc_physics_body();
+        entity->is_physics_body = true;
+        Rectangle rect = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
+        entity->physics_body_gid = fizx_body_alloc(
+            &entity_manager->fizx_state,
+            entity->transform,
+            linear_drag,
+            angular_drag,
+            PHYSICS_LAYER_ENVIRONMENT_BOT,
+            PHYSICS_LAYER_ALL,
+            false
+        );
+        GenId shape_gid = fizx_rectangle_collider_alloc(
+            &entity_manager->fizx_state, entity->physics_body_gid, TRANSFORM2D_IDENTITY, FIZX_ShapeBehaviour_Trigger, 
+            FIZX_CollisionCallbackBehaviour_All, &entity_gid, rect
+        );
+        fizx_shape_set_on_sustain_callback(&entity_manager->fizx_state, shape_gid, boost_pad_on_sustain_collision_callback);
+    }
+    
+    { // alloc_sprite();
+    
+        entity->is_sprite = true;
+        entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
+        entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
+        gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+        gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, TEXTURE_VIEW_BOOST_PAD);
+        gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
+        gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
+        gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
+        gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
+        gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+        gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+        gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 3);
+    }
+    
+    return entity_gid;
+}
+
 GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String name, Transform2D transform, GenId parent_gid){
     switch(type_id){
         default:{
@@ -1252,6 +1372,9 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String n
         case EntityTypeId_Pocket:{
             return entity_spawn_pocket(entity_manager, name, transform, parent_gid);
         }break;
+        case EntityTypeId_BoostPad:{
+            return entity_spawn_boost_pad(entity_manager, name, transform, parent_gid);
+        }
     }
 }
 

@@ -521,6 +521,7 @@ void gfx_clay_entity_spawner_layout(Editor_State* editor_state, GameState* game_
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Nine"), button_width, button_height, transient, editor_state, EntityTypeId_BallNine);
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Zero"), button_width, button_height, transient, editor_state, EntityTypeId_BallZero);
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Pocket"), button_width, button_height, transient, editor_state, EntityTypeId_Pocket);
+            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Boost Pad"), button_width, button_height, transient, editor_state, EntityTypeId_BoostPad);
         }
 
         GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){

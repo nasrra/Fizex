@@ -1861,6 +1861,10 @@ f32 transform2d_get_rotation_radians(Transform2D transform){
     return atan2f(transform.sine, transform.cosine);
 }
 
+Vector2 transform2d_get_forward_angle_vector(Transform2D transform){
+    return (Vector2){.x = transform.cosine, .y = transform.sine};
+}
+
 Transform2D transform2d_make(Vector2 position, Vector2 scale, f32 rotation_radians){
     return (Transform2D){
         .position = position,
