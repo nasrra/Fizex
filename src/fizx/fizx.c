@@ -895,7 +895,10 @@ void fizx_soa_material_clear_element(FIZX_Soa_Material* soa, i32 elem_idx){
     all `scratch-space` arrays passed into this function must have an allocated length of atleast `FIZX_COLLISION_MAX_CONTACT_POINTS`; any less than that and it will corrupt memory.
 **/
 inline void fizx_resolve_rigid_collisions(
-    FIZX_CollisionManifold manifold, IntrusiveList body_hierarchy, FIZX_Soa_Entity entity, i32* collision_to_resolve, i32 collision_to_resolve_length,
+    FIZX_CollisionManifold manifold, IntrusiveList body_hierarchy, FIZX_Soa_Entity entity, 
+    i32* collision_to_resolve, i32 collision_to_resolve_length,
+    i32* shape_layer, i32 shape_layer_length,
+    i32* shape_mask, i32 shape_mask_length,
     f32* impulses_x_scratch_space, f32* impulses_y_scratch_space, f32* impulse_magnitude_scratch_space,
     f32* contact_points_x_scratch_space, f32* contact_points_y_scratch_space,
     f32* owner_distance_x_scratch_space, f32* owner_distance_y_scratch_space,
@@ -912,6 +915,16 @@ inline void fizx_resolve_rigid_collisions(
         i32 collision_idx = collision_to_resolve[i];
         i32 owner_shape_idx = collision_idx / manifold.collider_stride;
         i32 other_shape_idx = collision_idx % manifold.collider_stride;
+
+        BOUNDS_CHECK(owner_shape_idx, shape_layer_length);
+        i32 owner_layer = shape_layer[owner_shape_idx];
+        BOUNDS_CHECK(other_shape_idx, shape_layer_length);
+        i32 other_layer = shape_layer[other_shape_idx];
+        
+        BOUNDS_CHECK(owner_shape_idx, shape_mask_length);
+        i32 owner_mask = shape_mask[owner_shape_idx];
+        BOUNDS_CHECK(other_shape_idx, shape_mask_length);
+        i32 other_mask = shape_mask[other_shape_idx];
 
         BOUNDS_CHECK(owner_shape_idx, body_hierarchy.length);
         i32 owner_body_idx = body_hierarchy.node[owner_shape_idx].parent;
@@ -1022,9 +1035,7 @@ inline void fizx_resolve_rigid_collisions(
             contact_points_y_scratch_space[0] = manifold.first_contact_point.y[collision_idx];
         }
 
-        /**
-            resolve rigid collision rotational
-        **/
+        // resolve_rigid_collision_rotational();
         if(owner_rotational_response || other_rotational_response){
             // f32 restitution = MIN(owner_restitution, other_restitution);
             // note: this is okay as it is assumed that restitution is between 0 and 1.
@@ -1100,39 +1111,42 @@ inline void fizx_resolve_rigid_collisions(
                 impulse_x = impulses_x_scratch_space[j];
                 impulse_y = impulses_y_scratch_space[j];
 
-                /**
-                    cross producting the dist and impulse gives a value indicating
-                    how much angular velocity - in radians - is needed to be applied based on the impulse direction.
-                    this is because cross producting two directions that are parallel to eachother, results in zero.
-                    which means that there should be no rotation if the collision is head on.
-                    but if the closer the two directions come to being perpendicular to one another,
-                    the larger the angular impulse will be, causing the body to rotate.
-                **/
-
-                *owner_linear_velocity_x += -impulse_x * owner_inverse_mass;
-                *owner_linear_velocity_y += -impulse_y * owner_inverse_mass;
-                if(owner_rotational_response){
-                    owner_distance_x = owner_distance_x_scratch_space[j];
-                    owner_distance_y = owner_distance_y_scratch_space[j];
-                    *owner_angular_velocity += -vector2_cross_scalar(owner_distance_x, owner_distance_y, impulse_x, impulse_y) * owner_inverse_rotational_inertia;
+                // `owner` to `other` response.
+                if((owner_mask & other_layer) != 0){
+                    *owner_linear_velocity_x += -impulse_x * owner_inverse_mass;
+                    *owner_linear_velocity_y += -impulse_y * owner_inverse_mass;
+                    if(owner_rotational_response){
+                        owner_distance_x = owner_distance_x_scratch_space[j];
+                        owner_distance_y = owner_distance_y_scratch_space[j];
+                        /*
+                            cross producting the dist and impulse gives a value indicating
+                            how much angular velocity - in radians - is needed to be applied based on the impulse direction.
+                            this is because cross producting two directions that are parallel to eachother, results in zero.
+                            which means that there should be no rotation if the collision is head on.
+                            but if the closer the two directions come to being perpendicular to one another,
+                            the larger the angular impulse will be, causing the body to rotate.
+                        */
+                        *owner_angular_velocity += -vector2_cross_scalar(owner_distance_x, owner_distance_y, impulse_x, impulse_y) * owner_inverse_rotational_inertia;
+                    }                
                 }
 
-                if(other_shape_is_kinematic){
-                    continue;
-                }
-                *other_linear_velocity_x += impulse_x * other_inverse_mass;
-                *other_linear_velocity_y += impulse_y * other_inverse_mass;
-                if(other_rotational_response){
-                    other_distance_x = other_distance_x_scratch_space[j];
-                    other_distance_y = other_distance_y_scratch_space[j];
-                    *other_angular_velocity += vector2_cross_scalar(other_distance_x, other_distance_y, impulse_x, impulse_y) * other_inverse_rotational_inertia;
+                // `other` to `owner` response.
+                if(
+                    !other_shape_is_kinematic &&
+                    (other_mask & owner_layer) != 0
+                ){
+                    *other_linear_velocity_x += impulse_x * other_inverse_mass;
+                    *other_linear_velocity_y += impulse_y * other_inverse_mass;
+                    if(other_rotational_response){
+                        other_distance_x = other_distance_x_scratch_space[j];
+                        other_distance_y = other_distance_y_scratch_space[j];
+                        *other_angular_velocity += vector2_cross_scalar(other_distance_x, other_distance_y, impulse_x, impulse_y) * other_inverse_rotational_inertia;
+                    }
                 }
             }
         }
 
-        /**
-            resolve rigid collision basic.
-        **/
+        // resolve_rigid_collision_basic();
         else{
             for(i32 j = 0; j < contact_points_count; j++){
                 f32 relative_velocity_x = *other_linear_velocity_x - *owner_linear_velocity_x;
@@ -1159,26 +1173,30 @@ inline void fizx_resolve_rigid_collisions(
             for(i32 j = 0; j < contact_points_count; j++){
                 BOUNDS_CHECK(j, FIZX_COLLISION_MAX_CONTACT_POINTS + 1);
                 f32 mag = impulse_magnitude_scratch_space[j];
-                impulse_force_x = -(mag / owner_mass * inverse_normal_x);
-                impulse_force_y = -(mag / owner_mass * inverse_normal_y);
-                *owner_linear_velocity_x += impulse_force_x;
-                *owner_linear_velocity_y += impulse_force_y;
-
-                if(other_shape_is_kinematic){
-                    continue;
+                
+                // `owner` to `other` response.
+                if((owner_mask & other_layer) != 0){
+                    impulse_force_x = -(mag / owner_mass * inverse_normal_x);
+                    impulse_force_y = -(mag / owner_mass * inverse_normal_y);
+                    *owner_linear_velocity_x += impulse_force_x;
+                    *owner_linear_velocity_y += impulse_force_y;
                 }
 
-                impulse_force_x = mag / other_mass * inverse_normal_x;
-                impulse_force_y = mag / other_mass * inverse_normal_y;
-                *other_linear_velocity_x += impulse_force_x;
-                *other_linear_velocity_y += impulse_force_y;
+                // `other` to `owner` response.                
+                if(
+                    !other_shape_is_kinematic &&
+                    (other_mask & owner_layer) != 0
+                ){
+                    impulse_force_x = mag / other_mass * inverse_normal_x;
+                    impulse_force_y = mag / other_mass * inverse_normal_y;
+                    *other_linear_velocity_x += impulse_force_x;
+                    *other_linear_velocity_y += impulse_force_y;
+                }
             }
         }
 
-        /**
-            resolve rigid collision friction.
-        **/
-        {
+        { // resolve_rigid_friction_collisions();
+
             /**
                 get an approximation of the friction values.
                 this is faster than the actual physics way.
@@ -1280,45 +1298,53 @@ inline void fizx_resolve_rigid_collisions(
             for(i32 j = 0; j < contact_points_count; j++){
                 impulse_x = impulses_x_scratch_space[j];
                 impulse_y = impulses_y_scratch_space[j];
-
-                *owner_linear_velocity_x += -impulse_x * owner_inverse_mass;
-                *owner_linear_velocity_y += -impulse_y * owner_inverse_mass;
-                if(owner_rotational_response){
-                    /**
-                        cross producting the dist and impulse gives a value indicating
-                        how much angular velocity - in radians - is needed to be applied based on the impulse direction.
-                        this is because cross producting two directions that are parallel to eachother, results in zero.
-                        which means that there should be no rotation if the collision is head on.
-                        but if the closer the two directions come to being perpendicular to one another,
-                        the larger the angular impulse will be, causing the body to rotate.
-                    **/
-                    owner_distance_x = owner_distance_x_scratch_space[j];
-                    owner_distance_y = owner_distance_y_scratch_space[j];
-                    *owner_angular_velocity += -vector2_cross_scalar(owner_distance_x, owner_distance_y, impulse_x, impulse_y) * owner_inverse_rotational_inertia;
+                
+                // `owner` to `other` response.
+                if((owner_mask & other_layer) != 0){
+                    *owner_linear_velocity_x += -impulse_x * owner_inverse_mass;
+                    *owner_linear_velocity_y += -impulse_y * owner_inverse_mass;
+                    if(owner_rotational_response){
+                        /**
+                            cross producting the dist and impulse gives a value indicating
+                            how much angular velocity - in radians - is needed to be applied based on the impulse direction.
+                            this is because cross producting two directions that are parallel to eachother, results in zero.
+                            which means that there should be no rotation if the collision is head on.
+                            but if the closer the two directions come to being perpendicular to one another,
+                            the larger the angular impulse will be, causing the body to rotate.
+                        **/
+                        owner_distance_x = owner_distance_x_scratch_space[j];
+                        owner_distance_y = owner_distance_y_scratch_space[j];
+                        *owner_angular_velocity += -vector2_cross_scalar(owner_distance_x, owner_distance_y, impulse_x, impulse_y) * owner_inverse_rotational_inertia;
+                    }
                 }
 
-                if(other_shape_is_kinematic){
-                    continue;
-                }
-
-                *other_linear_velocity_x += impulse_x * other_inverse_mass;
-                *other_linear_velocity_y += impulse_y * other_inverse_mass;
-                if(other_rotational_response){
-                    /**
-                        cross producting the dist and impulse gives a value indicating
-                        how much angular velocity - in radians - is needed to be applied based on the impulse direction.
-                        this is because cross producting two directions that are parallel to eachother, results in zero.
-                        which means that there should be no rotation if the collision is head on.
-                        but if the closer the two directions come to being perpendicular to one another,
-                        the larger the angular impulse will be, causing the body to rotate.
-                    **/
-                    other_distance_x = other_distance_x_scratch_space[j];
-                    other_distance_y = other_distance_y_scratch_space[j];
-                    *other_angular_velocity += vector2_cross_scalar(other_distance_x, other_distance_y, impulse_x, impulse_y) * other_inverse_rotational_inertia;
+                // `other` to `owner` response.                
+                if(
+                    !other_shape_is_kinematic &&
+                    (other_mask & owner_layer) != 0
+                ){
+                    *other_linear_velocity_x += impulse_x * other_inverse_mass;
+                    *other_linear_velocity_y += impulse_y * other_inverse_mass;
+                    if(other_rotational_response){
+                        /**
+                            cross producting the dist and impulse gives a value indicating
+                            how much angular velocity - in radians - is needed to be applied based on the impulse direction.
+                            this is because cross producting two directions that are parallel to eachother, results in zero.
+                            which means that there should be no rotation if the collision is head on.
+                            but if the closer the two directions come to being perpendicular to one another,
+                            the larger the angular impulse will be, causing the body to rotate.
+                        **/
+                        other_distance_x = other_distance_x_scratch_space[j];
+                        other_distance_y = other_distance_y_scratch_space[j];
+                        *other_angular_velocity += vector2_cross_scalar(other_distance_x, other_distance_y, impulse_x, impulse_y) * other_inverse_rotational_inertia;
+                    }
                 }
             }
+        
         }
+    
     }
+
 }
 
 
@@ -2625,7 +2651,7 @@ void fizx_state_increment_category_counter(FIZX_State* state, FIZX_ShapeCategory
 GenId fizx_shape_init(
     FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour,
     FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, 
-    i32 layer, f32* vert_x, f32* vert_y, i32 vert_length, f32 base_radius,
+    i32 layer, i32 mask, f32* vert_x, f32* vert_y, i32 vert_length, f32 base_radius,
     f32 base_height, f32 base_width, FIZX_Material material
 ){
     i32 body_idx;
@@ -2655,6 +2681,7 @@ GenId fizx_shape_init(
 
         BOUNDS_CHECK(shape_idx, state->entities.layer_length);
         state->entities.layer[shape_idx] = layer;
+        state->entities.mask[shape_idx] = mask;
     }
 
     { // copy_user_data();
@@ -2828,53 +2855,57 @@ bool fizx_shape_set_rotational_response(FIZX_State* state, GenId shape_gid, bool
 **/
 GenId fizx_circle_collider_alloc(
     FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour,
-    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, Circle shape
+    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, i32 mask,
+    Circle shape
 ){
     return fizx_shape_init(
         state, body_gid, local_transform, behaviour, collision_callback_behaviour,
-        user_data, layer, &shape.x, &shape.y, FIZX_SHAPE_CIRCLE_VERTICES_LENGTH, shape.radius,
+        user_data, layer, mask, &shape.x, &shape.y, FIZX_SHAPE_CIRCLE_VERTICES_LENGTH, shape.radius,
         0.0f, 0.0f, (FIZX_Material){0}
     );
 }
 
 GenId fizx_circle_rigid_alloc(
     FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, 
-    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, Circle shape, FIZX_Material material
+    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, i32 mask,
+    Circle shape, FIZX_Material material
 ){
     return fizx_shape_init(
         state, body_gid, local_transform, behaviour, collision_callback_behaviour,
-        user_data, layer, &shape.x, &shape.y, FIZX_SHAPE_CIRCLE_VERTICES_LENGTH, shape.radius,
+        user_data, layer, mask, &shape.x, &shape.y, FIZX_SHAPE_CIRCLE_VERTICES_LENGTH, shape.radius,
         0.0f, 0.0f, material
     );
 }
 
 GenId fizx_rectangle_collider_alloc(
     FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, 
-    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, Rectangle shape
+    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, i32 mask,
+    Rectangle shape
 ){
     PolygonRectangle poly = polygon_rectangle_from_rectangle(shape);
     return fizx_shape_init(
         state, body_gid, local_transform, behaviour, collision_callback_behaviour,
-        user_data, layer, poly.x, poly.y, FIZX_SHAPE_RECTANGLE_VERTICES_LENGTH, 0.0f,
+        user_data, layer, mask, poly.x, poly.y, FIZX_SHAPE_RECTANGLE_VERTICES_LENGTH, 0.0f,
         shape.height, shape.width, (FIZX_Material){0}
     );
 }
 
 GenId fizx_rectangle_rigid_alloc(
     FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, 
-    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, Rectangle shape, FIZX_Material material
+    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, i32 mask,
+    Rectangle shape, FIZX_Material material
 ){
     PolygonRectangle poly = polygon_rectangle_from_rectangle(shape);
     return fizx_shape_init(
         state, body_gid, local_transform, behaviour, collision_callback_behaviour,
-        user_data, layer, poly.x, poly.y, FIZX_SHAPE_RECTANGLE_VERTICES_LENGTH, 0.0f,
+        user_data, layer, mask, poly.x, poly.y, FIZX_SHAPE_RECTANGLE_VERTICES_LENGTH, 0.0f,
         shape.height, shape.width, material
     );
 }
 
 GenId fizx_line_collider_alloc(
     FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, 
-    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, 
+    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, i32 mask, 
     Vector2 local_origin, Vector2 direction, f32 length
 ){
     direction = vector2_normalise(direction);
@@ -2882,22 +2913,22 @@ GenId fizx_line_collider_alloc(
     f32* verts_y = (f32[2]){local_origin.y, local_origin.y + (direction.y * length)};
     return fizx_shape_init(
         state, body_gid, local_transform, behaviour, collision_callback_behaviour,
-        user_data, layer, verts_x, verts_y, FIZX_SHAPE_LINE_VERTICES_LENGTH, 0.0f,
+        user_data, layer, mask, verts_x, verts_y, FIZX_SHAPE_LINE_VERTICES_LENGTH, 0.0f,
         0.0f, 0.0f, (FIZX_Material){0}
     );
 }
 
 GenId fizx_line_rigid_alloc(
     FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, 
-    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, 
-    i32 layer, Vector2 local_origin, Vector2 direction, f32 length, FIZX_Material material
+    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, i32 mask, 
+    Vector2 local_origin, Vector2 direction, f32 length, FIZX_Material material
 ){
     direction = vector2_normalise(direction);
     f32* verts_x = (f32[2]){local_origin.x, local_origin.x + (direction.x * length)};
     f32* verts_y = (f32[2]){local_origin.y, local_origin.y + (direction.y * length)};
     return fizx_shape_init(
         state, body_gid, local_transform, behaviour, collision_callback_behaviour,
-        user_data, layer, verts_x, verts_y, FIZX_SHAPE_LINE_VERTICES_LENGTH, 0.0f,
+        user_data, layer, mask, verts_x, verts_y, FIZX_SHAPE_LINE_VERTICES_LENGTH, 0.0f,
         0.0f, 0.0f, material
     );
 }
@@ -3382,7 +3413,9 @@ bool fizx_collision_detection_circle_to_circle(
 bool fizx_collision_detection_broad_phase(
     IntrusiveList body_hierarchy,
     Soa_Aabb aabb,
-    i32 a_shape_idx, i32 b_shape_idx){
+    i32 a_shape_idx, 
+    i32 b_shape_idx
+){
     // skip if the two shapes are apart of the same body.
     BOUNDS_CHECK(a_shape_idx, body_hierarchy.length);
     BOUNDS_CHECK(b_shape_idx, body_hierarchy.length);
@@ -6620,11 +6653,9 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
             }
         }
 
-        /**
-            resolve shape collisions.
-        **/
-        // ordering is important here, shape collision resolution should always come before rigid resolution.
-        {
+        { // resolve_collider_collisions();
+          // note that ordering is important here, shape collision resolution should always come before rigid resolution.
+
             f32 depth;
             f32 displacement_x;
             f32 displacement_y;
@@ -6633,82 +6664,143 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
             // always the ohe kinematic or dynamic shape.
             i32 other_idx;
 
-            /**
-                resolve dynamic to dynamic collisions.
-            **/
             char* collisions_to_resolve_char_ptr;
             i32 collisions_to_resolve_length;
             FIZX_STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE* collisions_to_resolve;
 
-            categorised_overlap_get_overlaps(
-                state->sub_step_shape_collisions_to_resolve,
-                FIZX_CollisionResolutionCategory_Dynamic,
-                FIZX_CollisionResolutionCategory_Dynamic,
-                sizeof(FIZX_STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE),
-                &collisions_to_resolve_char_ptr,
-                &collisions_to_resolve_length
-            );
-            collisions_to_resolve = (FIZX_STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE*)collisions_to_resolve_char_ptr;
-
-            for(i32 i = 0; i < collisions_to_resolve_length; i++){
-                FIZX_STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE collision_idx = collisions_to_resolve[i];
-                owner_idx = collision_idx / state->collision_manifold.collider_stride; // i32 div truncates the remainder, always giving the owner index.
-                other_idx = collision_idx % state->collision_manifold.collider_stride;
-
-                BOUNDS_CHECK(collision_idx, state->collision_manifold.depth_length);
-                depth = state->collision_manifold.depth[collision_idx];
-                BOUNDS_CHECK(collision_idx, state->collision_manifold.normal.length);
-                displacement_x = state->collision_manifold.normal.x[collision_idx] * depth * 0.5f;
-                displacement_y = state->collision_manifold.normal.y[collision_idx] * depth * 0.5f;
-
-                BOUNDS_CHECK(owner_idx, state->body_hierarchy.length);
-                IntrusiveListNode* owner_node = &state->body_hierarchy.node[owner_idx];
-                BOUNDS_CHECK(other_idx, state->body_hierarchy.length);
-                IntrusiveListNode* other_node = &state->body_hierarchy.node[other_idx];
-
-                BOUNDS_CHECK(owner_node->parent, state->entities.shape_collision_displacement.length);
-                state->entities.shape_collision_displacement.x[other_node->parent] -= displacement_x;
-                state->entities.shape_collision_displacement.y[other_node->parent] -= displacement_y;
-                state->entities.shape_collision_displacement.x[owner_node->parent] += displacement_x;
-                state->entities.shape_collision_displacement.y[owner_node->parent] += displacement_y;
+            { // resolve_dynamic_to_dynamic_collider_collisions();
+            
+                categorised_overlap_get_overlaps(
+                    state->sub_step_shape_collisions_to_resolve,
+                    FIZX_CollisionResolutionCategory_Dynamic,
+                    FIZX_CollisionResolutionCategory_Dynamic,
+                    sizeof(FIZX_STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE),
+                    &collisions_to_resolve_char_ptr,
+                    &collisions_to_resolve_length
+                );
+                collisions_to_resolve = (FIZX_STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE*)collisions_to_resolve_char_ptr;
+    
+                for(i32 i = 0; i < collisions_to_resolve_length; i++){
+                    FIZX_STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE collision_idx = collisions_to_resolve[i];
+                    owner_idx = collision_idx / state->collision_manifold.collider_stride; // i32 div truncates the remainder, always giving the owner index.
+                    other_idx = collision_idx % state->collision_manifold.collider_stride;
+    
+                    BOUNDS_CHECK(collision_idx, state->collision_manifold.depth_length);
+                    depth = state->collision_manifold.depth[collision_idx];
+                    BOUNDS_CHECK(collision_idx, state->collision_manifold.normal.length);
+                    
+                    BOUNDS_CHECK(owner_idx, state->entities.layer_length);
+                    i32 owner_layer = state->entities.layer[owner_idx];
+                    BOUNDS_CHECK(other_idx, state->entities.layer_length);
+                    i32 other_layer = state->entities.layer[other_idx];
+                    
+                    BOUNDS_CHECK(owner_idx, state->entities.mask_length);
+                    i32 owner_mask = state->entities.mask[owner_idx];
+                    BOUNDS_CHECK(other_idx, state->entities.mask_length);
+                    i32 other_mask = state->entities.mask[other_idx];
+                    
+                    // both shapes are meant to respond to eachother.
+                    if(
+                        (owner_mask & other_layer) != 0 &&
+                        (other_mask & owner_layer) != 0
+                    ){
+                        // calculate body displacement.
+                        displacement_x = state->collision_manifold.normal.x[collision_idx] * depth * 0.5f;
+                        displacement_y = state->collision_manifold.normal.y[collision_idx] * depth * 0.5f;
+        
+                        BOUNDS_CHECK(owner_idx, state->body_hierarchy.length);
+                        IntrusiveListNode* owner_node = &state->body_hierarchy.node[owner_idx];
+                        BOUNDS_CHECK(other_idx, state->body_hierarchy.length);
+                        IntrusiveListNode* other_node = &state->body_hierarchy.node[other_idx];
+                        
+                        // apply body displacement to other.
+                        BOUNDS_CHECK(other_node->parent, state->entities.shape_collision_displacement.length);        
+                        state->entities.shape_collision_displacement.x[other_node->parent] -= displacement_x;
+                        state->entities.shape_collision_displacement.y[other_node->parent] -= displacement_y;
+                        
+                        // apply body displacement to owner.
+                        BOUNDS_CHECK(owner_node->parent, state->entities.shape_collision_displacement.length);
+                        state->entities.shape_collision_displacement.x[owner_node->parent] += displacement_x;
+                        state->entities.shape_collision_displacement.y[owner_node->parent] += displacement_y;
+                    }
+                    
+                    // only a single - or none - shape is meant to respond to the collision.
+                    else{                        
+                        i32 sole_idx;
+                        f32 displace_factor;
+                        if((owner_mask & other_layer) != 0){
+                            sole_idx = owner_idx;
+                            displace_factor = 1.0f;
+                        }
+                        else if((other_mask & owner_layer) != 0){
+                            sole_idx = other_idx;
+                            displace_factor = -1.0f;
+                        }
+                        else{
+                            // neither shapes are meant to respond to eachother.
+                            continue;
+                        }
+                        
+                        // calculate displacement.
+                        displacement_x = state->collision_manifold.normal.x[collision_idx] * depth;
+                        displacement_y = state->collision_manifold.normal.y[collision_idx] * depth;
+        
+                        BOUNDS_CHECK(sole_idx, state->body_hierarchy.length);
+                        IntrusiveListNode* sole_node = &state->body_hierarchy.node[sole_idx];
+        
+                        // apply displacement to sole shape.
+                        BOUNDS_CHECK(sole_node->parent, state->entities.shape_collision_displacement.length);
+                        state->entities.shape_collision_displacement.x[sole_node->parent] += displacement_x * displace_factor;
+                        state->entities.shape_collision_displacement.y[sole_node->parent] += displacement_y * displace_factor;
+                    }   
+                }
             }
 
-            /**
-                resolve dynamic to kinematic collision.
-            **/
-
-            categorised_overlap_get_overlaps(
-                state->sub_step_shape_collisions_to_resolve,
-                FIZX_CollisionResolutionCategory_Dynamic,
-                FIZX_CollisionResolutionCategory_Kinematic,
-                sizeof(FIZX_STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE),
-                &collisions_to_resolve_char_ptr,
-                &collisions_to_resolve_length
-            );
-            collisions_to_resolve = (FIZX_STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE*)collisions_to_resolve_char_ptr;
-
-            for(i32 i = 0; i < collisions_to_resolve_length; i++){
-                FIZX_STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE collision_idx = collisions_to_resolve[i];
-                owner_idx = collision_idx / state->collision_manifold.collider_stride; // i32 div truncates the remainder, always giving the owner index.
-
-                BOUNDS_CHECK(collision_idx, state->collision_manifold.depth_length);
-                depth = state->collision_manifold.depth[collision_idx];
-                displacement_x = state->collision_manifold.normal.x[collision_idx] * depth;
-                displacement_y = state->collision_manifold.normal.y[collision_idx] * depth;
-
-                BOUNDS_CHECK(owner_idx, state->body_hierarchy.length);
-                IntrusiveListNode* owner_node = &state->body_hierarchy.node[owner_idx];
-
-                BOUNDS_CHECK(owner_node->parent, state->entities.shape_collision_displacement.length);
-                state->entities.shape_collision_displacement.x[owner_node->parent] += displacement_x;
-                state->entities.shape_collision_displacement.y[owner_node->parent] += displacement_y;
+            { // resolve_dynamic_to_kinematic_collider_collisions();
+            
+                categorised_overlap_get_overlaps(
+                    state->sub_step_shape_collisions_to_resolve,
+                    FIZX_CollisionResolutionCategory_Dynamic,
+                    FIZX_CollisionResolutionCategory_Kinematic,
+                    sizeof(FIZX_STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE),
+                    &collisions_to_resolve_char_ptr,
+                    &collisions_to_resolve_length
+                );
+                collisions_to_resolve = (FIZX_STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE*)collisions_to_resolve_char_ptr;
+    
+                for(i32 i = 0; i < collisions_to_resolve_length; i++){
+                    FIZX_STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE collision_idx = collisions_to_resolve[i];
+                    owner_idx = collision_idx / state->collision_manifold.collider_stride; // i32 div truncates the remainder, always giving the owner index.
+                    other_idx = collision_idx % state->collision_manifold.collider_stride;
+    
+                    BOUNDS_CHECK(other_idx, state->entities.layer_length);
+                    i32 other_layer = state->entities.layer[other_idx];
+                    
+                    BOUNDS_CHECK(owner_idx, state->entities.mask_length);
+                    i32 owner_mask = state->entities.mask[owner_idx];
+                    
+                    // the dynamic isnt meant to respond to the kinematic.
+                    if((owner_mask & other_layer) == 0){
+                        continue;
+                    }
+    
+                    BOUNDS_CHECK(collision_idx, state->collision_manifold.depth_length);
+                    depth = state->collision_manifold.depth[collision_idx];
+                    displacement_x = state->collision_manifold.normal.x[collision_idx] * depth;
+                    displacement_y = state->collision_manifold.normal.y[collision_idx] * depth;
+    
+                    BOUNDS_CHECK(owner_idx, state->body_hierarchy.length);
+                    IntrusiveListNode* owner_node = &state->body_hierarchy.node[owner_idx];
+    
+                    BOUNDS_CHECK(owner_node->parent, state->entities.shape_collision_displacement.length);
+                    state->entities.shape_collision_displacement.x[owner_node->parent] += displacement_x;
+                    state->entities.shape_collision_displacement.y[owner_node->parent] += displacement_y;
+                }        
             }
         }
 
-        /**
-            resolve rigid collisions
-        **/
-        {
+        { // resolve_rigid_collisions();
+        
             bool other_shape_is_kinematic;
             char* collision_to_resolve_char_ptr;
             i32* collision_to_resolve;
@@ -6722,7 +6814,10 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
             );
             collision_to_resolve = (i32*)collision_to_resolve_char_ptr;
             fizx_resolve_rigid_collisions(
-                state->collision_manifold, state->body_hierarchy, state->entities, collision_to_resolve, collision_to_resolve_length,
+                state->collision_manifold, state->body_hierarchy, state->entities, 
+                collision_to_resolve, collision_to_resolve_length,
+                state->entities.layer, state->entities.layer_length,
+                state->entities.mask, state->entities.mask_length,
                 rigid_collision_resolution_impulse_x_scratch_space,
                 rigid_collision_resolution_impulse_y_scratch_space,
                 rigid_collision_resolution_impulse_magnitude_scratch_space,
@@ -6747,7 +6842,10 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
             );
             collision_to_resolve = (i32*)collision_to_resolve_char_ptr;
             fizx_resolve_rigid_collisions(
-                state->collision_manifold, state->body_hierarchy, state->entities, collision_to_resolve, collision_to_resolve_length,
+                state->collision_manifold, state->body_hierarchy, state->entities, 
+                collision_to_resolve, collision_to_resolve_length,
+                state->entities.layer, state->entities.layer_length,
+                state->entities.mask, state->entities.mask_length,
                 rigid_collision_resolution_impulse_x_scratch_space,
                 rigid_collision_resolution_impulse_y_scratch_space,
                 rigid_collision_resolution_impulse_magnitude_scratch_space,
@@ -6811,9 +6909,20 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
         
                             i32 cidx = collision_idx[j];
                             // see `collision_manifold_set_data_one_way` to know why and how this works.
-                            i32 target_entity_idx = cidx / state->collision_manifold.collider_stride;
-                            i32 source_entity_idx = cidx % state->collision_manifold.collider_stride;
-        
+                            i32 target_entity_idx = cidx / state->collision_manifold.collider_stride; // this is the current shape_idx; i.e, the shape that is recieving the collision.
+                            i32 source_entity_idx = cidx % state->collision_manifold.collider_stride; // this is the other shape that is causing the collision; i.e, the source of the collision. 
+                            
+                            BOUNDS_CHECK(target_entity_idx, state->entities.mask_length);
+                            i32 target_mask = state->entities.mask[target_entity_idx];
+                            
+                            BOUNDS_CHECK(source_entity_idx, state->entities.layer_length);
+                            i32 source_layer = state->entities.layer[source_entity_idx];
+                            
+                            // the recieving shape isn't meant to respond to the collision.
+                            if((target_mask & source_layer) == 0){
+                                continue;
+                            }
+                            
                             // read the data.
                             BOUNDS_CHECK(cidx, state->collision_manifold.depth_length);
                             BOUNDS_CHECK(cidx, state->collision_manifold.normal.length);
@@ -6874,54 +6983,77 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                         f32 shape_y = state->entities.centroid.y[shape_idx];
                         
                         f32 closest_dist = FLT_MAX;   // <float.h>
-                        i32 closest_idx = 0;
+                        i32 closest_collision_idx = 0;
+                        i32 closest_target_entity_idx = 0;
+                        i32 closest_source_entity_idx = 0;
                         
                         for(i32 j = 0; j < collision_count; j++){
-                            i32 cidx = collision_idx[j];
                         
-                            BOUNDS_CHECK(cidx, state->collision_manifold.first_contact_point.length);
-                            f32 dx = state->collision_manifold.first_contact_point.x[cidx] - shape_x;
-                            f32 dy = state->collision_manifold.first_contact_point.y[cidx] - shape_y;
+                            i32 current_collision_idx = collision_idx[j];
+                            
+                            // see `collision_manifold_set_data_one_way` to know why and how this works.
+                            i32 current_target_entity_idx = current_collision_idx / state->collision_manifold.collider_stride;
+                            i32 current_source_entity_idx = current_collision_idx % state->collision_manifold.collider_stride;
+
+                            BOUNDS_CHECK(current_target_entity_idx, state->entities.mask_length);
+                            i32 target_mask = state->entities.mask[current_target_entity_idx];
+                            
+                            BOUNDS_CHECK(current_source_entity_idx, state->entities.layer_length);
+                            i32 source_layer = state->entities.layer[current_source_entity_idx];
+                                                        
+                            // the recieving shape isn't meant to respond to the collision.
+                            if((target_mask & source_layer) == 0){
+                                continue;
+                            }
+                        
+                            BOUNDS_CHECK(current_collision_idx, state->collision_manifold.first_contact_point.length);
+                            f32 dx = state->collision_manifold.first_contact_point.x[current_collision_idx] - shape_x;
+                            f32 dy = state->collision_manifold.first_contact_point.y[current_collision_idx] - shape_y;
                             f32 f_dist = dx*dx + dy*dy;
                             if(f_dist < closest_dist){
                                 closest_dist = f_dist;
-                                closest_idx = cidx;
+                                closest_collision_idx = current_collision_idx;
+                                closest_target_entity_idx = current_target_entity_idx; 
+                                closest_source_entity_idx = current_source_entity_idx; 
                             }
                         
-                            BOUNDS_CHECK(cidx, state->collision_manifold.two_contact_points_length);
-                            if(state->collision_manifold.two_contact_points[cidx]){
-                                dx = state->collision_manifold.second_contact_point.x[cidx] - shape_x;
-                                dy = state->collision_manifold.second_contact_point.y[cidx] - shape_y;
+                            BOUNDS_CHECK(current_collision_idx, state->collision_manifold.two_contact_points_length);
+                            if(state->collision_manifold.two_contact_points[current_collision_idx]){
+                                dx = state->collision_manifold.second_contact_point.x[current_collision_idx] - shape_x;
+                                dy = state->collision_manifold.second_contact_point.y[current_collision_idx] - shape_y;
                                 f32 s_dist = dx*dx + dy*dy;
                                 if(s_dist < closest_dist){
                                     closest_dist = s_dist;
-                                    closest_idx = cidx;
+                                    closest_collision_idx = current_collision_idx;
+                                    closest_target_entity_idx = current_target_entity_idx; 
+                                    closest_source_entity_idx = current_source_entity_idx; 
                                 }
                             }
                         }
+                        
                         // see `collision_manifold_set_data_one_way` to know why and how this works.
-                        i32 target_entity_idx = closest_idx / state->collision_manifold.collider_stride;
-                        i32 source_entity_idx = closest_idx % state->collision_manifold.collider_stride;
+                        i32 target_entity_idx = closest_collision_idx / state->collision_manifold.collider_stride;
+                        i32 source_entity_idx = closest_collision_idx % state->collision_manifold.collider_stride;
                         
                         // read the data.
-                        BOUNDS_CHECK(closest_idx, state->collision_manifold.depth_length);
-                        BOUNDS_CHECK(closest_idx, state->collision_manifold.normal.length);
-                        BOUNDS_CHECK(closest_idx, state->collision_manifold.first_contact_point.length);
-                        BOUNDS_CHECK(closest_idx, state->collision_manifold.second_contact_point.length);
-                        BOUNDS_CHECK(closest_idx, state->collision_manifold.two_contact_points_length);
-                        BOUNDS_CHECK(target_entity_idx, state->entities.layer_length);
-                        BOUNDS_CHECK(source_entity_idx, state->entities.layer_length);
+                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.depth_length);
+                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.normal.length);
+                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.first_contact_point.length);
+                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.second_contact_point.length);
+                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.two_contact_points_length);
+                        BOUNDS_CHECK(closest_target_entity_idx, state->entities.layer_length);
+                        BOUNDS_CHECK(closest_source_entity_idx, state->entities.layer_length);
                         collision_info = (FIZX_CollisionInfo){
-                            .depth                      = state->collision_manifold.depth[closest_idx],
-                            .normal_x                   = state->collision_manifold.normal.x[closest_idx],
-                            .normal_y                   = state->collision_manifold.normal.y[closest_idx],
-                            .first_contact_point_x      = state->collision_manifold.first_contact_point.x[closest_idx],
-                            .first_contact_point_y      = state->collision_manifold.first_contact_point.y[closest_idx],
-                            .second_contact_point_x     = state->collision_manifold.second_contact_point.x[closest_idx],
-                            .second_contact_point_y     = state->collision_manifold.second_contact_point.y[closest_idx],
-                            .source_user_data           = state->collision_manifold.source_user_data[closest_idx],
-                            .target_user_data           = state->collision_manifold.target_user_data[closest_idx],
-                            .two_contact_points         = state->collision_manifold.two_contact_points[closest_idx],
+                            .depth                      = state->collision_manifold.depth                   [closest_collision_idx],
+                            .normal_x                   = state->collision_manifold.normal.x                [closest_collision_idx],
+                            .normal_y                   = state->collision_manifold.normal.y                [closest_collision_idx],
+                            .first_contact_point_x      = state->collision_manifold.first_contact_point.x   [closest_collision_idx],
+                            .first_contact_point_y      = state->collision_manifold.first_contact_point.y   [closest_collision_idx],
+                            .second_contact_point_x     = state->collision_manifold.second_contact_point.x  [closest_collision_idx],
+                            .second_contact_point_y     = state->collision_manifold.second_contact_point.y  [closest_collision_idx],
+                            .source_user_data           = state->collision_manifold.source_user_data        [closest_collision_idx],
+                            .target_user_data           = state->collision_manifold.target_user_data        [closest_collision_idx],
+                            .two_contact_points         = state->collision_manifold.two_contact_points      [closest_collision_idx],
                             // see `collision_manifold_set_data_one_way` to know why and how this works.
                             .target_entity_idx = target_entity_idx,
                             .source_entity_idx = source_entity_idx,
@@ -6929,9 +7061,14 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                             .source_layer = state->entities.layer[source_entity_idx]
                         };
                         
+                        // dont do anything if no collision was found to respond to.
+                        if(collision_idx == 0){
+                            break;
+                        }
+                        
                         // pass each collision info to the user callback.
-                        BOUNDS_CHECK(closest_idx, state->collision_manifold.contact_state_length);
-                        i32 contact_state = state->collision_manifold.contact_state[closest_idx];
+                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.contact_state_length);
+                        i32 contact_state = state->collision_manifold.contact_state[closest_collision_idx];
                         FIZX_CollisionCallback callback = NULL;
                         switch(contact_state){
                             case FIZX_ContactState_Enter:{

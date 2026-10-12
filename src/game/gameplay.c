@@ -162,6 +162,7 @@ typedef struct{
     GameMouseState mouse_state;
     EntityManager entity_manager;
     LevelManager level_manager;
+    BoardState board_state;
     f32 time_scale;
     bool is_init;
 } GameState;
@@ -215,7 +216,6 @@ typedef struct{
 #define PHYSICS_LAYER_ENVIRONMENT (1 << 2)
 #define PHYSICS_LAYER_RAYCAST (1 << 3)
 #define PHYSICS_LAYER_GUIDELINE (1 << 4)
-
 
 
 ///
@@ -673,11 +673,31 @@ void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_d
             return;
         }
         
-        if(entity->type_id == EntityTypeId_BallCue){
-            platform_output_message("you lose!");
-            level_manager_defer_reload_world_level(&ctx->game_state->level_manager);
+        switch(entity->type_id){
+            case EntityTypeId_BallCue:{
+                platform_output_message("you lose!");
+                level_manager_defer_reload_world_level(&ctx->game_state->level_manager);
+            }break;
+            case EntityTypeId_BallEight:{
+                platform_output_message("you lose!");
+                if(ctx->game_state->board_state.remaining_ball_count > 1){
+                    platform_output_message("you lose!");
+                    level_manager_defer_reload_world_level(&ctx->game_state->level_manager);
+                }
+            }break;
+            case EntityTypeId_BallOne:
+            case EntityTypeId_BallTwo:
+            case EntityTypeId_BallThree:
+            case EntityTypeId_BallFour:
+            case EntityTypeId_BallFive:
+            case EntityTypeId_BallSix:
+            case EntityTypeId_BallSeven:
+            case EntityTypeId_BallNine:
+            case EntityTypeId_BallZero:{
+                ctx->game_state->board_state.remaining_ball_count -= 1;
+            }break;
         }
-        
+                
         entity_manager_dealloc_entity(&ctx->game_state->entity_manager, *source_entity_gid);
     }
 }
@@ -715,6 +735,7 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
                 FIZX_CollisionCallbackBehaviour_All,
                 shape_user_data,
                 PHYSICS_LAYER_ENVIRONMENT,
+                PHYSICS_LAYER_ALL,
                 physics_shape
             );
             fizx_shape_set_on_sustain_callback(
@@ -773,6 +794,7 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
                 FIZX_CollisionCallbackBehaviour_All,
                 &entity_gid,
                 PHYSICS_LAYER_BALL,
+                PHYSICS_LAYER_ALL,
                 circle,
                 BALL_FIZX_SHAPE_MATERIAL
             );
@@ -803,6 +825,40 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
     return entity_gid;
 }
 
+void ball_cue_update(Entity* entity, GameState* game_state, f32 delta_time){
+    // platform_output_message("update cue ball!\n");
+    if(input_is_key_just_pressed(Key_A)){
+
+        if(entity->is_physics_body){
+            // Vector2 velocity = fizx_body_get_linear_velocity(game_state->entity_manager.fizx_state, entity->physics_body_gid);
+            // Vector2 direction = vector2_normalise(velocity);
+            
+            // Vector2 inner_left_direction = vector2_rotate(direction, -0.66f);     
+            // Transform2D inner_left_transform = entity->transform;
+            // inner_left_transform.position = vector2_sub(inner_left_transform.position, inner_left_direction);
+            // entity_spawn_ball_cue(
+            //     &game_state->entity_manager, 
+            //     (String){.chars = "spawned cue ball", .count = 16, .length = 16}, 
+            //     inner_left_transform, 
+            //     game_state->level_manager.world_root_entity_gid
+            // );
+            
+            // Vector2 outter_left_direction = vector2_rotate(direction, -0.99f);            
+            // Transform2D outter_left_transform = entity->transform;
+            // outter_left_transform.position = vector2_sub(outter_left_transform.position, outter_left_direction);
+            // entity_spawn_ball_cue(
+            //     &game_state->entity_manager, 
+            //     (String){.chars = "spawned cue ball", .count = 16, .length = 16}, 
+            //     outter_left_transform, 
+            //     game_state->level_manager.world_root_entity_gid
+            // );
+            
+            
+            // Vector2 inner_left_direction = vector2_rotate(direction, -0.167f);
+        }
+    }
+}
+
 GenId entity_spawn_wall(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
@@ -831,6 +887,7 @@ GenId entity_spawn_wall(EntityManager* entity_manager, String name, Transform2D 
             FIZX_CollisionCallbackBehaviour_All,
             &entity_gid,
             PHYSICS_LAYER_ENVIRONMENT,
+            PHYSICS_LAYER_ALL,
             square,
             material
         );
@@ -1021,6 +1078,7 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, String name, Transfo
             FIZX_CollisionCallbackBehaviour_All,
             &entity_gid,
             PHYSICS_LAYER_BALL,
+            PHYSICS_LAYER_ALL,
             circle,
             BALL_FIZX_SHAPE_MATERIAL
         );
@@ -1361,6 +1419,7 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
         FIZX_CollisionCallbackBehaviour_Closest,
         &x,
         PHYSICS_LAYER_GUIDELINE,
+        PHYSICS_LAYER_ALL,
         (Vector2){0}, 
         (Vector2){0}, 
         0.0f
@@ -1376,6 +1435,8 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
     );
     
     level_manager_init(&game_state->level_manager, persistent, &game_state->entity_manager, 256);
+    
+    game_state->board_state.remaining_ball_count = 10;
     
     game_state->is_init = true;
 }
@@ -1407,9 +1468,9 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
 
     { // update fizx draw state.
 
-        // if(input_is_key_just_pressed(Key_1)){
-        //     fizx_draw_state->draw_bvh_branches = !fizx_draw_state->draw_bvh_branches;
-        // }
+        if(input_is_key_just_pressed(Key_1)){
+            fizx_draw_state->draw_bvh_branches = !fizx_draw_state->draw_bvh_branches;
+        }
         if(input_is_key_just_pressed(Key_2)){
             fizx_draw_state->draw_bvh_leaves = !fizx_draw_state->draw_bvh_leaves;
         }
@@ -1419,6 +1480,10 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         if(input_is_key_just_pressed(Key_4)){
             fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
         }
+    }
+
+    if(input_is_key_just_pressed(Key_R)){
+        level_manager_defer_reload_world_level(&game_state->level_manager);
     }
 
     { // time management.
@@ -1453,9 +1518,47 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             fixed_update_accumulator -= FIXED_DELTA_TIME;
         }
     }
+    
+    { // set_entity_positions_to_fizx_positions();
+        for(i32 i = 0; i < entity_manager->entity_length; i++){
+            Entity* entity = &entity_manager->entity[i];
+
+            if(entity->is_physics_body){
+                if(fizx_body_is_active(fizx_state, entity->physics_body_gid)){
+                    Transform2D transform;
+                    if(fizx_body_get_transform(fizx_state, entity->physics_body_gid, &transform)){
+                        entity->transform.position = transform.position;
+                        entity->transform.cosine = transform.cosine;
+                        entity->transform.sine = transform.sine;
+                    }
+                }
+            }
+
+            if(entity->is_sprite){
+                Transform2D sprite_transform = transform2d_transform(entity->sprite_local_transform, entity->transform);
+                gfx_sprite_set_transform(gfx_state, entity->sprite_gid, sprite_transform);
+            }
+        }
+    }
+    
 
     { // move camera.
         gfx_state->world_camera.orthographic_size -= gfx_state->world_camera.orthographic_size * (f32)input_get_mouse_scroll_wheel_delta_value() * delta_time * 0.1f;
+    }
+    
+    { // entity_updates.
+    
+        for(i32 i = 0; i < game_state->entity_manager.entity_length; i++){
+            if(!entity_manager_is_entity_allocated_unsafe(game_state->entity_manager, i)){
+                continue;
+            }
+            
+            Entity* entity = &game_state->entity_manager.entity[i];
+            switch(entity->type_id){
+                case EntityTypeId_BallCue:{ball_cue_update(entity, game_state, delta_time);}break;;
+            }
+        }
+    
     }
 
     if(!in_editor_mode)
@@ -1550,28 +1653,6 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                 game_state->mouse_state.clicked_entity_idx = 0;
                 fizx_body_clear_forces_and_velocities(fizx_state, entity->physics_body_gid);
                 fizx_body_impulse_force(fizx_state,impulse_magnitude, entity->physics_body_gid);
-            }
-        }
-    }
-
-    {
-        for(i32 i = 0; i < entity_manager->entity_length; i++){
-            Entity* entity = &entity_manager->entity[i];
-
-            if(entity->is_physics_body){
-                if(fizx_body_is_active(fizx_state, entity->physics_body_gid)){
-                    Transform2D transform;
-                    if(fizx_body_get_transform(fizx_state, entity->physics_body_gid, &transform)){
-                        entity->transform.position = transform.position;
-                        entity->transform.cosine = transform.cosine;
-                        entity->transform.sine = transform.sine;
-                    }
-                }
-            }
-
-            if(entity->is_sprite){
-                Transform2D sprite_transform = transform2d_transform(entity->sprite_local_transform, entity->transform);
-                gfx_sprite_set_transform(gfx_state, entity->sprite_gid, sprite_transform);
             }
         }
     }

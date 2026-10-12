@@ -1,0 +1,4 @@
+// Ball Power Ups:
+- Fragmentation Ball: fragments the cue ball into multiple smaller balls.
+- Heavy/Large Ball: hits number balls harder, moving them faster.
+- Explosion Ball: explodes around the cue ball, spreading out the number balls.
