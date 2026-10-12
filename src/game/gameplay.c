@@ -304,6 +304,9 @@ bool timer_manager_init(TimerManager* manager, MemoryArena* arena, i32 timer_amo
 }
 
 /*
+    `remarks`
+    `timeout_data` is deep copied into the internal data storage.
+
     `returns`
     a handle to the newly started timer; otherwise 0 if allocation was unsuccessful.
 */
@@ -725,6 +728,8 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
                 entity->transform,
                 linear_drag,
                 angular_drag,
+                PHYSICS_LAYER_ENVIRONMENT,
+                PHYSICS_LAYER_ALL,
                 gravity_affected
             );
             GenId shape_gid = fizx_circle_collider_alloc(
@@ -734,8 +739,6 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
                 FIZX_ShapeBehaviour_Trigger,
                 FIZX_CollisionCallbackBehaviour_All,
                 shape_user_data,
-                PHYSICS_LAYER_ENVIRONMENT,
-                PHYSICS_LAYER_ALL,
                 physics_shape
             );
             fizx_shape_set_on_sustain_callback(
@@ -784,6 +787,8 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
                 entity->transform,
                 BALL_FIZX_BODY_LINEAR_DRAG,
                 BALL_FIZX_BODY_ANGULAR_DRAG,
+                PHYSICS_LAYER_BALL,
+                PHYSICS_LAYER_ALL,
                 false
             );
             fizx_circle_rigid_alloc(
@@ -793,8 +798,6 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
                 FIZX_ShapeBehaviour_Dynamic,
                 FIZX_CollisionCallbackBehaviour_All,
                 &entity_gid,
-                PHYSICS_LAYER_BALL,
-                PHYSICS_LAYER_ALL,
                 circle,
                 BALL_FIZX_SHAPE_MATERIAL
             );
@@ -829,7 +832,19 @@ void ball_cue_update(Entity* entity, GameState* game_state, f32 delta_time){
     // platform_output_message("update cue ball!\n");
     if(input_is_key_just_pressed(Key_A)){
 
-        if(entity->is_physics_body){
+        if(entity->is_physics_body){            
+            i32 mask;
+            if(fizx_body_get_mask(game_state->entity_manager.fizx_state, entity->physics_body_gid, &mask)){
+                switch(mask){
+                    default:{
+                        fizx_body_set_mask(&game_state->entity_manager.fizx_state, entity->physics_body_gid, PHYSICS_LAYER_ENVIRONMENT);
+                    }break;
+                    case PHYSICS_LAYER_ENVIRONMENT:{
+                        fizx_body_set_mask(&game_state->entity_manager.fizx_state, entity->physics_body_gid, PHYSICS_LAYER_ALL);
+                    }break;
+                }
+            }
+            
             // Vector2 velocity = fizx_body_get_linear_velocity(game_state->entity_manager.fizx_state, entity->physics_body_gid);
             // Vector2 direction = vector2_normalise(velocity);
             
@@ -878,7 +893,15 @@ GenId entity_spawn_wall(EntityManager* entity_manager, String name, Transform2D 
         f32 linear_drag = 0.75f;
         f32 angular_drag = 0.75f;
         bool gravity_effected = false;
-        entity->physics_body_gid = fizx_body_alloc(&entity_manager->fizx_state, entity->transform, linear_drag, angular_drag, false);
+        entity->physics_body_gid = fizx_body_alloc(
+            &entity_manager->fizx_state, 
+            entity->transform, 
+            linear_drag, 
+            angular_drag, 
+            PHYSICS_LAYER_ENVIRONMENT,
+            PHYSICS_LAYER_ALL,
+            false
+        );
         GenId entity_shape_gid = fizx_rectangle_rigid_alloc(
             &entity_manager->fizx_state,
             entity->physics_body_gid,
@@ -886,8 +909,6 @@ GenId entity_spawn_wall(EntityManager* entity_manager, String name, Transform2D 
             FIZX_ShapeBehaviour_Kinematic,
             FIZX_CollisionCallbackBehaviour_All,
             &entity_gid,
-            PHYSICS_LAYER_ENVIRONMENT,
-            PHYSICS_LAYER_ALL,
             square,
             material
         );
@@ -1067,6 +1088,8 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, String name, Transfo
             entity->transform,
             BALL_FIZX_BODY_LINEAR_DRAG,
             BALL_FIZX_BODY_ANGULAR_DRAG,
+            PHYSICS_LAYER_BALL,
+            PHYSICS_LAYER_ALL,
             false
         );
 
@@ -1077,8 +1100,6 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, String name, Transfo
             FIZX_ShapeBehaviour_Dynamic,
             FIZX_CollisionCallbackBehaviour_All,
             &entity_gid,
-            PHYSICS_LAYER_BALL,
-            PHYSICS_LAYER_ALL,
             circle,
             BALL_FIZX_SHAPE_MATERIAL
         );
@@ -1407,6 +1428,8 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
         TRANSFORM2D_IDENTITY, 
         0.0f, 
         0.0f, 
+        PHYSICS_LAYER_GUIDELINE,
+        PHYSICS_LAYER_ALL,
         false
     );
     
@@ -1418,8 +1441,6 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
         FIZX_ShapeBehaviour_Trigger,
         FIZX_CollisionCallbackBehaviour_Closest,
         &x,
-        PHYSICS_LAYER_GUIDELINE,
-        PHYSICS_LAYER_ALL,
         (Vector2){0}, 
         (Vector2){0}, 
         0.0f

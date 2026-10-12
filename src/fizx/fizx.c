@@ -1,11 +1,12 @@
-/**
+/*
     TODO: (nich s)
     - add entity type checks to body and shape functions.
     - deallocating bodies COULD fail at collidsion detection bvh indexing.
     - change shape user data from deep copying, should instead be just a pointer, user space handles life times.
     - update physics body data (material, density, mass, inertia, etc) when updating the transform scale.
     - immediate mode raycasting: by querying the bvh tree like the C# project did; note that the you only need to do detection, no need to put it into the tree or rigid responses. 
-**/
+    - remove entity type, rely upon shape category to tell you what it is: None means its a body; otherwise its a shape.
+*/
 
 
 /**====================
@@ -1585,9 +1586,106 @@ inline bool collision_manifold_shape_has_collisions(FIZX_CollisionManifold manif
 ///
 
 
-i32 fizx_entity_get_layer(FIZX_State* state, i32 entity_idx){
-    BOUNDS_CHECK(entity_idx, state->entities.layer_length);
-    return state->entities.layer[entity_idx];
+bool fizx_body_get_layer(FIZX_State state, GenId body_gid, i32* out_layer){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&state.gen_id_allocator, body_gid);
+    if(!idx){
+        return false;
+    }
+    BOUNDS_CHECK(idx, state.entities.entity_type_length);
+    if(state.entities.entity_type[idx] != FIZX_EntityType_Body){
+        return false;
+    }
+    BOUNDS_CHECK(idx, state.entities.layer_length);
+    *out_layer = state.entities.layer[idx];
+    return true;
+}
+
+bool fizx_body_set_layer(FIZX_State* state, GenId body_gid, i32 layer){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, body_gid);
+    if(!idx){
+        return false;
+    }
+    BOUNDS_CHECK(idx, state->entities.entity_type_length);
+    if(state->entities.entity_type[idx] != FIZX_EntityType_Body){
+        return false;
+    }
+    
+    // set body layer.
+    BOUNDS_CHECK(idx, state->entities.layer_length);
+    state->entities.layer[idx] = layer;
+    
+    // get heirarchy node.
+    BOUNDS_CHECK(idx, state->body_hierarchy.length);
+    IntrusiveListNode* body_node = &state->body_hierarchy.node[idx];
+    i32 shape_idx = body_node->first_child;
+    
+    // set shape layers.
+    while(true){
+        
+        BOUNDS_CHECK(shape_idx, state->entities.layer_length);
+        state->entities.layer[shape_idx] = layer;
+        
+        BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
+        IntrusiveListNode* node = &state->body_hierarchy.node[shape_idx];
+        shape_idx = node->next_sibling;
+        
+        if(shape_idx == body_node->first_child || shape_idx == 0){
+            break;
+        }
+    }
+
+    return true;
+}
+
+bool fizx_body_get_mask(FIZX_State state, GenId body_gid, i32* out_mask){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&state.gen_id_allocator, body_gid);
+    if(!idx){
+        return false;
+    }
+    BOUNDS_CHECK(idx, state.entities.entity_type_length);
+    if(state.entities.entity_type[idx] != FIZX_EntityType_Body){
+        return false;
+    }
+    BOUNDS_CHECK(idx, state.entities.mask_length);
+    *out_mask = state.entities.mask[idx];
+    return true;
+}
+
+bool fizx_body_set_mask(FIZX_State* state, GenId body_gid, i32 mask){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, body_gid);
+    if(!idx){
+        return false;
+    }
+    BOUNDS_CHECK(idx, state->entities.entity_type_length);
+    if(state->entities.entity_type[idx] != FIZX_EntityType_Body){
+        return false;
+    }
+    
+    // set body mask.
+    BOUNDS_CHECK(idx, state->entities.mask_length);
+    state->entities.mask[idx] = mask;
+    
+    // get heirarchy node.
+    BOUNDS_CHECK(idx, state->body_hierarchy.length);
+    IntrusiveListNode* body_node = &state->body_hierarchy.node[idx];
+    i32 shape_idx = body_node->first_child;
+    
+    // set shape masks.
+    while(true){
+        
+        BOUNDS_CHECK(shape_idx, state->entities.mask_length);
+        state->entities.mask[shape_idx] = mask;
+        
+        BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
+        IntrusiveListNode* node = &state->body_hierarchy.node[shape_idx];
+        shape_idx = node->next_sibling;
+        
+        if(shape_idx == body_node->first_child || shape_idx == 0){
+            break;
+        }
+    }
+
+    return true;
 }
 
 bool fizx_body_get_transform(FIZX_State* state, GenId body_gid, Transform2D* out_transform){
@@ -2530,29 +2628,55 @@ bool fizx_shape_dealloc(FIZX_State* state, GenId gid, bool recalculate_body_cent
     `returns`:
     A gen-id handle to the allocated body; note that it returns zero when failing to allocate a body.
 **/
-GenId fizx_body_alloc(FIZX_State* state, Transform2D global_transform, f32 linear_drag, f32 angular_drag, bool gravity_affected){
+GenId fizx_body_alloc(
+    FIZX_State* state, Transform2D global_transform, 
+    f32 linear_drag, f32 angular_drag, 
+    i32 layer, i32 mask,
+    bool gravity_affected
+){
     GenId gid = gen_id_allocator_alloc(&state->gen_id_allocator);
     ASSERT(gid != (GenId){0}, "memory limit hit");
     i32 body_idx = gen_id_get_index(gid);
 
     fizx_body_set_active_unsafe(state, body_idx, true);
-    BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
+
     BOUNDS_CHECK(body_idx, state->entities.global_transform.position.length);
-    BOUNDS_CHECK(body_idx, state->entities.global_transform.scale.length);
     state->entities.global_transform.position.x[body_idx] = global_transform.position.x;
     state->entities.global_transform.position.y[body_idx] = global_transform.position.y;
+
+    BOUNDS_CHECK(body_idx, state->entities.global_transform.scale.length);
     state->entities.global_transform.scale.x[body_idx] = global_transform.scale.x;
     state->entities.global_transform.scale.y[body_idx] = global_transform.scale.y;
+
+    BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
     state->entities.global_transform.cosine[body_idx] = global_transform.cosine;
     state->entities.global_transform.sine[body_idx] = global_transform.sine;
+
+    BOUNDS_CHECK(body_idx, state->entities.shape_collision_displacement.length);
     state->entities.shape_collision_displacement.x[body_idx] = 0;
     state->entities.shape_collision_displacement.y[body_idx] = 0;
+
+    BOUNDS_CHECK(body_idx, state->entities.mass_length);
     state->entities.mass[body_idx] = 0;
+
+    BOUNDS_CHECK(body_idx, state->entities.inverse_mass_length);
     state->entities.inverse_mass[body_idx] = 0;
+
+    BOUNDS_CHECK(body_idx, state->entities.entity_type_length);
     state->entities.entity_type[body_idx] = FIZX_EntityType_Body;
+
+    BOUNDS_CHECK(body_idx, state->entities.gravity_affected_length);
     state->entities.gravity_affected[body_idx] = gravity_affected;
+
+    BOUNDS_CHECK(body_idx, state->entities.linear_drag_length);
     state->entities.linear_drag[body_idx] = linear_drag;
+
+    BOUNDS_CHECK(body_idx, state->entities.angular_drag_length);
     state->entities.angular_drag[body_idx] = angular_drag;
+    
+    BOUNDS_CHECK(body_idx, state->entities.layer_length);
+    state->entities.layer[body_idx] = layer;
+    state->entities.mask[body_idx] = mask;
 
     fizx_body_clear_forces_and_velocities_unsafe(state, body_idx);
 
@@ -2651,7 +2775,7 @@ void fizx_state_increment_category_counter(FIZX_State* state, FIZX_ShapeCategory
 GenId fizx_shape_init(
     FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour,
     FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, 
-    i32 layer, i32 mask, f32* vert_x, f32* vert_y, i32 vert_length, f32 base_radius,
+    f32* vert_x, f32* vert_y, i32 vert_length, f32 base_radius,
     f32 base_height, f32 base_width, FIZX_Material material
 ){
     i32 body_idx;
@@ -2680,8 +2804,11 @@ GenId fizx_shape_init(
     { // basics();
 
         BOUNDS_CHECK(shape_idx, state->entities.layer_length);
-        state->entities.layer[shape_idx] = layer;
-        state->entities.mask[shape_idx] = mask;
+        BOUNDS_CHECK(body_idx, state->entities.layer_length);
+        state->entities.layer[shape_idx] = state->entities.layer[body_idx];
+        BOUNDS_CHECK(shape_idx, state->entities.mask_length);
+        BOUNDS_CHECK(body_idx, state->entities.mask_length);
+        state->entities.mask[shape_idx] = state->entities.mask[body_idx];
     }
 
     { // copy_user_data();
@@ -2855,57 +2982,54 @@ bool fizx_shape_set_rotational_response(FIZX_State* state, GenId shape_gid, bool
 **/
 GenId fizx_circle_collider_alloc(
     FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour,
-    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, i32 mask,
-    Circle shape
+    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, Circle shape
 ){
     return fizx_shape_init(
         state, body_gid, local_transform, behaviour, collision_callback_behaviour,
-        user_data, layer, mask, &shape.x, &shape.y, FIZX_SHAPE_CIRCLE_VERTICES_LENGTH, shape.radius,
+        user_data,  &shape.x, &shape.y, FIZX_SHAPE_CIRCLE_VERTICES_LENGTH, shape.radius,
         0.0f, 0.0f, (FIZX_Material){0}
     );
 }
 
 GenId fizx_circle_rigid_alloc(
     FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, 
-    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, i32 mask,
-    Circle shape, FIZX_Material material
+    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, Circle shape, FIZX_Material material
 ){
     return fizx_shape_init(
         state, body_gid, local_transform, behaviour, collision_callback_behaviour,
-        user_data, layer, mask, &shape.x, &shape.y, FIZX_SHAPE_CIRCLE_VERTICES_LENGTH, shape.radius,
+        user_data, &shape.x, &shape.y, FIZX_SHAPE_CIRCLE_VERTICES_LENGTH, shape.radius,
         0.0f, 0.0f, material
     );
 }
 
 GenId fizx_rectangle_collider_alloc(
     FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, 
-    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, i32 mask,
-    Rectangle shape
+    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, Rectangle shape
 ){
     PolygonRectangle poly = polygon_rectangle_from_rectangle(shape);
     return fizx_shape_init(
         state, body_gid, local_transform, behaviour, collision_callback_behaviour,
-        user_data, layer, mask, poly.x, poly.y, FIZX_SHAPE_RECTANGLE_VERTICES_LENGTH, 0.0f,
+        user_data, poly.x, poly.y, FIZX_SHAPE_RECTANGLE_VERTICES_LENGTH, 0.0f,
         shape.height, shape.width, (FIZX_Material){0}
     );
 }
 
 GenId fizx_rectangle_rigid_alloc(
     FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, 
-    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, i32 mask,
-    Rectangle shape, FIZX_Material material
+    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, Rectangle shape, 
+    FIZX_Material material
 ){
     PolygonRectangle poly = polygon_rectangle_from_rectangle(shape);
     return fizx_shape_init(
         state, body_gid, local_transform, behaviour, collision_callback_behaviour,
-        user_data, layer, mask, poly.x, poly.y, FIZX_SHAPE_RECTANGLE_VERTICES_LENGTH, 0.0f,
+        user_data, poly.x, poly.y, FIZX_SHAPE_RECTANGLE_VERTICES_LENGTH, 0.0f,
         shape.height, shape.width, material
     );
 }
 
 GenId fizx_line_collider_alloc(
     FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, 
-    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, i32 mask, 
+    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, 
     Vector2 local_origin, Vector2 direction, f32 length
 ){
     direction = vector2_normalise(direction);
@@ -2913,14 +3037,14 @@ GenId fizx_line_collider_alloc(
     f32* verts_y = (f32[2]){local_origin.y, local_origin.y + (direction.y * length)};
     return fizx_shape_init(
         state, body_gid, local_transform, behaviour, collision_callback_behaviour,
-        user_data, layer, mask, verts_x, verts_y, FIZX_SHAPE_LINE_VERTICES_LENGTH, 0.0f,
+        user_data, verts_x, verts_y, FIZX_SHAPE_LINE_VERTICES_LENGTH, 0.0f,
         0.0f, 0.0f, (FIZX_Material){0}
     );
 }
 
 GenId fizx_line_rigid_alloc(
     FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, 
-    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, i32 layer, i32 mask, 
+    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, 
     Vector2 local_origin, Vector2 direction, f32 length, FIZX_Material material
 ){
     direction = vector2_normalise(direction);
@@ -2928,7 +3052,7 @@ GenId fizx_line_rigid_alloc(
     f32* verts_y = (f32[2]){local_origin.y, local_origin.y + (direction.y * length)};
     return fizx_shape_init(
         state, body_gid, local_transform, behaviour, collision_callback_behaviour,
-        user_data, layer, mask, verts_x, verts_y, FIZX_SHAPE_LINE_VERTICES_LENGTH, 0.0f,
+        user_data, verts_x, verts_y, FIZX_SHAPE_LINE_VERTICES_LENGTH, 0.0f,
         0.0f, 0.0f, material
     );
 }
