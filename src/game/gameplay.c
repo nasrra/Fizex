@@ -39,7 +39,10 @@ typedef enum{
     EntityTypeId_BallNine       = 12,
     EntityTypeId_BallZero       = 13,
     EntityTypeId_Pocket         = 14,
-    EntityTypeId_BoostPad       = 15
+    EntityTypeId_BoostPad       = 15,
+    EntityTypeId_WindMill       = 16,
+    EntityTypeId_WindMillHinge  = 17,
+    EntityTypeId_WindMillBlade  = 18
 } EntityTypeId;
 
 typedef struct{
@@ -183,6 +186,7 @@ typedef struct{
     EntityManager* entity_manager;
 } BoostPadBoostDepletedTimerTimeoutContext;
 
+
 ///
 /// Definitions.
 ///
@@ -246,24 +250,24 @@ typedef struct{
 
 
 ///
-/// Texture Views.
+/// @ texture views.
 ///
 
 
-#define TEXTURE_VIEW_WALL       (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
-#define TEXTURE_VIEW_BALL_CUE   (GFX_TextureView){.top_left = {128, 0}, .bot_right = {256, 128}}
-#define TEXTURE_VIEW_BALL_ONE   (GFX_TextureView){.top_left = {256, 0}, .bot_right = {384, 128}}
-#define TEXTURE_VIEW_BALL_TWO   (GFX_TextureView){.top_left = {384, 0}, .bot_right = {512, 128}}
-#define TEXTURE_VIEW_BALL_THREE (GFX_TextureView){.top_left = {512, 0}, .bot_right = {640, 128}}
-#define TEXTURE_VIEW_BALL_FOUR  (GFX_TextureView){.top_left = {640, 0}, .bot_right = {768, 128}}
-#define TEXTURE_VIEW_BALL_FIVE  (GFX_TextureView){.top_left = {768, 0}, .bot_right = {896, 128}}
-#define TEXTURE_VIEW_BALL_SIX   (GFX_TextureView){.top_left = {896, 0}, .bot_right = {1024, 128}}
-#define TEXTURE_VIEW_BALL_SEVEN (GFX_TextureView){.top_left = {1024, 0}, .bot_right = {1152, 128}}
-#define TEXTURE_VIEW_BALL_EIGHT (GFX_TextureView){.top_left = {1152, 0}, .bot_right = {1280, 128}}
-#define TEXTURE_VIEW_BALL_NINE  (GFX_TextureView){.top_left = {1280, 0}, .bot_right = {1408, 128}}
-#define TEXTURE_VIEW_BALL_ZERO  (GFX_TextureView){.top_left = {1408, 0}, .bot_right = {1536, 128}}
-#define TEXTURE_VIEW_BOOST_PAD  (GFX_TextureView){.top_left = {1536, 0}, .bot_right = {1664, 128}}
-#define TEXTURE_VIEW_POCKET     (GFX_TextureView){.top_left = {128, 0}, .bot_right = {256, 128}}
+#define TEXTURE_VIEW_WALL           (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
+#define TEXTURE_VIEW_BALL_CUE       (GFX_TextureView){.top_left = {128, 0}, .bot_right = {256, 128}}
+#define TEXTURE_VIEW_BALL_ONE       (GFX_TextureView){.top_left = {256, 0}, .bot_right = {384, 128}}
+#define TEXTURE_VIEW_BALL_TWO       (GFX_TextureView){.top_left = {384, 0}, .bot_right = {512, 128}}
+#define TEXTURE_VIEW_BALL_THREE     (GFX_TextureView){.top_left = {512, 0}, .bot_right = {640, 128}}
+#define TEXTURE_VIEW_BALL_FOUR      (GFX_TextureView){.top_left = {640, 0}, .bot_right = {768, 128}}
+#define TEXTURE_VIEW_BALL_FIVE      (GFX_TextureView){.top_left = {768, 0}, .bot_right = {896, 128}}
+#define TEXTURE_VIEW_BALL_SIX       (GFX_TextureView){.top_left = {896, 0}, .bot_right = {1024, 128}}
+#define TEXTURE_VIEW_BALL_SEVEN     (GFX_TextureView){.top_left = {1024, 0}, .bot_right = {1152, 128}}
+#define TEXTURE_VIEW_BALL_EIGHT     (GFX_TextureView){.top_left = {1152, 0}, .bot_right = {1280, 128}}
+#define TEXTURE_VIEW_BALL_NINE      (GFX_TextureView){.top_left = {1280, 0}, .bot_right = {1408, 128}}
+#define TEXTURE_VIEW_BALL_ZERO      (GFX_TextureView){.top_left = {1408, 0}, .bot_right = {1536, 128}}
+#define TEXTURE_VIEW_BOOST_PAD      (GFX_TextureView){.top_left = {1536, 0}, .bot_right = {1664, 128}}
+#define TEXTURE_VIEW_POCKET         (GFX_TextureView){.top_left = {128, 0}, .bot_right = {256, 128}}
 
 #define FONT_HEIGHT_IN_PIXELS 48
 
@@ -673,7 +677,7 @@ bool entity_set_transform(EntityManager* manager, GenId entity_gid, Transform2D 
     entity->transform = transform;
 
     if(entity->is_sprite){
-        gfx_sprite_set_transform(manager->gfx_state, entity->sprite_gid, transform);
+        gfx_sprite_set_transform(manager->gfx_state, entity->sprite_gid, transform2d_transform(entity->sprite_local_transform, transform));
     }
 
     if(entity->is_physics_body){
@@ -684,7 +688,238 @@ bool entity_set_transform(EntityManager* manager, GenId entity_gid, Transform2D 
 
 
 ///
-/// functions: Entities.
+/// @ Entities.
+///
+
+
+///
+/// @ WindMillBlade.
+///
+
+
+#define WINDMILL_BLADE_TEXTURE_VIEW      (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
+#define WINDMILL_BLADE_DEFAULT_PHYSICS_LAYER  PHYSICS_LAYER_ENVIRONMENT_MID
+#define WINDMILL_BLADE_DEFAULT_PHYSICS_MASK   PHYSICS_LAYER_ALL 
+#define WINDMILL_BLADE_PHYSICS_MATERIAL (FIZX_Material){.static_friction = 0.75f, .kinetic_friction = 0.65f, .density = 10.0f, .restitution = 0.334f}
+
+GenId entity_spawn_windmill_blade(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
+    GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
+    Entity* entity;
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
+        entity->type_id = EntityTypeId_WindMillBlade;
+        string_push(&entity->name, name);
+        entity->transform = transform;
+
+        f32 width = 3.0f;
+        f32 height = 0.1f;
+
+        { // physics_body_alloc();
+
+            entity->is_physics_body = true;
+            Rectangle physics_shape = {.x = 0.0f, .y = 0.0f, .width = width, .height = height};
+            Transform2D physics_shape_transform = TRANSFORM2D_IDENTITY;
+            f32 linear_drag = 0.0f;
+            f32 angular_drag = 0.0f;
+            bool is_gravity_affected = false;
+            void* shape_user_data = &entity_gid;
+            entity->physics_body_gid = fizx_body_alloc(
+                &entity_manager->fizx_state,
+                entity->transform,
+                linear_drag,
+                angular_drag,
+                WINDMILL_BLADE_DEFAULT_PHYSICS_LAYER,
+                WINDMILL_BLADE_DEFAULT_PHYSICS_MASK,
+                is_gravity_affected
+            );
+            GenId shape_gid = fizx_rectangle_rigid_alloc(
+                &entity_manager->fizx_state,
+                entity->physics_body_gid,
+                physics_shape_transform,
+                FIZX_ShapeBehaviour_Kinematic,
+                FIZX_CollisionCallbackBehaviour_All,
+                shape_user_data,
+                physics_shape,
+                WINDMILL_BLADE_PHYSICS_MATERIAL
+            );
+        }        
+    
+        { // sprite_alloc();
+
+            entity->is_sprite = true;
+            entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
+            entity->sprite_local_transform.scale.x = width;
+            entity->sprite_local_transform.scale.y = height;
+            entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
+            gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, WINDMILL_BLADE_TEXTURE_VIEW);
+            gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
+            gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
+            gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_TopLeft);
+            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 0.34f, .g = 0.34f, .b = 0.34f, .a = 1.0f});
+            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+            gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
+        }
+    }
+    
+    return entity_gid;
+}
+
+
+///
+/// @ WindMillHinge.
+///
+
+
+// void windmill_hinge_update(Entity* entity, GameState* game_state, f32 delta_time){
+//     entity->transform
+// }
+
+GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
+    GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
+    Entity* entity;
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
+
+        entity->type_id = EntityTypeId_WindMillHinge;
+        string_push(&entity->name, name);
+        entity->transform = transform;
+
+        String blade_name = {.chars = "wind_mill_blade", .count = 15, .length = 15};
+        Entity* blade_entity;
+        
+        Transform2D blade_transform = TRANSFORM2D_IDENTITY;
+        blade_transform.position = transform.position;
+
+        
+        { // forward_blade();
+
+            GenId blade_gid = entity_spawn_windmill_blade(entity_manager, blade_name, blade_transform, entity_gid);
+            if(entity_manager_get_entity(*entity_manager, blade_gid, &blade_entity)){
+                // forward facing by default...
+            }
+            else{
+                entity_manager_dealloc_entity(entity_manager, entity_gid);
+            }
+            blade_entity = NULL;
+        }
+        
+        { // down_blade();
+
+            GenId blade_gid = entity_spawn_windmill_blade(entity_manager, blade_name, blade_transform, entity_gid);
+            if(entity_manager_get_entity(*entity_manager, blade_gid, &blade_entity)){
+                blade_entity->transform = transform2d_rotate(blade_entity->transform, degrees_to_radians(90));
+            }
+            else{
+                entity_manager_dealloc_entity(entity_manager, entity_gid);
+            }
+            blade_entity = NULL;
+        }
+        
+        { // backward_blade();
+
+            GenId blade_gid = entity_spawn_windmill_blade(entity_manager, blade_name, blade_transform, entity_gid);
+            if(entity_manager_get_entity(*entity_manager, blade_gid, &blade_entity)){
+                blade_entity->transform = transform2d_rotate(blade_entity->transform, degrees_to_radians(180));
+            }
+            else{
+                entity_manager_dealloc_entity(entity_manager, entity_gid);
+            }
+            blade_entity = NULL;
+        }
+
+        { // up_blade();
+        
+            GenId blade_gid = entity_spawn_windmill_blade(entity_manager, blade_name, blade_transform, entity_gid);
+            if(entity_manager_get_entity(*entity_manager, blade_gid, &blade_entity)){
+                blade_entity->transform = transform2d_rotate(blade_entity->transform, degrees_to_radians(270));
+            }
+            else{
+                entity_manager_dealloc_entity(entity_manager, entity_gid);
+            }
+            blade_entity = NULL;
+        }            
+    }
+    return entity_gid;
+}
+
+
+///
+/// @ WindMill.
+///
+
+
+#define WINDMILL_BODY_TEXTURE_VIEW      (GFX_TextureView){.top_left = {128, 0}, .bot_right = {256, 128}}
+#define WINDMILL_DEFAULT_PHYSICS_LAYER  PHYSICS_LAYER_ENVIRONMENT_MID
+#define WINDMILL_DEFAULT_PHYSICS_MASK   PHYSICS_LAYER_ALL 
+#define WINDMILL_PHYSICS_MATERIAL (FIZX_Material){.static_friction = 0.75f, .kinetic_friction = 0.65f, .density = 10.0f, .restitution = 0.167f}
+
+GenId entity_spawn_windmill(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
+    GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
+    Entity* entity;
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
+        entity->type_id = EntityTypeId_WindMill;
+        string_push(&entity->name, name);
+        entity->transform = transform;
+        
+        { // physics_body_alloc();
+
+            entity->is_physics_body = true;
+            Circle physics_shape = {.radius = 0.5f};
+            Transform2D physics_shape_transform = TRANSFORM2D_IDENTITY;
+            f32 linear_drag = 0.0f;
+            f32 angular_drag = 0.0f;
+            bool is_gravity_affected = false;
+            void* shape_user_data = &entity_gid;
+            entity->physics_body_gid = fizx_body_alloc(
+                &entity_manager->fizx_state,
+                entity->transform,
+                linear_drag,
+                angular_drag,
+                WINDMILL_DEFAULT_PHYSICS_LAYER,
+                WINDMILL_DEFAULT_PHYSICS_MASK,
+                is_gravity_affected
+            );
+            GenId shape_gid = fizx_circle_rigid_alloc(
+                &entity_manager->fizx_state,
+                entity->physics_body_gid,
+                physics_shape_transform,
+                FIZX_ShapeBehaviour_Kinematic,
+                FIZX_CollisionCallbackBehaviour_All,
+                shape_user_data,
+                physics_shape,
+                WINDMILL_PHYSICS_MATERIAL
+            );
+        }
+        
+        { // sprite_alloc();
+
+            entity->is_sprite = true;
+            entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
+            entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
+            gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, WINDMILL_BODY_TEXTURE_VIEW);
+            gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
+            gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
+            gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
+            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 0.34f, .g = 0.34f, .b = 0.34f, .a = 1.0f});
+            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+            gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
+        }
+
+        String hinge_name = {.chars = "wind_mill_hinge", .count = 15, .length = 15};
+        Transform2D hinge_transform = TRANSFORM2D_IDENTITY;
+        hinge_transform.position = transform.position;
+        if(!entity_spawn_windmill_hinge(entity_manager, hinge_name, hinge_transform, entity_gid)){
+            entity_manager_dealloc_entity(entity_manager, entity_gid);
+        }
+    }
+    return entity_gid;
+}
+
+
+///
+/// @ Pocket.
 ///
 
 
@@ -748,7 +983,7 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
             Transform2D physics_shape_transform = TRANSFORM2D_IDENTITY;
             f32 linear_drag = 0.0f;
             f32 angular_drag = 0.0f;
-            bool gravity_affected = false;
+            bool is_gravity_affected = false;
             void* shape_user_data = &entity_gid;
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state,
@@ -757,7 +992,7 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
                 angular_drag,
                 PHYSICS_LAYER_ENVIRONMENT_MID,
                 PHYSICS_LAYER_ALL,
-                gravity_affected
+                is_gravity_affected
             );
             GenId shape_gid = fizx_circle_collider_alloc(
                 &entity_manager->fizx_state,
@@ -793,6 +1028,12 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
     }
     return entity_gid;
 }
+
+
+///
+/// @ BallCue.
+///
+
 
 GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
     // clickable entity (angry bird).
@@ -931,6 +1172,12 @@ void ball_cue_update(Entity* entity, GameState* game_state, f32 delta_time){
     }
 }
 
+
+///
+/// @ Wall.
+///
+
+
 GenId entity_spawn_wall(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
@@ -986,6 +1233,12 @@ GenId entity_spawn_wall(EntityManager* entity_manager, String name, Transform2D 
     return entity_gid;
 }
 
+
+///
+/// @ LevelRoot.
+///
+
+
 GenId entity_spawn_level_root(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
@@ -997,81 +1250,11 @@ GenId entity_spawn_level_root(EntityManager* entity_manager, String name, Transf
     return entity_gid;
 }
 
-#if 0
-typedef struct{
-    EntityManager* entity_manager;
-    GenId entity_gid;
-} PigInvincibleTimerTimeoutContext;
 
-void pig_invincible_timer_timeout(void* user_data){
-    PigInvincibleTimerTimeoutContext* ctx = (PigInvincibleTimerTimeoutContext*)user_data;
-    Entity* entity;
-    if(!entity_manager_get_entity(*ctx->entity_manager, ctx->entity_gid, &entity)){
-        return;
-    }
-    entity->is_invincible = false;
-}
+///
+/// @ NumberBall.
+///
 
-void pig_fizx_shape_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
-    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    GenId* entity_gid = (GenId*)info.target_user_data;
-    EntityManager* entity_manager = &ctx->game_state->entity_manager;
-
-    if((info.source_layer & PHYSICS_LAYER_PLAYER) == 0){
-        return;
-    }
-
-    Entity* entity;
-    if(!entity_manager_get_entity(*entity_manager, *entity_gid, &entity)){
-        ASSERT(false, "failed to get entity.");
-    }
-    if(entity->is_invincible){
-        return;
-    }
-
-    i32 source_body_idx = fizx_shape_get_parent_unsafe(entity_manager->fizx_state, info.source_entity_idx);
-    if(!source_body_idx){
-        ASSERT(false, "failed to retrieve body idx.");
-        return;
-    }
-
-    Vector2 velocity = fizx_body_get_linear_velocity_unsafe(entity_manager->fizx_state, source_body_idx);
-    f32 magnitude = vector2_len(velocity);
-    f32 damage = magnitude / ((PLAYER_MOUSE_LAUNCH_FORCE * 0.5f) * PLAYER_MOUSE_MAX_DRAW_RADIUS);
-    damage = CLAMP(damage, 0.0f, 1.0f);
-
-    ASSERT(entity->is_health, "entity doesnt use health.");
-    entity->health -= damage;
-
-    if(entity->health <= 0.0f){
-        entity_manager_dealloc_entity(ctx->entity_manager, *entity_gid);
-        ctx->entity_manager->alive_enemies-=1;
-        if(ctx->entity_manager->alive_enemies <= 0){
-            platform_output_message("WIN!");
-        }
-    }
-    else if(entity->health <= 1.0f){
-        gfx_sprite_set_texture_view(entity_manager->gfx_state, entity->sprite_gid, GFX_TEXTURE_VIEW_PIG_CRITICAL);
-    }
-    else if(entity->health <= 2.0f){
-        gfx_sprite_set_texture_view(entity_manager->gfx_state, entity->sprite_gid, GFX_TEXTURE_VIEW_PIG_HURT);
-    }
-
-    PigInvincibleTimerTimeoutContext timeout_data = {
-        .entity_manager = entity_manager,
-        .entity_gid = *entity_gid
-    };
-
-    char* chars = (char[256]){0};
-    // i32 written = snprintf(chars, 256, "%f", entity->health);
-    i32 written = snprintf(chars, 256, "%f", damage);
-    chars[written] = '\n';
-    platform_output_message(chars);
-
-    entity->is_invincible = true;
-    timer_manager_timer_start(&ctx->entity_manager->timer_manager, 0.675f, 1.0f, pig_invincible_timer_timeout, &timeout_data, sizeof(timeout_data));
-}
-#endif
 
 GenId entity_spawn_game_ball(EntityManager* entity_manager, String name, Transform2D transform, GenId parent, i32 ball_number){
 
@@ -1221,6 +1404,12 @@ GenId entity_spawn_ball_zero(EntityManager* entity_manager, String name, Transfo
     return entity_spawn_game_ball(entity_manager, name, transform, parent, 0);
 }
 
+
+///
+/// @ BoostPad.
+///
+
+
 void boost_pad_boost_depleted_timeout(void* user_data){
     BoostPadBoostDepletedTimerTimeoutContext* ctx = (BoostPadBoostDepletedTimerTimeoutContext*)user_data;
     Entity* entity;
@@ -1331,6 +1520,12 @@ GenId entity_spawn_boost_pad(EntityManager* entity_manager, String name, Transfo
     return entity_gid;
 }
 
+
+///
+/// @ GenericEntity.
+///
+
+
 GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String name, Transform2D transform, GenId parent_gid){
     switch(type_id){
         default:{
@@ -1382,6 +1577,9 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String n
         case EntityTypeId_BoostPad:{
             return entity_spawn_boost_pad(entity_manager, name, transform, parent_gid);
         }break;
+        case EntityTypeId_WindMill:{
+            return entity_spawn_windmill(entity_manager, name, transform, parent_gid);
+        }
     }
 }
 

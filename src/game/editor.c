@@ -520,6 +520,7 @@ void gfx_clay_entity_spawner_layout(Editor_State* editor_state, GameState* game_
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Zero"), button_width, button_height, transient, editor_state, EntityTypeId_BallZero);
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Pocket"), button_width, button_height, transient, editor_state, EntityTypeId_Pocket);
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Boost Pad"), button_width, button_height, transient, editor_state, EntityTypeId_BoostPad);
+            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Windmill"), button_width, button_height, transient, editor_state, EntityTypeId_WindMill);
         }
 
         GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
@@ -712,7 +713,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                             editor_entity->clickable_area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
                         }break;
                         case GFX_SpriteOrigin_TopLeft:{
-                            editor_entity->clickable_area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+                            editor_entity->clickable_area.shape = transform2d_to_polygon_rectangle_top_left_origin(preferred_transform);
                         }break;
                     }
                     gfx_sprite_get_depth_layer(game_gfx_state, game_entity->sprite_gid, &editor_entity->clickable_area.depth_layer);

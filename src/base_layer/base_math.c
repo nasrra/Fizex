@@ -205,7 +205,7 @@ typedef struct{
 
 
 ///
-/// functions: f32
+/// @ functions: f32
 ///
 
 
@@ -295,6 +295,10 @@ void rotor_multiply(f32 sine, f32 cosine, f32 theta, f32* new_sine, f32* new_cos
 
     *new_sine = next_sine * inv_len;
     *new_cosine = next_cosine * inv_len;
+}
+
+inline f32 degrees_to_radians(f32 degrees){
+    return degrees * PI * 0.00555555555555555555555555555556f;
 }
 
 
