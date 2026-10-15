@@ -71,16 +71,25 @@ typedef struct{
 } Editor_MouseStateMoveBehaviourState;
 
 typedef struct{
+    // the previous frame's positional difference (from entity to mouse).
+    Vector2 previous_positional_difference;
+} Editor_MouseStateRotateBehaviourState;
+
+typedef struct{
     // the entity_id of the entity to spawn.
     EntityTypeId entity_to_spawn;
     GenId entity_to_spawn_parent_gid;
 
     // whether or not the selected entity was just set this update tick.
-    Editor_MouseStateBehaviour behaviour;
+    Editor_MouseStateBehaviour previous_behaviour;
+    Editor_MouseStateBehaviour current_behaviour;
+    Editor_MouseStateMoveBehaviourState move_behaviour_state;
+    Editor_MouseStateRotateBehaviourState rotate_behaviour_state;
+    
     Editor_SelectedGameEntity first_hit_game_entity;
     Editor_SelectedGameEntity selected_game_entity;
     Editor_SelectedGameEntity* previously_selected_game_entity;
-    Editor_MouseStateMoveBehaviourState move_behaviour_state;
+    
     i32 previously_selected_game_entity_length;
     i32 previously_selected_game_entity_count;
     Editor_SelectedEditorUiEntity selected_editor_ui_entity;
@@ -120,25 +129,17 @@ typedef struct{
 } Editor_SpawnEntityButtonOnHoverContext;
 
 
-
-
 ///
-/// globals.
+/// @ Globals.
 ///
-
-
 
 
 static i32 gfx_clay_element_id = 0;
 
 
-
-
 ///
-/// defines.
+/// @ Defines.
 ///
-
-
 
 
 // the length of the clickable area struct's vertex arrays.
@@ -299,12 +300,9 @@ CLAY(                                                                           
 }while(0)
 
 
-
 ///
 /// functions.
 ///
-
-
 
 
 void editor_entity_manager_init(Editor_EntityManager* entity_manager, MemoryArena* arena, i32 entity_amount){
@@ -627,13 +625,9 @@ void editor_mouse_state_set_selected_game_entity(Editor_MouseState* mouse_state,
 }
 
 
-
-
 ///
 /// functions: Editor_State
 ///
-
-
 
 
 void editor_state_update(Editor_State* editor_state, GameState* game_state, MemoryArena* transient, f32 delta_time){
@@ -779,16 +773,16 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
         }
         else{
             if(input_is_key_just_pressed(EDITOR_MOUSE_BEHAVIOUR_NAVIGATE_KEYBINDING)){
-                editor_mouse_state->behaviour = Editor_MouseStateBehaviour_Navigate;
+                editor_mouse_state->current_behaviour = Editor_MouseStateBehaviour_Navigate;
             }
             if(input_is_key_just_pressed(EDITOR_MOUSE_BEHAVIOUR_MOVE_KEYBINDING)){
-                editor_mouse_state->behaviour = Editor_MouseStateBehaviour_Move;
+                editor_mouse_state->current_behaviour = Editor_MouseStateBehaviour_Move;
             }
             if(input_is_key_just_pressed(EDITOR_MOUSE_BEHAVIOUR_SCALE_KEYBINDING)){
-                editor_mouse_state->behaviour = Editor_MouseStateBehaviour_Scale;
+                editor_mouse_state->current_behaviour = Editor_MouseStateBehaviour_Scale;
             }
             if(input_is_key_just_pressed(EDITOR_MOUSE_BEHAVIOUR_ROTATE_KEYBINDING)){
-                editor_mouse_state->behaviour = Editor_MouseStateBehaviour_Rotate;
+                editor_mouse_state->current_behaviour = Editor_MouseStateBehaviour_Rotate;
             }
             if(input_is_key_just_pressed(Key_D)){
                 entity_manager_dealloc_entity(game_entity_manager, editor_mouse_state->selected_game_entity.gid);                 
@@ -805,7 +799,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                     game_gfx_state->world_camera.position = vector3_add(game_gfx_state->world_camera.position, vector2_to_vector3(delta_mouse_position));
                 }
 
-                switch(editor_mouse_state->behaviour){
+                switch(editor_mouse_state->current_behaviour){
                     case Editor_MouseStateBehaviour_Navigate:{
             
                         { // entity_selecting();
@@ -976,6 +970,23 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                             game_entity->transform.position = new_position;
                         }
                     }break;
+                    case Editor_MouseStateBehaviour_Rotate:{
+                        Entity* game_entity;
+                        if(!entity_manager_get_entity(*game_entity_manager, editor_mouse_state->selected_game_entity.gid, &game_entity)){
+                            // failed to retrieve selected entity.
+                            break;
+                        }
+                        
+                        Vector2 diff = vector2_sub(game_entity->transform.position, mouse_world_position);
+                        
+                        if(editor_mouse_state->previous_behaviour == Editor_MouseStateBehaviour_Rotate){
+                            Vector2 prev_diff = editor_mouse_state->rotate_behaviour_state.previous_positional_difference;
+                            f32 radians = vector2_radian_difference_scalar(diff.x, diff.y, prev_diff.x, prev_diff.y);
+                            game_entity->transform = transform2d_rotate(game_entity->transform, radians);
+                        }
+    
+                        editor_mouse_state->rotate_behaviour_state.previous_positional_difference = diff;
+                    }break;
                 }
             }
         }
@@ -1010,18 +1021,22 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
             Editor_EntityImmediateModeData* editor_entity = &editor_entity_manager->entity[i];
             BOUNDS_CHECK(i, game_entity_manager->entity_length);
             Entity* game_entity = &game_entity_manager->entity[i];
-            
-            // draw the clickable area.                
-            
+                        
             if(selected_game_entity_idx == i){
-                switch(editor_mouse_state->behaviour){
+                switch(editor_mouse_state->current_behaviour){
                     case Editor_MouseStateBehaviour_Move:{
                         gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_LIGHT_BLUE, game_entity->transform.position, VECTOR2_UP, 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
                         gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_PINK, game_entity->transform.position, VECTOR2_RIGHT, 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+                        gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->transform.position, transform2d_get_forward_angle_vector(game_entity->transform), 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
                     }break;
+                    case Editor_MouseStateBehaviour_Rotate:{
+                        gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->transform.position, transform2d_get_forward_angle_vector(game_entity->transform), 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+                        gfx_draw_line(editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->transform.position, mouse_world_position, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
+                    }
                 }
             }
-                            
+            
+            // draw the clickable area.
             i32 sprite_depth = 100;
             gfx_draw_wire_poly(
                 editor_gfx_state,
@@ -1036,5 +1051,10 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
         
         }
     }
+
+    { // prepare_for_next_frame();
     
+        editor_mouse_state->previous_behaviour = editor_mouse_state->current_behaviour;
+    
+    }
 }

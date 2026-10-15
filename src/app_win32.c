@@ -123,6 +123,7 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
                 case VK_OEM_PERIOD: {input_set_key_down(Key_Period);}break;
                 case VK_BACK:       {input_set_key_down(Key_Backspace);}break;
                 case VK_OEM_MINUS:  {input_set_key_down(Key_Minus);}break;
+                case VK_OEM_3:      {input_set_key_down(Key_Tilde);}break;
                 case VK_SHIFT:      {input_set_key_down(Key_LeftShift); input_set_key_down(Key_RightShift);}break; // note: VK_LSHIFT and VK_RSHIFT dont work on my keyboard; only VK_SHIFT does.
             }
         }break;
@@ -160,6 +161,7 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
                 case VK_OEM_PERIOD: {input_set_key_up(Key_Period);}break;
                 case VK_BACK:       {input_set_key_up(Key_Backspace);}break;
                 case VK_OEM_MINUS:  {input_set_key_up(Key_Minus);}break;
+                case VK_OEM_3:      {input_set_key_up(Key_Tilde);}break;
                 case VK_SHIFT:      {input_set_key_up(Key_LeftShift); input_set_key_up(Key_RightShift);}break; // note: VK_LSHIFT and VK_RSHIFT dont work on my keyboard; only VK_SHIFT does.
             }
         }break;

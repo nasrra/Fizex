@@ -46,6 +46,7 @@ typedef enum {
     Key_Period,
     Key_Slash,
     Key_Capslock,
+    Key_Tilde,
 
     // Digit Keys (0-9)
     Key_0,

@@ -136,7 +136,7 @@ void app_main(){
 
         { // load level.
             string_clear(&file_path);
-            string_push_chars(&file_path, "assets/lvl_001.scsv", 19);
+            string_push_chars(&file_path, "assets/saved.scsv", 19);
             level_manager_defer_load_level(&game_state.level_manager, file_path, LevelLoadType_World);
         }
     }

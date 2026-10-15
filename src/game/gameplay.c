@@ -547,8 +547,14 @@ void entity_manager_dealloc_entity_data_unsafe(EntityManager* manager, i32 idx){
     if(entity->sprite_gid){
         gfx_dealloc_sprite(manager->gfx_state, entity->sprite_gid);
     }
-
+    
+    String name = entity->name;
+    string_clear(&name);
+    
     *entity = (Entity){0};
+    
+    // ensure that the name tag isnt fucked with.
+    entity->name = name;
 }
 
 void entity_on_entity_hierarchy_dealloc(IntrusiveList* list, i32 node_idx, void* user_data){
@@ -1279,6 +1285,7 @@ GenId entity_spawn_boost_pad(EntityManager* entity_manager, String name, Transfo
         return 0;
     }
     
+    entity->type_id = EntityTypeId_BoostPad;
     string_clear(&entity->name);
     string_push(&entity->name, name);
     entity->transform = transform;
@@ -1374,7 +1381,7 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String n
         }break;
         case EntityTypeId_BoostPad:{
             return entity_spawn_boost_pad(entity_manager, name, transform, parent_gid);
-        }
+        }break;
     }
 }
 
@@ -1497,7 +1504,7 @@ GenId level_manager_load_level_file(LevelManager* level_manager, String file_pat
         }
 
         if(lines_read == 9){
-            file_data += bytes_consumed + 1; // add 1 to account for the new line character.
+            file_data += bytes_consumed + 1; // add 2 to account for the ';' delimiter and the subsequent '\n'.
         }
         else{
             break;
@@ -1666,7 +1673,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         }
     }
 
-    if(input_is_key_just_pressed(Key_R)){
+    if(input_is_key_just_pressed(Key_Tilde)){
         level_manager_defer_reload_world_level(&game_state->level_manager);
     }
 

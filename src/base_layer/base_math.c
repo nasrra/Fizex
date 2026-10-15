@@ -227,23 +227,23 @@ inline f32 f32_sign(f32 val){
     return (f32)(val > 0.0f) - (val < 0.0f);
 }
 
-f32 f32_sin(f32 val){
+inline f32 f32_sin(f32 val){
     return sinf(val);
 }
 
-f32 f32_cos(f32 val){
+inline f32 f32_cos(f32 val){
     return cosf(val);
 }
 
-f32 f32_tan(f32 val){
+inline f32 f32_tan(f32 val){
     return tanf(val);
 }
 
-f32 f32_sqrt(f32 val){
+inline f32 f32_sqrt(f32 val){
     return sqrtf(val);
 }
 
-f32 f32_atan2(f32 y, f32 x){
+inline f32 f32_atan2(f32 y, f32 x){
     return atan2f(y, x);
 }
 
@@ -325,9 +325,18 @@ f64 f64_atan2(f64 y, f64 x){
 
 
 ///
-/// functions: Vector2
+/// @ functions: Vector2
 ///
 
+
+inline f32 vector2_radian_difference_scalar(
+    f32 sineA, f32 cosineA,
+    f32 sineB, f32 cosineB
+){
+    f32 cross = sineB * cosineA - cosineB * sineA;
+    f32 dot = cosineB * cosineA + sineB * sineA;
+    return f32_atan2(cross, dot);
+}
 
 f32 vector2_dot_scalar(f32 lhs_x, f32 lhs_y, f32 rhs_x, f32 rhs_y){
     return (lhs_x * rhs_x) + (lhs_y * rhs_y);
@@ -1853,7 +1862,7 @@ void soa_vector2_clear_element(Soa_Vector2* soa, i32 elem_idx){
 
 
 ///
-/// functions: Transform2D.
+/// @ functions: Transform2D.
 ///
 
 
