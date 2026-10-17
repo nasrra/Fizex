@@ -866,13 +866,9 @@ BvhOverlapInfo bvh_categorised_leaf_overlaps_get_overlaps(BvhCategorisedLeafOver
 }
 
 
-
-
-/**====================
-    functions: BoundingVolumeHierarchy
-====================**//**/
-
-
+/// 
+/// @ BoundingVolumeHierarchy
+/// 
 
 
 void bvh_init(BoundingVolumeHierarchy* bvh, MemoryArena* arena, i32 length){
@@ -1260,15 +1256,87 @@ void bvh_get_overlaps(BoundingVolumeHierarchy bvh, BvhCategorisedLeafOverlaps* o
     }
 }
 
+bool soa_leaf_overlaps_area(
+    Soa_BvhLeaf leaf, i32 leaf_idx, 
+    f32 area_min_x, f32 area_min_y,
+    f32 area_max_x, f32 area_max_y 
+){
+        BOUNDS_CHECK(leaf_idx, leaf.length);
+        return aabb_overlaps_scalar(
+            area_min_x, leaf.aabb.min_x[leaf_idx], 
+            area_min_y, leaf.aabb.min_y[leaf_idx], 
+            area_max_x, leaf.aabb.max_x[leaf_idx], 
+            area_max_y, leaf.aabb.max_y[leaf_idx]
+        );
+}
+
+void bvh_query_area(
+    BoundingVolumeHierarchy* bvh,
+    f32 area_min_x, f32 area_min_y,
+    f32 area_max_x, f32 area_max_y, 
+    i32* overlap_idx, i32 overlap_idx_length, i32* overlap_idx_count 
+){
+    // hoisting invariance.
+    Soa_BvhBranch* branch = &bvh->branches;
+    
+    i32 other_leaf_idx;
+    i32 other_branch_idx = 0;
+    
+    while(other_branch_idx < branch->count){
+        BOUNDS_CHECK(other_branch_idx, branch->length);
+        bool overlaps = aabb_overlaps_scalar(
+            area_min_x, branch->aabb.min_x[other_branch_idx], 
+            area_min_y, branch->aabb.min_y[other_branch_idx], 
+            area_max_x, branch->aabb.max_x[other_branch_idx], 
+            area_max_y, branch->aabb.max_y[other_branch_idx]
+        );
+        
+        if(!overlaps){
+            // skip the entire sub tree.
+            other_branch_idx += branch->subtree_stride[other_branch_idx];
+            continue;
+        }
+        
+        i32 leaf_count = branch->leaf_count[other_branch_idx];
+        switch(leaf_count){
+            default:{
+                ASSERT(false, "undefined leaf count.");
+            }break;
+            case 1:{
+                // left leaf idx should always be set to a leaf index for branches with leaf(s) attatched; it is the default leaf to set first.
+                other_leaf_idx = branch->left_leaf_index[other_branch_idx];
+                overlaps = soa_leaf_overlaps_area(bvh->leaves, other_leaf_idx, area_min_x, area_min_y, area_max_x, area_max_y);
+                if(overlaps){
+                    ARRAY_PUSH(overlap_idx, overlap_idx_length, overlap_idx_count, other_leaf_idx);
+                }
+            }break;
+            case 2:{
+                // add the left leaf.
+                other_leaf_idx = branch->left_leaf_index[other_branch_idx];
+                overlaps = soa_leaf_overlaps_area(bvh->leaves, other_leaf_idx, area_min_x, area_min_y, area_max_x, area_max_y);
+                if(overlaps){
+                    ARRAY_PUSH(overlap_idx, overlap_idx_length, overlap_idx_count, other_leaf_idx);
+                }
+                // add the right leaf 
+                other_leaf_idx = branch->right_leaf_index[other_branch_idx];
+                overlaps = soa_leaf_overlaps_area(bvh->leaves, other_leaf_idx, area_min_x, area_min_y, area_max_x, area_max_y);
+                if(overlaps){
+                    ARRAY_PUSH(overlap_idx, overlap_idx_length, overlap_idx_count, other_leaf_idx);
+                }
+            }break;
+            case 0:{
+                // do nothing..., just go to next branch in the tree.
+            } break;
+        }
+        
+        other_branch_idx += 1;
+    }
+}
 
 
-
-/**====================
-    functions: FixedStrideArray.
-====================**//**/
-
-
-
+///
+/// @ FixedStrideArray.
+///
 
 
 void fixed_stride_array_init(FixedStrideArray* array, MemoryArena* arena, i32 chunk_length, i32 chunk_stride, i32 element_size){

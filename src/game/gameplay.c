@@ -1878,7 +1878,7 @@ void level_manager_update(LevelManager* level_manager){
 }
 
 ///
-/// functions: GameState
+/// @ GameState
 ///
 
 
@@ -1979,6 +1979,14 @@ void game_state_preupdate(GameState* game_state, f32 delta_time){
     }
 }
 
+void foo(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data){
+    GameState* game_state = (GameState*)user_data;
+    Vector2 start = {.x = info.first_contact_point_x, .y = info.first_contact_point_y};
+    Vector2 end = {.x = start.x + info.normal_x, .y = start.y + info.normal_y};
+    gfx_draw_line(game_state->entity_manager.gfx_state, GFX_COLOUR_PINK, start, end, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
+    // platform_output_message("collided!\n");
+}
+
 void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryArena* transient, f32 delta_time, bool in_editor_mode){
 
     // hoisting invariance.
@@ -2041,6 +2049,10 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             CollisionCallbackContext collision_callback_ctx = {.game_state = game_state};
             if(!in_editor_mode){
                 fizx_state_fixed_update(fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME, 32);
+            
+                Circle query_area = {.radius = 1.0f};
+                gfx_draw_wire_circle(gfx_state, query_area, GFX_COLOUR_WHITE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+                fizx_state_query_circle_area(fizx_state, query_area, foo, game_state);
             }
 
             { // set_entity_positions_to_fizx_positions();
@@ -2064,7 +2076,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                     }
                 }
             }
-
+            
             fixed_update_accumulator -= FIXED_DELTA_TIME;
         }
     }    

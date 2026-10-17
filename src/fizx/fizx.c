@@ -6,6 +6,7 @@
     - update physics body data (material, density, mass, inertia, etc) when updating the transform scale.
     - immediate mode raycasting: by querying the bvh tree like the C# project did; note that the you only need to do detection, no need to put it into the tree or rigid responses. 
     - remove entity type, rely upon shape category to tell you what it is: None means its a body; otherwise its a shape.
+    - response type (trigger, kinematic, dynamic) should be global across a body's shapes; look at the is_kinematic in resolve rigid function lol.
 */
 
 /**====================
@@ -41,6 +42,24 @@ typedef struct{
 
     bool two_contact_points;
 } FIZX_CollisionInfo;
+
+typedef struct{
+    f32 normal_x;
+    f32 normal_y;
+    f32 first_contact_point_x;
+    f32 first_contact_point_y;
+    f32 second_contact_point_x;
+    f32 second_contact_point_y;
+    f32 depth;
+
+    i32 target_layer;
+    // this is the entity index of the `target` in the fizx state.
+    i32 target_entity_idx;
+    void* target_user_data;
+
+    bool two_contact_points;
+
+} FIZX_QueryCollisionInfo;
 
 typedef void (*FIZX_CollisionCallback)(FIZX_CollisionInfo, void*);
 
@@ -343,7 +362,7 @@ typedef struct{
         The bvh indices of all shapes.
 
         `remarks`
-        Elements are accessed via `entity_idx`
+        Elements are accessed via `bvh_leaf_idx`, and store the idx of the shaped associated witht the bvh leaf.
     **/
     i32* bvh_leaf_idx;
     i32 bvh_leaf_idx_length;
@@ -543,6 +562,10 @@ typedef struct{
     f64 find_collisions_step_in_ms;
     f64 collider_resolution_step_in_ms;
     f64 rigid_resolution_step_in_ms;
+
+    i32* query_area_leaf_idx_scratch_space;
+    i32 query_area_leaf_idx_scratch_space_length;
+    i32 query_area_leaf_idx_scratch_space_count;
 
     FIZX_Soa_Entity entities;
     /**
@@ -843,7 +866,7 @@ bool fizx_material_equals(FIZX_Material lhs, FIZX_Material rhs){
 
 
 ///
-/// functions: FIZX_Soa_Material.
+/// @ FIZX_Soa_Material.
 ///
 
 
@@ -886,7 +909,7 @@ void fizx_soa_material_clear_element(FIZX_Soa_Material* soa, i32 elem_idx){
 
 
 ///
-/// functions: Collision Resolution.
+/// @ Collision Resolution.
 ///
 
 
@@ -1816,9 +1839,10 @@ void fizx_soa_entity_transform_shape_vertices(FIZX_Soa_Entity* soa, i32 shape_id
 }
 
 
-/**====================
-    functions: FIZX_ShapeCategory
-====================**//**/
+///
+/// @ FIZX_ShapeCategory
+///
+
 
 bool fizx_shape_category_is_invalid(i32 category){
     return !(category > _FIZX_ShapeCategory_Padding1 && category < FIZX_ShapeCategory_Count);
@@ -2599,8 +2623,8 @@ void fizx_entity_clear_unsafe(FIZX_State* state, i32 entity_idx){
 
     { // clear i32s.
 
-        BOUNDS_CHECK(entity_idx, state->entities.bvh_leaf_idx_length);
-        state->entities.bvh_leaf_idx[entity_idx] = 0;
+        // BOUNDS_CHECK(entity_idx, state->entities.bvh_leaf_idx_length);
+        // state->entities.bvh_leaf_idx[entity_idx] = 0;
         BOUNDS_CHECK(entity_idx, state->entities.entity_type_length);
         state->entities.entity_type[entity_idx] = 0;
         BOUNDS_CHECK(entity_idx, state->entities.layer_length);
@@ -3608,8 +3632,13 @@ void fizx_state_init(FIZX_State* state, MemoryArena* arena, i32 entity_amount, i
     categorised_overlap_array_init(&state->sub_step_shape_collisions_to_resolve, arena, FIZX_CollisionResolutionCategory_Count, max_collisions, sizeof(FIZX_STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE));
     categorised_overlap_array_init(&state->sub_step_rigid_collisions_to_resolve, arena, FIZX_CollisionResolutionCategory_Count, max_collisions, sizeof(FIZX_STATE_SUB_STEP_RIGID_COLLISIONS_TO_RESOLVE_TYPE));
     intrusive_list_init(&state->body_hierarchy, arena, entity_amount, false);
+    
+    MEMORY_ARENA_ALLOC_ARRAY(arena, state->query_area_leaf_idx_scratch_space, &state->query_area_leaf_idx_scratch_space_length, entity_amount);
+    state->query_area_leaf_idx_scratch_space_count = 0;
+    
     state->gravity_direction = VECTOR2_DOWN;
     state->gravity_force = 9.81f;
+    
     state->is_init = true;
 }
 
@@ -7253,4 +7282,159 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
             }
         }
     }
+}
+
+
+///
+/// @ Immediate Mode
+///
+
+
+typedef void (*fizx_query_area_funcptr)(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data);
+
+bool fizx_state_query_circle_area(FIZX_State* state, Circle area, fizx_query_area_funcptr query_callback, void* user_data){
+    
+    f32 min_x;
+    f32 min_y;
+    f32 max_x;
+    f32 max_y;
+    
+    circle_get_min_max_vertices_scalar(
+        area.x, area.y, area.radius,
+        &min_x, &min_y, &max_x, &max_y
+    );
+    
+    // reset to defined state.
+    state->query_area_leaf_idx_scratch_space_count = 0;
+    
+    bvh_query_area(
+        &state->bvh,
+        min_x, min_y,
+        max_x, max_y, 
+        state->query_area_leaf_idx_scratch_space, 
+        state->query_area_leaf_idx_scratch_space_length, 
+        &state->query_area_leaf_idx_scratch_space_count 
+    );
+        
+    for(i32 i = 0; i < state->query_area_leaf_idx_scratch_space_count; i++){
+        FIZX_QueryCollisionInfo info = {0};
+        i32 leaf_idx = state->query_area_leaf_idx_scratch_space[i];
+        info.target_entity_idx = state->entities.bvh_leaf_idx[leaf_idx];
+        
+        BOUNDS_CHECK(info.target_entity_idx, state->entities.category_length);
+        i32 shape_category = state->entities.category[info.target_entity_idx];
+        if(fizx_shape_category_is_polygon(shape_category)){
+            
+            // gather verts.
+            f32* poly_vert_x;
+            f32* poly_vert_y;
+            i32 poly_vert_length;
+            fizx_shape_get_vertices_unsafe(
+                state->entities.global_vertex, info.target_entity_idx, 
+                &poly_vert_x, &poly_vert_y, &poly_vert_length
+            );
+            
+            // gather centroid.
+            BOUNDS_CHECK(info.target_entity_idx, state->entities.centroid.length);
+            f32 poly_cen_x = state->entities.centroid.x[info.target_entity_idx];
+            f32 poly_cen_y = state->entities.centroid.y[info.target_entity_idx];
+                    
+            bool overlaps = polygon_overlaps_circle_scalar(
+                poly_vert_x, poly_vert_y, poly_vert_length, poly_cen_x, poly_cen_y,
+                area.x, area.y, area.radius, &info.normal_x, &info.normal_y, &info.depth
+            );
+            
+            if(overlaps){
+                polygon_find_point_contact_points_scalar(
+                    poly_vert_x, poly_vert_y, poly_vert_length,
+                    area.x, area.y,
+                    &info.first_contact_point_x, &info.first_contact_point_y
+                );
+
+                query_callback(state, info, user_data);
+            }
+        }
+        else if(fizx_shape_category_is_circle(shape_category)){
+        
+            BOUNDS_CHECK(info.target_entity_idx, state->entities.centroid.length);
+            f32 other_x = state->entities.centroid.x[info.target_entity_idx];
+            f32 other_y = state->entities.centroid.y[info.target_entity_idx];
+            BOUNDS_CHECK(info.target_entity_idx, state->entities.global_radius_length);
+            f32 other_radius = state->entities.global_radius[info.target_entity_idx];
+         
+            bool overlaps = circle_overlaps_scalar(other_x, other_y, other_radius, area.x, area.y, area.radius, &info.normal_x, &info.normal_y, &info.depth);
+            if(overlaps){
+                circle_calc_contact_points_scalar(other_x, other_y, other_radius, area.x, area.y, &info.first_contact_point_x, &info.first_contact_point_y);
+                
+                BOUNDS_CHECK(info.target_entity_idx, state->entities.layer_length);
+                info.target_layer = state->entities.layer[info.target_entity_idx];
+            
+                BOUNDS_CHECK(info.target_entity_idx, state->entities.user_data_length);
+                info.target_user_data = (void*)state->entities.user_data[info.target_entity_idx];
+            
+                query_callback(state, info, user_data);
+            }
+        }
+        else if(fizx_shape_category_is_line(shape_category)){
+            
+            // gather line vertices.
+            f32* line_vert_x;
+            f32* line_vert_y;
+            i32 line_vert_length;
+            fizx_shape_get_vertices_unsafe(state->entities.global_vertex, info.target_entity_idx, &line_vert_x, &line_vert_y, &line_vert_length);
+            ASSERT(line_vert_length == FIZX_SHAPE_LINE_VERTICES_LENGTH, "line vertex array is not the expected length");
+            
+            bool has_first_contact_point = false;
+            bool has_second_contact_point = false;
+            
+            bool overlaps = line_segment_overlaps_circle(
+                line_vert_x[0], line_vert_y[0],
+                line_vert_x[1], line_vert_y[1],
+                area.x, area.y, area.radius,
+                F32_EPSILON,
+                &info.first_contact_point_x, &info.first_contact_point_y,
+                &info.second_contact_point_x, &info.second_contact_point_y,
+                &has_first_contact_point, &has_second_contact_point,
+                &info.normal_x, &info.normal_y,
+                &info.depth
+            );
+                    
+            if(overlaps){
+                if(!has_first_contact_point){
+                    if(!has_second_contact_point){
+                        // do nothing...
+                        // the line is submerged fully into the circle's area, this is treated
+                        // as "no collision", as the system only cares whether the shape is colliding
+                        // with another shapes edges.
+                    }
+                    else{
+                        f32 temp;
+                        temp = info.first_contact_point_x;
+                        info.first_contact_point_x = info.second_contact_point_x;
+                        info.second_contact_point_x = temp;
+
+                        temp = info.first_contact_point_y;
+                        info.first_contact_point_y = info.second_contact_point_y;
+                        info.second_contact_point_y = temp;
+                    }
+                }
+                else{
+                    if(!has_second_contact_point){
+                        // do nothing...
+                    }
+                    else{
+                        info.two_contact_points = true;
+                    }
+                }
+                
+                query_callback(state, info, user_data);
+            }            
+        }
+        else{
+            ASSERT(false, "undefined shape category.");
+            continue;
+        }
+    }
+        
+    return true;
 }
