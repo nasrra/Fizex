@@ -522,6 +522,10 @@ void gfx_clay_entity_spawner_layout(Editor_State* editor_state, GameState* game_
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Boost Pad"), button_width, button_height, transient, editor_state, EntityTypeId_BoostPad);
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Windmill"), button_width, button_height, transient, editor_state, EntityTypeId_WindMill);
         }
+        
+        GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Thwamper"), button_width, button_height, transient, editor_state, EntityTypeId_Thwamper);
+        }
 
         GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
             // for some reason this only works down here?

@@ -42,7 +42,8 @@ typedef enum{
     EntityTypeId_BoostPad       = 15,
     EntityTypeId_WindMill       = 16,
     EntityTypeId_WindMillHinge  = 17,
-    EntityTypeId_WindMillBlade  = 18
+    EntityTypeId_WindMillBlade  = 18,
+    EntityTypeId_Thwamper       = 19
 } EntityTypeId;
 
 typedef struct{
@@ -63,6 +64,7 @@ typedef struct{
     GenId physics_body_gid;
     Aabb clickable_aabb;
     EntityTypeId type_id;
+    i32 state;
     f32 health;
     bool is_sprite;
     bool is_health;
@@ -194,8 +196,8 @@ typedef struct{
 
 
 #define BALL_FIZX_SHAPE_MATERIAL (FIZX_Material) {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 1.7f, .restitution = 0.167f, .rotational_response = true}
-#define BALL_FIZX_BODY_LINEAR_DRAG 0.5f
-#define BALL_FIZX_BODY_ANGULAR_DRAG 0.5f
+#define BALL_FIZX_BODY_LINEAR_DRAG 0.75f
+#define BALL_FIZX_BODY_ANGULAR_DRAG 1.0f
 
 #define ENTITY_NAME_LENGTH 32
 #define PLAYER_MOUSE_MAX_DRAW_RADIUS 2.5f
@@ -813,6 +815,132 @@ bool entity_set_local_transform(EntityManager* manager, GenId entity_gid, Transf
 
 
 ///
+/// @ Thwamper.
+///
+
+
+typedef enum{
+    ThwamperState_Idle,
+    ThwamperState_SmackDown
+} ThwamperState;
+
+typedef struct{
+    EntityManager* entity_manager;
+    GenId thwamper_entity_gid;
+} ThwamperIdleStateTimeoutContext;
+
+#define THWAMPER_IDLE_TIME 0.5f
+#define THWAMPER_SMACKDOWN_TIME 0.167f
+#define THWAMPER_LAUNCH_FORCE 16.7f
+
+#define THWAMPER_TEXTURE_VIEW       (GFX_TextureView){.top_left = {1792, 0}, .bot_right = {1920, 128}}
+#define THWAMPER_DEFAULT_PHYSICS_LAYER  PHYSICS_LAYER_ENVIRONMENT_MID
+#define THWAMPER_DEFAULT_PHYSICS_MASK   PHYSICS_LAYER_ALL
+#define THWAMPER_PHYSICS_MATERIAL      (FIZX_Material){.static_friction = 0.75f, .kinetic_friction = 0.65f, .density = 10.0f, .restitution = 0.084f}
+
+void thwamper_smackdown_state_timeout(void* user_data);
+void thwamper_idle_state_timeout(void* user_data);
+
+void thwamper_smackdown_area_query_callback(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data){
+    i32 thwamper_body_idx = *(i32*)user_data;
+    i32 body_idx = fizx_shape_get_parent_unsafe(*state, info.target_entity_idx);
+    if(body_idx == thwamper_body_idx){
+        return;
+    }
+    
+    Vector2 force = vector2_mul_val((Vector2){.x = info.normal_x, .y = info.normal_y}, THWAMPER_LAUNCH_FORCE);
+    fizx_body_impulse_linear_force_unsafe(state, body_idx, force);
+}
+
+void thwamper_smackdown_state_timeout(void* user_data){
+    ThwamperIdleStateTimeoutContext* ctx = (ThwamperIdleStateTimeoutContext*)user_data;
+    Entity* entity;
+    if(entity_manager_get_entity(*ctx->entity_manager, ctx->thwamper_entity_gid, &entity)){
+        entity->state = ThwamperState_Idle;
+        platform_output_message("idle\n");
+        timer_manager_timer_start(&ctx->entity_manager->timer_manager, THWAMPER_IDLE_TIME, 1.0f, thwamper_idle_state_timeout, user_data, sizeof(*ctx));
+    }
+}
+
+void thwamper_idle_state_timeout(void* user_data){
+    ThwamperIdleStateTimeoutContext* ctx = (ThwamperIdleStateTimeoutContext*)user_data;
+    Entity* entity;
+    if(entity_manager_get_entity(*ctx->entity_manager, ctx->thwamper_entity_gid, &entity)){
+        entity->state = ThwamperState_SmackDown;
+        platform_output_message("smackdown\n");
+        Circle area = {.x = entity->global_transform.position.x, .y = entity->global_transform.position.y, 2.0f};
+        i32 body_idx = gen_id_get_index(entity->physics_body_gid);
+        fizx_state_query_circle_area(&ctx->entity_manager->fizx_state, thwamper_smackdown_area_query_callback, &body_idx, PHYSICS_LAYER_BALL, area);
+        gfx_draw_wire_circle(ctx->entity_manager->gfx_state, area, GFX_COLOUR_WHITE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+        timer_manager_timer_start(&ctx->entity_manager->timer_manager, THWAMPER_SMACKDOWN_TIME, 1.0f, thwamper_smackdown_state_timeout, user_data, sizeof(*ctx));
+    }
+}
+
+GenId entity_spawn_thwamper(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
+    GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
+    Entity* entity;
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
+        entity->type_id = EntityTypeId_Thwamper;
+        string_push(&entity->name, name);
+        
+        { // physics_body_alloc();
+
+            entity->is_physics_body = true;
+            Circle physics_shape = {.radius = 0.5f};
+            Transform2D physics_shape_transform = TRANSFORM2D_IDENTITY;
+            f32 linear_drag = 0.0f;
+            f32 angular_drag = 0.0f;
+            bool is_gravity_affected = false;
+            void* shape_user_data = &entity_gid;
+            entity->physics_body_gid = fizx_body_alloc(
+                &entity_manager->fizx_state,
+                TRANSFORM2D_IDENTITY,
+                linear_drag,
+                angular_drag,
+                THWAMPER_DEFAULT_PHYSICS_LAYER,
+                THWAMPER_DEFAULT_PHYSICS_MASK,
+                is_gravity_affected
+            );
+            GenId shape_gid = fizx_circle_rigid_alloc(
+                &entity_manager->fizx_state,
+                entity->physics_body_gid,
+                physics_shape_transform,
+                FIZX_ShapeBehaviour_Kinematic,
+                FIZX_CollisionCallbackBehaviour_All,
+                shape_user_data,
+                physics_shape,
+                THWAMPER_PHYSICS_MATERIAL
+            );
+        }
+
+        { // sprite_alloc();
+
+            entity->is_sprite = true;
+            entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
+            entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
+            gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, THWAMPER_TEXTURE_VIEW);
+            gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
+            gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
+            gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
+            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
+            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+            gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
+        }
+        
+        entity_set_local_transform(entity_manager, entity_gid, transform);
+        
+        ThwamperIdleStateTimeoutContext ctx = {
+            .entity_manager = entity_manager,
+            .thwamper_entity_gid = entity_gid
+        };
+        thwamper_idle_state_timeout(&ctx);
+    }
+    return entity_gid;
+}
+
+///
 /// @ WindMillBlade.
 ///
 
@@ -874,9 +1002,9 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, String name, Tr
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
         }
+        
+        entity_set_local_transform(entity_manager, entity_gid, transform);
     }
-
-    entity_set_local_transform(entity_manager, entity_gid, transform);
     
     return entity_gid;
 }
@@ -885,6 +1013,7 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, String name, Tr
 ///
 /// @ WindMillHinge.
 ///
+
 
 #define WINDMILL_HINGE_DEFAULT_PHYSICS_LAYER  PHYSICS_LAYER_ENVIRONMENT_MID
 #define WINDMILL_HINGE_DEFAULT_PHYSICS_MASK   PHYSICS_LAYER_ALL 
@@ -1715,7 +1844,10 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String n
         }break;
         case EntityTypeId_WindMill:{
             return entity_spawn_windmill(entity_manager, name, transform, parent_gid);
-        }
+        }break;
+        case EntityTypeId_Thwamper:{
+            return entity_spawn_thwamper(entity_manager, name, transform, parent_gid);
+        }break;
     }
 }
 
@@ -2048,11 +2180,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
 
             CollisionCallbackContext collision_callback_ctx = {.game_state = game_state};
             if(!in_editor_mode){
-                fizx_state_fixed_update(fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME, 32);
-            
-                Circle query_area = {.radius = 1.0f};
-                gfx_draw_wire_circle(gfx_state, query_area, GFX_COLOUR_WHITE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
-                fizx_state_query_circle_area(fizx_state, query_area, foo, game_state);
+                fizx_state_fixed_update(fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME, 32);            
             }
 
             { // set_entity_positions_to_fizx_positions();

@@ -7292,7 +7292,7 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
 
 typedef void (*fizx_query_area_funcptr)(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data);
 
-bool fizx_state_query_circle_area(FIZX_State* state, Circle area, fizx_query_area_funcptr query_callback, void* user_data){
+bool fizx_state_query_circle_area(FIZX_State* state, fizx_query_area_funcptr query_callback, void* user_data, i32 layer_mask, Circle area){
     
     f32 min_x;
     f32 min_y;
@@ -7321,8 +7321,16 @@ bool fizx_state_query_circle_area(FIZX_State* state, Circle area, fizx_query_are
         i32 leaf_idx = state->query_area_leaf_idx_scratch_space[i];
         info.target_entity_idx = state->entities.bvh_leaf_idx[leaf_idx];
         
+        BOUNDS_CHECK(info.target_entity_idx, state->entities.layer_length);
+        i32 layer = state->entities.layer[info.target_entity_idx];
+
+        if((layer & layer_mask) == 0){
+            continue;
+        }
+
         BOUNDS_CHECK(info.target_entity_idx, state->entities.category_length);
         i32 shape_category = state->entities.category[info.target_entity_idx];
+        
         if(fizx_shape_category_is_polygon(shape_category)){
             
             // gather verts.
