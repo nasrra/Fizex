@@ -1815,9 +1815,9 @@ void fssoa_vector2_clear_chunk_count(FsSoa_Vector2* soa, i32 chunk_index){
 void fssoa_vector2_clear_chunk(FsSoa_Vector2* soa, i32 chunk_idx){
     i32 element_idx = chunk_idx * soa->chunk_stride;
     BOUNDS_CHECK(element_idx, soa->x_length);
-    BOUNDS_CHECK(element_idx + soa->chunk_stride - 1, soa->x_length);
+    BOUNDS_CHECK(element_idx + soa->chunk_stride, soa->x_length);
     BOUNDS_CHECK(element_idx, soa->y_length);
-    BOUNDS_CHECK(element_idx + soa->chunk_stride - 1, soa->y_length);
+    BOUNDS_CHECK(element_idx + soa->chunk_stride, soa->y_length);
     ZERO_MEMORY(soa->x + element_idx, sizeof(*soa->x) * soa->chunk_stride);
     ZERO_MEMORY(soa->y + element_idx, sizeof(*soa->y) * soa->chunk_stride);
     fssoa_vector2_clear_chunk_count(soa, chunk_idx);
@@ -2062,8 +2062,8 @@ void transform2d_transform_scalar(
                 x' = x * cos - y * sin
                 y' = x * sin + y * cos
     **/
-    f32 rotated_x = (scaled_x * lhs_cos) - (scaled_y * rhs_sin);
-    f32 rotated_y = (scaled_x * rhs_sin) + (scaled_y * lhs_cos);
+    f32 rotated_x = (scaled_x * rhs_cos) - (scaled_y * rhs_sin);
+    f32 rotated_y = (scaled_x * rhs_sin) + (scaled_y * rhs_cos);
 
     // translate the rotated offset to the world position.
     *out_pos_x = rotated_x + rhs_pos_x;
@@ -2080,7 +2080,7 @@ void transform2d_transform_scalar(
                 cos(a + b) = cos(a)cos(b) - sin(a)sin(b)
     **/
     *out_sin = (lhs_sin * rhs_cos) + (lhs_cos * rhs_sin);
-    *out_cos = (lhs_cos * rhs_cos) + (lhs_sin * rhs_sin);
+    *out_cos = (lhs_cos * rhs_cos) - (lhs_sin * rhs_sin);
 }
 
 Transform2D transform2d_transform(Transform2D lhs, Transform2D rhs){
@@ -2091,6 +2091,16 @@ Transform2D transform2d_transform(Transform2D lhs, Transform2D rhs){
         &out.position.x, &out.position.y, &out.scale.x, &out.scale.y, &out.sine, &out.cosine
     );
     return out;
+}
+
+Transform2D transform2D_sub(Transform2D lhs, Transform2D rhs){
+    Transform2D result;
+    result.position = vector2_sub(lhs.position, rhs.position);
+    result.scale = vector2_sub(lhs.scale, rhs.scale);
+    f32 radians = vector2_radian_difference_scalar(lhs.sine, lhs.cosine, rhs.sine, rhs.sine);
+    result.sine = f32_sin(radians);
+    result.cosine = f32_cos(radians);
+    return result;
 }
 
 Transform2D transform3d_to_transform2d(Transform3D transform){
@@ -2139,7 +2149,7 @@ void transform_scalar_transform2d(
     //          sin(a + b) = sin(a)cos(b) + cos(a)sin(b)
     //          cos(a + b) = cos(a)cos(b) - sin(a)sin(b)
     *out_sine = (lhs_sine * rhs_cosine) + (lhs_cosine * rhs_sine);
-    *out_cosine = (lhs_cosine * rhs_cosine) + (lhs_sine * rhs_sine);
+    *out_cosine = (lhs_cosine * rhs_cosine) - (lhs_sine * rhs_sine);
 }
 
 Transform2D transform_transform2d(Transform2D lhs, Transform2D rhs){

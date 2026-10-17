@@ -8,7 +8,6 @@
     - remove entity type, rely upon shape category to tell you what it is: None means its a body; otherwise its a shape.
 */
 
-
 /**====================
     types.
 ====================**//**/
@@ -967,27 +966,29 @@ inline void fizx_resolve_rigid_collisions(
         f32 owner_inverse_rotational_inertia = entity.inverse_rotational_inertia[owner_body_idx];
         f32 other_inverse_rotational_inertia = entity.inverse_rotational_inertia[other_body_idx];
 
-        BOUNDS_CHECK(owner_body_idx, entity.material.length);
-        BOUNDS_CHECK(other_body_idx, entity.material.length);
+        BOUNDS_CHECK(owner_shape_idx, entity.material.length);
+        BOUNDS_CHECK(other_shape_idx, entity.material.length);
         f32 owner_restitution = entity.material.restitution[owner_shape_idx];
         f32 other_restitution = entity.material.restitution[other_shape_idx];
         f32 owner_kinetic_friction = entity.material.kinetic_friction[owner_shape_idx];
         f32 other_kinetic_friction = entity.material.kinetic_friction[other_shape_idx];
         f32 owner_static_friction = entity.material.static_friction[owner_shape_idx];
         f32 other_static_friction = entity.material.static_friction[other_shape_idx];
+        bool owner_rotational_response = entity.material.rotational_response[owner_shape_idx];
+        bool other_rotational_response = entity.material.rotational_response[other_shape_idx];
 
         BOUNDS_CHECK(owner_body_idx, entity.mass_length);
         BOUNDS_CHECK(other_body_idx, entity.mass_length);
         f32 owner_mass = entity.mass[owner_body_idx];
         f32 other_mass = entity.mass[other_body_idx];
 
-        BOUNDS_CHECK(owner_body_idx, entity.material.length);
-        BOUNDS_CHECK(other_body_idx, entity.material.length);
-        bool owner_rotational_response = entity.material.rotational_response[owner_shape_idx];
-        bool other_rotational_response = entity.material.rotational_response[other_shape_idx];
-
         inverse_normal_x = normal_x * -1.0f;
         inverse_normal_y = normal_y * -1.0f;
+
+        if(other_shape_is_kinematic){
+            other_inverse_mass = 0.0f;
+            other_inverse_rotational_inertia = 0.0f;
+        }
 
         /**
             zero scratch-space
@@ -1282,6 +1283,8 @@ inline void fizx_resolve_rigid_collisions(
                         // the friction applied will be the kinetic friction value instead.
                         friction_impulse_magnitude = (impulse_magnitude_scratch_space[j] * kinetic_friction) * f32_sign(friction_impulse_magnitude);
                     }
+                    
+                    friction_impulse_magnitude /= (f32)contact_points_count;
 
                     // apply the capped magnitude to the tangent vector.
                     impulses_x_scratch_space[j] = friction_impulse_magnitude * tangent_x;
@@ -1341,7 +1344,6 @@ inline void fizx_resolve_rigid_collisions(
                     }
                 }
             }
-        
         }
     
     }
@@ -2087,13 +2089,13 @@ bool fizx_shape_set_active(FIZX_State* state, GenId body_gid, bool is_active){
     return true;
 }
 
-void fizx_body_impulse_force_unsafe(FIZX_State* state, i32 body_idx, Vector2 force){
+void fizx_body_impulse_linear_force_unsafe(FIZX_State* state, i32 body_idx, Vector2 force){
     BOUNDS_CHECK(body_idx, state->entities.linear_velocity.length);
     state->entities.linear_velocity.x[body_idx] += force.x;
     state->entities.linear_velocity.y[body_idx] += force.y;
 }
 
-bool fizx_body_impulse_force(FIZX_State* state, GenId body_gid, Vector2 force){
+bool fizx_body_impulse_linear_force(FIZX_State* state, GenId body_gid, Vector2 force){
 
     i32 body_idx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, body_gid);
     if(!body_idx){
@@ -2105,7 +2107,28 @@ bool fizx_body_impulse_force(FIZX_State* state, GenId body_gid, Vector2 force){
         ASSERT(false, "not a body.");
         return false;
     }
-    fizx_body_impulse_force_unsafe(state, body_idx, force);
+    fizx_body_impulse_linear_force_unsafe(state, body_idx, force);
+    return true;
+}
+
+void fizx_body_impulse_angular_force_unsafe(FIZX_State* state, i32 body_idx, float force){
+    BOUNDS_CHECK(body_idx, state->entities.angular_velocity_length);
+    state->entities.angular_velocity[body_idx] += force;
+}
+
+bool fizx_body_impulse_angular_force(FIZX_State* state, GenId body_gid, float force){
+    i32 body_idx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, body_gid);
+    if(!body_idx){
+        return false;
+    }
+
+    BOUNDS_CHECK(body_idx, state->entities.entity_type_length);
+    if(state->entities.entity_type[body_idx] != FIZX_EntityType_Body){
+        ASSERT(false, "not a body.");
+        return false;
+    }
+    
+    fizx_body_impulse_angular_force_unsafe(state, body_idx, force);    
     return true;
 }
 
@@ -2535,37 +2558,6 @@ void fizx_entity_clear_unsafe(FIZX_State* state, i32 entity_idx){
 
     }
 
-    { // clear i32s.
-
-        BOUNDS_CHECK(entity_idx, state->entities.bvh_leaf_idx_length);
-        state->entities.bvh_leaf_idx[entity_idx] = 0;
-        BOUNDS_CHECK(entity_idx, state->entities.category_length);
-        state->entities.category[entity_idx] = 0;
-        BOUNDS_CHECK(entity_idx, state->entities.entity_type_length);
-        state->entities.entity_type[entity_idx] = 0;
-        BOUNDS_CHECK(entity_idx, state->entities.layer_length);
-        state->entities.layer[entity_idx] = 0;
-        BOUNDS_CHECK(entity_idx, state->entities.mask_length);
-        state->entities.mask[entity_idx] = 0;
-    }
-
-    { // others();
-        soa_aabb_clear_element(&state->entities.aabb, entity_idx);
-        fizx_soa_material_clear_element(&state->entities.material, entity_idx);
-
-        i32 user_data_idx = entity_idx * state->entities.user_data_element_size;
-        BOUNDS_CHECK(user_data_idx, state->entities.user_data_length);
-        BOUNDS_CHECK(user_data_idx + state->entities.user_data_element_size - 1, state->entities.user_data_length);
-        ZERO_MEMORY(state->entities.user_data + user_data_idx, sizeof(*state->entities.user_data) * state->entities.user_data_element_size);
-    }
-
-    { // clear_callback_data();
-
-        state->entities.shape_on_enter_callback[entity_idx] = (FIZX_CollisionCallback){0};
-        state->entities.shape_on_sustain_callback[entity_idx] = (FIZX_CollisionCallback){0};
-        state->entities.shape_on_exit_callback[entity_idx] = (FIZX_CollisionCallback){0};
-    }
-
     { // decrement_the_category_counter_in_the_state();
 
 
@@ -2600,6 +2592,38 @@ void fizx_entity_clear_unsafe(FIZX_State* state, i32 entity_idx){
             case FIZX_ShapeCategory_KinColCircle: {state->circle_collider_count.kinematic -= 1;} break;
             case FIZX_ShapeCategory_KinColLine: {state->line_collider_count.kinematic -= 1;} break;
         }
+
+        BOUNDS_CHECK(entity_idx, state->entities.category_length);
+        state->entities.category[entity_idx] = 0;
+    }
+
+    { // clear i32s.
+
+        BOUNDS_CHECK(entity_idx, state->entities.bvh_leaf_idx_length);
+        state->entities.bvh_leaf_idx[entity_idx] = 0;
+        BOUNDS_CHECK(entity_idx, state->entities.entity_type_length);
+        state->entities.entity_type[entity_idx] = 0;
+        BOUNDS_CHECK(entity_idx, state->entities.layer_length);
+        state->entities.layer[entity_idx] = 0;
+        BOUNDS_CHECK(entity_idx, state->entities.mask_length);
+        state->entities.mask[entity_idx] = 0;
+    }
+
+    { // others();
+        soa_aabb_clear_element(&state->entities.aabb, entity_idx);
+        fizx_soa_material_clear_element(&state->entities.material, entity_idx);
+
+        i32 user_data_idx = entity_idx * state->entities.user_data_element_size;
+        BOUNDS_CHECK(user_data_idx, state->entities.user_data_length);
+        BOUNDS_CHECK(user_data_idx + state->entities.user_data_element_size - 1, state->entities.user_data_length);
+        ZERO_MEMORY(state->entities.user_data + user_data_idx, sizeof(*state->entities.user_data) * state->entities.user_data_element_size);
+    }
+
+    { // clear_callback_data();
+
+        state->entities.shape_on_enter_callback[entity_idx] = (FIZX_CollisionCallback){0};
+        state->entities.shape_on_sustain_callback[entity_idx] = (FIZX_CollisionCallback){0};
+        state->entities.shape_on_exit_callback[entity_idx] = (FIZX_CollisionCallback){0};
     }
 
     // deallocate all collision information about the entity.
@@ -2712,10 +2736,11 @@ void fizx_body_dealloc_unsafe(FIZX_State* state, i32 body_idx){
             if(shape_idx == previous_shape_idx){
                 break;
             }
-            fizx_entity_clear_unsafe(state, shape_idx);
             previous_shape_idx = shape_idx;
             BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
-            shape_idx = node[shape_idx].previous_sibling;
+            i32 next_idx = node[shape_idx].previous_sibling;
+            fizx_entity_clear_unsafe(state, shape_idx);
+            shape_idx = next_idx;
         }
     }
 
@@ -3177,6 +3202,11 @@ bool fizx_collision_detection_polygon_to_polygon(
             &contact_count
         );
 
+        // this is for when an inactive shape collides with another lol, or they arent on the same layer.
+        // dont remove this, like, ever lol.
+        if(contact_count == 0){
+            return false;
+        }
         ASSERT(contact_count <= 2 && contact_count >= 1, "unknown contact count.");
 
         *out_idx_pair = collision_manifold_set_data_two_way(

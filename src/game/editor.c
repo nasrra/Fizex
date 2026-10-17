@@ -373,32 +373,32 @@ void editor_save_level_entity_recurssive(
             string_push_chars(entity_char_buffer, ";", 1);
 
             // transform position x.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->transform.position.x);
+            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->local_transform.position.x);
             string_push_chars(entity_char_buffer, char_scratch_space, written);
             string_push_chars(entity_char_buffer, ";", 1);
 
             // transform position y.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->transform.position.y);
+            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->local_transform.position.y);
             string_push_chars(entity_char_buffer, char_scratch_space, written);
             string_push_chars(entity_char_buffer, ";", 1);
 
             // transform scale x.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->transform.scale.x);
+            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->local_transform.scale.x);
             string_push_chars(entity_char_buffer, char_scratch_space, written);
             string_push_chars(entity_char_buffer, ";", 1);
 
             // transform scale y.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->transform.scale.y);
+            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->local_transform.scale.y);
             string_push_chars(entity_char_buffer, char_scratch_space, written);
             string_push_chars(entity_char_buffer, ";", 1);
 
             // transform sine.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->transform.sine);
+            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->local_transform.sine);
             string_push_chars(entity_char_buffer, char_scratch_space, written);
             string_push_chars(entity_char_buffer, ";", 1);
 
             // transform cosine.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->transform.cosine);
+            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->local_transform.cosine);
             string_push_chars(entity_char_buffer, char_scratch_space, written);
             string_push_chars(entity_char_buffer, ";", 1);
 
@@ -570,47 +570,43 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                 Entity* entity = &entity_manager->entity[idx];
 
                 // position-x.
-                position_x_string.length = snprintf((char*)position_x_string.chars, max_chars, "%f", entity->transform.position.x);
+                position_x_string.length = snprintf((char*)position_x_string.chars, max_chars, "%f", entity->local_transform.position.x);
                 ASSERT(position_x_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Position X"), position_x_string, 0.75f, 0.05f, editor_state, (void*)(&entity->transform.position.x), Editor_ButtonDataStorageType_F32, transient);
+                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Position X"), position_x_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.position.x), Editor_ButtonDataStorageType_F32, transient);
                 
                 // position-y.
-                position_y_string.length = snprintf((char*)position_y_string.chars, max_chars, "%f", entity->transform.position.y);
+                position_y_string.length = snprintf((char*)position_y_string.chars, max_chars, "%f", entity->local_transform.position.y);
                 ASSERT(position_y_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Position Y"), position_y_string, 0.75f, 0.05f, editor_state, (void*)(&entity->transform.position.y), Editor_ButtonDataStorageType_F32, transient);
+                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Position Y"), position_y_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.position.y), Editor_ButtonDataStorageType_F32, transient);
                 
                 // scale-x.
-                scale_x_string.length = snprintf((char*)scale_x_string.chars, max_chars, "%f", entity->transform.scale.x);
+                scale_x_string.length = snprintf((char*)scale_x_string.chars, max_chars, "%f", entity->local_transform.scale.x);
                 ASSERT(scale_x_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Scale X"), scale_x_string, 0.75f, 0.05f, editor_state, (void*)(&entity->transform.scale.x), Editor_ButtonDataStorageType_F32, transient);
+                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Scale X"), scale_x_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.scale.x), Editor_ButtonDataStorageType_F32, transient);
 
                 // scale-y.
-                scale_y_string.length = snprintf((char*)scale_y_string.chars, max_chars, "%f", entity->transform.scale.y);
+                scale_y_string.length = snprintf((char*)scale_y_string.chars, max_chars, "%f", entity->local_transform.scale.y);
                 ASSERT(scale_y_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Scale Y"), scale_y_string, 0.75f, 0.05f, editor_state, (void*)(&entity->transform.scale.y), Editor_ButtonDataStorageType_F32, transient);
+                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Scale Y"), scale_y_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.scale.y), Editor_ButtonDataStorageType_F32, transient);
                 
                 // sine.
-                sine_string.length = snprintf((char*)sine_string.chars, max_chars, "%f", entity->transform.sine);
+                sine_string.length = snprintf((char*)sine_string.chars, max_chars, "%f", entity->local_transform.sine);
                 ASSERT(sine_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Rotation"), sine_string, 0.75f, 0.05f, editor_state, (void*)(&entity->transform.sine), Editor_ButtonDataStorageType_F32, transient);
+                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Rotation"), sine_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.sine), Editor_ButtonDataStorageType_F32, transient);
 
                 // cosine.
-                cosine_string.length = snprintf((char*)cosine_string.chars, max_chars, "%f", entity->transform.cosine);
+                cosine_string.length = snprintf((char*)cosine_string.chars, max_chars, "%f", entity->local_transform.cosine);
                 ASSERT(cosine_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Rotation"), cosine_string, 0.75f, 0.05f, editor_state, (void*)(&entity->transform.cosine), Editor_ButtonDataStorageType_F32, transient);
+                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Rotation"), cosine_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.cosine), Editor_ButtonDataStorageType_F32, transient);
             }
         }
     }
 }
 
 
-
-
 ///
 /// functions: Editor_MouseState
 ///
-
-
 
 
 bool editor_selected_game_entity_equals(Editor_SelectedGameEntity a, Editor_SelectedGameEntity b){
@@ -702,7 +698,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
 
                     // falback to entity transform if we failed to get the sprite origin.
                     if(!gfx_sprite_get_sprite_origin(*game_gfx_state, game_entity->sprite_gid, &sprite_origin)){
-                        preferred_transform = game_entity->transform;
+                        preferred_transform = game_entity->global_transform;
                         editor_entity->clickable_area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
                     }
 
@@ -721,7 +717,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
 
                 // is not a sprite.
                 else{
-                    preferred_transform = game_entity->transform;
+                    preferred_transform = game_entity->global_transform;
                     editor_entity->clickable_area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
                 }
             }
@@ -952,7 +948,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                             // store the on click information.
                             if(overlaps){
                                 editor_mouse_state->move_behaviour_state.selected_game_entity_positional_offset 
-                                    = vector2_sub(game_entity->transform.position, mouse_world_position);
+                                    = vector2_sub(game_entity->global_transform.position, mouse_world_position);
                                 editor_mouse_state->move_behaviour_state.is_clicking_selected_game_entity = true;
                             } 
                         }
@@ -968,7 +964,9 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                         // drag the selected entity with the mouse if we are clicking down.
                         if(input_is_mouse_button_pressed(MouseButton_Left)){                                            
                             Vector2 new_position = vector2_add(mouse_world_position, editor_mouse_state->move_behaviour_state.selected_game_entity_positional_offset);
-                            game_entity->transform.position = new_position;
+                            Transform2D new_transform = game_entity->global_transform;
+                            new_transform.position = new_position;
+                            entity_set_global_transform_unsafe(game_entity_manager, entity_idx, new_transform);
                         }
                     }break;
                     case Editor_MouseStateBehaviour_Rotate:{
@@ -978,12 +976,14 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                             break;
                         }
                         
-                        Vector2 diff = vector2_sub(game_entity->transform.position, mouse_world_position);
+                        i32 entity_idx = gen_id_get_index(editor_mouse_state->selected_game_entity.gid);
+                        
+                        Vector2 diff = vector2_sub(game_entity->global_transform.position, mouse_world_position);
                         
                         if(editor_mouse_state->previous_behaviour == Editor_MouseStateBehaviour_Rotate){
                             Vector2 prev_diff = editor_mouse_state->rotate_behaviour_state.previous_positional_difference;
                             f32 radians = vector2_radian_difference_scalar(diff.x, diff.y, prev_diff.x, prev_diff.y);
-                            game_entity->transform = transform2d_rotate(game_entity->transform, radians);
+                            entity_set_local_transform_unsafe(game_entity_manager, entity_idx, transform2d_rotate(game_entity->local_transform, radians));
                         }
     
                         editor_mouse_state->rotate_behaviour_state.previous_positional_difference = diff;
@@ -993,18 +993,18 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
         }
     }
         
-    { // set entity transforms; specifcally to update sprite or physics body data.
+    // { // set entity transforms; specifcally to update sprite or physics body data.
 
-        for(i32 i = 0; i < game_entity_manager->entity_length; i++){
-            BOUNDS_CHECK(i, game_entity_manager->gen_id_allocator.length);
-            if(!game_entity_manager->gen_id_allocator.allocated[i]){
-                continue;
-            }
-            GenId game_entity_gid = game_entity_manager->gen_id_allocator.gen_ids[i];
-            Entity* game_entity = &game_entity_manager->entity[i];
-            entity_set_transform(game_entity_manager, game_entity_gid, game_entity->transform);
-        }
-    }
+    //     for(i32 i = 0; i < game_entity_manager->entity_length; i++){
+    //         BOUNDS_CHECK(i, game_entity_manager->gen_id_allocator.length);
+    //         if(!game_entity_manager->gen_id_allocator.allocated[i]){
+    //             continue;
+    //         }
+    //         GenId game_entity_gid = game_entity_manager->gen_id_allocator.gen_ids[i];
+    //         Entity* game_entity = &game_entity_manager->entity[i];
+    //         entity_set_transform(game_entity_manager, game_entity_gid, game_entity->transform);
+    //     }
+    // }
     
     // debug_gizmos();
     {
@@ -1026,13 +1026,13 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
             if(selected_game_entity_idx == i){
                 switch(editor_mouse_state->current_behaviour){
                     case Editor_MouseStateBehaviour_Move:{
-                        gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_LIGHT_BLUE, game_entity->transform.position, VECTOR2_UP, 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
-                        gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_PINK, game_entity->transform.position, VECTOR2_RIGHT, 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
-                        gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->transform.position, transform2d_get_forward_angle_vector(game_entity->transform), 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+                        gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_LIGHT_BLUE, game_entity->global_transform.position, VECTOR2_UP, 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+                        gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_PINK, game_entity->global_transform.position, VECTOR2_RIGHT, 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+                        gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->global_transform.position, transform2d_get_forward_angle_vector(game_entity->global_transform), 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
                     }break;
                     case Editor_MouseStateBehaviour_Rotate:{
-                        gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->transform.position, transform2d_get_forward_angle_vector(game_entity->transform), 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
-                        gfx_draw_line(editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->transform.position, mouse_world_position, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
+                        gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->global_transform.position, transform2d_get_forward_angle_vector(game_entity->global_transform), 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+                        gfx_draw_line(editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->global_transform.position, mouse_world_position, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
                     }
                 }
             }
