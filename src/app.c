@@ -51,9 +51,7 @@ void app_main(){
     GFX_State gfx_state = {0};
     { // init gfx
 
-        /**
-            font textures.
-        **/
+        // font textures.
         GFX_FontTextureInitInfo font_texture_init_info ={
             .max_glyphs = 256,
             .texture_height = 512,
@@ -64,9 +62,7 @@ void app_main(){
             font_texture_init_info.virtual_textures[i] = i+1;
         }
 
-        /**
-            image textures.
-        **/
+        // image textures.
         GFX_ImageTexturesInitInfo* image_textures_init_info;
         i32 image_textures_init_info_length;
         MEMORY_ARENA_ALLOC_ARRAY(transient, image_textures_init_info, &image_textures_init_info_length, 5);
@@ -82,9 +78,7 @@ void app_main(){
         BOUNDS_CHECK(4, image_textures_init_info_length);
         image_textures_init_info[4] = (GFX_ImageTexturesInitInfo){.width = 2048, .height = 2048, .max_textures = 4};
 
-        /**
-            context.
-        **/
+        // context.
         GFX_StateInitInfo gfx_init_info = {
             .max_file_path_length = platform_get_max_file_path_length(),
             .max_user_uniform_buffer_size_in_bytes = sizeof(Ubo),
@@ -144,8 +138,6 @@ void app_main(){
         }
     }
 
-    // floor entity.
-    Transform2D floor_transform = TRANSFORM2D_IDENTITY;
     GenId level_gid = entity_spawn_level_root(&game_state.entity_manager, (String){.chars = "level 0", .length = 7, .count = 7}, TRANSFORM2D_IDENTITY, 0);
 
     bool in_editor_mode = false;

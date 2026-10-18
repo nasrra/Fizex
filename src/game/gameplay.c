@@ -49,6 +49,11 @@ typedef struct{
     
     BoardTurn turn;
     
+    String turn_text;
+    String turn_text_scratch_space;
+    i32 turn_number;
+    bool display_turn_text;
+    
     bool is_init;
 } BoardState;
 
@@ -81,7 +86,8 @@ typedef enum{
     EntityTypeId_WindMill       = 16,
     EntityTypeId_WindMillHinge  = 17,
     EntityTypeId_WindMillBlade  = 18,
-    EntityTypeId_Thwamper       = 19
+    EntityTypeId_Thwamper       = 19,
+    EntityTypeId_BoardTurnText  = 20
 } EntityTypeId;
 
 typedef struct{
@@ -118,7 +124,6 @@ typedef struct{
     bool is_invincible;
     bool boost_depleted;
 } Entity;
-
 
 typedef void (*TimerTimeout)(void* user_data);
 
@@ -348,12 +353,9 @@ void level_manager_defer_load_level(
 );
 
 
-
-
 ///
 /// globals.
 ///
-
 
 static f32 fixed_update_accumulator = 0.0f;
 
@@ -571,6 +573,15 @@ f32 timer_manager_timer_get_delta_tick_time(TimerManager manager, TimerHandle ha
 ///
 
 
+typedef struct{
+    BoardState* board_state;
+} BoardStateDisplayTurnHUDTimerContext;
+
+void board_state_display_turn_hud_timeout(void* user_data){
+    BoardStateDisplayTurnHUDTimerContext* ctx = (BoardStateDisplayTurnHUDTimerContext*)user_data;
+    ctx->board_state->display_turn_text = false;
+}
+
 void board_state_init(BoardState* state, MemoryArena* arena, i32 max_turn_based_entities){
     if(state->is_init){
         ASSERT(false, "already init.");
@@ -582,6 +593,9 @@ void board_state_init(BoardState* state, MemoryArena* arena, i32 max_turn_based_
     
     MEMORY_ARENA_ALLOC_ARRAY(arena, state->turn_based_entity, &state->turn_based_entity_length, max_turn_based_entities);
     state->turn_based_entity_count = 0;
+    
+    string_init(&state->turn_text, arena, 64);
+    string_init(&state->turn_text_scratch_space, arena, 64);
     
     state->is_init = true;
 }
@@ -632,7 +646,7 @@ void entity_manager_dealloc_entity_data_unsafe(EntityManager* manager, i32 idx){
     }
 
     if(entity->sprite_gid){
-        gfx_dealloc_sprite(manager->gfx_state, entity->sprite_gid);
+        gfx_sprite_dealloc(manager->gfx_state, entity->sprite_gid);
     }
     
     String name = entity->name;
@@ -769,7 +783,13 @@ void entity_set_local_transform_unsafe(EntityManager* manager, i32 entity_idx, T
     // after calculate the global transform.
 
     if(entity->is_sprite){
-        gfx_sprite_set_transform(manager->gfx_state, entity->sprite_gid, transform2d_transform(entity->sprite_local_transform, entity->global_transform));
+        Transform2D sprite_transform = transform2d_transform(entity->sprite_local_transform, entity->global_transform);
+        if(gfx_gen_id_is_sprite_string(*manager->gfx_state, entity->sprite_gid)){
+            gfx_sprite_string_set_transform(manager->gfx_state, entity->sprite_gid, sprite_transform);            
+        }
+        else{
+            gfx_sprite_set_transform(manager->gfx_state, entity->sprite_gid, sprite_transform);
+        }
     }
 
     if(entity->is_physics_body){
@@ -896,6 +916,9 @@ typedef struct {
 
 void load_board_level_callback(GameState* game_state, void* user_data){
     
+    Transform2D transform = TRANSFORM2D_IDENTITY;;
+    transform.scale = vector2_mul_val(transform.scale, 20.0f);
+    
     // hoisting invariance.
     BoardState* board_state = &game_state->board_state;
     GenIdAllocator* gid_allocator = &game_state->entity_manager.gen_id_allocator;
@@ -916,7 +939,6 @@ void load_board_level_callback(GameState* game_state, void* user_data){
         if(entity_manager_get_entity(game_state->entity_manager, entity_gid, &entity)){
             
             { // check_if_turn_based();
-            
                 if(entity->on_turn_end_callback){
                     ARRAY_PUSH(board_state->turn_based_entity, board_state->turn_based_entity_length, &board_state->turn_based_entity_count, entity_gid);    
                 }
@@ -960,6 +982,46 @@ void load_board_level_callback(GameState* game_state, void* user_data){
 ///
 /// @ Entities.
 ///
+
+
+///
+/// @ BoardTurnText.
+///
+
+
+GenId entity_spawn_board_turn_text(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
+    GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
+    Entity* entity;
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
+        entity->type_id = EntityTypeId_Thwamper;
+        string_push(&entity->name, name);
+        
+        { // sprite_alloc();
+
+
+            String str = {
+                .chars = "text",
+                .length = 4,
+                .count = 4
+            };
+            entity->is_sprite = true;
+            entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
+            entity->sprite_gid = gfx_one_frame_sprite_chain_alloc(entity_manager->gfx_state, str.length);
+            // order matters here: text->transform.
+            gfx_sprite_string_set_active(       entity_manager->gfx_state, entity->sprite_gid);
+            gfx_sprite_string_set_text(         entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_FONT, str);
+            gfx_sprite_string_set_transform(    entity_manager->gfx_state, entity->sprite_gid, transform);
+            gfx_sprite_string_set_material(     entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_TEXT);
+            gfx_sprite_string_set_layer(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_UI);
+            gfx_sprite_string_set_depth(        entity_manager->gfx_state, entity->sprite_gid, 0);
+            gfx_sprite_string_set_colour(       entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
+            gfx_sprite_string_set_colour_state( entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+        }
+        
+        entity_set_local_transform(entity_manager, entity_gid, transform);
+    }
+    return entity_gid;
+}
 
 
 ///
@@ -2446,6 +2508,38 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                         }break;
                         case BoardTurn_TurnBased:{
                             board_state->turn = BoardTurn_Player;
+                            
+                            { // increment_turn_text();
+                            
+                                board_state->turn_number += 1;
+                                string_clear(&board_state->turn_text_scratch_space);
+                                board_state->turn_text_scratch_space.count = snprintf(
+                                    board_state->turn_text_scratch_space.chars, 
+                                    board_state->turn_text_scratch_space.length, 
+                                    "%i", 
+                                    board_state->turn_number
+                                );
+                                string_clear(&board_state->turn_text);
+                                string_push_chars(&board_state->turn_text, "Turn: ", 6);
+                                string_push(&board_state->turn_text, board_state->turn_text_scratch_space);
+                            }
+                            
+                            { // start_displaying_turn_text();
+                            
+                                board_state->display_turn_text = true;
+                                BoardStateDisplayTurnHUDTimerContext timer_ctx = {
+                                    .board_state = board_state
+                                };
+                                timer_manager_timer_start(
+                                    timer_manager, 
+                                    1.0f, 
+                                    1.0f, 
+                                    board_state_display_turn_hud_timeout, 
+                                    &timer_ctx, 
+                                    sizeof(timer_ctx)
+                                );                        
+                            }
+                            
                             platform_output_message("player turn\n");
                         }break;
                     }
@@ -2578,6 +2672,21 @@ void game_state_late_update(GameState* game_state, f32 delta_time){
     // hoisting invariance.
     EntityManager* entity_manager = &game_state->entity_manager;
     GFX_State* gfx_state = entity_manager->gfx_state;
+    
+    f32 camera_speed = 100.0f * delta_time;
+
+    if(input_is_key_pressed(Key_Up)){
+        gfx_state->screen_camera.position.y += camera_speed;
+    }
+    if(input_is_key_pressed(Key_Down)){
+        gfx_state->screen_camera.position.y -= camera_speed;
+    }
+    if(input_is_key_pressed(Key_Left)){
+        gfx_state->screen_camera.position.x -= camera_speed;
+    }
+    if(input_is_key_pressed(Key_Right)){
+        gfx_state->screen_camera.position.x += camera_speed;
+    }
 
     /**
         NOTE:
@@ -2611,12 +2720,42 @@ void game_state_late_update(GameState* game_state, f32 delta_time){
     gfx_write_to_user_uniform_buffer(gfx_state, &ubo, sizeof(Ubo));
 }
 
+#define GFX_CLAY_BG_COLOUR (Clay_Color){.r = 10, .g = 10, .b = 20, .a = 100}
+
+static game_gfx_clay_element_id;
+
+#define GFX_CLAY_BOARD_TURN_TEXT_CONTAINER()                                    \
+CLAY(CLAY_SIDI(CLAY_STRING("Board Turn Text"), game_gfx_clay_element_id++), {   \
+    .layout = {                                                                 \
+        .sizing = {                                                             \
+            .width = CLAY_SIZING_PERCENT(0.5f),                                 \
+            .height = CLAY_SIZING_PERCENT(0.2f)                                 \
+        },                                                                      \
+        .layoutDirection = CLAY_TOP_TO_BOTTOM,                                  \
+        .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER }          \
+    },                                                                          \
+    .backgroundColor = GFX_CLAY_BG_COLOUR,                                      \
+})
+
+#define GAME_GFX_CLAY_TEXT_CONFIG   \
+(Clay_TextElementConfig){           \
+    .fontSize = 1,                  \
+    .lineHeight = 24,               \
+    .textColor = {                  \
+        .r = 255,                   \
+        .g = 255,                   \
+        .b = 255,                   \
+        .a = 255                    \
+    }                               \
+}
+
 void game_state_draw(GameState* game_state, f32 delta_time){
 
     EntityManager* entity_manager = &game_state->entity_manager;
     GFX_State* gfx_state = entity_manager->gfx_state;
     FIZX_State* fizx_state = &entity_manager->fizx_state;
     FIZX_DrawInfo* fizx_draw_state = &entity_manager->fizx_draw_state;
+    BoardState* board_state = &game_state->board_state;
 
     fizx_state_draw(*fizx_state, gfx_state, *fizx_draw_state, delta_time);
 
@@ -2630,6 +2769,84 @@ void game_state_draw(GameState* game_state, f32 delta_time){
         gfx_state, (Vector2I){.x = gfx_state->window_ctx->width, .y = gfx_state->window_ctx->height}, mouse_backbuffer_position, delta_time,
         input_is_mouse_button_pressed(MouseButton_Left)
     );
-    // gfx_clay_test_layout(&entity_manager);
+    
+    CLAY(CLAY_SIDI(CLAY_STRING("Padding Container"), game_gfx_clay_element_id++), {
+        .layout = {                                                           
+            .sizing = {                                                       
+                .width = CLAY_SIZING_GROW(0),
+                .height = CLAY_SIZING_GROW(0)                                 
+            },                                                                
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,                            
+        },                                                                    
+    });
+    
+    CLAY(CLAY_SIDI(CLAY_STRING("Center Panel"), game_gfx_clay_element_id++), {
+        .layout = {                                                           
+            .sizing = {                                                       
+                .width = CLAY_SIZING_GROW(0),                                 
+                .height = CLAY_SIZING_GROW(0)
+            },                                                                
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER },
+        },                                                                    
+    }){
+        if(board_state->display_turn_text){
+            GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
+                Clay_String clay_string = {
+                    .length = board_state->turn_text.count,
+                    .chars = (const char*)board_state->turn_text.chars
+                };
+                CLAY_TEXT(clay_string, GAME_GFX_CLAY_TEXT_CONFIG);
+            }
+        }
+    }
+    
+    CLAY(CLAY_SIDI(CLAY_STRING("Right Panel"), game_gfx_clay_element_id++), {
+        .layout = {                                                           
+            .sizing = {                                                       
+                .width = CLAY_SIZING_GROW(0),                                 
+                .height = CLAY_SIZING_GROW(0)                                 
+            },                                                                
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+            .childAlignment = { .x = CLAY_ALIGN_X_CENTER },                            
+        },                      
+    }){
+        CLAY(CLAY_SIDI(CLAY_STRING("dummy"), game_gfx_clay_element_id++), {
+            .layout = {                                                           
+                .sizing = {                                                       
+                    .width = CLAY_SIZING_PERCENT(0.5f),                                 
+                    .height = CLAY_SIZING_GROW(0)                                 
+                },                                                                
+            }                      
+        });
+        GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
+            switch(board_state->turn){
+                case BoardTurn_Player:{
+                    CLAY_TEXT(CLAY_STRING("Player Turn"), GAME_GFX_CLAY_TEXT_CONFIG);
+                }break;
+                case BoardTurn_Ball:{
+                    CLAY_TEXT(CLAY_STRING("Ball Turn"), GAME_GFX_CLAY_TEXT_CONFIG);
+                }break;
+                case BoardTurn_TurnBased:{
+                    CLAY_TEXT(CLAY_STRING("Turn Based Turn"), GAME_GFX_CLAY_TEXT_CONFIG);
+                }break;
+            }
+        }
+    }
+
+#if 0
+    switch(board_state->turn){
+        case BoardTurn_Player:{
+            CLAY_TEXT(CLAY_STRING("PLAYER TURN"), GAME_GFX_CLAY_TEXT_CONFIG);
+        }break;
+        case BoardTurn_Ball:{
+            CLAY_TEXT(CLAY_STRING("BALL TURN"), GAME_GFX_CLAY_TEXT_CONFIG);
+        }break;
+        case BoardTurn_TurnBased:{
+            CLAY_TEXT(CLAY_STRING("TURN BASED TURN"), GAME_GFX_CLAY_TEXT_CONFIG);
+        }break;
+    }
+#endif
+    
     gfx_clay_end_layout(gfx_state, delta_time, SPRITE_LAYER_GAME_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
 }

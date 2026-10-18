@@ -1,7 +1,4 @@
 
-
-
-
 ///
 /// TODO:
 /// - text rendering currently doesnt work when setting a sprite chain to SpriteOrigin_TopLeft.
@@ -740,12 +737,12 @@ bool gfx_freetype_load_font(
 
 
 
-inline bool gfx_sprite_is_chain_sprite(GFX_HostSprite sprite){
+inline bool gfx_host_sprite_is_chain_sprite(GFX_HostSprite sprite){
     return sprite.next_in_chain > 0;
 }
 
 inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
-    return gfx_sprite_is_chain_sprite(sprite) && sprite.is_first_in_chain;
+    return gfx_host_sprite_is_chain_sprite(sprite) && sprite.is_first_in_chain;
 }
 
 /// sprite material.
@@ -786,7 +783,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
             return false;
         }
         BOUNDS_CHECK(first_idx, state->sprite_manager.host_sprite_length);
-        if(!gfx_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
+        if(!gfx_host_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
             ASSERT(false, "sprite is not within a sprite-chain.");
             return false;
         }
@@ -835,7 +832,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
             return false;
         }
         BOUNDS_CHECK(first_idx, state->sprite_manager.host_sprite_length);
-        if(!gfx_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
+        if(!gfx_host_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
             ASSERT(false, "sprite is not within a sprite-chain.");
             return false;
         }
@@ -907,7 +904,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
             return false;
         }
         BOUNDS_CHECK(first_idx, state->sprite_manager.host_sprite_length);
-        if(!gfx_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
+        if(!gfx_host_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
             ASSERT(false, "sprite is not within a sprite-chain.");
             return false;
         }
@@ -955,7 +952,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
             return false;
         }
         BOUNDS_CHECK(first_idx, state->sprite_manager.host_sprite_length);
-        if(!gfx_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
+        if(!gfx_host_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
             ASSERT(false, "sprite is not within a sprite-chain.");
             return false;
         }
@@ -1017,7 +1014,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
             return false;
         }
         BOUNDS_CHECK(first_idx, state->sprite_manager.host_sprite_length);
-        if(!gfx_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
+        if(!gfx_host_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
             ASSERT(false, "sprite is not within a sprite-chain.");
             return false;
         }
@@ -1071,7 +1068,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
             return false;
         }
         BOUNDS_CHECK(first_idx, state->sprite_manager.host_sprite_length);
-        if(!gfx_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
+        if(!gfx_host_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
             ASSERT(false, "sprite is not within a sprite-chain.");
             return false;
         }
@@ -1125,7 +1122,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
             return false;
         }
         BOUNDS_CHECK(first_idx, state->sprite_manager.host_sprite_length);
-        if(!gfx_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
+        if(!gfx_host_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
             ASSERT(false, "sprite is not within a sprite-chain.");
             return false;
         }
@@ -1179,7 +1176,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
             return false;
         }
         BOUNDS_CHECK(first_idx, state->sprite_manager.host_sprite_length);
-        if(!gfx_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
+        if(!gfx_host_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
             ASSERT(false, "sprite is not within a sprite-chain.");
             return false;
         }
@@ -1246,7 +1243,7 @@ bool gfx_sprite_get_depth_layer(GFX_State* state, GenId sprite_gid, u64* out_dep
             return false;
         }
         BOUNDS_CHECK(first_idx, state->sprite_manager.host_sprite_length);
-        if(!gfx_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
+        if(!gfx_host_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
             ASSERT(false, "sprite is not within a sprite-chain.");
             return false;
         }
@@ -1294,7 +1291,7 @@ bool gfx_sprite_get_depth_layer(GFX_State* state, GenId sprite_gid, u64* out_dep
             return false;
         }
         BOUNDS_CHECK(first_idx, state->sprite_manager.host_sprite_length);
-        if(!gfx_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
+        if(!gfx_host_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
             ASSERT(false, "sprite is not within a sprite-chain.");
             return false;
         }
@@ -1351,7 +1348,7 @@ bool gfx_sprite_get_depth_layer(GFX_State* state, GenId sprite_gid, u64* out_dep
             return false;
         }
         BOUNDS_CHECK(first_idx, state->sprite_manager.host_sprite_length);
-        if(!gfx_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
+        if(!gfx_host_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
             ASSERT(false, "sprite is not within a sprite-chain.");
             return false;
         }
@@ -1462,7 +1459,7 @@ bool gfx_sprite_get_depth_layer(GFX_State* state, GenId sprite_gid, u64* out_dep
             return false;
         }
         BOUNDS_CHECK(first_idx, state->sprite_manager.host_sprite_length);
-        if(!gfx_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
+        if(!gfx_host_sprite_is_chain_sprite(state->sprite_manager.host_sprite[first_idx])){
             ASSERT(false, "sprite is not within a sprite-chain.");
             return false;
         }
@@ -2756,39 +2753,42 @@ bool gfx_sprite_get_sprite_origin(GFX_State state, GenId sprite_gid, GFX_SpriteO
     return true;
 }
 
-void gfx_dealloc_sprite_unsafe(GFX_State* state, i32 sprite_idx){
-
+void gfx_sprite_dealloc_unsafe(GFX_State* state, i32 sprite_idx){
     GFX_SpriteManager* manager = &state->sprite_manager;
+    i32 next_idx = sprite_idx;
+    
+    while(next_idx){
+        gen_id_allocator_dealloc_unsafe(&state->sprite_manager.gen_id_allocator, next_idx);
+        
+        BOUNDS_CHECK(next_idx, manager->device_sprite_length);
+        GFX_DeviceSprite* ds = &manager->device_sprite[next_idx];
 
-    BOUNDS_CHECK(sprite_idx, manager->host_sprite_length);
-    manager->host_sprite[sprite_idx] = (GFX_HostSprite){0};
+        ASSERT(ds->state != GFX_SpriteState_Deallocated, "attempted to deallocate a sprite that has already been deallocated.");
 
-    // NOTE: do not change this; one-frame sprites need to have their GPU memory zero'd out after each frame.
-    BOUNDS_CHECK(sprite_idx, manager->device_sprite_length);
-    manager->device_sprite[sprite_idx] = (GFX_DeviceSprite){0};
+        BOUNDS_CHECK(next_idx, manager->host_sprite_length);
+        GFX_HostSprite* hs = &manager->host_sprite[next_idx];
 
-    gen_id_allocator_dealloc_unsafe(&state->sprite_manager.gen_id_allocator, sprite_idx);
+        next_idx = hs->next_in_chain;
+
+        *hs = (GFX_HostSprite){0};
+        // NOTE: do not change this; one-frame sprites need to have their GPU memory zero'd out after each frame.
+        *ds = (GFX_DeviceSprite){0};                
+
+        if(next_idx == sprite_idx || next_idx == 0){ // check for zero in the case that its not a sprite chain.
+            break;
+        }    
+    }    
 }
 
-bool gfx_dealloc_sprite(GFX_State* state, GenId sprite_gid){
+bool gfx_sprite_dealloc(GFX_State* state, GenId sprite_gid){
 
-    // validation.
-    ASSERT(state->is_init == true, "renderer context is not init.");
-    ASSERT(state->sprite_manager.is_init == true, "renderer sprite manager has not been init.");
     GFX_SpriteManager* manager = &state->sprite_manager;
-
     i32 idx = gen_id_allocator_is_gen_id_valid(&state->sprite_manager.gen_id_allocator, sprite_gid);
     if(!idx){
         return false;
     }
 
-    GFX_DeviceSprite* sprite = &manager->device_sprite[idx];
-    if(sprite->state == GFX_SpriteState_Deallocated){
-        ASSERT(0!=0, "attempted to deallocate a sprite that has already been deallocated.");
-        return false;
-    }
-
-    gfx_dealloc_sprite_unsafe(state, idx);
+    gfx_sprite_dealloc_unsafe(state, idx);
     return true;
 }
 
@@ -2824,6 +2824,9 @@ GenId gfx_sprite_chain_alloc(GFX_State* state, i32 chain_length){
         BOUNDS_CHECK(idx, manager->host_sprite_length);
         GFX_HostSprite* curr_hs = &manager->host_sprite[idx];
 
+        BOUNDS_CHECK(idx, manager->device_sprite_length);
+        GFX_DeviceSprite* curr_ds = &manager->device_sprite[idx];
+
         if(i == 0){
             first_gid = sprite_gid;
             first_idx = idx;
@@ -2837,62 +2840,26 @@ GenId gfx_sprite_chain_alloc(GFX_State* state, i32 chain_length){
 
         // always close the loop back to first; gets overwritten by the next
         // iteration's link unless this is the last node, in which case it sticks.
+        curr_ds->state = GFX_SpriteState_Inactive;
         curr_hs->next_in_chain = first_idx;
-        previous_idx = idx;
+        previous_idx = idx;        
     }
     return first_gid;
 }
 
 GenId gfx_one_frame_sprite_chain_alloc(GFX_State* state, i32 chain_length){
-    GFX_SpriteManager* manager = &state->sprite_manager;
+    GenId first_gid = gfx_sprite_chain_alloc(state, chain_length);
+    i32 idx = gen_id_get_index(first_gid);
 
-    if(chain_length <= 0){
-        ASSERT(false, "chain_length must be at least 1.");
-        return 0;
-    }
-
-    GenId first_gid = 0;
-    i32 first_idx = 0;
-    i32 previous_idx = 0;
-    bool success = false;
-
-    for(i32 i = 0; i < chain_length; i++){
-        GenId sprite_gid = gfx_sprite_alloc(state);
-        if(sprite_gid == 0){
-            ASSERT(false, "failed to alloc full sprite chain.");
-            // TODO: dealloc first.
-            return first_gid;
-        }
-
-        i32 idx = gen_id_get_index(sprite_gid);
-
-         // flag the sprite to be deallocated afterwards.
+    if(idx){
         ARRAY_PUSH(
-            manager->one_frame_sprite_stack,
-            manager->one_frame_sprite_stack_length,
-            &manager->one_frame_sprite_stack_count,
+            state->sprite_manager.one_frame_sprite_stack,
+            state->sprite_manager.one_frame_sprite_stack_length,
+            &state->sprite_manager.one_frame_sprite_stack_count,
             idx
         );
-
-        BOUNDS_CHECK(idx, manager->host_sprite_length);
-        GFX_HostSprite* curr_hs = &manager->host_sprite[idx];
-
-        if(i == 0){
-            first_gid = sprite_gid;
-            first_idx = idx;
-            curr_hs->is_first_in_chain = true;
-        }
-        else{
-            BOUNDS_CHECK(previous_idx, manager->host_sprite_length);
-            manager->host_sprite[previous_idx].next_in_chain = idx;
-            curr_hs->is_first_in_chain = false;
-        }
-
-        // always close the loop back to first; gets overwritten by the next
-        // iteration's link unless this is the last node, in which case it sticks.
-        curr_hs->next_in_chain = first_idx;
-        previous_idx = idx;
     }
+    
     return first_gid;
 }
 
@@ -3129,7 +3096,7 @@ void gfx_state_draw(GFX_State* state){
     **/
     gfx_free_surface_texture(&swapchain_texture);
     for(i32 i = 0; i < state->sprite_manager.one_frame_sprite_stack_count; i++){
-        gfx_dealloc_sprite_unsafe(state, state->sprite_manager.one_frame_sprite_stack[i]);
+        gfx_sprite_dealloc_unsafe(state, state->sprite_manager.one_frame_sprite_stack[i]);
     }
     state->sprite_manager.one_frame_sprite_stack_count = 0;
 }
@@ -3758,6 +3725,7 @@ void gfx_clay_end_layout(GFX_State* gfx_state, f32 delta_time, u32 sprite_layer,
                 };
 
                 GenId sprite_gid = gfx_one_frame_sprite_chain_alloc(gfx_state, str.length);
+                
                 // order matters here: text->transform.
                 gfx_sprite_string_set_active(gfx_state, sprite_gid);
                 gfx_sprite_string_set_text(gfx_state, sprite_gid, font_virtual_texture, str);
@@ -3771,5 +3739,27 @@ void gfx_clay_end_layout(GFX_State* gfx_state, f32 delta_time, u32 sprite_layer,
                 ASSERT(false, "attempted to use unimplemented clay feature!");
             }break;
         }
+    }
+}
+
+
+///
+/// @ Sprite
+///
+
+
+bool gfx_gen_id_is_sprite_string(GFX_State state, GenId entity_gid){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&state.sprite_manager.gen_id_allocator, entity_gid);
+    if(!idx){
+        return false;
+    }
+    
+    BOUNDS_CHECK(idx, state.sprite_manager.host_sprite_length);
+    GFX_HostSprite hs = state.sprite_manager.host_sprite[idx];
+    if(gfx_host_sprite_is_chain_sprite(hs)){
+        return true;
+    }
+    else{
+        return false;
     }
 }

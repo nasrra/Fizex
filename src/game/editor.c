@@ -5,13 +5,9 @@
 */
 
 
-
-
 ///
 /// types.
 ///
-
-
 
 
 typedef enum{
@@ -136,7 +132,7 @@ typedef struct{
 ///
 
 
-static i32 gfx_clay_element_id = 0;
+static i32 editor_gfx_clay_element_id = 0;
 
 
 ///
@@ -162,52 +158,52 @@ static i32 gfx_clay_element_id = 0;
 
 #define GFX_CLAY_WIDGET_COLOUR (Clay_Color){.r = 10, .g = 10, .b = 20, .a = 128}
 
-#define GFX_CLAY_TEXT_CONFIG    \
-(Clay_TextElementConfig){       \
-    .fontSize = 1,              \
-    .lineHeight = 24,           \
-    .textColor = {              \
-        .r = 255,               \
-        .g = 255,               \
-        .b = 255,               \
-        .a = 255                \
-    }                           \
+#define EDITOR_GFX_CLAY_TEXT_CONFIG \
+(Clay_TextElementConfig){           \
+    .fontSize = 1,                  \
+    .lineHeight = 24,               \
+    .textColor = {                  \
+        .r = 255,                   \
+        .g = 255,                   \
+        .b = 255,                   \
+        .a = 255                    \
+    }                               \
 }
 
-#define GFX_CLAY_SIDE_PANEL()                                           \
-CLAY(CLAY_SIDI(CLAY_STRING("Side Panel"), gfx_clay_element_id++), {     \
-    .layout = {                                                         \
-        .sizing = {                                                     \
-            .width = CLAY_SIZING_PERCENT(0.25),                         \
-            .height = CLAY_SIZING_GROW(0)                               \
-        },                                                              \
-        .padding = CLAY_PADDING_ALL(6),                                 \
-        .childGap = 4,                                                  \
-        .layoutDirection = CLAY_TOP_TO_BOTTOM                           \
-    },                                                                  \
-    .backgroundColor = GFX_CLAY_WIDGET_COLOUR,                          \
+#define GFX_CLAY_SIDE_PANEL()                                               \
+CLAY(CLAY_SIDI(CLAY_STRING("Side Panel"), editor_gfx_clay_element_id++), {  \
+    .layout = {                                                             \
+        .sizing = {                                                         \
+            .width = CLAY_SIZING_PERCENT(0.25),                             \
+            .height = CLAY_SIZING_GROW(0)                                   \
+        },                                                                  \
+        .padding = CLAY_PADDING_ALL(6),                                     \
+        .childGap = 4,                                                      \
+        .layoutDirection = CLAY_TOP_TO_BOTTOM                               \
+    },                                                                      \
+    .backgroundColor = GFX_CLAY_WIDGET_COLOUR,                              \
 })
 
-#define GFX_CLAY_ROW_BUTTON_CONTAINER(vertical_percent_size)            \
-CLAY(                                                                   \
-    CLAY_SIDI(CLAY_STRING("Button Container"), gfx_clay_element_id++),  \
-    {                                                                   \
-        .layout = {                                                     \
-            .sizing = {                                                 \
-                CLAY_SIZING_GROW(0),                                    \
-                CLAY_SIZING_PERCENT(vertical_percent_size)},            \
-            .padding = CLAY_PADDING_ALL(4),                             \
-            .childGap = 4,                                              \
-            .layoutDirection = CLAY_LEFT_TO_RIGHT                       \
-        }, .backgroundColor = {100,100,100,100},                        \
-    }                                                                   \
+#define GFX_CLAY_ROW_BUTTON_CONTAINER(vertical_percent_size)                    \
+CLAY(                                                                           \
+    CLAY_SIDI(CLAY_STRING("Button Container"), editor_gfx_clay_element_id++),   \
+    {                                                                           \
+        .layout = {                                                             \
+            .sizing = {                                                         \
+                CLAY_SIZING_GROW(0),                                            \
+                CLAY_SIZING_PERCENT(vertical_percent_size)},                    \
+            .padding = CLAY_PADDING_ALL(4),                                     \
+            .childGap = 4,                                                      \
+            .layoutDirection = CLAY_LEFT_TO_RIGHT                               \
+        }, .backgroundColor = {100,100,100,100},                                \
+    }                                                                           \
 )
 
 #define GFX_CLAY_BUTTON_IDLE_COLOUR (Clay_Color){100.0f,100.0f,100.0f,225.0f}
 #define GFX_CLAY_BUTTON_HOVER_COLOUR (Clay_Color){155.0f,155.0f,155.0f,255.0f}
 #define GFX_CLAY_BUTTON(clay_string_name, horizontal_percent_size, vertical_percent_size, on_hover_callback, on_hover_user_data)    \
 CLAY(                                                                                                                               \
-    CLAY_SIDI(clay_string_name, gfx_clay_element_id++),                                                                             \
+    CLAY_SIDI(clay_string_name, editor_gfx_clay_element_id++),                                                                      \
     {                                                                                                                               \
         .backgroundColor = Clay_Hovered() ? GFX_CLAY_BUTTON_HOVER_COLOUR : GFX_CLAY_BUTTON_IDLE_COLOUR,                             \
         .layout = {                                                                                                                 \
@@ -220,7 +216,7 @@ CLAY(                                                                           
     }                                                                                                                               \
 ) {                                                                                                                                 \
     Clay_OnHover(on_hover_callback, on_hover_user_data);                                                                            \
-    CLAY_TEXT(clay_string_name, GFX_CLAY_TEXT_CONFIG);                                                                              \
+    CLAY_TEXT(clay_string_name, EDITOR_GFX_CLAY_TEXT_CONFIG);                                                                       \
 }
 
 #define GFX_CLAY_SPAWN_ENTITY_BUTTON(_clay_string_name, _horizontal_percent_size, _vertical_percent_size, _transient_arena, _editor_state, _entity_type_id)do{      \
@@ -257,7 +253,7 @@ CLAY(                                                                           
 */
 
 #define GFX_CLAY_INPUT_TEXT_BOX(_clay_string_button_sid, _clay_string_button_label, _horizontal_percent_size, _vertical_percent_size, _editor_state, _data_storage, _data_storage_type, _transient_arena, _game_entity_idx) do{ \
-Clay_ElementId GFX_CLAY_INPUT_TEXT_BOX_clay_element_id = CLAY_SIDI(_clay_string_button_sid, gfx_clay_element_id++);                                                                                                             \
+Clay_ElementId GFX_CLAY_INPUT_TEXT_BOX_clay_element_id = CLAY_SIDI(_clay_string_button_sid, editor_gfx_clay_element_id++);                                                                                                             \
 CLAY(                                                                                                                                                                                                                           \
     GFX_CLAY_INPUT_TEXT_BOX_clay_element_id,                                                                                                                                                                                    \
     {                                                                                                                                                                                                                           \
@@ -295,10 +291,10 @@ CLAY(                                                                           
             .chars = (const char*)_editor_state->ui_input_scratch_space.chars,                                                                                                                                                  \
             .length = _editor_state->ui_input_scratch_space.count                                                                                                                                                               \
         };                                                                                                                                                                                                                      \
-        CLAY_TEXT(scratch_space_string, GFX_CLAY_TEXT_CONFIG);                                                                                                                                                                  \
+        CLAY_TEXT(scratch_space_string, EDITOR_GFX_CLAY_TEXT_CONFIG);                                                                                                                                                                  \
     }                                                                                                                                                                                                                           \
     else{                                                                                                                                                                                                                       \
-        CLAY_TEXT(_clay_string_button_label, GFX_CLAY_TEXT_CONFIG);                                                                                                                                                             \
+        CLAY_TEXT(_clay_string_button_label, EDITOR_GFX_CLAY_TEXT_CONFIG);                                                                                                                                                             \
     }                                                                                                                                                                                                                           \
 }                                                                                                                                                                                                                               \
 }while(0)
@@ -656,7 +652,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
         you need to reset the global element_id as Clay SIDI on hover callbacks requires that
         elements retain their ID numbers, without this, its impossible for clay to properly handle OnHover callbacks.
     */
-    gfx_clay_element_id = 0;
+    editor_gfx_clay_element_id = 0;
 
     editor_state->mouse_state.hovering_element = false;
 
