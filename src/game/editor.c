@@ -352,6 +352,10 @@ void editor_save_level_entity_recurssive(
     while(true){
         BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
         Entity* entity = &entity_manager->entity[entity_idx];
+        
+        if(entity->serialisation_disabled){
+            break;
+        }
 
         i32 written = 0;
         string_clear(entity_char_buffer);

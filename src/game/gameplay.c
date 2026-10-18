@@ -123,6 +123,7 @@ typedef struct{
     bool is_physics_body;
     bool is_invincible;
     bool boost_depleted;
+    bool serialisation_disabled;
 } Entity;
 
 typedef void (*TimerTimeout)(void* user_data);
@@ -1147,6 +1148,8 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, String name, Tr
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
         entity->type_id = EntityTypeId_WindMillBlade;
         string_push(&entity->name, name);
+        
+        entity->serialisation_disabled = true;
 
         f32 width = 3.0f;
         f32 height = 0.1f;
@@ -1223,7 +1226,8 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, String name, Tr
 
         entity->type_id = EntityTypeId_WindMillHinge;
         string_push(&entity->name, name);
-
+        
+        entity->serialisation_disabled = true;
         
         { // physics_body();
         
