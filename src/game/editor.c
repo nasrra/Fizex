@@ -38,6 +38,8 @@ typedef struct{
     // a pointer to the stored data that the button is displaying.
     void* data_storage;
     Clay_ElementId clay_element_id;
+    // the game entity that this is apart of (zero if it isnt associated with an entity).
+    i32 game_entity_idx;
 } Editor_SelectedEditorUiEntity;
 
 typedef struct{
@@ -238,7 +240,8 @@ CLAY(                                                                           
         Editor_State* editor_state, 
         void* data_storage_ptr, 
         Editor_ButtonDataStorageType data_storage_type,
-        Memory_Arena* transient_arena
+        Memory_Arena* transient_arena,
+        i32 game_entity_idx
     );
     
     `parameters`
@@ -250,53 +253,54 @@ CLAY(                                                                           
     `data_storage`: a pointer to the data this button is assigned to / is displaying. 
     `data_storage_type`: the type of data stored.
     `transient_arena`: the transient arena to allocate the function capture onto.
+    `game_entity_idx`: the index of the game entity that is associated with the data; otherwise 0 if not.
 */
 
-
-#define GFX_CLAY_INPUT_TEXT_BOX(_clay_string_button_sid, _clay_string_button_label, _horizontal_percent_size, _vertical_percent_size, _editor_state, _data_storage, _data_storage_type, _transient_arena) do{   \
-Clay_ElementId GFX_CLAY_INPUT_TEXT_BOX_clay_element_id = CLAY_SIDI(_clay_string_button_sid, gfx_clay_element_id++);                                                                                           \
-CLAY(                                                                                                                                                                                                   \
-    GFX_CLAY_INPUT_TEXT_BOX_clay_element_id,                                                                                                                                                                 \
-    {                                                                                                                                                                                                   \
-        .backgroundColor = Clay_Hovered() ? GFX_CLAY_BUTTON_HOVER_COLOUR : GFX_CLAY_BUTTON_IDLE_COLOUR,                                                                                                 \
-        .layout = {                                                                                                                                                                                     \
-            .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },                                                                                                                             \
-            .sizing = {                                                                                                                                                                                 \
-                CLAY_SIZING_PERCENT(_horizontal_percent_size),                                                                                                                                           \
-                CLAY_SIZING_PERCENT(_vertical_percent_size)                                                                                                                                              \
-            },                                                                                                                                                                                          \
-        }                                                                                                                                                                                               \
-    }                                                                                                                                                                                                   \
-) {                                                                                                                                                                                                     \
-                                                                                                                                                                                                        \
-    Editor_InputTextBoxOnClickContext GFX_CLAY_INPUT_TEXT_BOX_ctx = {                                                                                                                                   \
-        .src = {                                                                                                                                                                                        \
-            .data_storage_type = _data_storage_type,                                                                                                                                                     \
-            .data_storage = _data_storage,                                                                                                                                                               \
-            .clay_element_id = GFX_CLAY_INPUT_TEXT_BOX_clay_element_id                                                                                                                                            \
-        },                                                                                                                                                                                              \
-        .editor_state = _editor_state                                                                                                                                                                    \
-    };                                                                                                                                                                                                   \
-    void* GFX_CLAY_INPUT_TEXT_BOX_ctx_ptr;                                                                                                                                                              \
-    MEMORY_ARENA_PUSH_STRUCT(_transient_arena, GFX_CLAY_INPUT_TEXT_BOX_ctx, GFX_CLAY_INPUT_TEXT_BOX_ctx_ptr);                                                                                            \
-    Clay_OnHover(editor_input_field_on_hover, GFX_CLAY_INPUT_TEXT_BOX_ctx_ptr);                                                                                                                         \
-                                                                                                                                                                                                        \
-    if(                                                                                                                                                                                                 \
-        GFX_CLAY_INPUT_TEXT_BOX_clay_element_id.id       == editor_state->mouse_state.selected_editor_ui_entity.clay_element_id.id &&                                                                                        \
-        GFX_CLAY_INPUT_TEXT_BOX_clay_element_id.offset   == editor_state->mouse_state.selected_editor_ui_entity.clay_element_id.offset &&                                                                                    \
-        GFX_CLAY_INPUT_TEXT_BOX_clay_element_id.baseId   == editor_state->mouse_state.selected_editor_ui_entity.clay_element_id.baseId                                                                                       \
-    ){                                                                                                                                                                                                  \
-                                                                                                                                                                                                        \
-        Clay_String scratch_space_string = {                                                                                                                                                            \
-            .chars = (const char*)_editor_state->ui_input_scratch_space.chars,                                                                                                                       \
-            .length = _editor_state->ui_input_scratch_space.count                                                                                                                                    \
-        };                                                                                                                                                                                              \
-        CLAY_TEXT(scratch_space_string, GFX_CLAY_TEXT_CONFIG);                                                                                                                                          \
-    }                                                                                                                                                                                                   \
-    else{                                                                                                                                                                                               \
-        CLAY_TEXT(_clay_string_button_label, GFX_CLAY_TEXT_CONFIG);                                                                                                                                      \
-    }                                                                                                                                                                                                   \
-}                                                                                                                                                                                                       \
+#define GFX_CLAY_INPUT_TEXT_BOX(_clay_string_button_sid, _clay_string_button_label, _horizontal_percent_size, _vertical_percent_size, _editor_state, _data_storage, _data_storage_type, _transient_arena, _game_entity_idx) do{ \
+Clay_ElementId GFX_CLAY_INPUT_TEXT_BOX_clay_element_id = CLAY_SIDI(_clay_string_button_sid, gfx_clay_element_id++);                                                                                                             \
+CLAY(                                                                                                                                                                                                                           \
+    GFX_CLAY_INPUT_TEXT_BOX_clay_element_id,                                                                                                                                                                                    \
+    {                                                                                                                                                                                                                           \
+        .backgroundColor = Clay_Hovered() ? GFX_CLAY_BUTTON_HOVER_COLOUR : GFX_CLAY_BUTTON_IDLE_COLOUR,                                                                                                                         \
+        .layout = {                                                                                                                                                                                                             \
+            .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },                                                                                                                                                     \
+            .sizing = {                                                                                                                                                                                                         \
+                CLAY_SIZING_PERCENT(_horizontal_percent_size),                                                                                                                                                                  \
+                CLAY_SIZING_PERCENT(_vertical_percent_size)                                                                                                                                                                     \
+            },                                                                                                                                                                                                                  \
+        }                                                                                                                                                                                                                       \
+    }                                                                                                                                                                                                                           \
+) {                                                                                                                                                                                                                             \
+                                                                                                                                                                                                                                \
+    Editor_InputTextBoxOnClickContext GFX_CLAY_INPUT_TEXT_BOX_ctx = {                                                                                                                                                           \
+        .src = {                                                                                                                                                                                                                \
+            .data_storage_type = _data_storage_type,                                                                                                                                                                            \
+            .data_storage = _data_storage,                                                                                                                                                                                      \
+            .clay_element_id = GFX_CLAY_INPUT_TEXT_BOX_clay_element_id,                                                                                                                                                         \
+            .game_entity_idx = _game_entity_idx                                                                                                                                                                                 \
+        },                                                                                                                                                                                                                      \
+        .editor_state = _editor_state                                                                                                                                                                                           \
+    };                                                                                                                                                                                                                          \
+    void* GFX_CLAY_INPUT_TEXT_BOX_ctx_ptr;                                                                                                                                                                                      \
+    MEMORY_ARENA_PUSH_STRUCT(_transient_arena, GFX_CLAY_INPUT_TEXT_BOX_ctx, GFX_CLAY_INPUT_TEXT_BOX_ctx_ptr);                                                                                                                   \
+    Clay_OnHover(editor_input_field_on_hover, GFX_CLAY_INPUT_TEXT_BOX_ctx_ptr);                                                                                                                                                 \
+                                                                                                                                                                                                                                \
+    if(                                                                                                                                                                                                                         \
+        GFX_CLAY_INPUT_TEXT_BOX_clay_element_id.id       == editor_state->mouse_state.selected_editor_ui_entity.clay_element_id.id &&                                                                                           \
+        GFX_CLAY_INPUT_TEXT_BOX_clay_element_id.offset   == editor_state->mouse_state.selected_editor_ui_entity.clay_element_id.offset &&                                                                                       \
+        GFX_CLAY_INPUT_TEXT_BOX_clay_element_id.baseId   == editor_state->mouse_state.selected_editor_ui_entity.clay_element_id.baseId                                                                                          \
+    ){                                                                                                                                                                                                                          \
+                                                                                                                                                                                                                                \
+        Clay_String scratch_space_string = {                                                                                                                                                                                    \
+            .chars = (const char*)_editor_state->ui_input_scratch_space.chars,                                                                                                                                                  \
+            .length = _editor_state->ui_input_scratch_space.count                                                                                                                                                               \
+        };                                                                                                                                                                                                                      \
+        CLAY_TEXT(scratch_space_string, GFX_CLAY_TEXT_CONFIG);                                                                                                                                                                  \
+    }                                                                                                                                                                                                                           \
+    else{                                                                                                                                                                                                                       \
+        CLAY_TEXT(_clay_string_button_label, GFX_CLAY_TEXT_CONFIG);                                                                                                                                                             \
+    }                                                                                                                                                                                                                           \
+}                                                                                                                                                                                                                               \
 }while(0)
 
 
@@ -576,32 +580,32 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                 // position-x.
                 position_x_string.length = snprintf((char*)position_x_string.chars, max_chars, "%f", entity->local_transform.position.x);
                 ASSERT(position_x_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Position X"), position_x_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.position.x), Editor_ButtonDataStorageType_F32, transient);
+                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Position X"), position_x_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.position.x), Editor_ButtonDataStorageType_F32, transient, idx);
                 
                 // position-y.
                 position_y_string.length = snprintf((char*)position_y_string.chars, max_chars, "%f", entity->local_transform.position.y);
                 ASSERT(position_y_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Position Y"), position_y_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.position.y), Editor_ButtonDataStorageType_F32, transient);
+                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Position Y"), position_y_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.position.y), Editor_ButtonDataStorageType_F32, transient, idx);
                 
                 // scale-x.
                 scale_x_string.length = snprintf((char*)scale_x_string.chars, max_chars, "%f", entity->local_transform.scale.x);
                 ASSERT(scale_x_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Scale X"), scale_x_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.scale.x), Editor_ButtonDataStorageType_F32, transient);
+                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Scale X"), scale_x_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.scale.x), Editor_ButtonDataStorageType_F32, transient, idx);
 
                 // scale-y.
                 scale_y_string.length = snprintf((char*)scale_y_string.chars, max_chars, "%f", entity->local_transform.scale.y);
                 ASSERT(scale_y_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Scale Y"), scale_y_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.scale.y), Editor_ButtonDataStorageType_F32, transient);
+                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Scale Y"), scale_y_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.scale.y), Editor_ButtonDataStorageType_F32, transient, idx);
                 
                 // sine.
                 sine_string.length = snprintf((char*)sine_string.chars, max_chars, "%f", entity->local_transform.sine);
                 ASSERT(sine_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Rotation"), sine_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.sine), Editor_ButtonDataStorageType_F32, transient);
+                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Rotation"), sine_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.sine), Editor_ButtonDataStorageType_F32, transient, idx);
 
                 // cosine.
                 cosine_string.length = snprintf((char*)cosine_string.chars, max_chars, "%f", entity->local_transform.cosine);
                 ASSERT(cosine_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Rotation"), cosine_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.cosine), Editor_ButtonDataStorageType_F32, transient);
+                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Rotation"), cosine_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.cosine), Editor_ButtonDataStorageType_F32, transient, idx);
             }
         }
     }
@@ -749,24 +753,31 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 count-=1;
             }
                     
-            // apply changes.
-            if(input_is_mouse_button_just_pressed(MouseButton_Left)){
-
-                switch(editor_state->mouse_state.selected_editor_ui_entity.data_storage_type){
-                    default: {ASSERT(false, "unknown data storage type.");}break;
-                    case Editor_ButtonDataStorageType_F32:{
-                        sscanf(editor_state->ui_input_scratch_space.chars, "%f", (f32*)editor_mouse_state->selected_editor_ui_entity.data_storage);
-                    }break;
+            if(
+                input_is_mouse_button_just_pressed(MouseButton_Left) ||
+                input_is_mouse_button_just_pressed(MouseButton_Right)
+            ){
+                
+                // apply changes.
+                if(input_is_mouse_button_just_pressed(MouseButton_Left)){
+    
+                    switch(editor_mouse_state->selected_editor_ui_entity.data_storage_type){
+                        default: {ASSERT(false, "unknown data storage type.");}break;
+                        case Editor_ButtonDataStorageType_F32:{
+                            sscanf(editor_state->ui_input_scratch_space.chars, "%f", (f32*)editor_mouse_state->selected_editor_ui_entity.data_storage);
+                        }break;
+                    }
+                    
+                    if(editor_mouse_state->selected_editor_ui_entity.game_entity_idx){
+                    
+                        // refresh the local transform because it might have been updated.
+                        i32 game_entity_idx = editor_mouse_state->selected_editor_ui_entity.game_entity_idx;
+                        BOUNDS_CHECK(game_entity_idx, game_entity_manager->entity_length);
+                        Transform2D local_transform = game_entity_manager->entity[game_entity_idx].local_transform;
+                        entity_set_local_transform_unsafe(game_entity_manager, game_entity_idx, local_transform);
+                    }
                 }
 
-                editor_state->is_typing = false;
-                editor_mouse_state->selected_editor_ui_entity = (Editor_SelectedEditorUiEntity){0};
-                string_clear(&editor_state->ui_input_scratch_space);
-            }
-            
-            // discard changes.
-            else if(input_is_mouse_button_just_pressed(MouseButton_Right)){
-                
                 editor_state->is_typing = false;
                 editor_mouse_state->selected_editor_ui_entity = (Editor_SelectedEditorUiEntity){0};
                 string_clear(&editor_state->ui_input_scratch_space);

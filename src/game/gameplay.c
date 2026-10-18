@@ -2308,16 +2308,16 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
     { // update fizx draw state.
 
         if(input_is_key_just_pressed(Key_1)){
-            fizx_draw_state->draw_bvh_branches = !fizx_draw_state->draw_bvh_branches;
+            // fizx_draw_state->draw_bvh_branches = !fizx_draw_state->draw_bvh_branches;
         }
         if(input_is_key_just_pressed(Key_2)){
-            fizx_draw_state->draw_bvh_leaves = !fizx_draw_state->draw_bvh_leaves;
+            // fizx_draw_state->draw_bvh_leaves = !fizx_draw_state->draw_bvh_leaves;
         }
         if(input_is_key_just_pressed(Key_3)){
-            fizx_draw_state->draw_body_shapes = !fizx_draw_state->draw_body_shapes;
+            // fizx_draw_state->draw_body_shapes = !fizx_draw_state->draw_body_shapes;
         }
         if(input_is_key_just_pressed(Key_4)){
-            fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
+            // fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
         }
     }
 

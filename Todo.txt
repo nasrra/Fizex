@@ -8,13 +8,13 @@ DONT DO THIS:
 ENVIRONMENTAL ASSIST:
 + BOOST PAD: applies a velocity to the body in the direction it is pointing.
 + WINDMILL: SPIN THE BALLS AROUND.
++ Thwamper:
+    + After three turns, hits the ground, dispersing the balls around it.
 
 - WALL: Two sided wall (springy side & absorbant side).
 - TELEPORTER:
 - (MAYBE) C4: ball hits the C4 block, and explodes, pushing away all balls in a radial area.
 
-- Thwamper:
-- After three turns, hits the ground, dispersing the balls around it.
 - desk fan
     - button operated
-    - turns off by pressing it, and turns back on after three turns. 
+    - turns off by pressing it, and turns back on after three turns.
