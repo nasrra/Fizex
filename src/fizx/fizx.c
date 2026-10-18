@@ -2333,16 +2333,17 @@ Vector2 fizx_body_get_linear_velocity_unsafe(FIZX_State state, i32 body_idx){
     return (Vector2){.x = soa->x[body_idx], .y = soa->y[body_idx]};
 }
 
-Vector2 fizx_body_get_linear_velocity(FIZX_State state, GenId body_gid){
+bool fizx_body_get_linear_velocity(FIZX_State state, GenId body_gid, Vector2* out_linear_velocity){
     i32 idx = fizx_validate_body_gen_id(&state, body_gid);
     if(idx == 0){
         ASSERT(false, "not a body gid");
-        return (Vector2){0};
+        return false;
     }
     if(!fizx_body_is_active_unsafe(&state, idx)){
-        return (Vector2){0};
+        return false;
     }
-    return fizx_body_get_linear_velocity_unsafe(state, idx);
+    *out_linear_velocity = fizx_body_get_linear_velocity_unsafe(state, idx);
+    return true;
 }
 
 void fizx_body_translate_unsafe(FIZX_State* state, f32 displacement_x, f32 displacement_y, i32 body_idx){

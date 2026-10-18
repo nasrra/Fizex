@@ -187,7 +187,7 @@ typedef enum{
     LevelLoadType_UiEntity
 } LevelLoadType;
 
-typedef void (*DeferredLevelLoadCallback)(void* user_data);
+typedef void (*DeferredLevelLoadCallback)(GameState* game_state, void* user_data);
 
 typedef struct{
     String file_path;
@@ -894,10 +894,9 @@ typedef struct {
     GameState* game_state;
 }LoadBoardLevelCallbackContext;
 
-void load_board_level_callback(void* user_data){
+void load_board_level_callback(GameState* game_state, void* user_data){
     
     // hoisting invariance.
-    GameState* game_state = ((LoadBoardLevelCallbackContext*)user_data)->game_state;
     BoardState* board_state = &game_state->board_state;
     GenIdAllocator* gid_allocator = &game_state->entity_manager.gen_id_allocator;
 
@@ -1517,11 +1516,12 @@ void ball_cue_update(Entity* entity, GameState* game_state, f32 delta_time){
             
             timer_manager_timer_start(&game_state->entity_manager.timer_manager, 0.334f, 1.0f, ball_cue_fragment_timer_timeout, &ctx, sizeof(ctx));
             
+            #if 0
+            
             Vector2 velocity = fizx_body_get_linear_velocity(game_state->entity_manager.fizx_state, entity->physics_body_gid);
             Vector2 direction = vector2_normalise(velocity);
             f32 velocity_len = vector2_len(velocity);
             
-            #if 0
             
             { // inner_left_ball_fragment();
 
@@ -2155,33 +2155,6 @@ void level_manager_defer_reload_world_level(
     level_manager_defer_load_level(level_manager, level_manager->world_root_entity_file_path, LevelLoadType_World, callback, callback_user_data, callback_user_data_size);
 }
 
-void level_manager_update(LevelManager* level_manager){
-    for(i32 i = 0; i < level_manager->deferred_level_load_count; i++){
-        BOUNDS_CHECK(i, level_manager->deferred_level_load_length);
-        DeferredLevelLoadContext* ctx = &level_manager->deferred_level_load[i];
-        switch(ctx->load_type){
-            default:{
-                ASSERT(false, "undefined level load type.");
-            }break;
-            case LevelLoadType_World:{
-                entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->world_root_entity_gid);
-                level_manager->world_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path);
-                string_clear(&level_manager->world_root_entity_file_path);
-                string_push(&level_manager->world_root_entity_file_path, ctx->file_path);
-            }break;
-            case LevelLoadType_Ui:{
-                entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->ui_root_entity_gid);
-                level_manager->ui_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path);
-                string_clear(&level_manager->ui_root_entity_file_path);
-                string_push(&level_manager->ui_root_entity_file_path, ctx->file_path);
-            }break;
-        }
-        if(ctx->callback){
-            ctx->callback((void*)ctx->callback_user_data);
-        }
-    }
-    level_manager->deferred_level_load_count = 0;
-}
 
 ///
 /// @ GameState
@@ -2274,7 +2247,38 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
 }
 
 void game_state_preupdate(GameState* game_state, f32 delta_time){
-    level_manager_update(&game_state->level_manager);
+
+    // hoist invariance.
+    LevelManager* level_manager = &game_state->level_manager;
+
+    { // level_manager_update();
+    
+        for(i32 i = 0; i < level_manager->deferred_level_load_count; i++){
+            BOUNDS_CHECK(i, level_manager->deferred_level_load_length);
+            DeferredLevelLoadContext* ctx = &level_manager->deferred_level_load[i];
+            switch(ctx->load_type){
+                default:{
+                    ASSERT(false, "undefined level load type.");
+                }break;
+                case LevelLoadType_World:{
+                    entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->world_root_entity_gid);
+                    level_manager->world_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path);
+                    string_clear(&level_manager->world_root_entity_file_path);
+                    string_push(&level_manager->world_root_entity_file_path, ctx->file_path);
+                }break;
+                case LevelLoadType_Ui:{
+                    entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->ui_root_entity_gid);
+                    level_manager->ui_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path);
+                    string_clear(&level_manager->ui_root_entity_file_path);
+                    string_push(&level_manager->ui_root_entity_file_path, ctx->file_path);
+                }break;
+            }
+            if(ctx->callback){
+                ctx->callback(game_state, (void*)ctx->callback_user_data);
+            }
+        }
+        level_manager->deferred_level_load_count = 0;
+    }
 
     EntityManager* entity_manager = &game_state->entity_manager;
     for(i32 i = 0; i < entity_manager->entity_length; i++){
@@ -2321,9 +2325,8 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         }
     }
 
-    i32 x = 12;
     if(input_is_key_just_pressed(Key_Tilde)){
-        level_manager_defer_reload_world_level(&game_state->level_manager, foo, &x, sizeof(i32));
+        level_manager_defer_reload_world_level(&game_state->level_manager, load_board_level_callback, NULL, 0);
         // entity_manager_dealloc_entity(&game_state->entity_manager, game_state->level_manager.world_root_entity_gid);
     }
 
@@ -2385,10 +2388,12 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                                 
                 Entity* cue_ball_entity;
                 if(entity_manager_get_entity(*entity_manager, board_state->cue_ball_entity_gid, &cue_ball_entity)){
-                    Vector2 linear_velocity = fizx_body_get_linear_velocity(*fizx_state, cue_ball_entity->physics_body_gid); 
-                    if(vector2_len_sqrd(linear_velocity)){
-                        balls_are_moving = true;
-                    }
+                    Vector2 linear_velocity;
+                    if(fizx_body_get_linear_velocity(*fizx_state, cue_ball_entity->physics_body_gid, &linear_velocity)){                
+                        if(vector2_len_sqrd(linear_velocity)){
+                            balls_are_moving = true;
+                        }
+                    } 
                 }
                 
                 for(i32 i = 0; i < board_state->number_ball_count; i++){
@@ -2398,11 +2403,14 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                     GenId number_ball_entity_gid = board_state->number_ball[i];
                     
                     if(entity_manager_get_entity(*entity_manager, number_ball_entity_gid, &number_ball_entity)){
-                        Vector2 linear_velocity = fizx_body_get_linear_velocity(*fizx_state, number_ball_entity->physics_body_gid); 
-                        if(vector2_len_sqrd(linear_velocity)){
-                            balls_are_moving = true;
-                            break;
-                        }
+                        Vector2 linear_velocity;
+                        if(fizx_body_get_linear_velocity(*fizx_state, number_ball_entity->physics_body_gid, &linear_velocity)){
+                            if(vector2_len_sqrd(linear_velocity)){
+                                balls_are_moving = true;
+                                break;
+                            }
+
+                        } 
                     }
                     else{
                         ASSERT(false, "failed to get number ball entity.");
