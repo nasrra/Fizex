@@ -137,14 +137,16 @@ void app_main(){
         { // load level.
             string_clear(&file_path);
             string_push_chars(&file_path, "assets/saved.scsv", 19);
-            level_manager_defer_load_level(&game_state.level_manager, file_path, LevelLoadType_World, NULL, NULL, 0);
+            LoadBoardLevelCallbackContext load_board_level_callback_ctx = {
+                .game_state = &game_state
+            };
+            level_manager_defer_load_level(&game_state.level_manager, file_path, LevelLoadType_World, load_board_level_callback, &load_board_level_callback_ctx, sizeof(load_board_level_callback_ctx));
         }
     }
 
     // floor entity.
     Transform2D floor_transform = TRANSFORM2D_IDENTITY;
     GenId level_gid = entity_spawn_level_root(&game_state.entity_manager, (String){.chars = "level 0", .length = 7, .count = 7}, TRANSFORM2D_IDENTITY, 0);
-
 
     bool in_editor_mode = false;
     Key last_editor_key_pressed = Key_None;

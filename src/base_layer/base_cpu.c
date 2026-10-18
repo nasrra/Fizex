@@ -22,9 +22,11 @@
 #   error not implemented for cpu architecture.
 #endif
 
-/*========================================
-    types.
-========================================*//**/
+
+///
+///    @ types.
+///
+
 
 typedef void (*simd_f32_log_op_funcptr)(f32* dst, const f32* lhs, const f32* rhs, i32 length, i32 start_idx);
 typedef void (*simd_f32_val_log_op_funcptr)(f32* dst, const f32* lhs, const f32 rhs, i32 length, i32 start_idx);
