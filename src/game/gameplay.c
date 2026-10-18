@@ -11,7 +11,11 @@
 
 typedef struct{
     // the amount of numbered balls still alive on the board.
-    i32 remaining_ball_count;  
+    GenId* number_ball;
+    i32 number_ball_count;
+    i32 number_ball_length;
+    GenId cue_ball_entity_gid;
+    bool is_init;
 } BoardState;
 
 typedef struct{
@@ -88,8 +92,8 @@ typedef struct{
     // 1.0f = true, 0.0f = false.
     f32* has_started;
     f32* delta_time_scratch_space;
-    char* timeout_data;
     TimerTimeout* timeout_function;
+    char* timeout_data;
     i32 timeout_data_length;
     i32 timeout_data_element_size;
     // the length of all backing arrays.
@@ -127,7 +131,6 @@ typedef struct{
     GFX_State* gfx_state;
     TimerManager timer_manager;
     IntrusiveList entity_hierarchy;
-    i32 alive_enemies;
     bool is_init;
 } EntityManager;
 
@@ -142,9 +145,14 @@ typedef enum{
     LevelLoadType_UiEntity
 } LevelLoadType;
 
+typedef void (*DeferredLevelLoadCallback)(void* user_data);
+
 typedef struct{
     String file_path;
     LevelLoadType load_type;
+    DeferredLevelLoadCallback callback;
+    char* callback_user_data;
+    i32 callback_user_data_length;
 } DeferredLevelLoadContext;
 
 typedef struct{
@@ -161,8 +169,7 @@ typedef struct{
     // the queue of levels to load at an appropriate time (deffered for later).
     DeferredLevelLoadContext* deferred_level_load;
     i32 deferred_level_load_length;
-    i32 deferred_level_load_count;
-    
+    i32 deferred_level_load_count;    
     bool is_init;
 } LevelManager;
 
@@ -290,8 +297,14 @@ typedef struct{
 
 
 GenId level_manager_load_level_file(LevelManager* level_manager, String file_path);
-void level_manager_defer_reload_world_level(LevelManager* level_manager);
-void level_manager_defer_load_level(LevelManager* level_manager, String file_path, LevelLoadType load_type);
+void level_manager_defer_reload_world_level(
+    LevelManager* level_manager, DeferredLevelLoadCallback callback, void* callback_user_data, i32 callback_user_data_size
+);
+void level_manager_defer_load_level(
+    LevelManager* level_manager, String file_path, LevelLoadType load_type, 
+    DeferredLevelLoadCallback callback, void* callback_user_data, i32 callback_user_data_size
+);
+
 
 
 
@@ -512,7 +525,23 @@ f32 timer_manager_timer_get_delta_tick_time(TimerManager manager, TimerHandle ha
 
 
 ///
-/// functions: EntityManager
+/// @ BoardState
+///
+
+
+void board_state_init(BoardState* state, MemoryArena* arena){
+    if(state->is_init){
+        ASSERT(false, "already init.");
+        return;
+    }
+    MEMORY_ARENA_ALLOC_ARRAY(arena, state->number_ball, &state->number_ball_length, 10);
+    state->number_ball_count = 0;
+    state->is_init = true;
+}
+
+
+///
+/// @ EntityManager
 ///
 
 
@@ -1184,7 +1213,7 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, String name, Transfor
 void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_data){
     
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    GenId* source_entity_gid = (GenId*)info.source_user_data;
+    GenId source_entity_gid = *(GenId*)info.source_user_data;
 
     if((info.source_layer & PHYSICS_LAYER_BALL) == 0){
         return;
@@ -1192,18 +1221,18 @@ void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_d
 
     if(info.depth >= 0.85f){
         Entity* entity;
-        if(!entity_manager_get_entity(ctx->game_state->entity_manager, *source_entity_gid, &entity)){
+        if(!entity_manager_get_entity(ctx->game_state->entity_manager, source_entity_gid, &entity)){
             return;
         }
         
         switch(entity->type_id){
             case EntityTypeId_BallCue:{
                 platform_output_message("you lose!");
-                level_manager_defer_reload_world_level(&ctx->game_state->level_manager);
+                level_manager_defer_reload_world_level(&ctx->game_state->level_manager, NULL, NULL, 0);
             }break;
             case EntityTypeId_BallEight:{
                 platform_output_message("you lose!");
-                if(ctx->game_state->board_state.remaining_ball_count > 1){
+                if(ctx->game_state->board_state.number_ball_count > 1){
                     // platform_output_message("you lose!");
                     // level_manager_defer_reload_world_level(&ctx->game_state->level_manager);
                 }
@@ -1217,11 +1246,22 @@ void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_d
             case EntityTypeId_BallSeven:
             case EntityTypeId_BallNine:
             case EntityTypeId_BallZero:{
-                ctx->game_state->board_state.remaining_ball_count -= 1;
+                for(i32 i = 0; i < ctx->game_state->board_state.number_ball_count; i++){
+                    GenId ball_entity_gid = ctx->game_state->board_state.number_ball[i];
+                    if(source_entity_gid == ball_entity_gid){
+                        ARRAY_UNORDERED_REMOVE_AT(
+                            ctx->game_state->board_state.number_ball, 
+                            ctx->game_state->board_state.number_ball_length, 
+                            &ctx->game_state->board_state.number_ball_count, 
+                            i
+                        );
+                        break;
+                    }                    
+                }
             }break;
         }
                 
-        entity_manager_dealloc_entity(&ctx->game_state->entity_manager, *source_entity_gid);
+        entity_manager_dealloc_entity(&ctx->game_state->entity_manager, source_entity_gid);
     }
 }
 
@@ -1626,7 +1666,6 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, String name, Transfo
     
         entity_set_local_transform(entity_manager, entity_gid, transform);
     }
-    entity_manager->alive_enemies+=1;
     return entity_gid;
 }
 
@@ -1858,7 +1897,11 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String n
 
 
 
-void level_manager_init(LevelManager* level_manager, MemoryArena* arena, EntityManager* entity_manager, i32 deferred_level_load_length){
+void level_manager_init(
+    LevelManager* level_manager, MemoryArena* arena, 
+    EntityManager* entity_manager, i32 deferred_level_load_length,
+    i32 deferred_level_load_user_data_size
+){
     
     ASSERT(!level_manager->is_init, "level manager is already init.");
     *level_manager = (LevelManager){0};
@@ -1868,20 +1911,40 @@ void level_manager_init(LevelManager* level_manager, MemoryArena* arena, EntityM
     string_init(&level_manager->ui_root_entity_file_path, arena, file_path_length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, level_manager->deferred_level_load, &level_manager->deferred_level_load_length, deferred_level_load_length);
     for(i32 i = 0; i < deferred_level_load_length; i++){
-        string_init(&level_manager->deferred_level_load[i].file_path, arena, file_path_length);
+        DeferredLevelLoadContext* ctx = &level_manager->deferred_level_load[i];
+        string_init(&ctx->file_path, arena, file_path_length);
+        MEMORY_ARENA_ALLOC_ARRAY(arena, ctx->callback_user_data, &ctx->callback_user_data_length, deferred_level_load_user_data_size);
     }
     
     level_manager->entity_manager = entity_manager;
     level_manager->is_init = false;
 }
 
-void level_manager_defer_load_level(LevelManager* level_manager, String file_path, LevelLoadType load_type){
+void level_manager_defer_load_level(
+    LevelManager* level_manager, String file_path, LevelLoadType load_type, 
+    DeferredLevelLoadCallback callback, void* callback_user_data, i32 callback_user_data_size
+){
+    // get ctx.
     i32 idx = level_manager->deferred_level_load_count;
     BOUNDS_CHECK(idx, level_manager->deferred_level_load_length);
-    DeferredLevelLoadContext* deferred = &level_manager->deferred_level_load[idx];
-    string_clear(&deferred->file_path);
-    string_push(&deferred->file_path, file_path);
-    deferred->load_type = load_type;
+    DeferredLevelLoadContext* ctx = &level_manager->deferred_level_load[idx];
+    
+    // set file path.
+    string_clear(&ctx->file_path);
+    string_push(&ctx->file_path, file_path);
+    
+    // set load type.
+    ctx->load_type = load_type;
+    
+    // set callback user data.
+    if(callback_user_data_size > 0){
+        ASSERT(callback_user_data_size <= ctx->callback_user_data_length, "buffer overflow");
+        COPY_MEMORY(ctx->callback_user_data, callback_user_data, callback_user_data_size);
+    }
+    
+    // set callback.
+    ctx->callback = callback;
+    
     level_manager->deferred_level_load_count++;
 }
 
@@ -1983,8 +2046,10 @@ GenId level_manager_load_level_file(LevelManager* level_manager, String file_pat
     return entity_manager->deserialised_entity[1].entity_gid;    
 }
 
-void level_manager_defer_reload_world_level(LevelManager* level_manager){
-    level_manager_defer_load_level(level_manager, level_manager->world_root_entity_file_path, LevelLoadType_World);
+void level_manager_defer_reload_world_level(
+    LevelManager* level_manager, DeferredLevelLoadCallback callback, void* callback_user_data, i32 callback_user_data_size
+){
+    level_manager_defer_load_level(level_manager, level_manager->world_root_entity_file_path, LevelLoadType_World, callback, callback_user_data, callback_user_data_size);
 }
 
 void level_manager_update(LevelManager* level_manager){
@@ -2004,6 +2069,9 @@ void level_manager_update(LevelManager* level_manager){
                 string_clear(&level_manager->ui_root_entity_file_path);
                 string_push(&level_manager->ui_root_entity_file_path, ctx->file_path);
             }break;
+        }
+        if(ctx->callback){
+            ctx->callback((void*)ctx->callback_user_data);
         }
     }
     level_manager->deferred_level_load_count = 0;
@@ -2091,9 +2159,10 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
         false
     );
     
-    level_manager_init(&game_state->level_manager, persistent, &game_state->entity_manager, 256);
-    
-    game_state->board_state.remaining_ball_count = 10;
+    i32 callback_user_data_size = 64;
+    level_manager_init(&game_state->level_manager, persistent, &game_state->entity_manager, 256, callback_user_data_size);
+        
+    board_state_init(&game_state->board_state, persistent);
     
     game_state->is_init = true;
 }
@@ -2111,12 +2180,9 @@ void game_state_preupdate(GameState* game_state, f32 delta_time){
     }
 }
 
-void foo(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data){
-    GameState* game_state = (GameState*)user_data;
-    Vector2 start = {.x = info.first_contact_point_x, .y = info.first_contact_point_y};
-    Vector2 end = {.x = start.x + info.normal_x, .y = start.y + info.normal_y};
-    gfx_draw_line(game_state->entity_manager.gfx_state, GFX_COLOUR_PINK, start, end, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
-    // platform_output_message("collided!\n");
+void foo(void* user_data){
+    i32 x = *(i32*)user_data;
+    platform_output_message("loaded level!\n");
 }
 
 void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryArena* transient, f32 delta_time, bool in_editor_mode){
@@ -2147,10 +2213,10 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         }
     }
 
+    i32 x = 12;
     if(input_is_key_just_pressed(Key_Tilde)){
-        // level_manager_defer_reload_world_level(&game_state->level_manager);
-        entity_manager_dealloc_entity(&game_state->entity_manager, game_state->level_manager.world_root_entity_gid);
-
+        level_manager_defer_reload_world_level(&game_state->level_manager, foo, &x, sizeof(i32));
+        // entity_manager_dealloc_entity(&game_state->entity_manager, game_state->level_manager.world_root_entity_gid);
     }
 
     { // time management.
