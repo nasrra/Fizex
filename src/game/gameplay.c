@@ -1070,7 +1070,7 @@ void camera_update(Entity* entity, GFX_State* gfx_state, f32 delta_time){
         vector3_add(vector2_to_vector3(entity->global_transform.position), CAMERA_POSITIONAL_OFFSET), 
         entity->camera_near_z, 
         entity->camera_far_z, 
-        entity->camera_orthographic_size
+        entity->camera_orthographic_size * MAX(entity->global_transform.scale.x, entity->global_transform.scale.y)
     );
 }
 

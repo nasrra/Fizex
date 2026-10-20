@@ -209,8 +209,9 @@ GenId gen_id_allocator_alloc(GenIdAllocator* allocator){
     return allocator->gen_ids[slot];
 }
 
-void gen_id_allocator_dealloc_unsafe(GenIdAllocator* allocator, i32 index){
-    BOUNDS_CHECK(index, allocator->length);
+void gen_id_allocator_dealloc_unsafe(GenIdAllocator* allocator, i32 index){    
+    
+    NIL_BOUNDS_CHECK(index, allocator->length);
     // increment the generation so that any gen indices pointing to this data are invalidated (making them stale pointers).
     allocator->gen_ids[index] = gen_id_increment_generation(allocator->gen_ids[index]);
 
