@@ -1,6 +1,6 @@
 ///
 /// todo:
-/// bird damage per km/h or speed lol, do it.
+/// turn entities active and inactive.
 ///
 
 
@@ -67,27 +67,29 @@ typedef struct{
 } Ubo;
 
 typedef enum{
-    EntityTypeId_None           = 0,
-    EntityTypeId_LevelRoot      = 1,
-    EntityTypeId_Wall           = 2,
-    EntityTypeId_BallCue        = 3,
-    EntityTypeId_BallOne        = 4,
-    EntityTypeId_BallTwo        = 5,
-    EntityTypeId_BallThree      = 6,
-    EntityTypeId_BallFour       = 7,
-    EntityTypeId_BallFive       = 8,
-    EntityTypeId_BallSix        = 9,
-    EntityTypeId_BallSeven      = 10,
-    EntityTypeId_BallEight      = 11,
-    EntityTypeId_BallNine       = 12,
-    EntityTypeId_BallZero       = 13,
-    EntityTypeId_Pocket         = 14,
-    EntityTypeId_BoostPad       = 15,
-    EntityTypeId_WindMill       = 16,
-    EntityTypeId_WindMillHinge  = 17,
-    EntityTypeId_WindMillBlade  = 18,
-    EntityTypeId_Thwamper       = 19,
-    EntityTypeId_BoardTurnText  = 20
+    EntityTypeId_None                   = 0,
+    EntityTypeId_LevelRoot              = 1,
+    EntityTypeId_Wall                   = 2,
+    EntityTypeId_BallCue                = 3,
+    EntityTypeId_BallOne                = 4,
+    EntityTypeId_BallTwo                = 5,
+    EntityTypeId_BallThree              = 6,
+    EntityTypeId_BallFour               = 7,
+    EntityTypeId_BallFive               = 8,
+    EntityTypeId_BallSix                = 9,
+    EntityTypeId_BallSeven              = 10,
+    EntityTypeId_BallEight              = 11,
+    EntityTypeId_BallNine               = 12,
+    EntityTypeId_BallZero               = 13,
+    EntityTypeId_Pocket                 = 14,
+    EntityTypeId_BoostPad               = 15,
+    EntityTypeId_WindMill               = 16,
+    EntityTypeId_WindMillHinge          = 17,
+    EntityTypeId_WindMillBlade          = 18,
+    EntityTypeId_Thwamper               = 19,
+    EntityTypeId_BoardTurnText          = 20,
+    EntityTypeId_WorldCamera            = 21,
+    EntityTypeId_UiCamera               = 22    
 } EntityTypeId;
 
 typedef struct{
@@ -104,18 +106,22 @@ typedef struct GameState GameState;
 typedef void (*TurnBasedEntityOnTurnEndCallback)(GameState* game_state, i32 entity_idx);
 
 typedef struct{
-    String name;
     Transform2D global_transform;
     Transform2D local_transform;
     Transform2D sprite_local_transform;
-    GenId sprite_gid;
-    GenId physics_body_gid;
+    String name;
     Aabb clickable_aabb;
     EntityTypeId type_id;
+    GenId sprite_gid;
+    GenId physics_body_gid;
     i32 state;
     i32 max_turns_until_turn_end_callback;
     i32 turns_until_turn_end_callback; 
     f32 health;
+    f32 camera_orthographic_size;
+    f32 camera_perspective_fov;
+    f32 camera_far_z;
+    f32 camera_near_z;
     TurnBasedEntityOnTurnEndCallback on_turn_end_callback;
     bool is_sprite;
     bool is_health;
@@ -1017,6 +1023,69 @@ GenId entity_spawn_board_turn_text(EntityManager* entity_manager, String name, T
             gfx_sprite_string_set_depth(        entity_manager->gfx_state, entity->sprite_gid, 0);
             gfx_sprite_string_set_colour(       entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
             gfx_sprite_string_set_colour_state( entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+        }
+        
+        entity_set_local_transform(entity_manager, entity_gid, transform);
+    }
+    return entity_gid;
+}
+
+
+///
+/// @ Camera.
+///
+
+
+#define CAMERA_POSITIONAL_OFFSET (Vector3){.z = -1.0f}
+#define WORLD_CAMERA_COORDINATE_SPACE GFX_CoordinateSpace_Cartesian
+#define WORLD_CAMERA_DEFAULT_NEAR_Z 0.01f
+#define WORLD_CAMERA_DEFAULT_FAR_Z 100.0f
+#define WORLD_CAMERA_DEFAULT_ORTHOGRAPHIC_SIZE 22.0f
+#define UI_CAMERA_COORDINATE_SPACE GFX_CoordinateSpace_Rasterised 
+#define UI_CAMERA_DEFAULT_NEAR_Z 0.01f
+#define UI_CAMERA_DEFAULT_FAR_Z 100.0f
+
+void camera_update(Entity* entity, GFX_State* gfx_state, f32 delta_time){    
+    GFX_Camera* camera;
+    GFX_CoordinateSpace coord_space;
+    
+    switch(entity->type_id){
+        default:{
+            ASSERT(false, "entity is not a camera.");
+            return;
+        };
+        case EntityTypeId_WorldCamera: {
+            camera = &gfx_state->world_camera;
+            coord_space = WORLD_CAMERA_COORDINATE_SPACE;
+        } break;
+        case EntityTypeId_UiCamera: {
+            camera = &gfx_state->screen_camera;
+            coord_space = UI_CAMERA_COORDINATE_SPACE;
+        } break;
+    }
+    
+    gfx_orthographic_camera_init(
+        camera, 
+        coord_space, 
+        vector3_add(vector2_to_vector3(entity->global_transform.position), CAMERA_POSITIONAL_OFFSET), 
+        entity->camera_near_z, 
+        entity->camera_far_z, 
+        entity->camera_orthographic_size
+    );
+}
+
+GenId entity_spawn_world_camera(EntityManager* entity_manager, String name, Transform2D transform, GenId parent_entity_gid){
+    GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent_entity_gid);
+    Entity* entity;
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
+        entity->type_id = EntityTypeId_WorldCamera;
+        string_push(&entity->name, name);
+        
+        { // set_camera_settings();
+        
+            entity->camera_orthographic_size = WORLD_CAMERA_DEFAULT_ORTHOGRAPHIC_SIZE * MAX(transform.scale.x, transform.scale.y);
+            entity->camera_near_z = WORLD_CAMERA_DEFAULT_NEAR_Z;
+            entity->camera_far_z = WORLD_CAMERA_DEFAULT_FAR_Z;
         }
         
         entity_set_local_transform(entity_manager, entity_gid, transform);
@@ -2056,6 +2125,9 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String n
         case EntityTypeId_Thwamper:{
             return entity_spawn_thwamper(entity_manager, name, transform, parent_gid);
         }break;
+        case EntityTypeId_WorldCamera:{
+            return entity_spawn_world_camera(entity_manager, name, transform, parent_gid);
+        }break;
     }
 }
 
@@ -2569,10 +2641,10 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             switch(entity->type_id){
                 case EntityTypeId_BallCue:{ball_cue_update(entity, game_state, delta_time);}break;
                 case EntityTypeId_WindMillHinge:{windmill_hinge_update(entity, i, game_state, delta_time);}break;
-                
+                case EntityTypeId_WorldCamera:{camera_update(entity, gfx_state, delta_time);}break;
+                case EntityTypeId_UiCamera:{camera_update(entity, gfx_state, delta_time);}break;
             }
         }
-    
     }
 
     if(!in_editor_mode)

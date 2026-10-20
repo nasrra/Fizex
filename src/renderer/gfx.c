@@ -50,7 +50,6 @@ typedef struct GFX_Camera{
     f32 near_z;
     GFX_ProjectionType projection_type;
     GFX_CoordinateSpace coordinate_space;
-    bool is_init;
 } GFX_Camera;
 
 typedef struct{
@@ -3177,7 +3176,6 @@ void gfx_perspective_camera_init(
 ){
 
     { // validation.
-        ASSERT(!camera->is_init, "attempted to init an already init camera.");
         ASSERT(near_z >= F32_EPSILON, "camera shouldnt be init with a near_z plane value less than F32_EPSILON");
         ASSERT(far_z > near_z, "far_z value should be less than the near_z.");
     }
@@ -3188,7 +3186,6 @@ void gfx_perspective_camera_init(
     camera->perspective_fov = fov_in_radians;
     camera->projection_type = GFX_ProjectionType_Perspective;
     camera->coordinate_space = GFX_CoordinateSpace_Cartesian;
-    camera->is_init = true;
 }
 
 void gfx_orthographic_camera_init(
@@ -3197,7 +3194,6 @@ void gfx_orthographic_camera_init(
 ){
 
     { // validation.
-        ASSERT(!camera->is_init, "attempted to init an already init camera.");
         ASSERT(near_z >= F32_EPSILON, "camera shouldnt be init with a near_z plane value less than F32_EPSILON");
         ASSERT(far_z > near_z, "far_z value should be less than the near_z.");
     }
@@ -3208,7 +3204,6 @@ void gfx_orthographic_camera_init(
     camera->orthographic_size = orthographic_size;
     camera->projection_type = GFX_ProjectionType_Orthographic;
     camera->coordinate_space = coordinate_space;
-    camera->is_init = true;
 }
 
 void gfx_camera_update_projection_matrix(GFX_Camera* camera, f32 surface_aspect_ratio){

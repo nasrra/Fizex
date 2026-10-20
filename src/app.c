@@ -97,8 +97,24 @@ void app_main(){
         };
 
         gfx_state_init(&gfx_state, gfx_init_info, persistent, transient, window_ctx);
-        gfx_orthographic_camera_init(&gfx_state.world_camera, GFX_CoordinateSpace_Cartesian, (Vector3){.y = 5.0f, .z = -1.0f}, 0.01f, 100.0f, 22.0f);
-        gfx_orthographic_camera_init(&gfx_state.screen_camera, GFX_CoordinateSpace_Rasterised, (Vector3){.z = -1.0f}, 0.01f, WINDOW_WIDTH, WINDOW_HEIGHT);
+        gfx_orthographic_camera_init(
+            &gfx_state.world_camera, 
+            WORLD_CAMERA_COORDINATE_SPACE, 
+            CAMERA_POSITIONAL_OFFSET, 
+            WORLD_CAMERA_DEFAULT_NEAR_Z, 
+            WORLD_CAMERA_DEFAULT_FAR_Z, 
+            WORLD_CAMERA_DEFAULT_ORTHOGRAPHIC_SIZE
+        );
+        
+        gfx_orthographic_camera_init(
+            &gfx_state.screen_camera, 
+            UI_CAMERA_COORDINATE_SPACE, 
+            CAMERA_POSITIONAL_OFFSET, 
+            UI_CAMERA_DEFAULT_NEAR_Z,
+            UI_CAMERA_DEFAULT_FAR_Z,
+            WINDOW_HEIGHT
+        );
+        
         gfx_state.clay_game_ui_ctx = gfx_clay_create_context(MEGABYTE(8), WINDOW_WIDTH, WINDOW_HEIGHT);
         gfx_state.clay_editor_ui_ctx = gfx_clay_create_context(MEGABYTE(8), WINDOW_WIDTH, WINDOW_HEIGHT);
     }
