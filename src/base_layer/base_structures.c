@@ -1949,6 +1949,19 @@ void clickable_area_hierarchy_init(ClickableAreaHierarchy* state, MemoryArena* a
 }
 
 /*
+    `remarks`
+    bypasses all genid checks.
+*/
+void clickable_area_hierarchy_set_clickable_area_rectangle_shape_unsafe(
+    ClickableAreaHierarchy* hierarchy, i32 area_idx, f32* vert_x, f32* vert_y
+){
+    NIL_BOUNDS_CHECK(area_idx, hierarchy->area_length);
+    ClickableArea* area = &hierarchy->area[area_idx];
+    COPY_MEMORY(area->rectangle.x, vert_x, sizeof(float) * 4);
+    COPY_MEMORY(area->rectangle.y, vert_y, sizeof(float) * 4);    
+}
+
+/*
     `remarks`:
     - it is assumed that the leng of the `vert_x` and `vert_y` arrays are four.
 */
@@ -1957,12 +1970,20 @@ bool clickable_area_hierarchy_set_clickable_area_rectangle_shape(ClickableAreaHi
     if(!idx){
         return false;
     }
-    
-    BOUNDS_CHECK(idx, hierarchy->area_length);
-    ClickableArea* area = &hierarchy->area[idx];
-    COPY_MEMORY(area->rectangle.x, vert_x, sizeof(float) * 4);
-    COPY_MEMORY(area->rectangle.y, vert_y, sizeof(float) * 4);    
+    clickable_area_hierarchy_set_clickable_area_rectangle_shape_unsafe(hierarchy, idx, vert_x, vert_y);
     return true;
+}
+
+/*
+    `remarks`
+    bypasses all genid checks.
+*/
+void clickable_area_hierarchy_set_clickable_area_depth_layer_unsafe(
+    ClickableAreaHierarchy* hierarchy, i32 area_idx, u64 depth_layer
+){
+    NIL_BOUNDS_CHECK(area_idx, hierarchy->area_length);
+    ClickableArea* area = &hierarchy->area[area_idx];
+    area->depth_layer = depth_layer;
 }
 
 bool clickable_area_hierarchy_set_clickable_area_depth_layer(ClickableAreaHierarchy* hierarchy, GenId area_gid, u64 depth_layer){
@@ -1970,11 +1991,20 @@ bool clickable_area_hierarchy_set_clickable_area_depth_layer(ClickableAreaHierar
     if(!idx){
         return false;    
     }
-    
-    BOUNDS_CHECK(idx, hierarchy->area_length);
-    ClickableArea* area = &hierarchy->area[idx];
-    area->depth_layer = depth_layer;
+    clickable_area_hierarchy_set_clickable_area_depth_layer_unsafe(hierarchy, idx, depth_layer);
     return true;
+}
+
+/*
+    `remarks`
+    bypasses all genid checks.
+*/
+void clickable_area_hierarchy_set_clickable_area_user_data_unsafe(
+    ClickableAreaHierarchy* hierarchy, i32 area_idx, void* user_data
+){
+    NIL_BOUNDS_CHECK(area_idx, hierarchy->area_length);
+    ClickableArea* area = &hierarchy->area[area_idx];
+    area->user_data = user_data;    
 }
 
 bool clickable_area_hierarchy_set_clickable_area_user_data(ClickableAreaHierarchy* hierarchy, GenId area_gid, void* user_data){
@@ -1982,10 +2012,7 @@ bool clickable_area_hierarchy_set_clickable_area_user_data(ClickableAreaHierarch
     if(!idx){
         return false;
     }
-    
-    BOUNDS_CHECK(idx, hierarchy->area_length);
-    ClickableArea* area = &hierarchy->area[idx];
-    area->user_data = user_data;
+    clickable_area_hierarchy_set_clickable_area_user_data_unsafe(hierarchy, idx, user_data);
     return true;
 }
 
@@ -2094,11 +2121,25 @@ void clickable_area_hierarchy_update(ClickableAreaHierarchy* hierarchy, Vector2 
     }
 }
 
-bool clicked_entity_hierarchy_get_selected_area(ClickableAreaHierarchy* hierarchy, ClickableArea** out_area){
+bool clickable_area_hierarchy_get_selected_area(ClickableAreaHierarchy* hierarchy, ClickableArea** out_area){
     if(!hierarchy->selected_idx){
         return false;
     }
     NIL_BOUNDS_CHECK(hierarchy->selected_idx, hierarchy->area_length);
     *out_area = &hierarchy->area[hierarchy->selected_idx];
+    return true;
+}
+
+void clickable_area_hierarchy_get_clickable_area_unsafe(ClickableAreaHierarchy* hierarchy, i32 area_idx, ClickableArea** out_area){
+    NIL_BOUNDS_CHECK(area_idx, hierarchy->area_length);
+    *out_area = &hierarchy->area[area_idx];
+}
+
+bool clickable_area_hierarchy_get_clickable_area(ClickableAreaHierarchy* hierarchy, GenId area_gid, ClickableArea** out_area){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&hierarchy->gen_id_allocator, area_gid);
+    if(!idx){
+        return false;
+    }
+    clickable_area_hierarchy_get_clickable_area_unsafe(hierarchy, idx, out_area);
     return true;
 }

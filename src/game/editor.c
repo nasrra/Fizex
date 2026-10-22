@@ -35,32 +35,13 @@ typedef struct{
     void* data_storage;
     Clay_ElementId clay_element_id;
     // the game entity that this is apart of (zero if it isnt associated with an entity).
-    i32 game_entity_idx;
+    i32 entity_idx;
 } Editor_SelectedEditorUiEntity;
-
-typedef struct{
-    u64 depth_layer;
-    GenId gid;
-} Editor_SelectedGameEntity;
 
 typedef struct{
     PolygonRectangle shape;
     u64 depth_layer;
 }Editor_EntityClickableArea;
-
-// note that this is per-frame data; and should be considered stale
-// beyond the frame boundary. hence the name suffix: immediate mode.
-typedef struct{
-    Editor_EntityClickableArea clickable_area;
-} Editor_EntityImmediateModeData;
-
-typedef struct{
-    Editor_EntityImmediateModeData* entity;
-    bool* entity_is_valid;
-    i32 entity_length;
-    i32 entity_is_valid_length;
-    bool is_init;
-} Editor_EntityManager;
 
 typedef struct{
     // the positional offset to apply to the selected game entity when dragging it around with the mouse. 
@@ -83,13 +64,7 @@ typedef struct{
     Editor_MouseStateBehaviour current_behaviour;
     Editor_MouseStateMoveBehaviourState move_behaviour_state;
     Editor_MouseStateRotateBehaviourState rotate_behaviour_state;
-    
-    Editor_SelectedGameEntity first_hit_game_entity;
-    Editor_SelectedGameEntity selected_game_entity;
-    Editor_SelectedGameEntity* previously_selected_game_entity;
-    i32 previously_selected_game_entity_length;
-    i32 previously_selected_game_entity_count;
-    
+        
     Editor_SelectedEditorUiEntity selected_editor_ui_entity;
     bool hovering_element;
 } Editor_MouseState;
@@ -98,7 +73,8 @@ typedef struct{
     Editor_MouseState mouse_state;
     String ui_input_scratch_space;
     GFX_State* gfx_state;
-    Editor_EntityManager entity_manager;
+    ClickableAreaHierarchy game_entity_clickable_area_hierarchy;
+    GenId slected_game_entity_gid;
     Editor_Menu menu;
     bool is_typing;
     bool is_init;
@@ -237,7 +213,7 @@ CLAY(                                                                           
         void* data_storage_ptr, 
         Editor_ButtonDataStorageType data_storage_type,
         Memory_Arena* transient_arena,
-        i32 game_entity_idx
+        i32 entity_idx
     );
     
     `parameters`
@@ -249,11 +225,11 @@ CLAY(                                                                           
     `data_storage`: a pointer to the data this button is assigned to / is displaying. 
     `data_storage_type`: the type of data stored.
     `transient_arena`: the transient arena to allocate the function capture onto.
-    `game_entity_idx`: the index of the game entity that is associated with the data; otherwise 0 if not.
+    `entity_idx`: the index of the entity whom the data_storage is attached to; otherwise 0 if not an entity data_storage.
 */
 
-#define GFX_CLAY_INPUT_TEXT_BOX(_clay_string_button_sid, _clay_string_button_label, _horizontal_percent_size, _vertical_percent_size, _editor_state, _data_storage, _data_storage_type, _transient_arena, _game_entity_idx) do{ \
-Clay_ElementId GFX_CLAY_INPUT_TEXT_BOX_clay_element_id = CLAY_SIDI(_clay_string_button_sid, editor_gfx_clay_element_id++);                                                                                                             \
+#define GFX_CLAY_INPUT_TEXT_BOX(_clay_string_button_sid, _clay_string_button_label, _horizontal_percent_size, _vertical_percent_size, _editor_state, _data_storage, _data_storage_type, _transient_arena, _entity_idx) do{      \
+Clay_ElementId GFX_CLAY_INPUT_TEXT_BOX_clay_element_id = CLAY_SIDI(_clay_string_button_sid, editor_gfx_clay_element_id++);                                                                                                      \
 CLAY(                                                                                                                                                                                                                           \
     GFX_CLAY_INPUT_TEXT_BOX_clay_element_id,                                                                                                                                                                                    \
     {                                                                                                                                                                                                                           \
@@ -273,7 +249,7 @@ CLAY(                                                                           
             .data_storage_type = _data_storage_type,                                                                                                                                                                            \
             .data_storage = _data_storage,                                                                                                                                                                                      \
             .clay_element_id = GFX_CLAY_INPUT_TEXT_BOX_clay_element_id,                                                                                                                                                         \
-            .game_entity_idx = _game_entity_idx                                                                                                                                                                                 \
+            .entity_idx = _entity_idx                                                                                                                                                                                           \
         },                                                                                                                                                                                                                      \
         .editor_state = _editor_state                                                                                                                                                                                           \
     };                                                                                                                                                                                                                          \
@@ -291,10 +267,10 @@ CLAY(                                                                           
             .chars = (const char*)_editor_state->ui_input_scratch_space.chars,                                                                                                                                                  \
             .length = _editor_state->ui_input_scratch_space.count                                                                                                                                                               \
         };                                                                                                                                                                                                                      \
-        CLAY_TEXT(scratch_space_string, EDITOR_GFX_CLAY_TEXT_CONFIG);                                                                                                                                                                  \
+        CLAY_TEXT(scratch_space_string, EDITOR_GFX_CLAY_TEXT_CONFIG);                                                                                                                                                           \
     }                                                                                                                                                                                                                           \
     else{                                                                                                                                                                                                                       \
-        CLAY_TEXT(_clay_string_button_label, EDITOR_GFX_CLAY_TEXT_CONFIG);                                                                                                                                                             \
+        CLAY_TEXT(_clay_string_button_label, EDITOR_GFX_CLAY_TEXT_CONFIG);                                                                                                                                                      \
     }                                                                                                                                                                                                                           \
 }                                                                                                                                                                                                                               \
 }while(0)
@@ -305,22 +281,18 @@ CLAY(                                                                           
 ///
 
 
-void editor_entity_manager_init(Editor_EntityManager* entity_manager, MemoryArena* arena, i32 entity_amount){
-    MEMORY_ARENA_ALLOC_ARRAY(arena, entity_manager->entity, &entity_manager->entity_length, entity_amount);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, entity_manager->entity_is_valid, &entity_manager->entity_is_valid_length, entity_amount);
-    entity_manager->is_init = true;
-}
-
 void editor_state_init(Editor_State* state, MemoryArena* arena, GFX_State* gfx_state, i32 entity_amount){
     ASSERT(!state->is_init, "already init.");
     state->mouse_state = (Editor_MouseState){0};
-    MEMORY_ARENA_ALLOC_ARRAY(
-        arena, state->mouse_state.previously_selected_game_entity, &state->mouse_state.previously_selected_game_entity_length, entity_amount
-    );
     string_init(&state->ui_input_scratch_space, arena, EDITOR_MAX_STRING_LENGTH);
-    state->mouse_state.previously_selected_game_entity_count = 0;
     state->gfx_state = gfx_state;
-    editor_entity_manager_init(&state->entity_manager, arena, entity_amount);
+    clickable_area_hierarchy_init(&state->game_entity_clickable_area_hierarchy, arena, entity_amount);    
+    
+    // set all the allocated flags to true so that the 'set_clickable_areas' loop doesnt have to.
+    for(i32 i = 0; i < state->game_entity_clickable_area_hierarchy.gen_id_allocator.length; i++){
+        state->game_entity_clickable_area_hierarchy.gen_id_allocator.allocated[i] = true;
+    }
+    
     state->is_init = true;
 }
 
@@ -547,7 +519,7 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
 
     // hoist invariance.
     EntityManager* entity_manager = &game_state->entity_manager;
-
+    ClickableAreaHierarchy* clickable_area_hierarchy = &editor_state->game_entity_clickable_area_hierarchy;
 
     GFX_CLAY_SIDE_PANEL(){
 
@@ -555,79 +527,122 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
             editor_state->mouse_state.hovering_element = true;
         }
 
-        GenId entity_gid = editor_state->mouse_state.selected_game_entity.gid;
-        if(entity_gid != 0){
-            i32 idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, entity_gid);
-            if(idx){
+        ClickableArea* clickable_area;
+        if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &clickable_area)){
 
-                i32 max_chars = EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH + 1; // +1 for null terminator.
-                char* chars;
-                MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
-                Clay_String position_x_string = {.chars = (const char*)chars};
-                MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
-                Clay_String position_y_string = {.chars = (const char*)chars};
-                MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
-                Clay_String scale_x_string = {.chars = (const char*)chars};
-                MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
-                Clay_String scale_y_string = {.chars = (const char*)chars};
-                MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
-                Clay_String sine_string = {.chars = (const char*)chars};
-                MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
-                Clay_String cosine_string = {.chars = (const char*)chars};
+            Entity* entity = (Entity*)clickable_area->user_data;
 
-                BOUNDS_CHECK(idx, entity_manager->entity_length);
-                Entity* entity = &entity_manager->entity[idx];
+            i32 max_chars = EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH + 1; // +1 for null terminator.
+            char* chars;
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
+            Clay_String position_x_string = {.chars = (const char*)chars};
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
+            Clay_String position_y_string = {.chars = (const char*)chars};
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
+            Clay_String scale_x_string = {.chars = (const char*)chars};
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
+            Clay_String scale_y_string = {.chars = (const char*)chars};
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
+            Clay_String sine_string = {.chars = (const char*)chars};
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
+            Clay_String cosine_string = {.chars = (const char*)chars};
 
-                // position-x.
-                position_x_string.length = snprintf((char*)position_x_string.chars, max_chars, "%f", entity->local_transform.position.x);
-                ASSERT(position_x_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Position X"), position_x_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.position.x), Editor_ButtonDataStorageType_F32, transient, idx);
-                
-                // position-y.
-                position_y_string.length = snprintf((char*)position_y_string.chars, max_chars, "%f", entity->local_transform.position.y);
-                ASSERT(position_y_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Position Y"), position_y_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.position.y), Editor_ButtonDataStorageType_F32, transient, idx);
-                
-                // scale-x.
-                scale_x_string.length = snprintf((char*)scale_x_string.chars, max_chars, "%f", entity->local_transform.scale.x);
-                ASSERT(scale_x_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Scale X"), scale_x_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.scale.x), Editor_ButtonDataStorageType_F32, transient, idx);
+            f32 horizontal_percent_size = 0.75f;
+            f32 vertical_percent_size = 0.05f;
+            
+            i32 entity_idx = clickable_area_hierarchy->selected_idx;
 
-                // scale-y.
-                scale_y_string.length = snprintf((char*)scale_y_string.chars, max_chars, "%f", entity->local_transform.scale.y);
-                ASSERT(scale_y_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Scale Y"), scale_y_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.scale.y), Editor_ButtonDataStorageType_F32, transient, idx);
-                
-                // sine.
-                sine_string.length = snprintf((char*)sine_string.chars, max_chars, "%f", entity->local_transform.sine);
-                ASSERT(sine_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Rotation"), sine_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.sine), Editor_ButtonDataStorageType_F32, transient, idx);
+            // position-x.
+            position_x_string.length = snprintf((char*)position_x_string.chars, max_chars, "%f", entity->local_transform.position.x);
+            ASSERT(position_x_string.length > 0, "failed to encode float.");
+            GFX_CLAY_INPUT_TEXT_BOX(
+                CLAY_STRING("Entity Position X"), 
+                position_x_string, 
+                horizontal_percent_size, 
+                vertical_percent_size, 
+                editor_state, 
+                (void*)(&entity->local_transform.position.x), 
+                Editor_ButtonDataStorageType_F32, 
+                transient, 
+                entity_idx
+            );
+            
+            // position-y.
+            position_y_string.length = snprintf((char*)position_y_string.chars, max_chars, "%f", entity->local_transform.position.y);
+            ASSERT(position_y_string.length > 0, "failed to encode float.");
+            GFX_CLAY_INPUT_TEXT_BOX(
+                CLAY_STRING("Entity Position Y"), 
+                position_y_string, 
+                horizontal_percent_size, 
+                vertical_percent_size, 
+                editor_state, 
+                (void*)(&entity->local_transform.position.y), 
+                Editor_ButtonDataStorageType_F32, 
+                transient, 
+                entity_idx
+            );
+            
+            // scale-x.
+            scale_x_string.length = snprintf((char*)scale_x_string.chars, max_chars, "%f", entity->local_transform.scale.x);
+            ASSERT(scale_x_string.length > 0, "failed to encode float.");
+            GFX_CLAY_INPUT_TEXT_BOX(
+                CLAY_STRING("Entity Scale X"), 
+                scale_x_string, 
+                horizontal_percent_size, 
+                vertical_percent_size,
+                editor_state, 
+                (void*)(&entity->local_transform.scale.x), 
+                Editor_ButtonDataStorageType_F32, 
+                transient,
+                entity_idx
+            );
 
-                // cosine.
-                cosine_string.length = snprintf((char*)cosine_string.chars, max_chars, "%f", entity->local_transform.cosine);
-                ASSERT(cosine_string.length > 0, "failed to encode float.");
-                GFX_CLAY_INPUT_TEXT_BOX(CLAY_STRING("Entity Rotation"), cosine_string, 0.75f, 0.05f, editor_state, (void*)(&entity->local_transform.cosine), Editor_ButtonDataStorageType_F32, transient, idx);
-            }
+            // scale-y.
+            scale_y_string.length = snprintf((char*)scale_y_string.chars, max_chars, "%f", entity->local_transform.scale.y);
+            ASSERT(scale_y_string.length > 0, "failed to encode float.");
+            GFX_CLAY_INPUT_TEXT_BOX(
+                CLAY_STRING("Entity Scale Y"), 
+                scale_y_string, 
+                horizontal_percent_size, 
+                vertical_percent_size,
+                editor_state, 
+                (void*)(&entity->local_transform.scale.y), 
+                Editor_ButtonDataStorageType_F32, 
+                transient, 
+                entity_idx
+            );
+            
+            // sine.
+            sine_string.length = snprintf((char*)sine_string.chars, max_chars, "%f", entity->local_transform.sine);
+            ASSERT(sine_string.length > 0, "failed to encode float.");
+            GFX_CLAY_INPUT_TEXT_BOX(
+                CLAY_STRING("Entity Rotation"), 
+                sine_string, 
+                horizontal_percent_size,
+                vertical_percent_size,
+                editor_state, 
+                (void*)(&entity->local_transform.sine), 
+                Editor_ButtonDataStorageType_F32, 
+                transient, 
+                entity_idx
+            );
+
+            // cosine.
+            cosine_string.length = snprintf((char*)cosine_string.chars, max_chars, "%f", entity->local_transform.cosine);
+            ASSERT(cosine_string.length > 0, "failed to encode float.");
+            GFX_CLAY_INPUT_TEXT_BOX(
+                CLAY_STRING("Entity Rotation"), 
+                cosine_string, 
+                horizontal_percent_size, 
+                vertical_percent_size, 
+                editor_state, 
+                (void*)(&entity->local_transform.cosine), 
+                Editor_ButtonDataStorageType_F32, 
+                transient, 
+                entity_idx
+            );
         }
     }
-}
-
-
-///
-/// functions: Editor_MouseState
-///
-
-
-bool editor_selected_game_entity_equals(Editor_SelectedGameEntity a, Editor_SelectedGameEntity b){
-    return a.gid == b.gid && a.depth_layer == b.depth_layer;
-}
-
-bool editor_mouse_state_has_selected_game_entity(Editor_MouseState* mouse_state){
-    return !editor_selected_game_entity_equals(mouse_state->selected_game_entity, (Editor_SelectedGameEntity){0});
-}
-
-void editor_mouse_state_set_selected_game_entity(Editor_MouseState* mouse_state, Editor_SelectedGameEntity entity){
-    mouse_state->selected_game_entity = entity;
 }
 
 
@@ -639,16 +654,14 @@ void editor_mouse_state_set_selected_game_entity(Editor_MouseState* mouse_state,
 void editor_state_update(Editor_State* editor_state, GameState* game_state, MemoryArena* transient, f32 delta_time){
 
     // hoisting invariance.
-    Editor_EntityManager*   editor_entity_manager = &editor_state->entity_manager;
     Editor_MouseState*      editor_mouse_state = &editor_state->mouse_state;
     GFX_State*              editor_gfx_state = editor_state->gfx_state;
-
     EntityManager*          game_entity_manager = &game_state->entity_manager;
     GFX_State*              game_gfx_state = game_entity_manager->gfx_state;
+    ClickableAreaHierarchy* clickable_area_hierarchy = &editor_state->game_entity_clickable_area_hierarchy;
 
     // retrieve necessary data.
     Vector2 mouse_world_position = gfx_get_mouse_world_position(game_gfx_state);
-
 
     /*
         clear from pervious run.
@@ -682,57 +695,74 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
         gfx_clay_end_layout(editor_gfx_state, delta_time, SPRITE_LAYER_GAME_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
     }
 
-    { // retrieve_entity_immeidate_mode_data();
+    { // set_clickable_area_hierarchy_areas();
 
-        // clear previous tick's stale data.
-        ZERO_MEMORY(editor_entity_manager->entity_is_valid, sizeof(bool) * editor_entity_manager->entity_is_valid_length);
-
-        for(i32 idx = 0; idx < game_entity_manager->entity_length; idx++){
-            if(!entity_manager_is_entity_allocated_unsafe(*game_entity_manager, idx)){
-                continue;
-            }
-            BOUNDS_CHECK(idx, editor_entity_manager->entity_length);
-            editor_state->entity_manager.entity_is_valid[idx] = true;
-            Editor_EntityImmediateModeData* editor_entity = &editor_entity_manager->entity[idx];
-            Entity* game_entity = &game_entity_manager->entity[idx];
-
-            { // get_clickable_area();
-
-                editor_entity->clickable_area = (Editor_EntityClickableArea){0};
+        for(i32 idx = 1; idx < game_entity_manager->entity_length; idx++){
+            u64 depth_layer = 0;
+            PolygonRectangle rectangle = {0};
+            void* user_data = NULL;
+            
+            // get_clickable_area();
+            if(entity_manager_is_entity_allocated_unsafe(*game_entity_manager, idx)){
+            
                 Transform2D preferred_transform = {0};
+                
+                Entity* entity = &game_entity_manager->entity[idx];
+
                 // note that we infer this is a sprite; no need to check 'is_sprite' flag or 'sprite_gid'.
-                if(gfx_sprite_get_transform(*game_gfx_state, game_entity->sprite_gid, &preferred_transform)){
+                if(gfx_sprite_get_transform(*game_gfx_state, entity->sprite_gid, &preferred_transform)){
 
                     GFX_SpriteOrigin sprite_origin;
 
                     // falback to entity transform if we failed to get the sprite origin.
-                    if(!gfx_sprite_get_sprite_origin(*game_gfx_state, game_entity->sprite_gid, &sprite_origin)){
-                        preferred_transform = game_entity->global_transform;
-                        editor_entity->clickable_area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+                    if(!gfx_sprite_get_sprite_origin(*game_gfx_state, entity->sprite_gid, &sprite_origin)){
+                        preferred_transform = entity->global_transform;
+                        rectangle = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
                     }
 
                     switch(sprite_origin){
                         default:
                             ASSERT(false, "unknown sprite origin");
                         case GFX_SpriteOrigin_Center:{
-                            editor_entity->clickable_area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+                            rectangle = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
                         }break;
                         case GFX_SpriteOrigin_TopLeft:{
-                            editor_entity->clickable_area.shape = transform2d_to_polygon_rectangle_top_left_origin(preferred_transform);
+                            rectangle = transform2d_to_polygon_rectangle_top_left_origin(preferred_transform);
                         }break;
                     }
-                    gfx_sprite_get_depth_layer(game_gfx_state, game_entity->sprite_gid, &editor_entity->clickable_area.depth_layer);
+                    gfx_sprite_get_depth_layer(game_gfx_state, entity->sprite_gid, &depth_layer);
                 }
 
                 // is not a sprite.
                 else{
-                    preferred_transform = game_entity->global_transform;
-                    editor_entity->clickable_area.shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+                    preferred_transform = entity->global_transform;
+                    rectangle = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
                 }
+            }
+        
+            { // set_clickable_area();
+            
+                clickable_area_hierarchy_set_clickable_area_user_data_unsafe(
+                    clickable_area_hierarchy,
+                    idx,
+                    user_data
+                );
+                
+                clickable_area_hierarchy_set_clickable_area_rectangle_shape_unsafe(
+                    clickable_area_hierarchy,
+                    idx,
+                    rectangle.x,
+                    rectangle.y
+                );
+            
+                clickable_area_hierarchy_set_clickable_area_depth_layer_unsafe(
+                    clickable_area_hierarchy,
+                    idx,
+                    depth_layer
+                );
             }
         }
     }
-
 
     { // input_handling();
 
@@ -769,13 +799,13 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                         }break;
                     }
                     
-                    if(editor_mouse_state->selected_editor_ui_entity.game_entity_idx){
+                    if(editor_mouse_state->selected_editor_ui_entity.entity_idx){
                     
                         // refresh the local transform because it might have been updated.
-                        i32 game_entity_idx = editor_mouse_state->selected_editor_ui_entity.game_entity_idx;
-                        BOUNDS_CHECK(game_entity_idx, game_entity_manager->entity_length);
-                        Transform2D local_transform = game_entity_manager->entity[game_entity_idx].local_transform;
-                        entity_set_local_transform_unsafe(game_entity_manager, game_entity_idx, local_transform);
+                        i32 entity_idx = editor_mouse_state->selected_editor_ui_entity.entity_idx;
+                        BOUNDS_CHECK(entity_idx, game_entity_manager->entity_length);
+                        Transform2D local_transform = game_entity_manager->entity[entity_idx].local_transform;
+                        entity_set_local_transform_unsafe(game_entity_manager, entity_idx, local_transform);
                     }
                 }
 
@@ -798,7 +828,8 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 editor_mouse_state->current_behaviour = Editor_MouseStateBehaviour_Rotate;
             }
             if(input_is_key_just_pressed(Key_D)){
-                entity_manager_dealloc_entity(game_entity_manager, editor_mouse_state->selected_game_entity.gid);                 
+                entity_manager_dealloc_entity(game_entity_manager, editor_state->slected_game_entity_gid);
+                editor_state->slected_game_entity_gid = 0;
             }
             
             if(!editor_state->mouse_state.hovering_element){
@@ -814,107 +845,24 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
 
                 switch(editor_mouse_state->current_behaviour){
                     case Editor_MouseStateBehaviour_Navigate:{
-            
-                        { // entity_selecting();
-        
-                            if(input_is_mouse_button_just_pressed(MouseButton_Left)){
-        
-                                /*
-                                    this is here in the very astronomically low case that  entities are deallocated enough times
-                                    and reallocated, stacking ontop of eachother (whilst clicking them); which could cause a buffer overflow.
-                                    DO NOT REMOVE THIS!!!
-                                */
-                                if(editor_mouse_state->previously_selected_game_entity_count == editor_mouse_state->previously_selected_game_entity_length){
-                                    editor_mouse_state->previously_selected_game_entity_count = 0;
-                                }
-        
-                                if(editor_mouse_state->selected_game_entity.gid != 0){
-                                    ARRAY_PUSH(
-                                        editor_mouse_state->previously_selected_game_entity,
-                                        editor_mouse_state->previously_selected_game_entity_length,
-                                        &editor_mouse_state->previously_selected_game_entity_count,
-                                        editor_mouse_state->selected_game_entity
-                                    );
-                                }
-                                editor_mouse_state->first_hit_game_entity           = (Editor_SelectedGameEntity){.gid = GENID_MAX, .depth_layer = U64_MAX};
-                                editor_mouse_state->selected_game_entity            = (Editor_SelectedGameEntity){0};
-                            }
-        
-                            // only attempt selction of a game entity if the mouse isnt on a editor
-                            // ui widget, the left button has just been pressed, and we havent already selected an entity.
-                            if(
-                                !editor_state->mouse_state.hovering_element &&
-                                input_is_mouse_button_just_pressed(MouseButton_Left) &&
-                                !editor_mouse_state_has_selected_game_entity(editor_mouse_state)
-                            ){
-        
-                                for(i32 idx = 0; idx < editor_entity_manager->entity_length; idx++){
-        
-                                    if(!editor_entity_manager->entity_is_valid[idx]){
-                                        continue;
-                                    }
-        
-                                    Editor_EntityImmediateModeData* entity = &editor_entity_manager->entity[idx];
-        
-                                    Vector2 normal;
-                                    f32 depth;
-                                    bool overlaps = polygon_overlaps_point_scalar(
-                                        entity->clickable_area.shape.x, entity->clickable_area.shape.y,
-                                        EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH,
-                                        mouse_world_position.x, mouse_world_position.y,
-                                        &normal.x, &normal.y, &depth
-                                    );
-        
-                                    if(!overlaps){
-                                        continue;
-                                    }
-        
-                                    // get the game entity vertically associated with this editor entity.
-                                    BOUNDS_CHECK(idx, game_entity_manager->gen_id_allocator.length);
-                                    GenId current_gid = game_entity_manager->gen_id_allocator.gen_ids[idx];
-        
-                                    if(entity->clickable_area.depth_layer <= editor_mouse_state->first_hit_game_entity.depth_layer){
-                                        Editor_SelectedGameEntity first_hit_game_entity = {.gid = current_gid, .depth_layer = entity->clickable_area.depth_layer};
-                                        editor_mouse_state->first_hit_game_entity = first_hit_game_entity;
-                                    }
-        
-                                    // loop through all of the previously selected entities
-                                    // and skip this one if it was previously selected.
-                                    bool is_previously_selected = false;
-                                    for(i32 j = 0; j < editor_mouse_state->previously_selected_game_entity_count; j++){
-                                        if(current_gid == editor_mouse_state->previously_selected_game_entity[j].gid){
-                                            is_previously_selected = true;
-                                            break;
-                                        }
-                                    }
-                                    if(is_previously_selected){
-                                        continue;
-                                    }
-        
-                                    if(entity->clickable_area.depth_layer >= editor_mouse_state->selected_game_entity.depth_layer){
-                                        Editor_SelectedGameEntity selected_game_entity = {.gid = current_gid, .depth_layer = entity->clickable_area.depth_layer};
-                                        editor_mouse_state_set_selected_game_entity(editor_mouse_state, selected_game_entity);
-                                    }
-                                }
-        
-                                // if the mouse didnt find anything to select.
-                                if(!editor_mouse_state_has_selected_game_entity(editor_mouse_state)){
-        
-                                    // if the mouse did click on something.
-                                    if(!editor_selected_game_entity_equals(editor_mouse_state->first_hit_game_entity, (Editor_SelectedGameEntity){.gid = GENID_MAX, .depth_layer = U64_MAX})){
-                                        // go to the top of the stack.
-                                        editor_mouse_state_set_selected_game_entity(editor_mouse_state, editor_mouse_state->first_hit_game_entity);
-                                    }
-                                    // if the mouse didn't click on anything, clear the stack entirely.
-                                    editor_mouse_state->previously_selected_game_entity_count = 0;
-                                }
+
+                        // select_entity();  
+                        if(input_is_mouse_button_just_pressed(MouseButton_Left)){
+                            clickable_area_hierarchy_update(
+                                clickable_area_hierarchy,
+                                mouse_world_position
+                            );
+                            
+                            i32 selected_entity_idx = clickable_area_hierarchy->selected_idx;
+                            if(clickable_area_hierarchy->selected_idx){
+                                BOUNDS_CHECK(selected_entity_idx, game_entity_manager->gen_id_allocator.length);
+                                editor_state->slected_game_entity_gid = game_entity_manager->gen_id_allocator.gen_ids[selected_entity_idx];
                             }
                         }
         
-        
                         // handle entity spawning if we are not moving a selected entity around.
                         if(
-                            !editor_mouse_state_has_selected_game_entity(editor_mouse_state) &&
+                            !clickable_area_hierarchy->selected_idx &&
                             input_is_mouse_button_just_pressed(MouseButton_Left)
                         ){
         
@@ -940,23 +888,28 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                     case Editor_MouseStateBehaviour_Move:{
                         
                         Entity* game_entity;
-                        if(!entity_manager_get_entity(*game_entity_manager, editor_mouse_state->selected_game_entity.gid, &game_entity)){
+                        if(!entity_manager_get_entity(*game_entity_manager, editor_state->slected_game_entity_gid, &game_entity)){
                             // failed to retrieve selected entity data.
                             break;
                         }
     
-                        i32 entity_idx = gen_id_get_index(editor_mouse_state->selected_game_entity.gid);
-                        BOUNDS_CHECK(entity_idx, editor_entity_manager->entity_length);
-                        Editor_EntityImmediateModeData* editor_entity = &editor_entity_manager->entity[entity_idx];
-        
+                        i32 entity_idx = gen_id_get_index(editor_state->slected_game_entity_gid);
+                        
+                        // this can be 0 because of deletion.
+                        if(!entity_idx){
+                            break;
+                        }
+                        
+                        ClickableArea* clickable_area;
+                        clickable_area_hierarchy_get_clickable_area_unsafe(clickable_area_hierarchy, entity_idx, &clickable_area);
+                                                        
                         // check if we have just clicked the entity.
                         if(input_is_mouse_button_just_pressed(MouseButton_Left)){
                             Vector2 normal;
                             f32 depth;
                             bool overlaps = 
                                 polygon_overlaps_point_scalar(
-                                    editor_entity->clickable_area.shape.x, editor_entity->clickable_area.shape.y,
-                                    EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH,
+                                    clickable_area->rectangle.x, clickable_area->rectangle.y, 4,
                                     mouse_world_position.x, mouse_world_position.y,
                                     &normal.x, &normal.y, &depth
                                 );
@@ -986,13 +939,14 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                         }
                     }break;
                     case Editor_MouseStateBehaviour_Rotate:{
+                        GenId game_entity_gid = editor_state->slected_game_entity_gid;
                         Entity* game_entity;
-                        if(!entity_manager_get_entity(*game_entity_manager, editor_mouse_state->selected_game_entity.gid, &game_entity)){
+                        if(!entity_manager_get_entity(*game_entity_manager, game_entity_gid, &game_entity)){
                             // failed to retrieve selected entity.
                             break;
                         }
                         
-                        i32 entity_idx = gen_id_get_index(editor_mouse_state->selected_game_entity.gid);
+                        i32 entity_idx = gen_id_get_index(game_entity_gid);
                         
                         Vector2 diff = vector2_sub(game_entity->global_transform.position, mouse_world_position);
                         
@@ -1025,18 +979,16 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
     // debug_gizmos();
     {
         i32 selected_game_entity_idx = -1;
-        if(editor_mouse_state_has_selected_game_entity(editor_mouse_state)){
-            selected_game_entity_idx = gen_id_get_index(editor_mouse_state->selected_game_entity.gid);
+        if(editor_state->slected_game_entity_gid){
+            selected_game_entity_idx = gen_id_get_index(editor_state->slected_game_entity_gid);
         }
     
-        for(i32 i = 0; i < editor_entity_manager->entity_length; i++){
-            BOUNDS_CHECK(i, editor_entity_manager->entity_is_valid_length);
-            if(!editor_entity_manager->entity_is_valid[i]){
+        for(i32 i = 1; i < game_entity_manager->entity_length; i++){
+                        
+            if(!entity_manager_is_entity_allocated_unsafe(*game_entity_manager, i)){
                 continue;
             }
-            
-            Editor_EntityImmediateModeData* editor_entity = &editor_entity_manager->entity[i];
-            BOUNDS_CHECK(i, game_entity_manager->entity_length);
+                        
             Entity* game_entity = &game_entity_manager->entity[i];
                         
             if(selected_game_entity_idx == i){
@@ -1052,20 +1004,21 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                     }
                 }
             }
-            
+                
+            ClickableArea* clickable_area;
+            clickable_area_hierarchy_get_clickable_area_unsafe(clickable_area_hierarchy, i, &clickable_area);
             // draw the clickable area.
             i32 sprite_depth = 100;
             gfx_draw_wire_poly(
                 editor_gfx_state,
-                editor_entity->clickable_area.shape.x,
-                editor_entity->clickable_area.shape.y,
+                clickable_area->rectangle.x,
+                clickable_area->rectangle.y,
                 EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH,
                 selected_game_entity_idx == i ? EDITOR_ENTTY_CLICKABLE_AREA_ACTIVE_COLOUR : EDITOR_ENTTY_CLICKABLE_AREA_PASSIVE_COLOUR,
                 SPRITE_LAYER_EDITOR_WORLD,
                 sprite_depth,
                 SPRITE_MATERIAL_DEBUG
             );
-        
         }
     }
 

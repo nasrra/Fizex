@@ -2152,16 +2152,17 @@ void generic_entity_update(Entity* entity, EntityManager* entity_manager){
             depth_layer
         );
         
-        gfx_draw_wire_poly(
-            gfx_state, 
-            clickable_area_shape.x,
-            clickable_area_shape.y,
-            4, 
-            GFX_COLOUR_RED, 
-            SPRITE_LAYER_EDITOR_WORLD, 
-            0, 
-            SPRITE_MATERIAL_DEBUG
-        );
+        // draw_clickable_wireframe();
+        // gfx_draw_wire_poly(
+        //     gfx_state, 
+        //     clickable_area_shape.x,
+        //     clickable_area_shape.y,
+        //     4, 
+        //     GFX_COLOUR_RED, 
+        //     SPRITE_LAYER_EDITOR_WORLD, 
+        //     0, 
+        //     SPRITE_MATERIAL_DEBUG
+        // );
 
         clickable_area_hierarchy_set_clickable_area_rectangle_shape(
             clickable_area_hierarchy,
@@ -2454,7 +2455,7 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
         0.0f, 
         0.0f, 
         PHYSICS_LAYER_GUIDELINE,
-        PHYSICS_LAYER_ALL,
+        PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID,
         false
     );
     
@@ -2769,7 +2770,6 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
     BoardState* board_state = &game_state->board_state;
     
     if(!in_editor_mode){
-        
 
         Entity* clicked_entity = NULL;
         ClickableArea* area;
@@ -2779,12 +2779,12 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                 clickable_area_hierarchy,
                 mouse_world_position
             );
-            if(clicked_entity_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
+            if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
                 mouse_state->clicked_entity_initial_position = ((Entity*)area->user_data)->global_transform.position;
             }
         }
         
-        if(clicked_entity_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
+        if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
             clicked_entity = (Entity*)area->user_data;                
         }
         
@@ -2851,13 +2851,13 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                 );
             }      
         }
-    }
-    else{    
-        fizx_body_set_active(
-            &game_state->entity_manager.fizx_state,
-            game_state->mouse_state.guideline_physics_body_gid,
-            false
-        );  
+        else{    
+            fizx_body_set_active(
+                &game_state->entity_manager.fizx_state,
+                game_state->mouse_state.guideline_physics_body_gid,
+                false
+            );  
+        }
     }
         
     // deslect_entity();
