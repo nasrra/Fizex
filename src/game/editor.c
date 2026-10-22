@@ -711,6 +711,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 Transform2D preferred_transform = {0};
                 
                 Entity* entity = &game_entity_manager->entity[idx];
+                user_data = entity;
 
                 // note that we infer this is a sprite; no need to check 'is_sprite' flag or 'sprite_gid'.
                 if(gfx_sprite_get_transform(*game_gfx_state, entity->sprite_gid, &preferred_transform)){
