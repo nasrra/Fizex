@@ -1,3 +1,5 @@
+
+
 /*
     TODO:
     - forbid the user from changing editor ui screens / alterning the clay layout
@@ -132,7 +134,7 @@ static i32 editor_gfx_clay_element_id = 0;
 #define EDITOR_MOUSE_BEHAVIOUR_SCALE_KEYBINDING Key_E
 #define EDITOR_MOUSE_BEHAVIOUR_ROTATE_KEYBINDING Key_R
 
-#define GFX_CLAY_WIDGET_COLOUR (Clay_Color){.r = 10, .g = 10, .b = 20, .a = 128}
+#define EDITOR_GFX_CLAY_WIDGET_COLOUR (Clay_Color){.r = 10, .g = 10, .b = 20, .a = 128}
 
 #define EDITOR_GFX_CLAY_TEXT_CONFIG \
 (Clay_TextElementConfig){           \
@@ -146,7 +148,7 @@ static i32 editor_gfx_clay_element_id = 0;
     }                               \
 }
 
-#define GFX_CLAY_SIDE_PANEL()                                               \
+#define EDITOR_GFX_CLAY_SIDE_PANEL()                                        \
 CLAY(CLAY_SIDI(CLAY_STRING("Side Panel"), editor_gfx_clay_element_id++), {  \
     .layout = {                                                             \
         .sizing = {                                                         \
@@ -157,10 +159,10 @@ CLAY(CLAY_SIDI(CLAY_STRING("Side Panel"), editor_gfx_clay_element_id++), {  \
         .childGap = 4,                                                      \
         .layoutDirection = CLAY_TOP_TO_BOTTOM                               \
     },                                                                      \
-    .backgroundColor = GFX_CLAY_WIDGET_COLOUR,                              \
+    .backgroundColor = EDITOR_GFX_CLAY_WIDGET_COLOUR,                       \
 })
 
-#define GFX_CLAY_ROW_BUTTON_CONTAINER(vertical_percent_size)                    \
+#define EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(vertical_percent_size)             \
 CLAY(                                                                           \
     CLAY_SIDI(CLAY_STRING("Button Container"), editor_gfx_clay_element_id++),   \
     {                                                                           \
@@ -175,32 +177,32 @@ CLAY(                                                                           
     }                                                                           \
 )
 
-#define GFX_CLAY_BUTTON_IDLE_COLOUR (Clay_Color){100.0f,100.0f,100.0f,225.0f}
-#define GFX_CLAY_BUTTON_HOVER_COLOUR (Clay_Color){155.0f,155.0f,155.0f,255.0f}
-#define GFX_CLAY_BUTTON(clay_string_name, horizontal_percent_size, vertical_percent_size, on_hover_callback, on_hover_user_data)    \
-CLAY(                                                                                                                               \
-    CLAY_SIDI(clay_string_name, editor_gfx_clay_element_id++),                                                                      \
-    {                                                                                                                               \
-        .backgroundColor = Clay_Hovered() ? GFX_CLAY_BUTTON_HOVER_COLOUR : GFX_CLAY_BUTTON_IDLE_COLOUR,                             \
-        .layout = {                                                                                                                 \
-            .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },                                                         \
-            .sizing = {                                                                                                             \
-                CLAY_SIZING_PERCENT(horizontal_percent_size),                                                                       \
-                CLAY_SIZING_PERCENT(vertical_percent_size)                                                                          \
-            },                                                                                                                      \
-        }                                                                                                                           \
-    }                                                                                                                               \
-) {                                                                                                                                 \
-    Clay_OnHover(on_hover_callback, on_hover_user_data);                                                                            \
-    CLAY_TEXT(clay_string_name, EDITOR_GFX_CLAY_TEXT_CONFIG);                                                                       \
+#define EDITOR_GFX_CLAY_BUTTON_IDLE_COLOUR (Clay_Color){100.0f,100.0f,100.0f,225.0f}
+#define EDITOR_GFX_CLAY_BUTTON_HOVER_COLOUR (Clay_Color){155.0f,155.0f,155.0f,255.0f}
+#define EDITOR_GFX_CLAY_BUTTON(clay_string_name, horizontal_percent_size, vertical_percent_size, on_hover_callback, on_hover_user_data)     \
+CLAY(                                                                                                                                       \
+    CLAY_SIDI(clay_string_name, editor_gfx_clay_element_id++),                                                                              \
+    {                                                                                                                                       \
+        .backgroundColor = Clay_Hovered() ? EDITOR_GFX_CLAY_BUTTON_HOVER_COLOUR : EDITOR_GFX_CLAY_BUTTON_IDLE_COLOUR,                       \
+        .layout = {                                                                                                                         \
+            .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },                                                                 \
+            .sizing = {                                                                                                                     \
+                CLAY_SIZING_PERCENT(horizontal_percent_size),                                                                               \
+                CLAY_SIZING_PERCENT(vertical_percent_size)                                                                                  \
+            },                                                                                                                              \
+        }                                                                                                                                   \
+    }                                                                                                                                       \
+) {                                                                                                                                         \
+    Clay_OnHover(on_hover_callback, on_hover_user_data);                                                                                    \
+    CLAY_TEXT(clay_string_name, EDITOR_GFX_CLAY_TEXT_CONFIG);                                                                               \
 }
 
-#define GFX_CLAY_SPAWN_ENTITY_BUTTON(_clay_string_name, _horizontal_percent_size, _vertical_percent_size, _transient_arena, _editor_state, _entity_type_id)do{      \
-    Editor_SpawnEntityButtonOnHoverContext GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx = {.editor_state = _editor_state, .entity_type_id = _entity_type_id};                   \
-    void* GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx_ptr;                                                                                                                     \
-    MEMORY_ARENA_PUSH_STRUCT(_transient_arena, GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx, GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx_ptr);                                             \
-    GFX_CLAY_BUTTON(_clay_string_name, _horizontal_percent_size, _vertical_percent_size, editor_spawn_entity_button_on_hover, GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx_ptr);\
-}while(0)                                                                                                                                                           \
+#define GFX_CLAY_SPAWN_ENTITY_BUTTON(_clay_string_name, _horizontal_percent_size, _vertical_percent_size, _transient_arena, _editor_state, _entity_type_id)do{              \
+    Editor_SpawnEntityButtonOnHoverContext GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx = {.editor_state = _editor_state, .entity_type_id = _entity_type_id};                           \
+    void* GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx_ptr;                                                                                                                             \
+    MEMORY_ARENA_PUSH_STRUCT(_transient_arena, GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx, GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx_ptr);                                                     \
+    EDITOR_GFX_CLAY_BUTTON(_clay_string_name, _horizontal_percent_size, _vertical_percent_size, editor_spawn_entity_button_on_hover, GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx_ptr); \
+}while(0)                                                                                                                                                                   \
 
 /*
     `typed example`
@@ -233,7 +235,7 @@ Clay_ElementId GFX_CLAY_INPUT_TEXT_BOX_clay_element_id = CLAY_SIDI(_clay_string_
 CLAY(                                                                                                                                                                                                                           \
     GFX_CLAY_INPUT_TEXT_BOX_clay_element_id,                                                                                                                                                                                    \
     {                                                                                                                                                                                                                           \
-        .backgroundColor = Clay_Hovered() ? GFX_CLAY_BUTTON_HOVER_COLOUR : GFX_CLAY_BUTTON_IDLE_COLOUR,                                                                                                                         \
+        .backgroundColor = Clay_Hovered() ? EDITOR_GFX_CLAY_BUTTON_HOVER_COLOUR : EDITOR_GFX_CLAY_BUTTON_IDLE_COLOUR,                                                                                                           \
         .layout = {                                                                                                                                                                                                             \
             .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },                                                                                                                                                     \
             .sizing = {                                                                                                                                                                                                         \
@@ -450,7 +452,7 @@ void gfx_clay_entity_spawner_layout(Editor_State* editor_state, GameState* game_
 
     // hoisting invariance.
     EntityManager* entity_manager = &game_state->entity_manager;
-    GFX_CLAY_SIDE_PANEL(){
+    EDITOR_GFX_CLAY_SIDE_PANEL(){
 
         if(Clay_Hovered()){
             editor_state->mouse_state.hovering_element = true;
@@ -459,7 +461,7 @@ void gfx_clay_entity_spawner_layout(Editor_State* editor_state, GameState* game_
         f32 button_width = 0.2f;
         f32 button_height = 1.0f;
 
-        GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
             for(i32 i = 1; i < entity_manager->entity_hierarchy.root_index_count; i++){
                 i32 idx = entity_manager->entity_hierarchy.root_index[i];
                 BOUNDS_CHECK(idx, entity_manager->entity_length);
@@ -471,11 +473,11 @@ void gfx_clay_entity_spawner_layout(Editor_State* editor_state, GameState* game_
                 };
                 SelectLevelButtonOnHoverContext* ctx_ptr;
                 MEMORY_ARENA_PUSH_STRUCT(transient, ctx, ctx_ptr);
-                GFX_CLAY_BUTTON(name, button_width, button_height, editor_on_hover_select_level_button, ctx_ptr);
+                EDITOR_GFX_CLAY_BUTTON(name, button_width, button_height, editor_on_hover_select_level_button, ctx_ptr);
             }
         }
 
-        GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Wall"), button_width, button_height, transient, editor_state, EntityTypeId_Wall);
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Cue"), button_width, button_height, transient, editor_state, EntityTypeId_BallCue);
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball One"), button_width, button_height, transient, editor_state, EntityTypeId_BallOne);
@@ -483,7 +485,7 @@ void gfx_clay_entity_spawner_layout(Editor_State* editor_state, GameState* game_
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Three"), button_width, button_height, transient, editor_state, EntityTypeId_BallThree);
         }
         
-        GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Four"), button_width, button_height, transient, editor_state, EntityTypeId_BallFour);
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Five"), button_width, button_height, transient, editor_state, EntityTypeId_BallFive);
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Six"), button_width, button_height, transient, editor_state, EntityTypeId_BallSix);
@@ -491,7 +493,7 @@ void gfx_clay_entity_spawner_layout(Editor_State* editor_state, GameState* game_
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Eight"), button_width, button_height, transient, editor_state, EntityTypeId_BallEight);
         }
 
-        GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Nine"), button_width, button_height, transient, editor_state, EntityTypeId_BallNine);
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Zero"), button_width, button_height, transient, editor_state, EntityTypeId_BallZero);
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Pocket"), button_width, button_height, transient, editor_state, EntityTypeId_Pocket);
@@ -499,18 +501,18 @@ void gfx_clay_entity_spawner_layout(Editor_State* editor_state, GameState* game_
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Windmill"), button_width, button_height, transient, editor_state, EntityTypeId_WindMill);
         }
         
-        GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Thwamper"), button_width, button_height, transient, editor_state, EntityTypeId_Thwamper);
             GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("World Camera"), button_width, button_height, transient, editor_state, EntityTypeId_WorldCamera);
         }
 
-        GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
             // for some reason this only works down here?
             // the save button user data gets corrupted for some reason when above the the earlier button container?
             SaveLevelButtonOnHoverContext ctx = {.editor_state = editor_state, .game_state = game_state};
             SaveLevelButtonOnHoverContext* ctx_ptr;
             MEMORY_ARENA_PUSH_STRUCT(transient, ctx, ctx_ptr);
-            GFX_CLAY_BUTTON(CLAY_STRING("Save Level"), button_width, button_height, editor_on_hover_save_level_button, ctx_ptr);
+            EDITOR_GFX_CLAY_BUTTON(CLAY_STRING("Save Level"), button_width, button_height, editor_on_hover_save_level_button, ctx_ptr);
         }
     }
 }
@@ -521,9 +523,10 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
     EntityManager* entity_manager = &game_state->entity_manager;
     ClickableAreaHierarchy* clickable_area_hierarchy = &editor_state->game_entity_clickable_area_hierarchy;
 
-    GFX_CLAY_SIDE_PANEL(){
+    EDITOR_GFX_CLAY_SIDE_PANEL(){
 
         if(Clay_Hovered()){
+            platform_output_message("asd\n");
             editor_state->mouse_state.hovering_element = true;
         }
 
@@ -842,6 +845,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                     f32 camera_zoom_speed = 0.156f * delta_time * world_camera->camera_orthographic_size;
                     
                     { // movement();
+
                         if(input_is_mouse_button_pressed(MouseButton_Middle)){
                             Transform2D global_transform = world_camera->global_transform;
                             Vector2 movement = vector2_mul_val(gfx_get_mouse_delta_world_position(game_gfx_state), camera_move_speed);
@@ -849,12 +853,12 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                             entity_set_global_transform(game_entity_manager, game_entity_manager->world_camera_entity_gid, global_transform);
                         }
                     }
-                    
+
                     { // zoom();
-                    
+
                         world_camera->camera_orthographic_size -= input_get_mouse_scroll_wheel_delta_value() * camera_zoom_speed;
                     }
-                }                
+                }
             }
             
             if(!editor_state->mouse_state.hovering_element){

@@ -214,7 +214,7 @@ void app_main(){
             }
 
             { // app end update.
-                game_state_draw(&game_state, delta_time);
+                game_state_draw(&game_state, transient, delta_time);
                 gfx_state_draw(&gfx_state);
                 transient->stride = 0;
             }

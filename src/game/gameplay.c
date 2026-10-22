@@ -37,6 +37,12 @@ typedef enum{
     
 } BoardTurn;
 
+typedef enum{  
+    BoardStage_Playing,
+    BoardStage_Win,
+    BoardStage_Lose
+} BoardStage;
+
 typedef struct{
     GenId cue_ball_entity_gid;
     GenId* number_ball;
@@ -49,6 +55,7 @@ typedef struct{
     i32 turn_based_entity_count;
     
     BoardTurn turn;
+    BoardStage stage;
     
     String turn_text;
     String turn_text_scratch_space;
@@ -102,6 +109,9 @@ typedef struct{
     GenId guideline_physics_shape_gid;
     // the end point in world space for the guideline to draw.
     Vector2 guideline_end_point;
+
+    bool hovering_ui_element;
+
 } GameMouseState;
 
 typedef struct GameState GameState;
@@ -254,6 +264,16 @@ typedef struct GameState{
     f32 time_scale;
     bool is_init;
 } GameState;
+
+typedef struct {
+    LevelManager* level_manager;
+    DeferredLevelLoadContext deferred_level_load_ctx;
+    String file_path;
+    LevelLoadType load_type;
+    DeferredLevelLoadCallback callback;
+    char* callback_user_data;
+    i32 callback_user_data_length;
+} LoadLevelButtonOnHoverContext;
 
 typedef struct{
     GameState* game_state;
@@ -963,13 +983,18 @@ void load_board_level_callback(GameState* game_state, void* user_data){
     Transform2D transform = TRANSFORM2D_IDENTITY;;
     transform.scale = vector2_mul_val(transform.scale, 20.0f);
     
+    
+    
     // hoisting invariance.
     BoardState* board_state = &game_state->board_state;
     GenIdAllocator* gid_allocator = &game_state->entity_manager.gen_id_allocator;
-
-    board_state->turn_based_entity_count = 0;    
-    board_state->number_ball_count = 0;
-
+    
+    { // reset_board_state();
+        board_state->turn_based_entity_count = 0;    
+        board_state->number_ball_count = 0;
+        board_state->stage = BoardStage_Playing;
+    }
+    
     for(i32 i = 0; i < gid_allocator->length; i++){
     
         if(!gid_allocator->allocated[i]){
@@ -1504,14 +1529,30 @@ void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_d
         
         switch(entity->type_id){
             case EntityTypeId_BallCue:{
-                platform_output_message("you lose!");
-                level_manager_defer_reload_world_level(&ctx->game_state->level_manager, load_board_level_callback, NULL, 0);
+                ctx->game_state->board_state.stage = BoardStage_Lose;
+                // level_manager_defer_reload_world_level(&ctx->game_state->level_manager, load_board_level_callback, NULL, 0);
             }break;
             case EntityTypeId_BallEight:{
-                platform_output_message("you lose!");
+                
+                for(i32 i = 0; i < ctx->game_state->board_state.number_ball_count; i++){
+                    GenId ball_entity_gid = ctx->game_state->board_state.number_ball[i];
+                    if(source_entity_gid == ball_entity_gid){
+                        ARRAY_UNORDERED_REMOVE_AT(
+                            ctx->game_state->board_state.number_ball, 
+                            ctx->game_state->board_state.number_ball_length, 
+                            &ctx->game_state->board_state.number_ball_count, 
+                            i
+                        );
+                        break;
+                    }
+                }
+                
                 if(ctx->game_state->board_state.number_ball_count > 1){
-                    // platform_output_message("you lose!");
+                    ctx->game_state->board_state.stage = BoardStage_Lose;
                     // level_manager_defer_reload_world_level(&ctx->game_state->level_manager);
+                }
+                else{
+                    ctx->game_state->board_state.stage = BoardStage_Win;
                 }
             }break;
             case EntityTypeId_BallOne:
@@ -1533,7 +1574,7 @@ void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_d
                             i
                         );
                         break;
-                    }                    
+                    }
                 }
             }break;
         }
@@ -2630,6 +2671,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             }
 
             { // set_entity_positions_to_fizx_positions();
+            
                 for(i32 i = 0; i < entity_manager->entity_length; i++){
                     Entity* entity = &entity_manager->entity[i];
         
@@ -2790,101 +2832,106 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
     
     if(!in_editor_mode){
 
-        Entity* clicked_entity = NULL;
-        ClickableArea* area;
-        // select_entity();  
-        if(input_is_mouse_button_just_pressed(MouseButton_Left)){
-            clickable_area_hierarchy_update(
-                clickable_area_hierarchy,
-                mouse_world_position
-            );
-            if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
-                mouse_state->clicked_entity_initial_position = ((Entity*)area->user_data)->global_transform.position;
-            }
-        }
-        
-        if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
-            clicked_entity = (Entity*)area->user_data;                
-        }
-        
         if(
-            clicked_entity &&
-            board_state->turn == BoardTurn_Player
-        ){            
-            // get directions.
-            Vector2 position_diff = vector2_sub(mouse_state->clicked_entity_initial_position, mouse_world_position);
-            position_diff = vector2_clamp_to_radius(position_diff, PLAYER_MOUSE_MAX_DRAW_RADIUS);
-            f32 length = vector2_len(position_diff);
-            Vector2 launch_direction = vector2_normalise(position_diff);
-            
-            // calculate impulse to apply to clicked entity.
-            Vector2 impulse_magnitude = vector2_mul_val(position_diff, PLAYER_MOUSE_LAUNCH_FORCE);
-
-            // apply impulse when button is released.            
-            if(input_is_mouse_button_just_released(MouseButton_Left)){
-                fizx_body_clear_forces_and_velocities(fizx_state, clicked_entity->physics_body_gid);
-                fizx_body_impulse_linear_force(fizx_state, clicked_entity->physics_body_gid, impulse_magnitude);
-            }
-
-            { // draw_guideline();
-                gfx_draw_line(
-                    entity_manager->gfx_state,
-                    GFX_COLOUR_WHITE,
-                    mouse_state->clicked_entity_initial_position,
-                    mouse_state->guideline_end_point, 
-                    SPRITE_LAYER_EDITOR_WORLD, 
-                    0, 
-                    SPRITE_MATERIAL_DEBUG, 
-                    0.05f
+            !mouse_state->hovering_ui_element &&
+            board_state->stage == BoardStage_Playing
+        ){
+            Entity* clicked_entity = NULL;
+            ClickableArea* area;
+            // select_entity();  
+            if(input_is_mouse_button_just_pressed(MouseButton_Left)){
+                clickable_area_hierarchy_update(
+                    clickable_area_hierarchy,
+                    mouse_world_position
                 );
+                if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
+                    mouse_state->clicked_entity_initial_position = ((Entity*)area->user_data)->global_transform.position;
+                }
+            }
+            
+            if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
+                clicked_entity = (Entity*)area->user_data;                
+            }
+            
+            if(
+                clicked_entity &&
+                board_state->turn == BoardTurn_Player
+            ){            
+                // get directions.
+                Vector2 position_diff = vector2_sub(mouse_state->clicked_entity_initial_position, mouse_world_position);
+                position_diff = vector2_clamp_to_radius(position_diff, PLAYER_MOUSE_MAX_DRAW_RADIUS);
+                f32 length = vector2_len(position_diff);
+                Vector2 launch_direction = vector2_normalise(position_diff);
+                
+                // calculate impulse to apply to clicked entity.
+                Vector2 impulse_magnitude = vector2_mul_val(position_diff, PLAYER_MOUSE_LAUNCH_FORCE);
     
+                // apply impulse when button is released.            
+                if(input_is_mouse_button_just_released(MouseButton_Left)){
+                    fizx_body_clear_forces_and_velocities(fizx_state, clicked_entity->physics_body_gid);
+                    fizx_body_impulse_linear_force(fizx_state, clicked_entity->physics_body_gid, impulse_magnitude);
+                }
+    
+                { // draw_guideline();
+                    gfx_draw_line(
+                        entity_manager->gfx_state,
+                        GFX_COLOUR_WHITE,
+                        mouse_state->clicked_entity_initial_position,
+                        mouse_state->guideline_end_point, 
+                        SPRITE_LAYER_EDITOR_WORLD, 
+                        0, 
+                        SPRITE_MATERIAL_DEBUG, 
+                        0.05f
+                    );
+        
+                    fizx_body_set_active(
+                        &entity_manager->fizx_state,
+                        mouse_state->guideline_physics_body_gid,
+                        true
+                    );        
+                    fizx_body_set_global_position(
+                        &entity_manager->fizx_state, 
+                        mouse_state->guideline_physics_body_gid, 
+                        mouse_state->clicked_entity_initial_position
+                    );
+                    fizx_line_set_direction(
+                        &entity_manager->fizx_state, 
+                        mouse_state->guideline_physics_shape_gid, 
+                        launch_direction, 
+                        100.0f
+                    );       
+                }
+                
+                { // draw_launch_cursour();
+                    Vector2 new_position = vector2_sub(mouse_state->clicked_entity_initial_position, position_diff);
+                    Circle launch_cursour_shape = {.x = new_position.x, .y = new_position.y, .radius = 0.1f};
+                    gfx_draw_wire_circle(
+                        entity_manager->gfx_state, 
+                        launch_cursour_shape, 
+                        GFX_COLOUR_YELLOW, 
+                        SPRITE_LAYER_EDITOR_WORLD, 
+                        0, 
+                        SPRITE_MATERIAL_DEBUG
+                    );
+                }      
+            }
+            else{    
                 fizx_body_set_active(
-                    &entity_manager->fizx_state,
-                    mouse_state->guideline_physics_body_gid,
-                    true
-                );        
-                fizx_body_set_global_position(
-                    &entity_manager->fizx_state, 
-                    mouse_state->guideline_physics_body_gid, 
-                    mouse_state->clicked_entity_initial_position
-                );
-                fizx_line_set_direction(
-                    &entity_manager->fizx_state, 
-                    mouse_state->guideline_physics_shape_gid, 
-                    launch_direction, 
-                    100.0f
-                );       
+                    &game_state->entity_manager.fizx_state,
+                    game_state->mouse_state.guideline_physics_body_gid,
+                    false
+                );  
             }
-            
-            { // draw_launch_cursour();
-                Vector2 new_position = vector2_sub(mouse_state->clicked_entity_initial_position, position_diff);
-                Circle launch_cursour_shape = {.x = new_position.x, .y = new_position.y, .radius = 0.1f};
-                gfx_draw_wire_circle(
-                    entity_manager->gfx_state, 
-                    launch_cursour_shape, 
-                    GFX_COLOUR_YELLOW, 
-                    SPRITE_LAYER_EDITOR_WORLD, 
-                    0, 
-                    SPRITE_MATERIAL_DEBUG
+        
+            // deslect_entity();
+            // note: this is done after the clcked entity code so that a clicked entity
+            // can execute 'input_on_mouse_button_released' code paths. 
+            if(input_is_mouse_button_just_released(MouseButton_Left)){
+                clickable_area_hierarchy_update(
+                    clickable_area_hierarchy,
+                    mouse_world_position
                 );
-            }      
-        }
-        else{    
-            fizx_body_set_active(
-                &game_state->entity_manager.fizx_state,
-                game_state->mouse_state.guideline_physics_body_gid,
-                false
-            );  
-        }
-    
-        // deslect_entity();
-        // note: this is done after the clcked entity code so that a clicked entity
-        // can execute 'input_on_mouse_button_released' code paths. 
-        if(input_is_mouse_button_just_released(MouseButton_Left)){
-            clickable_area_hierarchy_update(
-                clickable_area_hierarchy,
-                mouse_world_position
-            );
+            }
         }
     }
         
@@ -2962,7 +3009,7 @@ CLAY(CLAY_SIDI(CLAY_STRING("Board Turn Text"), game_gfx_clay_element_id++), {   
         .layoutDirection = CLAY_TOP_TO_BOTTOM,                                  \
         .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER }          \
     },                                                                          \
-    .backgroundColor = GFX_CLAY_BG_COLOUR,                                      \
+    .backgroundColor = GFX_CLAY_BG_COLOUR                                       \
 })
 
 #define GAME_GFX_CLAY_TEXT_CONFIG   \
@@ -2977,13 +3024,111 @@ CLAY(CLAY_SIDI(CLAY_STRING("Board Turn Text"), game_gfx_clay_element_id++), {   
     }                               \
 }
 
-void game_state_draw(GameState* game_state, f32 delta_time){
 
+#define GAME_GFX_CLAY_BUTTON_IDLE_COLOUR (Clay_Color){100.0f,100.0f,100.0f,225.0f}
+#define GAME_GFX_CLAY_BUTTON_HOVER_COLOUR (Clay_Color){155.0f,155.0f,155.0f,255.0f}
+#define GAME_GFX_CLAY_BUTTON(clay_string_name, horizontal_percent_size, vertical_percent_size, on_hover_callback, on_hover_user_data)   \
+CLAY(                                                                                                                                   \
+    CLAY_SIDI(clay_string_name, game_gfx_clay_element_id++),                                                                          \
+    {                                                                                                                                   \
+        .backgroundColor = Clay_Hovered() ? GAME_GFX_CLAY_BUTTON_HOVER_COLOUR : GAME_GFX_CLAY_BUTTON_IDLE_COLOUR,                       \
+        .layout = {                                                                                                                     \
+            .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },                                                             \
+            .sizing = {                                                                                                                 \
+                CLAY_SIZING_PERCENT(horizontal_percent_size),                                                                           \
+                CLAY_SIZING_PERCENT(vertical_percent_size)                                                                              \
+            },                                                                                                                          \
+        }                                                                                                                               \
+    }                                                                                                                                   \
+) {                                                                                                                                     \
+    Clay_OnHover(on_hover_callback, on_hover_user_data);                                                                                \
+    CLAY_TEXT(clay_string_name, GAME_GFX_CLAY_TEXT_CONFIG);                                                                           \
+}
+
+void load_world_level_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    LoadLevelButtonOnHoverContext* ctx = (LoadLevelButtonOnHoverContext*)user_data;
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        level_manager_defer_load_level(ctx->level_manager, ctx->file_path, ctx->load_type, ctx->callback, ctx->callback_user_data, ctx->callback_user_data_length);
+    }    
+}
+
+/*
+    `typed example`
+    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
+        Clay_String _clay_string_name, 
+        f32 _horizontal_percent_size, 
+        f32 _vertical_percent, 
+        MemoryArena* _transient_arena,
+        LevelManager* _level_manager,
+        char* _file_path_chars,
+        i32 _file_path_length,
+        DeferredLevelLoadCallback _level_load_callback,
+        char* _level_load_callback_user_data,
+        i32 _level_load_call_back_user_data_length 
+    );
+    
+    `parameters`
+    `_clay_string_name`: the display label of the button.
+    `_horizontal_percent_size`: the horizontal percentage size of the button within the container widget.
+    `_vertical_percent_size`: the horizontal percentage size of the button within the container widget.
+    `_transient_arena`: the transient arena to allocate the function capture onto.
+    `_level_manager`: the level manager to push the generated defer load level onto.                        
+    `_file_path_chars`: the file path to the level asset to load
+    `_file_path_length`: the length of the file path to the asset to load.
+    `_level_load_callback`: the callback for when the level is loaded. 
+    `_level_load_callback_user_data`: the user_data to supply to the callback.
+    `_level_load_call_back_user_data_length`: the size of the user_data in bytes.
+*/
+#define GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(                                                                                                                                                  \
+    _clay_string_name,                                                                                                                                                                          \
+    _horizontal_percent_size,                                                                                                                                                                   \
+    _vertical_percent_size,                                                                                                                                                                     \
+    _transient_arena,                                                                                                                                                                           \
+    _level_manager,                                                                                                                                                                             \
+    _file_path_chars,                                                                                                                                                                           \
+    _file_path_length,                                                                                                                                                                          \
+    _level_load_callback,                                                                                                                                                                       \
+    _level_load_callback_user_data,                                                                                                                                                             \
+    _level_load_call_back_user_data_length                                                                                                                                                      \
+) do {                                                                                                                                                                                          \
+                                                                                                                                                                                                \
+    String GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_file_path = {0};                                                                                                                               \
+    LoadLevelButtonOnHoverContext GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx = {0};                                                                                                              \
+    string_init(&GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.file_path, _transient_arena, _file_path_length);                                                                                     \
+    string_push_chars(&GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.file_path, _file_path_chars, _file_path_length);                                                                               \
+    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.load_type = LevelLoadType_World;                                                                                                                  \
+    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.callback = _level_load_callback;                                                                                                                  \
+    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.callback_user_data = _level_load_callback_user_data;                                                                                              \
+    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.callback_user_data_length = _level_load_call_back_user_data_length;                                                                               \
+    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.level_manager = _level_manager;                                                                                                                   \
+                                                                                                                                                                                                \
+    void* GAME_GFX_CLAY_LOAD_LEVEL_BUTTON_ctx_ptr;                                                                                                                                              \
+    MEMORY_ARENA_PUSH_STRUCT(_transient_arena, GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx, GAME_GFX_CLAY_LOAD_LEVEL_BUTTON_ctx_ptr);                                                             \
+    GAME_GFX_CLAY_BUTTON(_clay_string_name, (f32)_horizontal_percent_size, (f32)_vertical_percent_size, load_world_level_button_on_hover_callback, GAME_GFX_CLAY_LOAD_LEVEL_BUTTON_ctx_ptr);    \
+                                                                                                                                                                                                \
+}while(0)
+
+void game_state_draw(GameState* game_state, MemoryArena* transient_arena, f32 delta_time){
+
+    // hoisting invariance.
     EntityManager* entity_manager = &game_state->entity_manager;
     GFX_State* gfx_state = entity_manager->gfx_state;
     FIZX_State* fizx_state = &entity_manager->fizx_state;
     FIZX_DrawInfo* fizx_draw_state = &entity_manager->fizx_draw_state;
     BoardState* board_state = &game_state->board_state;
+    GameMouseState* mouse_state = &game_state->mouse_state;
+
+
+    /*
+        clear from previous run.
+
+        NOTE:
+        you need to reset the global element_id as Clay SIDI on hover callbacks requires that
+        elements retain their ID numbers, without this, its impossible for clay to properly handle OnHover callbacks.
+    */
+    game_gfx_clay_element_id = 0;
+
+    mouse_state->hovering_ui_element = false;
 
     fizx_state_draw(*fizx_state, gfx_state, *fizx_draw_state, delta_time);
 
@@ -3014,16 +3159,63 @@ void game_state_draw(GameState* game_state, f32 delta_time){
             },                                                                
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
             .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER },
-        },                                                                    
+        },
     }){
-        if(board_state->display_turn_text){
-            GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
-                Clay_String clay_string = {
-                    .length = board_state->turn_text.count,
-                    .chars = (const char*)board_state->turn_text.chars
-                };
-                CLAY_TEXT(clay_string, GAME_GFX_CLAY_TEXT_CONFIG);
-            }
+        switch(board_state->stage){
+            default: {ASSERT(false, "undefined state");} break;
+            case BoardStage_Playing:{
+                if(board_state->display_turn_text){
+                    GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
+                        Clay_String clay_string = {
+                            .length = board_state->turn_text.count,
+                            .chars = (const char*)board_state->turn_text.chars
+                        };
+                        CLAY_TEXT(clay_string, GAME_GFX_CLAY_TEXT_CONFIG);
+                        if(Clay_Hovered()){
+                            mouse_state->hovering_ui_element = true;
+                        }
+                    }
+                }
+            }break;
+            case BoardStage_Lose:{
+                GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
+                    CLAY_TEXT(CLAY_STRING("You Lose!"), GAME_GFX_CLAY_TEXT_CONFIG);                
+                    f32 horizontal_size = 0.75f;
+                    f32 vertical_size = 0.25f;
+                    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
+                        CLAY_STRING("Retry"),
+                        horizontal_size,
+                        vertical_size,
+                        transient_arena,
+                        &game_state->level_manager,
+                        game_state->level_manager.world_root_entity_file_path.chars,
+                        game_state->level_manager.world_root_entity_file_path.count,
+                        load_board_level_callback,
+                        NULL,
+                        0
+                    );
+                }
+            }break;
+            
+            case BoardStage_Win:{
+                GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
+                    CLAY_TEXT(CLAY_STRING("You Win!"), GAME_GFX_CLAY_TEXT_CONFIG);
+                    f32 horizontal_size = 0.75f;
+                    f32 vertical_size = 0.25f;
+                    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
+                        CLAY_STRING("Play Again"),
+                        horizontal_size,
+                        vertical_size,
+                        transient_arena,
+                        &game_state->level_manager,
+                        game_state->level_manager.world_root_entity_file_path.chars,
+                        game_state->level_manager.world_root_entity_file_path.count,
+                        load_board_level_callback,
+                        NULL,
+                        0
+                    );
+                }
+            }break;
         }
     }
     
@@ -3046,6 +3238,10 @@ void game_state_draw(GameState* game_state, f32 delta_time){
             }                      
         });
         GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
+            if(Clay_Hovered()){
+                mouse_state->hovering_ui_element = true;
+            }
+        
             switch(board_state->turn){
                 case BoardTurn_Player:{
                     CLAY_TEXT(CLAY_STRING("Player Turn"), GAME_GFX_CLAY_TEXT_CONFIG);
@@ -3075,4 +3271,8 @@ void game_state_draw(GameState* game_state, f32 delta_time){
 #endif
     
     gfx_clay_end_layout(gfx_state, delta_time, SPRITE_LAYER_GAME_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
+}
+
+void shit_my_pants(){
+    platform_output_message("shit my pants!");
 }
