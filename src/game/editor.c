@@ -664,7 +664,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
     Vector2 mouse_world_position = gfx_get_mouse_world_position(game_gfx_state);
 
     /*
-        clear from pervious run.
+        clear from previous run.
 
         NOTE:
         you need to reset the global element_id as Clay SIDI on hover callbacks requires that
@@ -832,17 +832,33 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 editor_state->slected_game_entity_gid = 0;
             }
             
+            
+            { // camera_input();
+        
+                Entity* world_camera;
+                if(entity_manager_get_world_camera(*game_entity_manager, &world_camera)){
+                    
+                    f32 camera_move_speed = 1.334f * delta_time * world_camera->camera_orthographic_size;
+                    f32 camera_zoom_speed = 0.156f * delta_time * world_camera->camera_orthographic_size;
+                    
+                    { // movement();
+                        if(input_is_mouse_button_pressed(MouseButton_Middle)){
+                            Transform2D global_transform = world_camera->global_transform;
+                            Vector2 movement = vector2_mul_val(gfx_get_mouse_delta_world_position(game_gfx_state), camera_move_speed);
+                            global_transform.position = vector2_sub(global_transform.position, movement);
+                            entity_set_global_transform(game_entity_manager, game_entity_manager->world_camera_entity_gid, global_transform);
+                        }
+                    }
+                    
+                    { // zoom();
+                    
+                        world_camera->camera_orthographic_size -= input_get_mouse_scroll_wheel_delta_value() * camera_zoom_speed;
+                    }
+                }                
+            }
+            
             if(!editor_state->mouse_state.hovering_element){
             
-                if(input_is_middle_mouse_down()){
-                    f32 camera_speed = 0.334f * delta_time * game_gfx_state->world_camera.orthographic_size;
-                    Vector2I delta_mouse_position_i; 
-                    input_get_mouse_delta_position(&delta_mouse_position_i.x, &delta_mouse_position_i.y);
-                    Vector2 delta_mouse_position = vector2_mul_val(vector2i_to_vector2(delta_mouse_position_i), camera_speed);
-                    delta_mouse_position.x = -delta_mouse_position.x;
-                    game_gfx_state->world_camera.position = vector3_add(game_gfx_state->world_camera.position, vector2_to_vector3(delta_mouse_position));
-                }
-
                 switch(editor_mouse_state->current_behaviour){
                     case Editor_MouseStateBehaviour_Navigate:{
 

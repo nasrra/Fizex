@@ -200,6 +200,9 @@ typedef struct{
     GenId* clickable_area_hierarchy_user_data_scratch_space;
     i32 clickable_area_hierarchy_user_data_scratch_space_length;
     
+    GenId world_camera_entity_gid;
+    GenId ui_camera_entity_gid;
+    
     bool is_init;
 
 } EntityManager;
@@ -761,6 +764,14 @@ void entity_manager_init(
     manager->is_init = true;
 }
 
+bool entity_manager_get_world_camera(EntityManager entity_manager, Entity** out_entity){
+    return entity_manager_get_entity(entity_manager, entity_manager.world_camera_entity_gid, out_entity);    
+}
+
+bool entity_manager_get_ui_camera(EntityManager entity_manager, Entity** out_entity){
+    return entity_manager_get_entity(entity_manager, entity_manager.ui_camera_entity_gid, out_entity);    
+}
+
 
 ///
 /// functions: Entity.
@@ -819,6 +830,17 @@ void entity_set_local_transform_unsafe(EntityManager* manager, i32 entity_idx, T
     if(entity->is_physics_body){
         fizx_body_set_global_transform(&manager->fizx_state, entity->physics_body_gid, entity->global_transform);
     }
+}
+
+bool entity_set_local_transform(EntityManager* manager, GenId entity_gid, Transform2D transform){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, entity_gid); 
+    if(!idx){
+        return false;
+    }
+    
+    entity_set_local_transform_unsafe(manager, idx, transform);
+        
+    return true;
 }
 
 void entity_set_global_transform_unsafe(EntityManager* manager, i32 entity_idx, Transform2D transform){
@@ -917,14 +939,12 @@ void entity_set_global_transform_unsafe(EntityManager* manager, i32 entity_idx, 
     }
 }
 
-bool entity_set_local_transform(EntityManager* manager, GenId entity_gid, Transform2D transform){
-    i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, entity_gid); 
+bool entity_set_global_transform(EntityManager* entity_manager, GenId entity_gid, Transform2D global_transform){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, entity_gid);
     if(!idx){
         return false;
     }
-    
-    entity_set_local_transform_unsafe(manager, idx, transform);
-        
+    entity_set_global_transform_unsafe(entity_manager, idx, global_transform);
     return true;
 }
 
@@ -986,6 +1006,9 @@ void load_board_level_callback(GameState* game_state, void* user_data){
                     case EntityTypeId_BallCue:{
                         board_state->cue_ball_entity_gid = entity_gid;
                     }break;
+                    case EntityTypeId_WorldCamera:
+                        game_state->entity_manager.world_camera_entity_gid = entity_gid;
+                    break;
                 }
             }
         }
@@ -2733,11 +2756,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             fixed_update_accumulator -= FIXED_DELTA_TIME;
         }
     }
-
-    { // move camera.
-        gfx_state->world_camera.orthographic_size -= gfx_state->world_camera.orthographic_size * (f32)input_get_mouse_scroll_wheel_delta_value() * delta_time * 0.1f;
-    }
-    
+        
     { // entity_updates.
     
         for(i32 i = 0; i < game_state->entity_manager.entity_length; i++){
@@ -2877,17 +2896,23 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
         
         f32 camera_speed = 100.0f * delta_time;
     
-        if(input_is_key_pressed(Key_Up)){
-            gfx_state->screen_camera.position.y += camera_speed;
-        }
-        if(input_is_key_pressed(Key_Down)){
-            gfx_state->screen_camera.position.y -= camera_speed;
-        }
-        if(input_is_key_pressed(Key_Left)){
-            gfx_state->screen_camera.position.x -= camera_speed;
-        }
-        if(input_is_key_pressed(Key_Right)){
-            gfx_state->screen_camera.position.x += camera_speed;
+        Entity* world_camera;
+        if(entity_manager_get_world_camera(*entity_manager, &world_camera)){
+            Transform2D global_transform = world_camera->global_transform;
+            if(input_is_key_pressed(Key_Up)){
+                global_transform.position.y += camera_speed;
+            }
+            if(input_is_key_pressed(Key_Down)){
+                global_transform.position.y -= camera_speed;
+            }
+            if(input_is_key_pressed(Key_Left)){
+                global_transform.position.x -= camera_speed;
+            }
+            if(input_is_key_pressed(Key_Right)){
+                global_transform.position.x += camera_speed;
+            }
+            
+            entity_set_global_transform(entity_manager, entity_manager->world_camera_entity_gid, global_transform);   
         }
     
         /**

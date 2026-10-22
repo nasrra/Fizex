@@ -50,27 +50,18 @@ f32 input_latest_active_key_print_rate;
 // the amount of time before printing the latest active key.
 f32 input_latest_active_key_print_delay;
 
-// true if down; otherwise false.
-bool input_middle_mouse_down_state;
-
 
 ///
 /// defines
 ///
 
 
-
-
 // #define INPUT_EMPTY_CHAR ''
-
-
 
 
 ///
 /// functions.
 ///
-
-
 
 
 void input_set_key_up(Key key){
@@ -347,18 +338,6 @@ void input_init(MemoryArena* arena, f32 latest_active_key_print_delay, f32 lates
     input_is_init = true;
 }
 
-void input_set_middle_mouse_down(){
-    input_middle_mouse_down_state = true;
-}
-
-void input_set_middle_mouse_up(){
-    input_middle_mouse_down_state = false;
-}
-
-bool input_is_middle_mouse_down(){
-    return input_middle_mouse_down_state; 
-}
-
 
 ///
 /// mouse position.
@@ -410,13 +389,9 @@ f32 input_key_get_elapsed_pressed_time(Key key){
 }
 
 
-
-
 ///
 /// key to character handling.
 ///
-
-
 
 
 char input_get_latest_active_key_character(){
