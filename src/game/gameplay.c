@@ -2835,7 +2835,6 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                     launch_direction, 
                     100.0f
                 );       
-                platform_output_message("aaa\n");     
             }
             
             { // draw_launch_cursour();
@@ -2858,16 +2857,16 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                 false
             );  
         }
-    }
-        
-    // deslect_entity();
-    // note: this is done after the clcked entity code so that a clicked entity
-    // can execute 'input_on_mouse_button_released' code paths. 
-    if(input_is_mouse_button_just_released(MouseButton_Left)){
-        clickable_area_hierarchy_update(
-            clickable_area_hierarchy,
-            mouse_world_position
-        );
+    
+        // deslect_entity();
+        // note: this is done after the clcked entity code so that a clicked entity
+        // can execute 'input_on_mouse_button_released' code paths. 
+        if(input_is_mouse_button_just_released(MouseButton_Left)){
+            clickable_area_hierarchy_update(
+                clickable_area_hierarchy,
+                mouse_world_position
+            );
+        }
     }
         
     { // gfx_handling();
