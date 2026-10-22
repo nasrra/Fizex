@@ -87,9 +87,9 @@ typedef struct{
     Editor_SelectedGameEntity first_hit_game_entity;
     Editor_SelectedGameEntity selected_game_entity;
     Editor_SelectedGameEntity* previously_selected_game_entity;
-    
     i32 previously_selected_game_entity_length;
     i32 previously_selected_game_entity_count;
+    
     Editor_SelectedEditorUiEntity selected_editor_ui_entity;
     bool hovering_element;
 } Editor_MouseState;
@@ -821,7 +821,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
         
                                 /*
                                     this is here in the very astronomically low case that  entities are deallocated enough times
-                                    an reallocated, stacking ontop of eachother (whilst clicking them); which could cause a buffer overflow.
+                                    and reallocated, stacking ontop of eachother (whilst clicking them); which could cause a buffer overflow.
                                     DO NOT REMOVE THIS!!!
                                 */
                                 if(editor_mouse_state->previously_selected_game_entity_count == editor_mouse_state->previously_selected_game_entity_length){

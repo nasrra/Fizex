@@ -1,6 +1,34 @@
-/**====================
-    types
-====================**//**/
+
+
+///
+/// @ types
+///
+
+
+typedef struct{
+    // clickable area.
+    PolygonRectangle rectangle;
+    u64 depth_layer;
+    void* user_data;
+} ClickableArea;
+
+typedef struct{
+    
+    GenIdAllocator gen_id_allocator;
+    
+    ClickableArea* area;
+    i32 area_length;
+    
+    i32 first_hit_idx;
+    i32 selected_idx;
+    
+    i32* previous_idx;
+    i32 previous_idx_length;
+    i32 previous_idx_count;
+    
+    bool is_init;
+    
+} ClickableAreaHierarchy;
 
 typedef struct{
     /**
@@ -478,7 +506,7 @@ typedef struct{
 
 
 ///
-/// functions: CategorisedOverlaps.
+/// @ CategorisedOverlaps.
 ///
 
 
@@ -669,7 +697,7 @@ void categorised_overlap_get_overlaps(CategorisedOverlapArray array, i32 main_ca
 
 
 ///
-/// functions: Soa_BvhLeaf
+/// @ Soa_BvhLeaf
 ///
 
 
@@ -708,13 +736,9 @@ void soa_bvh_leaf_clear(Soa_BvhLeaf* soa){
 }
 
 
-
-
-/**====================
-    functions: Soa_BvhBranch.
-====================**//**/
-
-
+///
+/// @ Soa_BvhBranch
+///
 
 
 void soa_bvh_branch_init(Soa_BvhBranch* soa, MemoryArena* arena, i32 length){
@@ -754,13 +778,9 @@ void soa_bvh_branch_clear(Soa_BvhBranch* soa){
 }
 
 
-
-
-/**====================
-    functions: BvhCategorisedLeafOverlaps
-====================**//**/
-
-
+///
+/// @ BvhCategorisedLeafOverlaps
+///
 
 
 /**
@@ -1404,13 +1424,9 @@ void fixed_stride_array_unordered_remove_at(FixedStrideArray* array, i32 chunk_i
 }
 
 
-
-
-/**====================
-    functions: IntrusiveList
-====================**//**/
-
-
+///
+/// @ IntrusiveList
+///
 
 
 void intrusive_list_init(IntrusiveList* list, MemoryArena* arena, i32 length, bool preserve_root_order){
@@ -1908,4 +1924,181 @@ IntrusiveListNode* intrusive_list_get_node_root(IntrusiveList* list, i32 node_id
         node = &list->node[node->parent];
     }
     return node;
+}
+
+
+///
+/// @ ClickableAreaHierarchy
+///
+
+
+void clickable_area_hierarchy_init(ClickableAreaHierarchy* state, MemoryArena* arena, i32 entity_amount){
+    
+    ASSERT(!state->is_init, "already, init");
+    
+    MEMORY_ARENA_ALLOC_ARRAY(arena, state->previous_idx, &state->previous_idx_length, entity_amount);
+    
+    MEMORY_ARENA_ALLOC_ARRAY(arena, state->area, &state->area_length, entity_amount);
+        
+    gen_id_allocator_init(&state->gen_id_allocator, arena, entity_amount);
+    
+    // this is okay, as gen_id_allocator_init() asserts that entity_amount is greater than 0.
+    state->area[0].depth_layer = I32_MAX; // NIL is at the fartherest layer from the camera.
+    state->previous_idx_count = 0;
+    state->is_init = true;
+}
+
+/*
+    `remarks`:
+    - it is assumed that the leng of the `vert_x` and `vert_y` arrays are four.
+*/
+bool clickable_area_hierarchy_set_clickable_area_rectangle_shape(ClickableAreaHierarchy* hierarchy, GenId area_gid, f32* vert_x, f32* vert_y){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&hierarchy->gen_id_allocator, area_gid);
+    if(!idx){
+        return false;
+    }
+    
+    BOUNDS_CHECK(idx, hierarchy->area_length);
+    ClickableArea* area = &hierarchy->area[idx];
+    COPY_MEMORY(area->rectangle.x, vert_x, sizeof(float) * 4);
+    COPY_MEMORY(area->rectangle.y, vert_y, sizeof(float) * 4);    
+    return true;
+}
+
+bool clickable_area_hierarchy_set_clickable_area_depth_layer(ClickableAreaHierarchy* hierarchy, GenId area_gid, u64 depth_layer){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&hierarchy->gen_id_allocator, area_gid);
+    if(!idx){
+        return false;    
+    }
+    
+    BOUNDS_CHECK(idx, hierarchy->area_length);
+    ClickableArea* area = &hierarchy->area[idx];
+    area->depth_layer = depth_layer;
+    return true;
+}
+
+bool clickable_area_hierarchy_set_clickable_area_user_data(ClickableAreaHierarchy* hierarchy, GenId area_gid, void* user_data){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&hierarchy->gen_id_allocator, area_gid);
+    if(!idx){
+        return false;
+    }
+    
+    BOUNDS_CHECK(idx, hierarchy->area_length);
+    ClickableArea* area = &hierarchy->area[idx];
+    area->user_data = user_data;
+    return true;
+}
+
+GenId clickable_area_hierarchy_alloc_clickable_area(ClickableAreaHierarchy* hierarchy){
+    return gen_id_allocator_alloc(&hierarchy->gen_id_allocator);
+}
+
+void clickable_area_hierarchy_update(ClickableAreaHierarchy* hierarchy, Vector2 mouse_world_position){
+    
+
+    /*
+        this is here in the very astronomically low case that  entities are deallocated enough times
+        and reallocated, stacking ontop of eachother (whilst clicking them); which could cause a buffer overflow.
+        DO NOT REMOVE THIS!!!
+        
+        generational incrementing causes this btw, as genids are added to the stack after each click.
+    */
+    if(hierarchy->previous_idx_count == hierarchy->previous_idx_length){
+        hierarchy->previous_idx_count = 0;
+    }
+
+    if(hierarchy->selected_idx != 0){
+        ARRAY_PUSH(
+            hierarchy->previous_idx,
+            hierarchy->previous_idx_length,
+            &hierarchy->previous_idx_count,
+            hierarchy->selected_idx
+        );
+    }
+    hierarchy->first_hit_idx = 0;
+    hierarchy->selected_idx = 0;        
+    
+    // only attempt selection of a entity if the mouse isnt on a editor
+    // ui widget, the left button has just been pressed, and we havent already selected an entity.
+    if(
+        !hierarchy->selected_idx
+    ){
+
+        for(i32 idx = 1; idx < hierarchy->area_length; idx++){
+
+            if(!hierarchy->gen_id_allocator.allocated[idx]){
+                continue;
+            }
+            
+            ClickableArea* area = &hierarchy->area[idx];
+            
+            Vector2 normal;    
+            f32 depth;
+            bool overlaps = polygon_overlaps_point_scalar(
+                area->rectangle.x, area->rectangle.y,
+                4, // this will need to change: if the whole thing breaks you know why :)))
+                mouse_world_position.x, mouse_world_position.y,
+                &normal.x, &normal.y, &depth
+            );
+            
+            if(!overlaps){
+                continue;
+            }
+            
+            // get first hit.
+            BOUNDS_CHECK(hierarchy->first_hit_idx, hierarchy->area_length);
+            ClickableArea* first_hit_area = &hierarchy->area[hierarchy->first_hit_idx];
+            
+            // check if this is the first hit entity; i.e, the closest entity to the camera.
+            if(area->depth_layer <= first_hit_area->depth_layer){
+                hierarchy->first_hit_idx = idx;
+            }
+
+            // loop through all of the previously selected entities
+            // and skip this one if it was previously selected.
+            bool is_previously_selected = false;
+            
+            for(i32 j = 0; j < hierarchy->previous_idx_count; j++){
+                BOUNDS_CHECK(j, hierarchy->previous_idx_length);
+                i32 previous_idx = hierarchy->previous_idx[j];
+                if(idx == previous_idx){
+                    is_previously_selected = true;
+                    break;
+                }
+            }
+            
+            if(is_previously_selected){
+                continue;
+            }
+
+            // get selected.
+            BOUNDS_CHECK(hierarchy->selected_idx, hierarchy->area_length);
+            ClickableArea* selected_area = &hierarchy->area[hierarchy->selected_idx];
+
+            if(area->depth_layer >= selected_area->depth_layer){
+                hierarchy->selected_idx = idx;
+            }
+        }
+        
+        // if the mouse didnt find anything to select.
+        if(!hierarchy->selected_idx){
+
+            // if the mouse did click on something.
+            if(hierarchy->first_hit_idx){
+                // go to the top of the stack.
+                hierarchy->selected_idx = hierarchy->first_hit_idx;
+            }
+            // if the mouse didn't click on anything, clear the stack entirely.
+            hierarchy->previous_idx_count = 0;
+        }
+    }
+}
+
+bool clicked_entity_hierarchy_get_selected_area(ClickableAreaHierarchy* hierarchy, ClickableArea** out_area){
+    if(!hierarchy->selected_idx){
+        return false;
+    }
+    NIL_BOUNDS_CHECK(hierarchy->selected_idx, hierarchy->area_length);
+    *out_area = &hierarchy->area[hierarchy->selected_idx];
+    return true;
 }

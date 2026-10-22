@@ -204,7 +204,7 @@ void app_main(){
 
                 game_state_preupdate(&game_state, delta_time);
                 game_state_update(&game_state, persistent, transient, delta_time, in_editor_mode);
-                game_state_late_update(&game_state, delta_time);
+                game_state_late_update(&game_state, delta_time, in_editor_mode);
             }
 
             if(in_editor_mode)
