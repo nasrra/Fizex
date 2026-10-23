@@ -67,6 +67,7 @@ bool platform_read_file(String file_path, MemoryArena* arena);
 void* platform_load_file(String file_path, size_t* out_buffer_size);
 i32 platform_write_file(String file_path, void* data, size_t data_size, FileWriteType write_type);
 bool platform_delete_file(String file_path);
+bool platform_copy_file(String dst_file_path, String src_file_path, bool fail_if_exists);
 
 f32 platform_window_calc_aspect_ratio(WindowContext window_ctx);
 u128 platform_get_system_tick();

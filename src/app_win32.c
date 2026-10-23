@@ -615,6 +615,32 @@ bool platform_free_image(Image* image){
     return true;
 }
 
+bool platform_copy_file(String dst_file_path, String src_file_path, bool fail_if_exists){
+
+    /**
+        convert to null terminated string.
+    **/
+    char* null_terminated_src_file_path;
+    int32_t null_terminated_src_file_path_length;
+    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_src_file_path, &null_terminated_src_file_path_length, src_file_path.count+1);
+    COPY_MEMORY(null_terminated_src_file_path, src_file_path.chars, src_file_path.count);
+    null_terminated_src_file_path[src_file_path.count] = '\0';
+
+    char* null_terminated_dst_file_path;
+    int32_t null_terminated_dst_file_path_length;
+    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_dst_file_path, &null_terminated_dst_file_path_length, dst_file_path.count+1);
+    COPY_MEMORY(null_terminated_dst_file_path, dst_file_path.chars, dst_file_path.count);
+    null_terminated_dst_file_path[dst_file_path.count] = '\0';
+    
+    BOOL success = CopyFile(
+      null_terminated_src_file_path,
+      null_terminated_dst_file_path,
+      fail_if_exists // bFailIfExists
+    );
+    
+    return success;
+}
+
 i32 platform_get_max_file_path_length(){
     return MAX_PATH; 
 }

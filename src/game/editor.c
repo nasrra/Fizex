@@ -335,7 +335,7 @@ void editor_save_level_entity_recurssive(
     char* char_scratch_space, i32 char_scratch_space_length,
     i32 entity_idx, i32 parent_line_idx, i32 line_idx
 ){
-    
+
     // this is the root entity of the tree, and the file name
     // should be the name of the root entity. 
     if(line_idx == 0){
@@ -437,6 +437,16 @@ void editor_save_level_entity_recurssive(
             );
         }
 
+        // TODO: in relase, dont do this!
+        if(line_idx == 1){
+            char* chars = (char*)platform_alloc_memory(platform_get_max_file_path_length());
+            String dst_file_path = {.chars = chars, .length = platform_get_max_file_path_length()};
+            string_push_chars(&dst_file_path, "../", 3);
+            string_push(&dst_file_path, *file_path);
+            platform_copy_file(dst_file_path, *file_path, true);
+            platform_free_memory(chars);
+        }
+        
         // loop through branch level.
         entity_idx = node->next_sibling;
         if(entity_idx == first_idx){

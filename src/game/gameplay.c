@@ -121,6 +121,10 @@ typedef struct{
     Transform2D global_transform;
     Transform2D local_transform;
     Transform2D sprite_local_transform;
+    
+    // this is only applicable to the root entity that was loaded from a file.
+    String loaded_from_file_path;
+    
     String name;
     Aabb clickable_aabb;
     EntityTypeId type_id;
@@ -695,13 +699,17 @@ void entity_manager_dealloc_entity_data_unsafe(EntityManager* manager, i32 idx){
         gfx_sprite_dealloc(manager->gfx_state, entity->sprite_gid);
     }
     
+    
     String name = entity->name;
     string_clear(&name);
+    String loaded_from_file_path = entity->loaded_from_file_path;
+    string_clear(&loaded_from_file_path);
     
     *entity = (Entity){0};
     
     // ensure that the name tag isnt fucked with.
     entity->name = name;
+    entity->loaded_from_file_path;
 }
 
 void entity_on_entity_hierarchy_dealloc(IntrusiveList* list, i32 node_idx, void* user_data){
@@ -755,6 +763,7 @@ void entity_manager_init(
     for(i32 i = 0; i < entity_amount; i++){
         Entity* entity = &manager->entity[i];
         string_init(&entity->name, arena, ENTITY_NAME_LENGTH);
+        string_init(&entity->loaded_from_file_path, arena, platform_get_max_file_path_length());
     }
 
     gen_id_allocator_init(&manager->gen_id_allocator, arena, entity_amount);
@@ -779,7 +788,6 @@ void entity_manager_init(
             entity_amount
         );
     }
-    
     
     manager->is_init = true;
 }
