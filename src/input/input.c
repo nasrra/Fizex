@@ -415,6 +415,33 @@ char input_get_latest_active_key_character(){
         case Key_0:         return !shift ? '0' : ')';
         case Key_Period:    return !shift ? '.' : '>';
         case Key_Minus:     return !shift ? '-' : '_';
+        case Key_A:         return !shift ? 'a' : 'A';
+        case Key_B:         return !shift ? 'b' : 'B';
+        case Key_C:         return !shift ? 'c' : 'C';
+        case Key_D:         return !shift ? 'd' : 'D';
+        case Key_E:         return !shift ? 'e' : 'E';
+        case Key_F:         return !shift ? 'f' : 'F';
+        case Key_G:         return !shift ? 'g' : 'G';
+        case Key_H:         return !shift ? 'h' : 'H';
+        case Key_I:         return !shift ? 'i' : 'I';
+        case Key_J:         return !shift ? 'j' : 'J';
+        case Key_K:         return !shift ? 'k' : 'K';
+        case Key_L:         return !shift ? 'l' : 'L';
+        case Key_M:         return !shift ? 'm' : 'M';
+        case Key_N:         return !shift ? 'n' : 'N';
+        case Key_O:         return !shift ? 'o' : 'O';
+        case Key_P:         return !shift ? 'p' : 'P';
+        case Key_Q:         return !shift ? 'q' : 'Q';
+        case Key_R:         return !shift ? 'r' : 'R';
+        case Key_S:         return !shift ? 's' : 'S';
+        case Key_T:         return !shift ? 't' : 'T';
+        case Key_U:         return !shift ? 'u' : 'U';
+        case Key_V:         return !shift ? 'v' : 'V';
+        case Key_W:         return !shift ? 'w' : 'W';
+        case Key_X:         return !shift ? 'x' : 'X';
+        case Key_Y:         return !shift ? 'y' : 'Y';
+        case Key_Z:         return !shift ? 'z' : 'Z';
+        case Key_Space:     return ' ';
     }
 }
 

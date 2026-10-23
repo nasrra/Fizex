@@ -1,3 +1,5 @@
+// native and asset entity loading/saving.
+
 DONT DO THIS:
 // Ball Power Ups:
 - Fragmentation Ball: fragments the cue ball into multiple smaller balls.

@@ -73,7 +73,8 @@ typedef struct{
 
 typedef struct{
     Editor_MouseState mouse_state;
-    String ui_input_scratch_space;
+    String f32_input_text_box_scratch_space;
+    String string_input_text_box_scratch_space;
     GFX_State* gfx_state;
     ClickableAreaHierarchy game_entity_clickable_area_hierarchy;
     GenId slected_game_entity_gid;
@@ -124,6 +125,7 @@ static i32 editor_gfx_clay_element_id = 0;
 // max value of f32 is: 340,282,346,638,528,859,811,704,183,484,516,925,440
 // which is 39 characters long (excluding commans).
 #define EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH 39
+#define EDITOR_STRING_INPUT_BUTTON_MAX_STRING_LENGTH 64
 #define EDITOR_MAX_STRING_LENGTH 64
 
 #define EDITOR_ENTTY_CLICKABLE_AREA_PASSIVE_COLOUR (GFX_Colour){.r = 0.25f, .g = 0.25f, .b = 0.25f, .a = 1.0f}
@@ -265,11 +267,21 @@ CLAY(                                                                           
         GFX_CLAY_INPUT_TEXT_BOX_clay_element_id.baseId   == editor_state->mouse_state.selected_editor_ui_entity.clay_element_id.baseId                                                                                          \
     ){                                                                                                                                                                                                                          \
                                                                                                                                                                                                                                 \
-        Clay_String scratch_space_string = {                                                                                                                                                                                    \
-            .chars = (const char*)_editor_state->ui_input_scratch_space.chars,                                                                                                                                                  \
-            .length = _editor_state->ui_input_scratch_space.count                                                                                                                                                               \
+        String* GFX_CLAY_INPUT_TEXT_BOX_scratch_space_string;                                                                                                                                                                   \
+        switch(_editor_state->mouse_state.selected_editor_ui_entity.data_storage_type){                                                                                                                                         \
+            case Editor_ButtonDataStorageType_F32:{                                                                                                                                                                             \
+                GFX_CLAY_INPUT_TEXT_BOX_scratch_space_string = &_editor_state->f32_input_text_box_scratch_space;                                                                                                                \
+            }break;                                                                                                                                                                                                             \
+            case Editor_ButtonDataStorageType_String:{                                                                                                                                                                          \
+                GFX_CLAY_INPUT_TEXT_BOX_scratch_space_string = &_editor_state->string_input_text_box_scratch_space;                                                                                                             \
+            }break;                                                                                                                                                                                                             \
+        }                                                                                                                                                                                                                       \
+                                                                                                                                                                                                                                \
+        Clay_String clay_scratch_space_string = {                                                                                                                                                                               \
+            .chars = (const char*)GFX_CLAY_INPUT_TEXT_BOX_scratch_space_string->chars,                                                                                                                                          \
+            .length = GFX_CLAY_INPUT_TEXT_BOX_scratch_space_string->count                                                                                                                                                       \
         };                                                                                                                                                                                                                      \
-        CLAY_TEXT(scratch_space_string, EDITOR_GFX_CLAY_TEXT_CONFIG);                                                                                                                                                           \
+        CLAY_TEXT(clay_scratch_space_string, EDITOR_GFX_CLAY_TEXT_CONFIG);                                                                                                                                                      \
     }                                                                                                                                                                                                                           \
     else{                                                                                                                                                                                                                       \
         CLAY_TEXT(_clay_string_button_label, EDITOR_GFX_CLAY_TEXT_CONFIG);                                                                                                                                                      \
@@ -286,7 +298,10 @@ CLAY(                                                                           
 void editor_state_init(Editor_State* state, MemoryArena* arena, GFX_State* gfx_state, i32 entity_amount){
     ASSERT(!state->is_init, "already init.");
     state->mouse_state = (Editor_MouseState){0};
-    string_init(&state->ui_input_scratch_space, arena, EDITOR_MAX_STRING_LENGTH);
+    
+    string_init(&state->f32_input_text_box_scratch_space, arena, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH);
+    string_init(&state->string_input_text_box_scratch_space, arena, EDITOR_STRING_INPUT_BUTTON_MAX_STRING_LENGTH);
+    
     state->gfx_state = gfx_state;
     clickable_area_hierarchy_init(&state->game_entity_clickable_area_hierarchy, arena, entity_amount);    
     
@@ -535,115 +550,252 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
 
             Entity* entity = (Entity*)clickable_area->user_data;
 
-            i32 max_chars = EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH + 1; // +1 for null terminator.
             char* chars;
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
-            Clay_String position_x_string = {.chars = (const char*)chars};
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
-            Clay_String position_y_string = {.chars = (const char*)chars};
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
-            Clay_String scale_x_string = {.chars = (const char*)chars};
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
-            Clay_String scale_y_string = {.chars = (const char*)chars};
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
-            Clay_String sine_string = {.chars = (const char*)chars};
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, max_chars);
-            Clay_String cosine_string = {.chars = (const char*)chars};
+                        
+            i32 val_label_max_chars = 16;
+            i32 string_label_max_chars = 16;
+            
+            
+            // allocator_entity_name_strings();
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_STRING_INPUT_BUTTON_MAX_STRING_LENGTH);
+            Clay_String entity_name_val_string = {.chars = (const char*) chars};
+            
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, string_label_max_chars);
+            Clay_String entity_name_label_string = {.chars = (const char *) chars};
+            
+            // allocate_floating_point_strings();            
+            
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH);
+            Clay_String position_x_val_string = {.chars = (const char*)chars};
+            
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
+            Clay_String position_x_label_string = {.chars = (const char*)chars};
+            
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH);
+            Clay_String position_y_val_string = {.chars = (const char*)chars};
+            
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
+            Clay_String position_y_label_string = {.chars = (const char*)chars};
+            
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH);
+            Clay_String scale_x_val_string = {.chars = (const char*)chars};
+            
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
+            Clay_String scale_x_label_string = {.chars = (const char*)chars};
+            
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH);
+            Clay_String scale_y_val_string = {.chars = (const char*)chars};
+            
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
+            Clay_String scale_y_label_string = {.chars = (const char*)chars};
+            
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH);
+            Clay_String sine_val_string = {.chars = (const char*)chars};
+            
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
+            Clay_String sine_label_string = {.chars = (const char*)chars};
+            
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH);
+            Clay_String cosine_val_string = {.chars = (const char*)chars};
+            
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
+            Clay_String cosine_label_string = {.chars = (const char*)chars};
 
             f32 horizontal_percent_size = 0.75f;
             f32 vertical_percent_size = 0.05f;
             
             i32 entity_idx = clickable_area_hierarchy->selected_idx;
 
-            // position-x.
-            position_x_string.length = snprintf((char*)position_x_string.chars, max_chars, "%f", entity->local_transform.position.x);
-            ASSERT(position_x_string.length > 0, "failed to encode float.");
-            GFX_CLAY_INPUT_TEXT_BOX(
-                CLAY_STRING("Entity Position X"), 
-                position_x_string, 
-                horizontal_percent_size, 
-                vertical_percent_size, 
-                editor_state, 
-                (void*)(&entity->local_transform.position.x), 
-                Editor_ButtonDataStorageType_F32, 
-                transient, 
-                entity_idx
-            );
+            { // draw_name_tag();
             
-            // position-y.
-            position_y_string.length = snprintf((char*)position_y_string.chars, max_chars, "%f", entity->local_transform.position.y);
-            ASSERT(position_y_string.length > 0, "failed to encode float.");
-            GFX_CLAY_INPUT_TEXT_BOX(
-                CLAY_STRING("Entity Position Y"), 
-                position_y_string, 
-                horizontal_percent_size, 
-                vertical_percent_size, 
-                editor_state, 
-                (void*)(&entity->local_transform.position.y), 
-                Editor_ButtonDataStorageType_F32, 
-                transient, 
-                entity_idx
-            );
-            
-            // scale-x.
-            scale_x_string.length = snprintf((char*)scale_x_string.chars, max_chars, "%f", entity->local_transform.scale.x);
-            ASSERT(scale_x_string.length > 0, "failed to encode float.");
-            GFX_CLAY_INPUT_TEXT_BOX(
-                CLAY_STRING("Entity Scale X"), 
-                scale_x_string, 
-                horizontal_percent_size, 
-                vertical_percent_size,
-                editor_state, 
-                (void*)(&entity->local_transform.scale.x), 
-                Editor_ButtonDataStorageType_F32, 
-                transient,
-                entity_idx
-            );
+                { // draw_label();
 
-            // scale-y.
-            scale_y_string.length = snprintf((char*)scale_y_string.chars, max_chars, "%f", entity->local_transform.scale.y);
-            ASSERT(scale_y_string.length > 0, "failed to encode float.");
-            GFX_CLAY_INPUT_TEXT_BOX(
-                CLAY_STRING("Entity Scale Y"), 
-                scale_y_string, 
-                horizontal_percent_size, 
-                vertical_percent_size,
-                editor_state, 
-                (void*)(&entity->local_transform.scale.y), 
-                Editor_ButtonDataStorageType_F32, 
-                transient, 
-                entity_idx
-            );
-            
-            // sine.
-            sine_string.length = snprintf((char*)sine_string.chars, max_chars, "%f", entity->local_transform.sine);
-            ASSERT(sine_string.length > 0, "failed to encode float.");
-            GFX_CLAY_INPUT_TEXT_BOX(
-                CLAY_STRING("Entity Rotation"), 
-                sine_string, 
-                horizontal_percent_size,
-                vertical_percent_size,
-                editor_state, 
-                (void*)(&entity->local_transform.sine), 
-                Editor_ButtonDataStorageType_F32, 
-                transient, 
-                entity_idx
-            );
+                    entity_name_label_string.length = 11;
+                    char* label_chars = (char*)entity_name_label_string.chars;
+                    COPY_MEMORY(label_chars, "Entity Name", entity_name_label_string.length);
+                    CLAY_TEXT(entity_name_label_string, EDITOR_GFX_CLAY_TEXT_CONFIG);                
+                }
+                
+                { // draw_value();
+                
+                    entity_name_val_string.length = entity->name.count;
+                    char* label_chars = (char*)entity_name_val_string.chars;
+                    COPY_MEMORY(label_chars, entity->name.chars, entity_name_val_string.length);
+                
+                    GFX_CLAY_INPUT_TEXT_BOX(
+                        CLAY_STRING("Entity Name"),
+                        entity_name_val_string,
+                        horizontal_percent_size,
+                        vertical_percent_size,
+                        editor_state, 
+                        (void*)(&entity->name), 
+                        Editor_ButtonDataStorageType_String, 
+                        transient,
+                        entity_idx
+                    );
+                }            
+            }
 
-            // cosine.
-            cosine_string.length = snprintf((char*)cosine_string.chars, max_chars, "%f", entity->local_transform.cosine);
-            ASSERT(cosine_string.length > 0, "failed to encode float.");
-            GFX_CLAY_INPUT_TEXT_BOX(
-                CLAY_STRING("Entity Rotation"), 
-                cosine_string, 
-                horizontal_percent_size, 
-                vertical_percent_size, 
-                editor_state, 
-                (void*)(&entity->local_transform.cosine), 
-                Editor_ButtonDataStorageType_F32, 
-                transient, 
-                entity_idx
-            );
+            { // draw_position_x();
+            
+                { // draw_label();
+                    position_x_label_string.length = 10;
+                    char* label_chars = (char*)position_x_label_string.chars;
+                    COPY_MEMORY(label_chars, "Position X", position_x_label_string.length);
+                    CLAY_TEXT(position_x_label_string, EDITOR_GFX_CLAY_TEXT_CONFIG);
+                }
+                
+                { // draw_value();
+                    position_x_val_string.length = 
+                    snprintf((char*)position_x_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.position.x);
+                    ASSERT(position_x_val_string.length > 0, "failed to encode float.");
+                    GFX_CLAY_INPUT_TEXT_BOX(
+                        CLAY_STRING("Entity Position X"), 
+                        position_x_val_string, 
+                        horizontal_percent_size, 
+                        vertical_percent_size, 
+                        editor_state, 
+                        (void*)(&entity->local_transform.position.x), 
+                        Editor_ButtonDataStorageType_F32, 
+                        transient, 
+                        entity_idx
+                    );
+                }
+            
+            }
+             
+            { // draw_position_y();
+            
+                { // draw_label();
+                    position_y_label_string.length = 10;
+                    char* label_chars = (char*)position_y_label_string.chars;
+                    COPY_MEMORY(label_chars, "Position Y", position_y_label_string.length);
+                    CLAY_TEXT(position_y_label_string, EDITOR_GFX_CLAY_TEXT_CONFIG);
+                }
+            
+                { // draw_value();
+                    position_y_val_string.length = 
+                        snprintf((char*)position_y_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.position.y);
+                    ASSERT(position_y_val_string.length > 0, "failed to encode float.");
+                    GFX_CLAY_INPUT_TEXT_BOX(
+                        CLAY_STRING("Entity Position Y"), 
+                        position_y_val_string, 
+                        horizontal_percent_size, 
+                        vertical_percent_size, 
+                        editor_state, 
+                        (void*)(&entity->local_transform.position.y), 
+                        Editor_ButtonDataStorageType_F32, 
+                        transient, 
+                        entity_idx
+                    );
+                }
+            }
+            
+            { // draw_scale_x();
+                
+                { // draw_label();
+                    scale_x_label_string.length = 7;
+                    char* label_chars = (char*)scale_x_label_string.chars;
+                    COPY_MEMORY(label_chars, "Scale X", scale_x_label_string.length);
+                    CLAY_TEXT(scale_x_label_string, EDITOR_GFX_CLAY_TEXT_CONFIG);
+                }
+                
+                { // draw_value();
+                    scale_x_val_string.length = snprintf((char*)scale_x_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.scale.x);
+                    ASSERT(scale_x_val_string.length > 0, "failed to encode float.");
+                    GFX_CLAY_INPUT_TEXT_BOX(
+                        CLAY_STRING("Entity Scale X"), 
+                        scale_x_val_string, 
+                        horizontal_percent_size, 
+                        vertical_percent_size,
+                        editor_state, 
+                        (void*)(&entity->local_transform.scale.x), 
+                        Editor_ButtonDataStorageType_F32, 
+                        transient,
+                        entity_idx
+                    );
+                }
+            }            
+        
+            { // draw_scale_y();
+                
+                { // draw_label();
+                    scale_y_label_string.length = 7;
+                    char* label_chars = (char*)scale_y_label_string.chars;
+                    COPY_MEMORY(label_chars, "Scale Y", scale_y_label_string.length);
+                    CLAY_TEXT(scale_y_label_string, EDITOR_GFX_CLAY_TEXT_CONFIG);
+                }
+                
+                { // draw_value();
+                    scale_y_val_string.length = snprintf((char*)scale_y_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.scale.y);
+                    ASSERT(scale_y_val_string.length > 0, "failed to encode float.");
+                    GFX_CLAY_INPUT_TEXT_BOX(
+                        CLAY_STRING("Entity Scale Y"), 
+                        scale_y_val_string, 
+                        horizontal_percent_size, 
+                        vertical_percent_size,
+                        editor_state, 
+                        (void*)(&entity->local_transform.scale.y), 
+                        Editor_ButtonDataStorageType_F32, 
+                        transient, 
+                        entity_idx
+                    );
+                }            
+            }
+            
+            { // draw_sine();
+            
+                { // draw_label();
+                    sine_label_string.length = 4;
+                    char* label_chars = (char*)sine_label_string.chars;
+                    COPY_MEMORY(label_chars, "Sine", sine_label_string.length);
+                    CLAY_TEXT(sine_label_string, EDITOR_GFX_CLAY_TEXT_CONFIG);
+                }
+            
+                { // draw_value();
+                    sine_val_string.length = snprintf((char*)sine_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.sine);
+                    ASSERT(sine_val_string.length > 0, "failed to encode float.");
+                    GFX_CLAY_INPUT_TEXT_BOX(
+                        CLAY_STRING("Entity Rotation"), 
+                        sine_val_string, 
+                        horizontal_percent_size,
+                        vertical_percent_size,
+                        editor_state, 
+                        (void*)(&entity->local_transform.sine), 
+                        Editor_ButtonDataStorageType_F32, 
+                        transient, 
+                        entity_idx
+                    );
+                }
+            }
+            
+            { // draw_cosine();
+                
+                { // draw_label();
+                    cosine_label_string.length = 6;
+                    char* label_chars = (char*)cosine_label_string.chars;
+                    COPY_MEMORY(label_chars, "Cosine", cosine_label_string.length);
+                    CLAY_TEXT(cosine_label_string, EDITOR_GFX_CLAY_TEXT_CONFIG);
+                }
+                
+                { // draw_value();
+
+                    // cosine.
+                    cosine_val_string.length = snprintf((char*)cosine_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.cosine);
+                    ASSERT(cosine_val_string.length > 0, "failed to encode float.");
+                    GFX_CLAY_INPUT_TEXT_BOX(
+                        CLAY_STRING("Entity Rotation"), 
+                        cosine_val_string, 
+                        horizontal_percent_size, 
+                        vertical_percent_size, 
+                        editor_state, 
+                        (void*)(&entity->local_transform.cosine), 
+                        Editor_ButtonDataStorageType_F32, 
+                        transient, 
+                        entity_idx
+                    );
+                }
+            }
         }
     }
 }
@@ -773,16 +925,28 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
         if(editor_state->is_typing){
             
             Key key = input_get_latest_active_key();
+
+            String* scratch_space;
+            switch(editor_mouse_state->selected_editor_ui_entity.data_storage_type){
+                case Editor_ButtonDataStorageType_String:{
+                    scratch_space = &editor_state->string_input_text_box_scratch_space;
+                }break;
+                case Editor_ButtonDataStorageType_F32:{
+                    scratch_space = &editor_state->f32_input_text_box_scratch_space;
+                }break;
+            }
             
             i32 count = input_get_latest_active_key_print_count();
             while(count){
+
+            
                 if(key == Key_Backspace){
-                    string_pop(&editor_state->ui_input_scratch_space);
+                    string_pop(scratch_space);
                 }
                 else{
                     char typed_char = input_get_latest_active_key_character();
                     if(typed_char != '\0'){
-                        string_push_chars(&editor_state->ui_input_scratch_space, &typed_char, 1);
+                        string_push_chars(scratch_space, &typed_char, 1);
                     }
                 }
                 count-=1;
@@ -799,7 +963,15 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                     switch(editor_mouse_state->selected_editor_ui_entity.data_storage_type){
                         default: {ASSERT(false, "unknown data storage type.");}break;
                         case Editor_ButtonDataStorageType_F32:{
-                            sscanf(editor_state->ui_input_scratch_space.chars, "%f", (f32*)editor_mouse_state->selected_editor_ui_entity.data_storage);
+                            sscanf(
+                                scratch_space->chars, "%f", 
+                                (f32*)editor_mouse_state->selected_editor_ui_entity.data_storage
+                            );
+                        }break;
+                        case Editor_ButtonDataStorageType_String:{
+                            String* data_string = (String*)editor_mouse_state->selected_editor_ui_entity.data_storage;
+                            string_clear(data_string);
+                            string_push(data_string, *scratch_space);
                         }break;
                     }
                     
@@ -815,7 +987,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
 
                 editor_state->is_typing = false;
                 editor_mouse_state->selected_editor_ui_entity = (Editor_SelectedEditorUiEntity){0};
-                string_clear(&editor_state->ui_input_scratch_space);
+                string_clear(scratch_space);
             }
         }
         else{
