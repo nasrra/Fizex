@@ -330,11 +330,28 @@ void editor_spawn_entity_button_on_hover(Clay_ElementId element_id, Clay_Pointer
 
 void editor_save_level_entity_recurssive(
     EntityManager* entity_manager,
-    String file_path,
+    String* file_path,
     String* entity_char_buffer,
     char* char_scratch_space, i32 char_scratch_space_length,
     i32 entity_idx, i32 parent_line_idx, i32 line_idx
 ){
+    
+    // this is the root entity of the tree, and the file name
+    // should be the name of the root entity. 
+    if(line_idx == 0){
+        
+        BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
+        Entity* entity = &entity_manager->entity[entity_idx];
+    
+        // this starts as a directory path, and gets the file name + extension added here.
+        // for subsequent serialisation calls.
+        string_push(file_path, entity->name);
+        string_push_chars(file_path, ".scsv", 5);
+    
+        if(!platform_delete_file(*file_path)){
+            platform_output_message("[Warning]: failed to delete level file whilst serialising entity; as the file wasn't present previously.");
+        }
+    }
 
     // loop through branch level.
     i32 first_idx = entity_idx;
@@ -400,8 +417,9 @@ void editor_save_level_entity_recurssive(
         }
 
         { // write entity data to file.
+        
             platform_write_file(
-                file_path,
+                *file_path,
                 entity_char_buffer->chars,
                 entity_char_buffer->count,
                 FileWriteType_Append
@@ -439,13 +457,16 @@ void editor_on_hover_save_level_button(Clay_ElementId element_id, Clay_PointerDa
             .length = LEVEL_FILE_LINE_LENGTH
         };
         char* char_scratch_space = (char[512]){0};
+        
+        // release build path.
         // String file_path = {.chars = "assets/saved.scsv", .length = 17, .count = 17};
-        String file_path = {.chars = "../assets/saved.scsv", .length = 20, .count = 20};
-        platform_delete_file(file_path);
-
+        
+        // debug build path.
+        String directory_path = {.chars = "../assets/levels/", .length = platform_get_max_file_path_length(), .count = 17};
+        
         editor_save_level_entity_recurssive(
             &ctx->game_state->entity_manager,
-            file_path,
+            &directory_path,
             &entity_char_buffer,
             char_scratch_space,
             64,

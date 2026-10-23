@@ -1,4 +1,6 @@
+
 // native and asset entity loading/saving.
+// clear selected entity when loading a new board level.
 
 DONT DO THIS:
 // Ball Power Ups:

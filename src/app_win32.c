@@ -395,9 +395,9 @@ bool platform_load_file_into_memory_arena(String file_path, MemoryArena* arena){
     **/
     char* null_terminated_file_path;
     int32_t null_terminated_file_path_length;
-    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.length+1);
-    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
-    null_terminated_file_path[file_path.length] = '\0';
+    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.count+1);
+    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.count);
+    null_terminated_file_path[file_path.count] = '\0';
 
     /**
         open file.
@@ -450,9 +450,9 @@ void* platform_load_file(String file_path, size_t* out_buffer_size){
     **/
     char* null_terminated_file_path;
     int32_t null_terminated_file_path_length;
-    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.length+1);
-    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
-    null_terminated_file_path[file_path.length] = '\0';
+    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.count+1);
+    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.count);
+    null_terminated_file_path[file_path.count] = '\0';
 
     /**
         open file.
@@ -507,9 +507,9 @@ int32_t platform_write_file(String file_path, void* data, size_t data_size, File
     **/
     char* null_terminated_file_path;
     int32_t null_terminated_file_path_length;
-    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.length+1);
-    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
-    null_terminated_file_path[file_path.length] = '\0';
+    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.count+1);
+    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.count);
+    null_terminated_file_path[file_path.count] = '\0';
 
     HANDLE h;
     switch(write_type){
@@ -566,9 +566,9 @@ bool platform_delete_file(String file_path){
     **/
     char* null_terminated_file_path;
     int32_t null_terminated_file_path_length;
-    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.length+1);
-    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.length);
-    null_terminated_file_path[file_path.length] = '\0';
+    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.count+1);
+    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.count);
+    null_terminated_file_path[file_path.count] = '\0';
 
     if(DeleteFileA(null_terminated_file_path)){
         return true;
