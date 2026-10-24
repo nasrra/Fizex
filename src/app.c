@@ -146,16 +146,16 @@ void app_main(){
             gfx_load_font_texture(&gfx_state, transient, VIRTUAL_TEXTURE_ID_FONT, 24, 32, 12);
         }
 
-        { // load level.
-            string_clear(&file_path);
-            string_push_chars(&file_path,    "../assets/levels/level_001.scsv", 31);
-            // string_push_chars(&file_path,    "../assets/levels/hamburger.scsv", 31);
-            LoadBoardLevelCallbackContext load_board_level_callback_ctx = {
-                .game_state = &game_state
-            };
+        // { // load level.
+        //     string_clear(&file_path);
+        //     string_push_chars(&file_path,    "../assets/levels/level_001.scsv", 31);
+        //     // string_push_chars(&file_path,    "../assets/levels/hamburger.scsv", 31);
+        //     LoadBoardLevelCallbackContext load_board_level_callback_ctx = {
+        //         .game_state = &game_state
+        //     };
             
-            level_manager_defer_load_level(&game_state.level_manager, file_path, LevelLoadType_World, load_board_level_callback, &load_board_level_callback_ctx, sizeof(load_board_level_callback_ctx));
-        }
+        //     level_manager_defer_load_level(&game_state.level_manager, file_path, LevelLoadType_World, load_board_level_callback, &load_board_level_callback_ctx, sizeof(load_board_level_callback_ctx));
+        // }
     }
 
     GenId level_gid = entity_spawn_level_root(&game_state.entity_manager, (String){.chars = "level 0", .length = 7, .count = 7}, TRANSFORM2D_IDENTITY, 0);
@@ -309,7 +309,7 @@ void app_main(){
 
             { // draw();
             
-                game_state_draw(&game_state, transient, delta_time);
+                game_state_draw(&game_state, transient, delta_time, in_editor_mode);
                 gfx_state_draw(&gfx_state);
             }
             

@@ -984,7 +984,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 gfx_clay_entity_inspector_layout(editor_state, game_state, transient);
             }break;
         }
-        gfx_clay_end_layout(editor_gfx_state, delta_time, SPRITE_LAYER_GAME_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
+        gfx_clay_end_layout(editor_gfx_state, delta_time, SPRITE_LAYER_EDITOR_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
     }
 
     { // set_clickable_area_hierarchy_areas();

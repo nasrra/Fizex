@@ -2024,7 +2024,6 @@ void clickable_area_hierarchy_clear_previous_selected_stack(ClickableAreaHierarc
 }
 
 void clickable_area_hierarchy_update(ClickableAreaHierarchy* hierarchy, Vector2 mouse_world_position){
-    
 
     /*
         this is here in the very astronomically low case that  entities are deallocated enough times
@@ -2134,4 +2133,9 @@ bool clickable_area_hierarchy_get_clickable_area(ClickableAreaHierarchy* hierarc
     }
     clickable_area_hierarchy_get_clickable_area_unsafe(hierarchy, idx, out_area);
     return true;
+}
+
+void clickable_area_hierarchy_reset(ClickableAreaHierarchy* hierarchy){
+    hierarchy->selected_idx = 0;
+    hierarchy->previous_idx_count = 0;
 }

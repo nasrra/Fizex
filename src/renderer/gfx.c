@@ -1105,7 +1105,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
         i32 first_idx = sprite_idx;
         i32 idx = first_idx;
         while(true){
-            gfx_sprite_set_layer_unsafe(state, sprite_idx, layer);
+            gfx_sprite_set_layer_unsafe(state, idx, layer);
             BOUNDS_CHECK(idx, state->sprite_manager.host_sprite_length);
             GFX_HostSprite* host = &state->sprite_manager.host_sprite[idx];
             idx = host->next_in_chain;
@@ -1159,7 +1159,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
         i32 first_idx = sprite_idx;
         i32 idx = first_idx;
         while(true){
-            gfx_sprite_set_depth_unsafe(state, sprite_idx, depth);
+            gfx_sprite_set_depth_unsafe(state, idx, depth);
             BOUNDS_CHECK(idx, state->sprite_manager.host_sprite_length);
             GFX_HostSprite* host = &state->sprite_manager.host_sprite[idx];
             idx = host->next_in_chain;
@@ -3597,13 +3597,9 @@ Vector2 gfx_get_mouse_delta_world_position(GFX_State* state){
 }
 
 
-
-
-//////////
-//  functions: Clay.
-//////////
-
-
+///
+/// @ Clay.
+///
 
 
 const Clay_Color COLOR_LIGHT = {224, 215, 210, 255};
@@ -3623,6 +3619,13 @@ inline GFX_Colour gfx_clay_colour_to_gfx_colour(Clay_Color clay_colour){
         .g = clay_colour.g > 0 ? 255.0f / (f32)clay_colour.g : 0.0f,
         .b = clay_colour.b > 0 ? 255.0f / (f32)clay_colour.b : 0.0f,
         .a = clay_colour.a > 0 ? 255.0f / (f32)clay_colour.a : 0.0f
+    };
+}
+
+inline Clay_String gfx_string_to_clay_string(String string){
+    return(Clay_String){
+        .chars = (const char*)string.chars,
+        .length = (string.count)
     };
 }
 

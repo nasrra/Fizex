@@ -98,6 +98,11 @@ typedef enum{
     EntityTypeId_UiCamera               = 22    
 } EntityTypeId;
 
+typedef enum{
+    GameStage_Menu,
+    GameStage_Board
+} GameStage;
+
 typedef struct{
     ClickableAreaHierarchy clickable_entity_hierarchy;
 
@@ -260,13 +265,24 @@ typedef struct{
     bool is_init;
 } LevelManager;
 
+typedef enum{
+    // MenuStage_MainMenu,
+    MenuStage_LevelSelector
+} MenuStage;
+
+typedef struct{
+    MenuStage stage;
+} MenuState;
+
 typedef struct GameState{
     GameMouseState mouse_state;
     EntityManager entity_manager;
     LevelManager level_manager;
     BoardState board_state;
+    MenuState menu_state;
     f32 time_scale;
     bool is_init;
+    GameStage stage;
 } GameState;
 
 typedef struct {
@@ -660,6 +676,15 @@ void board_state_init(BoardState* state, MemoryArena* arena, i32 max_turn_based_
     state->is_init = true;
 }
 
+void board_state_reset(BoardState* state){
+    state->turn = BoardTurn_Player;
+    state->stage = BoardStage_Playing;
+    state->number_ball_count = 0;
+    state->turn_based_entity_count = 0;
+    state->turn_number = 0;
+    state->display_turn_text = false;
+}
+
 
 ///
 /// @ EntityManager
@@ -996,20 +1021,21 @@ typedef struct {
     GameState* game_state;
 }LoadBoardLevelCallbackContext;
 
-void load_board_level_callback(GameState* game_state, void* user_data){
-    
-    Transform2D transform = TRANSFORM2D_IDENTITY;;
-    transform.scale = vector2_mul_val(transform.scale, 20.0f);
-    
+void load_board_level_callback(GameState* game_state, void* user_data){    
     // hoisting invariance.
     BoardState* board_state = &game_state->board_state;
     GenIdAllocator* gid_allocator = &game_state->entity_manager.gen_id_allocator;
     
-    { // reset_board_state();
-        board_state->turn_based_entity_count = 0;    
-        board_state->number_ball_count = 0;
-        board_state->stage = BoardStage_Playing;
-    }
+    Transform2D transform = TRANSFORM2D_IDENTITY;;
+    transform.scale = vector2_mul_val(transform.scale, 20.0f);
+
+    
+    clickable_area_hierarchy_reset(&game_state->entity_manager.clickable_area_hierarchy);
+    game_state->mouse_state.clicked_entity_idx = 0;
+    
+    game_state->stage = GameStage_Board;
+    
+    board_state_reset(board_state);
     
     for(i32 i = 0; i < gid_allocator->length; i++){
     
@@ -1032,8 +1058,8 @@ void load_board_level_callback(GameState* game_state, void* user_data){
             { // check_if_ball();
             
                 switch(entity->type_id){
-                    case EntityTypeId_BallOne:  
-                    case EntityTypeId_BallTwo:  
+                    case EntityTypeId_BallOne:
+                    case EntityTypeId_BallTwo:
                     case EntityTypeId_BallThree:
                     case EntityTypeId_BallFour: 
                     case EntityTypeId_BallFive: 
@@ -1057,7 +1083,6 @@ void load_board_level_callback(GameState* game_state, void* user_data){
             ASSERT(false, "gid is allocated but failed to get entity.");
         }
 
-        //
         if(board_state->number_ball_count == BOARD_STATE_MAX_BALLS){
             break;
         }
@@ -2941,7 +2966,8 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
             }
             
             if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
-                clicked_entity = (Entity*)area->user_data;                
+                clicked_entity = (Entity*)area->user_data;
+                platform_output_message("farts\n");        
             }
             
             if(
@@ -3018,10 +3044,11 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
             // note: this is done after the clcked entity code so that a clicked entity
             // can execute 'input_on_mouse_button_released' code paths. 
             if(input_is_mouse_button_just_released(MouseButton_Left)){
-                clickable_area_hierarchy_update(
-                    clickable_area_hierarchy,
-                    mouse_world_position
-                );
+                // clickable_area_hierarchy_update(
+                //     clickable_area_hierarchy,
+                //     mouse_world_position
+                // );
+                clickable_area_hierarchy_reset(clickable_area_hierarchy); 
             }
         }
     }
@@ -3056,6 +3083,17 @@ CLAY(CLAY_SIDI(CLAY_STRING("Board Turn Text"), game_gfx_clay_element_id++), {   
     }                               \
 }
 
+#define GAME_GFX_CLAY_HEADER_TEXT_CONFIG    \
+(Clay_TextElementConfig){                   \
+    .fontSize = 2,                          \
+    .lineHeight = 24,                       \
+    .textColor = {                          \
+        .r = 255,                           \
+        .g = 255,                           \
+        .b = 255,                           \
+        .a = 255                            \
+    }                                       \
+}
 
 #define GAME_GFX_CLAY_BUTTON_IDLE_COLOUR (Clay_Color){100.0f,100.0f,100.0f,225.0f}
 #define GAME_GFX_CLAY_BUTTON_HOVER_COLOUR (Clay_Color){155.0f,155.0f,155.0f,255.0f}
@@ -3140,7 +3178,21 @@ void load_world_level_button_on_hover_callback(Clay_ElementId element_id, Clay_P
                                                                                                                                                                                                 \
 }while(0)
 
-void game_state_draw(GameState* game_state, MemoryArena* transient_arena, f32 delta_time){
+#define GAME_GFX_CLAY_LEVEL_SELECT_BUTTON_CONTAINER()                                       \
+                                                                                            \
+CLAY(CLAY_SIDI(CLAY_STRING("Level Select Button Container"), game_gfx_clay_element_id++), { \
+    .backgroundColor = (Clay_Color){0.0f,0.0f,0.0f,200.0f},                                 \
+    .layout = {                                                                             \
+        .sizing = {                                                                         \
+            .width = CLAY_SIZING_PERCENT(0.95f),                                            \
+            .height = CLAY_SIZING_PERCENT(0.25f)                                             \
+        },                                                                                  \
+        .layoutDirection = CLAY_LEFT_TO_RIGHT,                                              \
+        .padding = CLAY_PADDING_ALL(16)                                                     \
+    },                                                                                      \
+})
+
+void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_time, bool in_editor_mode){
 
     // hoisting invariance.
     EntityManager* entity_manager = &game_state->entity_manager;
@@ -3149,7 +3201,7 @@ void game_state_draw(GameState* game_state, MemoryArena* transient_arena, f32 de
     FIZX_DrawInfo* fizx_draw_state = &entity_manager->fizx_draw_state;
     BoardState* board_state = &game_state->board_state;
     GameMouseState* mouse_state = &game_state->mouse_state;
-
+    LevelManager* level_manager = &game_state->level_manager;
 
     /*
         clear from previous run.
@@ -3165,142 +3217,231 @@ void game_state_draw(GameState* game_state, MemoryArena* transient_arena, f32 de
     fizx_state_draw(*fizx_state, gfx_state, *fizx_draw_state, delta_time);
 
     Vector2I mouse_backbuffer_position;
-    input_get_mouse_position(&mouse_backbuffer_position.x, &mouse_backbuffer_position.y);
+    if(in_editor_mode){
+        mouse_backbuffer_position.x = I32_MAX;
+        mouse_backbuffer_position.y = I32_MAX;
+    }
+    else{
+        input_get_mouse_position(&mouse_backbuffer_position.x, &mouse_backbuffer_position.y);
+    }
+    
 
-    Clay_SetCurrentContext(gfx_state->clay_game_ui_ctx);
-    gfx_clay_begin_layout(
-        gfx_state, (Vector2I){.x = gfx_state->window_ctx->width, .y = gfx_state->window_ctx->height}, mouse_backbuffer_position, delta_time,
-        input_is_mouse_button_pressed(MouseButton_Left)
-    );
-    
-    CLAY(CLAY_SIDI(CLAY_STRING("Padding Container"), game_gfx_clay_element_id++), {
-        .layout = {                                                           
-            .sizing = {                                                       
-                .width = CLAY_SIZING_GROW(0),
-                .height = CLAY_SIZING_GROW(0)                                 
-            },                                                                
-            .layoutDirection = CLAY_TOP_TO_BOTTOM,                            
-        },                                                                    
-    });
-    
-    CLAY(CLAY_SIDI(CLAY_STRING("Center Panel"), game_gfx_clay_element_id++), {
-        .layout = {                                                           
-            .sizing = {                                                       
-                .width = CLAY_SIZING_GROW(0),                                 
-                .height = CLAY_SIZING_GROW(0)
-            },                                                                
-            .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER },
-        },
-    }){
-        switch(board_state->stage){
-            default: {ASSERT(false, "undefined state");} break;
-            case BoardStage_Playing:{
-                if(board_state->display_turn_text){
+    { // ui();
+
+        Clay_SetCurrentContext(gfx_state->clay_game_ui_ctx);
+        gfx_clay_begin_layout(
+            gfx_state, (Vector2I){.x = gfx_state->window_ctx->width, .y = gfx_state->window_ctx->height}, 
+            mouse_backbuffer_position, delta_time, input_is_mouse_button_pressed(MouseButton_Left)
+        );
+
+        switch(game_state->stage){
+
+            case GameStage_Menu:{
+                CLAY(CLAY_SIDI(CLAY_STRING("Left Panel"), game_gfx_clay_element_id++), {
+                    .layout = {                                                           
+                        .sizing = {                                                       
+                            .width = CLAY_SIZING_PERCENT(0.1f),
+                            .height = CLAY_SIZING_GROW(0)                                 
+                        },                                                                
+                    },                                                                    
+                });
+                
+                CLAY(CLAY_SIDI(CLAY_STRING("Center Panel"), game_gfx_clay_element_id++), {
+                    .backgroundColor = GAME_GFX_CLAY_BUTTON_IDLE_COLOUR,
+                    .layout = {                                                           
+                        .sizing = {                                                       
+                            .width = CLAY_SIZING_PERCENT(0.8f),
+                            .height = CLAY_SIZING_GROW(0)
+                        },                           
+                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                        .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER },
+                        .padding = CLAY_PADDING_ALL(16) 
+                    },
+                }){
+
+                    CLAY(CLAY_SIDI(CLAY_STRING("Level Select Widget Container"), game_gfx_clay_element_id++), {
+                        .backgroundColor =  (Clay_Color){0.0f,0.0f,0.0f,200.0f},
+                        .layout = {                                                           
+                            .sizing = {                                                       
+                                .width = CLAY_SIZING_GROW(0),                                 
+                                .height = CLAY_SIZING_GROW(0)
+                            },                                                                
+                            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                            .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER },
+                            .childGap = 16
+                        },
+                    }){
+                        
+                        String level_001_file_path;                                                
+                        string_init(&level_001_file_path, transient, platform_get_max_file_path_length());
+                        string_push_chars(&level_001_file_path,  "../assets/levels/level_001.scsv", 31); 
+                        
+                        CLAY_TEXT(CLAY_STRING("Level Select"), GAME_GFX_CLAY_HEADER_TEXT_CONFIG);   
+                        
+                        GAME_GFX_CLAY_LEVEL_SELECT_BUTTON_CONTAINER(){
+                            GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
+                                CLAY_STRING("Level 001"),
+                                0.25f,
+                                1.0f,
+                                transient,
+                                level_manager,
+                                level_001_file_path.chars,
+                                level_001_file_path.count,
+                                load_board_level_callback,
+                                NULL,
+                                0
+                            );
+                        }
+                        GAME_GFX_CLAY_LEVEL_SELECT_BUTTON_CONTAINER();
+                        GAME_GFX_CLAY_LEVEL_SELECT_BUTTON_CONTAINER();
+                    }
+                }
+                
+                CLAY(CLAY_SIDI(CLAY_STRING("Right Panel"), game_gfx_clay_element_id++), {
+                    .layout = {                                                           
+                        .sizing = {                                                       
+                            .width = CLAY_SIZING_PERCENT(0.1f),                                 
+                            .height = CLAY_SIZING_GROW(0)                                 
+                        },                                                                
+                    },                      
+                });          
+            }break;
+            case GameStage_Board:{
+                
+                CLAY(CLAY_SIDI(CLAY_STRING("Padding Container"), game_gfx_clay_element_id++), {
+                    .layout = {                                                           
+                        .sizing = {                                                       
+                            .width = CLAY_SIZING_GROW(0),
+                            .height = CLAY_SIZING_GROW(0)                                 
+                        },                                                                
+                        .layoutDirection = CLAY_TOP_TO_BOTTOM,                            
+                    },                                                                    
+                });
+                
+                CLAY(CLAY_SIDI(CLAY_STRING("Center Panel"), game_gfx_clay_element_id++), {
+                    .layout = {                                                           
+                        .sizing = {                                                       
+                            .width = CLAY_SIZING_GROW(0),                                 
+                            .height = CLAY_SIZING_GROW(0)
+                        },                                                                
+                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                        .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER },
+                    },
+                }){
+                    switch(board_state->stage){
+                        default: {ASSERT(false, "undefined state");} break;
+                        case BoardStage_Playing:{
+                            if(board_state->display_turn_text){
+                                GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
+                                    Clay_String clay_string = {
+                                        .length = board_state->turn_text.count,
+                                        .chars = (const char*)board_state->turn_text.chars
+                                    };
+                                    CLAY_TEXT(clay_string, GAME_GFX_CLAY_TEXT_CONFIG);
+                                    if(Clay_Hovered()){
+                                        mouse_state->hovering_ui_element = true;
+                                    }
+                                }
+                            }
+                        }break;
+                        case BoardStage_Lose:{
+                            GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
+                                CLAY_TEXT(CLAY_STRING("You Lose!"), GAME_GFX_CLAY_TEXT_CONFIG);                
+                                f32 horizontal_size = 0.75f;
+                                f32 vertical_size = 0.25f;
+                                GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
+                                    CLAY_STRING("Retry"),
+                                    horizontal_size,
+                                    vertical_size,
+                                    transient,
+                                    &game_state->level_manager,
+                                    game_state->level_manager.world_root_entity_file_path.chars,
+                                    game_state->level_manager.world_root_entity_file_path.count,
+                                    load_board_level_callback,
+                                    NULL,
+                                    0
+                                );
+                            }
+                        }break;
+                        
+                        case BoardStage_Win:{
+                            GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
+                                CLAY_TEXT(CLAY_STRING("You Win!"), GAME_GFX_CLAY_TEXT_CONFIG);
+                                f32 horizontal_size = 0.75f;
+                                f32 vertical_size = 0.25f;
+                                GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
+                                    CLAY_STRING("Play Again"),
+                                    horizontal_size,
+                                    vertical_size,
+                                    transient,
+                                    &game_state->level_manager,
+                                    game_state->level_manager.world_root_entity_file_path.chars,
+                                    game_state->level_manager.world_root_entity_file_path.count,
+                                    load_board_level_callback,
+                                    NULL,
+                                    0
+                                );
+                            }
+                        }break;
+                    }
+                }
+                
+                CLAY(CLAY_SIDI(CLAY_STRING("Right Panel"), game_gfx_clay_element_id++), {
+                    .layout = {                                                           
+                        .sizing = {                                                       
+                            .width = CLAY_SIZING_GROW(0),                                 
+                            .height = CLAY_SIZING_GROW(0)                                 
+                        },                                                                
+                        .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                        .childAlignment = { .x = CLAY_ALIGN_X_CENTER },                            
+                    },                      
+                }){
+                    CLAY(CLAY_SIDI(CLAY_STRING("dummy"), game_gfx_clay_element_id++), {
+                        .layout = {                                                           
+                            .sizing = {                                                       
+                                .width = CLAY_SIZING_PERCENT(0.5f),                                 
+                                .height = CLAY_SIZING_GROW(0)                                 
+                            },                                                                
+                        }                      
+                    });
                     GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
-                        Clay_String clay_string = {
-                            .length = board_state->turn_text.count,
-                            .chars = (const char*)board_state->turn_text.chars
-                        };
-                        CLAY_TEXT(clay_string, GAME_GFX_CLAY_TEXT_CONFIG);
                         if(Clay_Hovered()){
                             mouse_state->hovering_ui_element = true;
                         }
+                    
+                        switch(board_state->turn){
+                            case BoardTurn_Player:{
+                                CLAY_TEXT(CLAY_STRING("Player Turn"), GAME_GFX_CLAY_TEXT_CONFIG);
+                            }break;
+                            case BoardTurn_Ball:{
+                                CLAY_TEXT(CLAY_STRING("Ball Turn"), GAME_GFX_CLAY_TEXT_CONFIG);
+                            }break;
+                            case BoardTurn_TurnBased:{
+                                CLAY_TEXT(CLAY_STRING("Turn Based Turn"), GAME_GFX_CLAY_TEXT_CONFIG);
+                            }break;
+                        }
                     }
                 }
-            }break;
-            case BoardStage_Lose:{
-                GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
-                    CLAY_TEXT(CLAY_STRING("You Lose!"), GAME_GFX_CLAY_TEXT_CONFIG);                
-                    f32 horizontal_size = 0.75f;
-                    f32 vertical_size = 0.25f;
-                    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
-                        CLAY_STRING("Retry"),
-                        horizontal_size,
-                        vertical_size,
-                        transient_arena,
-                        &game_state->level_manager,
-                        game_state->level_manager.world_root_entity_file_path.chars,
-                        game_state->level_manager.world_root_entity_file_path.count,
-                        load_board_level_callback,
-                        NULL,
-                        0
-                    );
-                }
-            }break;
             
-            case BoardStage_Win:{
-                GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
-                    CLAY_TEXT(CLAY_STRING("You Win!"), GAME_GFX_CLAY_TEXT_CONFIG);
-                    f32 horizontal_size = 0.75f;
-                    f32 vertical_size = 0.25f;
-                    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
-                        CLAY_STRING("Play Again"),
-                        horizontal_size,
-                        vertical_size,
-                        transient_arena,
-                        &game_state->level_manager,
-                        game_state->level_manager.world_root_entity_file_path.chars,
-                        game_state->level_manager.world_root_entity_file_path.count,
-                        load_board_level_callback,
-                        NULL,
-                        0
-                    );
+#if 0
+                switch(board_state->turn){
+                    case BoardTurn_Player:{
+                        CLAY_TEXT(CLAY_STRING("PLAYER TURN"), GAME_GFX_CLAY_TEXT_CONFIG);
+                    }break;
+                    case BoardTurn_Ball:{
+                        CLAY_TEXT(CLAY_STRING("BALL TURN"), GAME_GFX_CLAY_TEXT_CONFIG);
+                    }break;
+                    case BoardTurn_TurnBased:{
+                        CLAY_TEXT(CLAY_STRING("TURN BASED TURN"), GAME_GFX_CLAY_TEXT_CONFIG);
+                    }break;
                 }
-            }break;
+#endif
+            }break;        
         }
-    }
-    
-    CLAY(CLAY_SIDI(CLAY_STRING("Right Panel"), game_gfx_clay_element_id++), {
-        .layout = {                                                           
-            .sizing = {                                                       
-                .width = CLAY_SIZING_GROW(0),                                 
-                .height = CLAY_SIZING_GROW(0)                                 
-            },                                                                
-            .layoutDirection = CLAY_LEFT_TO_RIGHT,
-            .childAlignment = { .x = CLAY_ALIGN_X_CENTER },                            
-        },                      
-    }){
-        CLAY(CLAY_SIDI(CLAY_STRING("dummy"), game_gfx_clay_element_id++), {
-            .layout = {                                                           
-                .sizing = {                                                       
-                    .width = CLAY_SIZING_PERCENT(0.5f),                                 
-                    .height = CLAY_SIZING_GROW(0)                                 
-                },                                                                
-            }                      
-        });
-        GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
-            if(Clay_Hovered()){
-                mouse_state->hovering_ui_element = true;
-            }
-        
-            switch(board_state->turn){
-                case BoardTurn_Player:{
-                    CLAY_TEXT(CLAY_STRING("Player Turn"), GAME_GFX_CLAY_TEXT_CONFIG);
-                }break;
-                case BoardTurn_Ball:{
-                    CLAY_TEXT(CLAY_STRING("Ball Turn"), GAME_GFX_CLAY_TEXT_CONFIG);
-                }break;
-                case BoardTurn_TurnBased:{
-                    CLAY_TEXT(CLAY_STRING("Turn Based Turn"), GAME_GFX_CLAY_TEXT_CONFIG);
-                }break;
-            }
-        }
+
+
     }
 
-#if 0
-    switch(board_state->turn){
-        case BoardTurn_Player:{
-            CLAY_TEXT(CLAY_STRING("PLAYER TURN"), GAME_GFX_CLAY_TEXT_CONFIG);
-        }break;
-        case BoardTurn_Ball:{
-            CLAY_TEXT(CLAY_STRING("BALL TURN"), GAME_GFX_CLAY_TEXT_CONFIG);
-        }break;
-        case BoardTurn_TurnBased:{
-            CLAY_TEXT(CLAY_STRING("TURN BASED TURN"), GAME_GFX_CLAY_TEXT_CONFIG);
-        }break;
-    }
-#endif
     
     gfx_clay_end_layout(gfx_state, delta_time, SPRITE_LAYER_GAME_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
 }
