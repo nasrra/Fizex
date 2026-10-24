@@ -419,11 +419,13 @@ void editor_save_level_entity_recurssive(
         i32 written = 0;
         string_clear(entity_char_buffer);
 
-        // asset entity.
-        if(
+        bool is_asset_entity =             
             line_idx > 0 && // dont serialise root entity as an asset file.
             entity->serialisation_file_path.count
-        ){
+        ;
+
+        // asset entity.
+        if(is_asset_entity){
         
             string_push_char(entity_char_buffer, LEVEL_FILE_ASSET_ENTITY_TOKEN);
             string_push_char(entity_char_buffer, ';');
@@ -485,23 +487,21 @@ void editor_save_level_entity_recurssive(
             // new line.
             string_push_chars(entity_char_buffer, "\n", 1);
         }
-
-        { // write entity data to file.
-        
-            platform_write_file(
-                *file_path,
-                entity_char_buffer->chars,
-                entity_char_buffer->count,
-                FileWriteType_Append
-            );
-        }
+                
+        platform_write_file(
+            *file_path,
+            entity_char_buffer->chars,
+            entity_char_buffer->count,
+            FileWriteType_Append
+        );
 
         BOUNDS_CHECK(entity_idx, entity_manager->entity_hierarchy.length);
         IntrusiveListNode* node = &entity_manager->entity_hierarchy.node[entity_idx];
 
         line_idx += 1;
+        
         // go further into tree.
-        if(node->first_child != 0){
+        if(node->first_child != 0 && !is_asset_entity){
             editor_save_level_entity_recurssive(
                 entity_manager, file_path, entity_char_buffer, char_scratch_space, char_scratch_space_length, node->first_child, line_idx, line_idx
             );
