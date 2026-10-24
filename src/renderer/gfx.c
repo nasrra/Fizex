@@ -3729,11 +3729,7 @@ void gfx_clay_end_layout(GFX_State* gfx_state, f32 delta_time, u32 sprite_layer,
                 };
 
                 GenId sprite_gid = gfx_one_frame_sprite_chain_alloc(gfx_state, str.length);
-                
-                if(renderCommand->renderData.text.textColor.b == 0){
-                    platform_output_message("farts\n");
-                }
-                
+                                
                 // order matters here: text->transform.
                 gfx_sprite_string_set_active(gfx_state, sprite_gid);
                 gfx_sprite_string_set_text(gfx_state, sprite_gid, font_virtual_texture, str);

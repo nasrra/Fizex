@@ -149,9 +149,11 @@ void app_main(){
         { // load level.
             string_clear(&file_path);
             string_push_chars(&file_path,    "../assets/levels/level_001.scsv", 31);
+            // string_push_chars(&file_path,    "../assets/levels/hamburger.scsv", 31);
             LoadBoardLevelCallbackContext load_board_level_callback_ctx = {
                 .game_state = &game_state
             };
+            
             level_manager_defer_load_level(&game_state.level_manager, file_path, LevelLoadType_World, load_board_level_callback, &load_board_level_callback_ctx, sizeof(load_board_level_callback_ctx));
         }
     }
@@ -204,7 +206,7 @@ void app_main(){
 
             { // game update.
 
-                game_state_preupdate(&game_state, delta_time);
+                game_state_preupdate(&game_state, delta_time, transient);
                 game_state_update(&game_state, persistent, transient, delta_time, in_editor_mode);
                 game_state_late_update(&game_state, delta_time, in_editor_mode);
             }

@@ -306,6 +306,9 @@ typedef struct{
 #define LEVEL_ASSET_DIRECTORY_PATH "../assets/levels/"
 #define LEVEL_ASSET_DIRECTORY_PATH_LENGTH 17
 
+#define LEVEL_FILE_NATIVE_ENTITY_TOKEN 'N'
+#define LEVEL_FILE_ASSET_ENTITY_TOKEN 'A'
+
 #define BALL_FIZX_SHAPE_MATERIAL (FIZX_Material) {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 1.7f, .restitution = 0.167f, .rotational_response = true}
 #define BALL_FIZX_BODY_LINEAR_DRAG 0.75f
 #define BALL_FIZX_BODY_ANGULAR_DRAG 1.0f
@@ -400,7 +403,7 @@ typedef struct{
 ///
 
 
-GenId level_manager_load_level_file(LevelManager* level_manager, String file_path);
+GenId level_manager_load_level_file(LevelManager* level_manager, String file_path, MemoryArena* transient);
 void level_manager_defer_reload_world_level(
     LevelManager* level_manager, DeferredLevelLoadCallback callback, void* callback_user_data, i32 callback_user_data_size
 );
@@ -2263,6 +2266,10 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String n
             ASSERT(false, "unknown entity type id.");
             return (GenId){0};
         }break;
+        case EntityTypeId_None:{
+            platform_output_message("[Warning]: editor attempted to spawn an entity without a entity type id; (EntityTypeId_None).\n");
+            return 0;
+        }break;
         case EntityTypeId_LevelRoot:{
             return entity_spawn_level_root(entity_manager, name, transform, parent_gid);
         }break;
@@ -2378,7 +2385,7 @@ void level_manager_defer_load_level(
     level_manager->deferred_level_load_count++;
 }
 
-GenId level_manager_load_level_file(LevelManager* level_manager, String file_path){
+GenId level_manager_load_level_file(LevelManager* level_manager, String file_path, MemoryArena* transient){
     
     EntityManager* entity_manager = level_manager->entity_manager;
 
@@ -2421,64 +2428,111 @@ GenId level_manager_load_level_file(LevelManager* level_manager, String file_pat
         BOUNDS_CHECK(entity_manager->deserialised_entity_count, entity_manager->deserialised_entity_length);
         deserialised_entity = &entity_manager->deserialised_entity[entity_manager->deserialised_entity_count-1];
 
-        deserialised_entity->spawn_transform = TRANSFORM2D_IDENTITY;
+
+        // get the entity token.
+        char token;
         lines_read = sscanf(
             file_data,
-            "%[^;]%n;%i;%i;%f;%f;%f;%f;%f;%f;%n",
-            deserialised_entity->name.chars,
-            &deserialised_entity->name.count,
-            &deserialised_entity->entity_type_id,
-            &deserialised_entity->parent_deserialised_entity_idx,
-            &deserialised_entity->spawn_transform.position.x,
-            &deserialised_entity->spawn_transform.position.y,
-            &deserialised_entity->spawn_transform.scale.x,
-            &deserialised_entity->spawn_transform.scale.y,
-            &deserialised_entity->spawn_transform.sine,
-            &deserialised_entity->spawn_transform.cosine,
-            &bytes_consumed
+            "%c;",
+            &token
         );
-
-        // NOTE:
-        // deserialsied entities should be in the order (from 0 to length) parent->child.
-        // such that entities at the end can be parented to ones near the start.
-        //
-        // EXAMPLE:
-        // [0] is the NIL.
-        // [1] parent_deserialised_entity_idx = 0; // the root.
-        // [2] parent_deserialised_entity_idx = 1; // references the line above.
-        // [3] parent_deserialised_entity_idx = 4; // this is not okay as it is a later in the list and hasnt been loaded yet, also its out of bounds.
-        i32 parent_idx = deserialised_entity->parent_deserialised_entity_idx; // note that parenting is by line in the level file.
-        BOUNDS_CHECK(parent_idx, entity_manager->deserialised_entity_count);
-                
-        GenId parent_gid = parent_idx <= 0
-        ? 0
-        : entity_manager->deserialised_entity[parent_idx].entity_gid;
-
-        if(lines_read == 9){
-            deserialised_entity->entity_gid = entity_spawn(
-                entity_manager, 
-                deserialised_entity->entity_type_id, 
-                deserialised_entity->name, 
-                deserialised_entity->spawn_transform, 
-                parent_gid
-            );
-            file_data += bytes_consumed + 1; // add 2 to account for the ';' delimiter and the subsequent '\n'.
-   
-            // root entity from file.
-            if(parent_idx == 0){
-                Entity* root_entity;
-                if(entity_manager_get_entity(*entity_manager, deserialised_entity->entity_gid, &root_entity)){
-                    // set the root entity's serialisation file path to the file path we just loaded it from.
-                    string_push(&root_entity->serialisation_file_path, file_path);
-                }
-                else{
-                    ASSERT(false, "failed to retrieve root entity.");
-                }
-            }
-        }    
-        else{
+        
+        // go forward by two bytes:
+        // one for the token, one for the ';' delimiter.
+        file_data += 2;
+        
+        if(lines_read != 1){
             break;
         }
+        
+        switch(token){
+            default :{ASSERT(false, "unknown entity file line token.");}break;
+            case LEVEL_FILE_ASSET_ENTITY_TOKEN:{
+                String scratch_space = {0};
+                string_init(&scratch_space, transient, platform_get_max_file_path_length());
+    
+                lines_read = sscanf(
+                    file_data,
+                    "%[^;]%n;%n",
+                    scratch_space.chars,
+                    &scratch_space.count,
+                    &bytes_consumed
+                );
+                
+                if(lines_read != 1){
+                    ASSERT(false, "mangled entity serialisation found.");
+                    break;
+                }
+                
+                level_manager_load_level_file(level_manager, scratch_space, transient);
+            }break;
+            case LEVEL_FILE_NATIVE_ENTITY_TOKEN: {
+
+                deserialised_entity->spawn_transform = TRANSFORM2D_IDENTITY;
+                lines_read = sscanf(
+                    file_data,
+                    "%[^;]%n;%i;%i;%f;%f;%f;%f;%f;%f;%n",
+                    deserialised_entity->name.chars,
+                    &deserialised_entity->name.count,
+                    &deserialised_entity->entity_type_id,
+                    &deserialised_entity->parent_deserialised_entity_idx,
+                    &deserialised_entity->spawn_transform.position.x,
+                    &deserialised_entity->spawn_transform.position.y,
+                    &deserialised_entity->spawn_transform.scale.x,
+                    &deserialised_entity->spawn_transform.scale.y,
+                    &deserialised_entity->spawn_transform.sine,
+                    &deserialised_entity->spawn_transform.cosine,
+                    &bytes_consumed
+                );
+        
+                // NOTE:
+                // deserialsied entities should be in the order (from 0 to length) parent->child.
+                // such that entities at the end can be parented to ones near the start.
+                //
+                // EXAMPLE:
+                // [0] is the NIL.
+                // [1] parent_deserialised_entity_idx = 0; // the root.
+                // [2] parent_deserialised_entity_idx = 1; // references the line above.
+                // [3] parent_deserialised_entity_idx = 4; // this is not okay as it is a later in the list and hasnt been loaded yet, also its out of bounds.
+                i32 parent_idx = deserialised_entity->parent_deserialised_entity_idx; // note that parenting is by line in the level file.
+                BOUNDS_CHECK(parent_idx, entity_manager->deserialised_entity_count);
+                        
+                GenId parent_gid = parent_idx <= 0
+                ? 0
+                : entity_manager->deserialised_entity[parent_idx].entity_gid;
+        
+                if(lines_read == 9){
+                    deserialised_entity->entity_gid = entity_spawn(
+                        entity_manager, 
+                        deserialised_entity->entity_type_id, 
+                        deserialised_entity->name, 
+                        deserialised_entity->spawn_transform, 
+                        parent_gid
+                    );
+           
+                    // root entity from file.
+                    if(parent_idx == 0){
+                        Entity* root_entity;
+                        if(entity_manager_get_entity(*entity_manager, deserialised_entity->entity_gid, &root_entity)){
+                            // set the root entity's serialisation file path to the file path we just loaded it from.
+                            string_push(&root_entity->serialisation_file_path, file_path);
+                        }
+                        else{
+                            ASSERT(false, "failed to retrieve root entity.");
+                        }
+                    }
+                }    
+                else{
+                    ASSERT(false, "mangled entity serialisation found.");
+                    break;
+                }
+
+            }break;
+             
+        }        
+        
+        file_data += bytes_consumed + 1; // add 1 to account for the subsequent '\n'.
+    
     }
     platform_free_memory(raw_file);
     
@@ -2584,7 +2638,7 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
     game_state->is_init = true;
 }
 
-void game_state_preupdate(GameState* game_state, f32 delta_time){
+void game_state_preupdate(GameState* game_state, f32 delta_time, MemoryArena* transient){
 
     // hoist invariance.
     LevelManager* level_manager = &game_state->level_manager;
@@ -2600,13 +2654,13 @@ void game_state_preupdate(GameState* game_state, f32 delta_time){
                 }break;
                 case LevelLoadType_World:{
                     entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->world_root_entity_gid);
-                    level_manager->world_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path);
+                    level_manager->world_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path, transient);
                     string_clear(&level_manager->world_root_entity_file_path);
                     string_push(&level_manager->world_root_entity_file_path, ctx->file_path);
                 }break;
                 case LevelLoadType_Ui:{
                     entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->ui_root_entity_gid);
-                    level_manager->ui_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path);
+                    level_manager->ui_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path, transient);
                     string_clear(&level_manager->ui_root_entity_file_path);
                     string_push(&level_manager->ui_root_entity_file_path, ctx->file_path);
                 }break;

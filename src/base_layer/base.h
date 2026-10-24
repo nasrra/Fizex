@@ -670,6 +670,7 @@ bool gen_id_equals(GenId a, GenId b);
 void string_init(String* string, MemoryArena* arena, i32 size);
 void string_clear(String* string);
 void string_push_chars(String* string, char* chars, i32 chars_length);
+void string_push_char(String* string, char c);
 void string_push(String* dst, String src);
 char string_pop(String* string);
 

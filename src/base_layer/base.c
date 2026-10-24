@@ -159,6 +159,12 @@ void string_push_chars(String* string, char* chars, i32 chars_length){
     string->count += available_space;
 }
 
+void string_push_char(String* string, char c){
+    ASSERT((string->count + 1) <= string->length, "string to small to hold character");
+    string->chars[string->count] = c;
+    string->count += 1;
+}
+
 void string_push(String* dst, String src){
     string_push_chars(dst, src.chars, src.count);
 }

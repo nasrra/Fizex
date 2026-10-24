@@ -411,7 +411,24 @@ void editor_save_level_entity_recurssive(
         i32 written = 0;
         string_clear(entity_char_buffer);
 
-        { // prepare entity data for serialisation.
+        // asset entity.
+        if(
+            line_idx > 0 && // dont serialise root entity as an asset file.
+            entity->serialisation_file_path.count
+        ){
+        
+            string_push_char(entity_char_buffer, LEVEL_FILE_ASSET_ENTITY_TOKEN);
+            string_push_char(entity_char_buffer, ';');
+            string_push(entity_char_buffer, entity->serialisation_file_path);
+            string_push_chars(entity_char_buffer, ";\n", 2);
+        }
+        
+        // native entity serialisation.
+        else{
+
+            // token
+            string_push_char(entity_char_buffer, LEVEL_FILE_NATIVE_ENTITY_TOKEN);
+            string_push_char(entity_char_buffer, ';');
 
             // entity name.
             string_push(entity_char_buffer, entity->name);
@@ -488,7 +505,7 @@ void editor_save_level_entity_recurssive(
             String dst_file_path = {.chars = chars, .length = platform_get_max_file_path_length()};
             string_push_chars(&dst_file_path, "../", 3);
             string_push(&dst_file_path, *file_path);
-            platform_copy_file(dst_file_path, *file_path, true);
+            platform_copy_file(dst_file_path, *file_path, false);
             platform_free_memory(chars);
         }
         
@@ -1075,8 +1092,12 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                     switch(editor_mouse_state->selected_editor_ui_entity.data_storage_type){
                         default: {ASSERT(false, "unknown data storage type.");}break;
                         case Editor_ButtonDataStorageType_F32:{
+                            
+                            char* null_terminated_scratch_space = (char[EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH]){0};
+                            COPY_MEMORY(null_terminated_scratch_space, scratch_space->chars, scratch_space->count);
+                            
                             sscanf(
-                                scratch_space->chars, "%f", 
+                                null_terminated_scratch_space, "%f", 
                                 (f32*)editor_mouse_state->selected_editor_ui_entity.data_storage
                             );
                         }break;
