@@ -2495,13 +2495,8 @@ GenId level_manager_load_level_file_recurssive(
                         root_parent_idx = entity_manager->deserialised_entity_count;
                     }
                     else{
-                        
-                        if(parent_idx_offset > 0){
-                            platform_output_message("asd");
-                        }
-                        
+                                                
                         // this isa native entity within the asset entity file.
-                        
                         parent_gid = entity_manager->deserialised_entity[parent_idx + parent_idx_offset].entity_gid;
                     }
                                         

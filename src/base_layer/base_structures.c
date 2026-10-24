@@ -19,7 +19,6 @@ typedef struct{
     ClickableArea* area;
     i32 area_length;
     
-    i32 first_hit_idx;
     i32 selected_idx;
     
     i32* previous_idx;
@@ -1943,7 +1942,7 @@ void clickable_area_hierarchy_init(ClickableAreaHierarchy* state, MemoryArena* a
     gen_id_allocator_init(&state->gen_id_allocator, arena, entity_amount);
     
     // this is okay, as gen_id_allocator_init() asserts that entity_amount is greater than 0.
-    state->area[0].depth_layer = I32_MAX; // NIL is at the fartherest layer from the camera.
+    state->area[0].depth_layer = U64_MAX; // NIL is at the fartherest layer from the camera.
     state->previous_idx_count = 0;
     state->is_init = true;
 }
@@ -2020,6 +2019,10 @@ GenId clickable_area_hierarchy_alloc_clickable_area(ClickableAreaHierarchy* hier
     return gen_id_allocator_alloc(&hierarchy->gen_id_allocator);
 }
 
+void clickable_area_hierarchy_clear_previous_selected_stack(ClickableAreaHierarchy* hierarchy){
+    hierarchy->previous_idx_count = 0;
+}
+
 void clickable_area_hierarchy_update(ClickableAreaHierarchy* hierarchy, Vector2 mouse_world_position){
     
 
@@ -2042,82 +2045,71 @@ void clickable_area_hierarchy_update(ClickableAreaHierarchy* hierarchy, Vector2 
             hierarchy->selected_idx
         );
     }
-    hierarchy->first_hit_idx = 0;
-    hierarchy->selected_idx = 0;        
     
-    // only attempt selection of a entity if the mouse isnt on a editor
-    // ui widget, the left button has just been pressed, and we havent already selected an entity.
-    if(
-        !hierarchy->selected_idx
-    ){
+    hierarchy->selected_idx = 0;
 
-        for(i32 idx = 1; idx < hierarchy->area_length; idx++){
+    for(i32 idx = 1; idx < hierarchy->area_length; idx++){
 
-            if(!hierarchy->gen_id_allocator.allocated[idx]){
-                continue;
-            }
-            
-            ClickableArea* area = &hierarchy->area[idx];
-            
-            Vector2 normal;    
-            f32 depth;
-            bool overlaps = polygon_overlaps_point_scalar(
-                area->rectangle.x, area->rectangle.y,
-                4, // this will need to change: if the whole thing breaks you know why :)))
-                mouse_world_position.x, mouse_world_position.y,
-                &normal.x, &normal.y, &depth
-            );
-            
-            if(!overlaps){
-                continue;
-            }
-            
-            // get first hit.
-            BOUNDS_CHECK(hierarchy->first_hit_idx, hierarchy->area_length);
-            ClickableArea* first_hit_area = &hierarchy->area[hierarchy->first_hit_idx];
-            
-            // check if this is the first hit entity; i.e, the closest entity to the camera.
-            if(area->depth_layer <= first_hit_area->depth_layer){
-                hierarchy->first_hit_idx = idx;
-            }
+        if(!hierarchy->gen_id_allocator.allocated[idx]){
+            continue;
+        }
+        
+        ClickableArea* area = &hierarchy->area[idx];
+        
+        Vector2 normal;
+        f32 depth;
+        u64 selected_area_depth_layer = 0;
+        bool overlaps = polygon_overlaps_point_scalar(
+            area->rectangle.x, area->rectangle.y,
+            4, // this will need to change: if the whole thing breaks you know why :)))
+            mouse_world_position.x, mouse_world_position.y,
+            &normal.x, &normal.y, &depth
+        );
+        
+        if(!overlaps){
+            continue;
+        }
 
-            // loop through all of the previously selected entities
-            // and skip this one if it was previously selected.
-            bool is_previously_selected = false;
-            
-            for(i32 j = 0; j < hierarchy->previous_idx_count; j++){
-                BOUNDS_CHECK(j, hierarchy->previous_idx_length);
-                i32 previous_idx = hierarchy->previous_idx[j];
-                if(idx == previous_idx){
-                    is_previously_selected = true;
-                    break;
-                }
-            }
-            
-            if(is_previously_selected){
-                continue;
-            }
-
-            // get selected.
-            BOUNDS_CHECK(hierarchy->selected_idx, hierarchy->area_length);
-            ClickableArea* selected_area = &hierarchy->area[hierarchy->selected_idx];
-
-            if(area->depth_layer >= selected_area->depth_layer){
-                hierarchy->selected_idx = idx;
+        // loop through all of the previously selected entities
+        // and skip this one if it was previously selected.
+        bool is_previously_selected = false;
+        
+        for(i32 j = 0; j < hierarchy->previous_idx_count; j++){
+            BOUNDS_CHECK(j, hierarchy->previous_idx_length);
+            i32 previous_idx = hierarchy->previous_idx[j];
+            if(idx == previous_idx){
+                is_previously_selected = true;
+                break;
             }
         }
         
-        // if the mouse didnt find anything to select.
-        if(!hierarchy->selected_idx){
-
-            // if the mouse did click on something.
-            if(hierarchy->first_hit_idx){
-                // go to the top of the stack.
-                hierarchy->selected_idx = hierarchy->first_hit_idx;
-            }
-            // if the mouse didn't click on anything, clear the stack entirely.
-            hierarchy->previous_idx_count = 0;
+        if(is_previously_selected){
+            continue;
         }
+
+        // get selected.
+        BOUNDS_CHECK(hierarchy->selected_idx, hierarchy->area_length);
+        ClickableArea* selected_area = &hierarchy->area[hierarchy->selected_idx];
+
+        if(area->depth_layer >= selected_area_depth_layer){
+            hierarchy->selected_idx = idx;
+            selected_area_depth_layer = area->depth_layer;
+        }
+    }
+        
+    // if the mouse didnt find anything to select.
+    if(!hierarchy->selected_idx){
+
+        if(hierarchy->previous_idx_count){
+            hierarchy->selected_idx = hierarchy->previous_idx[0];
+        }
+        
+        // if the mouse didn't click on anything, clear the stack entirely.
+        hierarchy->previous_idx_count = 0;
+    }
+    
+    if(hierarchy->selected_idx){
+        ARRAY_PUSH(hierarchy->previous_idx, hierarchy->previous_idx_length, &hierarchy->previous_idx_count, hierarchy->selected_idx);
     }
 }
 

@@ -1076,7 +1076,6 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
             i32 count = input_get_latest_active_key_print_count();
             while(count){
 
-            
                 if(key == Key_Backspace){
                     string_pop(scratch_space);
                 }
@@ -1171,6 +1170,10 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
             }
             
             if(!editor_state->mouse_state.hovering_element){
+            
+                if(editor_mouse_state->current_behaviour != Editor_MouseStateBehaviour_Navigate){
+                    clickable_area_hierarchy_clear_previous_selected_stack(clickable_area_hierarchy);
+                }
             
                 switch(editor_mouse_state->current_behaviour){
                     case Editor_MouseStateBehaviour_Navigate:{
