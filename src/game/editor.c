@@ -76,6 +76,10 @@ typedef struct{
     String f32_input_text_box_scratch_space;
     String string_input_text_box_scratch_space;
     GFX_State* gfx_state;
+    
+    Vector2 world_camera_position;
+    f32 world_camera_orthographic_size;
+    
     ClickableAreaHierarchy game_entity_clickable_area_hierarchy;
     GenId slected_game_entity_gid;
     Editor_Menu menu;
@@ -120,6 +124,10 @@ static i32 editor_gfx_clay_element_id = 0;
 /// @ Defines.
 ///
 
+#define EDITOR_WORLD_CAMERA_PROJECTION_TYPE GFX_ProjectionType_Orthographic
+#define EDITOR_WORLD_CAMERA_COORDINATE_SPACE GFX_CoordinateSpace_Cartesian
+#define EDITOR_WORLD_CAMERA_FAR_Z F32_MAX
+#define EDITOR_WORLD_CAMERA_NEAR_Z F32_EPSILON
 
 // the length of the clickable area struct's vertex arrays.
 #define EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH 4
@@ -1144,26 +1152,21 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
             
             { // camera_input();
         
-                Entity* world_camera;
-                if(entity_manager_get_world_camera(*game_entity_manager, &world_camera)){
-                    
-                    f32 camera_move_speed = 1.334f * delta_time * world_camera->camera_orthographic_size;
-                    f32 camera_zoom_speed = 0.156f * delta_time * world_camera->camera_orthographic_size;
-                    
-                    { // movement();
+                
+                f32 camera_move_speed = 1.334f * delta_time * editor_state->world_camera_orthographic_size;
+                f32 camera_zoom_speed = 0.156f * delta_time * editor_state->world_camera_orthographic_size;
+                
+                { // movement();
 
-                        if(input_is_mouse_button_pressed(MouseButton_Middle)){
-                            Transform2D global_transform = world_camera->global_transform;
-                            Vector2 movement = vector2_mul_val(gfx_get_mouse_delta_world_position(game_gfx_state), camera_move_speed);
-                            global_transform.position = vector2_sub(global_transform.position, movement);
-                            entity_set_global_transform(game_entity_manager, game_entity_manager->world_camera_entity_gid, global_transform);
-                        }
+                    if(input_is_mouse_button_pressed(MouseButton_Middle)){
+                        Vector2 movement = vector2_mul_val(gfx_get_mouse_delta_world_position(game_gfx_state), camera_move_speed);
+                        editor_state->world_camera_position = vector2_sub(editor_state->world_camera_position, movement);
                     }
+                }
 
-                    { // zoom();
+                { // zoom();
 
-                        world_camera->camera_orthographic_size -= input_get_mouse_scroll_wheel_delta_value() * camera_zoom_speed;
-                    }
+                    editor_state->world_camera_orthographic_size -= input_get_mouse_scroll_wheel_delta_value() * camera_zoom_speed;
                 }
             }
             

@@ -160,10 +160,11 @@ void app_main(){
 
     GenId level_gid = entity_spawn_level_root(&game_state.entity_manager, (String){.chars = "level 0", .length = 7, .count = 7}, TRANSFORM2D_IDENTITY, 0);
 
+    bool was_in_editor_mode = false;
     bool in_editor_mode = false;
     Key last_editor_key_pressed = Key_None;
 
-    { // update loop
+    { // update_loop();
 
         u128 prev_process_tick_in_mili  = 0;
         f32 previous_time_in_seconds    = 0.0f;
@@ -211,16 +212,111 @@ void app_main(){
                 game_state_late_update(&game_state, delta_time, in_editor_mode);
             }
 
+
+            { // app end update.
+            
+                { // choose_camera();
+                
+                    EntityManager* entity_manager = &game_state.entity_manager;
+                    
+                    // hoisting invariance.
+                    if(in_editor_mode){
+                        
+                        // when first entering the editor state, the editor camera should 
+                        // mimic the game camera position and scale.
+                        if(!was_in_editor_mode){
+                            Entity* world_camera_entity;
+                            if(entity_manager_get_world_camera(*entity_manager, &world_camera_entity)){
+                                editor_state.world_camera_position            = world_camera_entity->global_transform.position;
+                                editor_state.world_camera_orthographic_size   = world_camera_entity->camera_orthographic_size;
+                            }
+                        }
+                        
+                        gfx_orthographic_camera_init(
+                            &gfx_state.world_camera, 
+                            EDITOR_WORLD_CAMERA_COORDINATE_SPACE,
+                            vector3_add(
+                                vector2_to_vector3(editor_state.world_camera_position), 
+                                CAMERA_POSITIONAL_OFFSET
+                            ), 
+                            EDITOR_WORLD_CAMERA_NEAR_Z, 
+                            EDITOR_WORLD_CAMERA_FAR_Z, 
+                            editor_state.world_camera_orthographic_size
+                        );
+                    }
+                    else{                        
+                        Entity* world_camera_entity;
+                        if(entity_manager_get_world_camera(game_state.entity_manager, &world_camera_entity)){
+                            
+                            Vector2 scale = world_camera_entity->global_transform.scale;
+                            gfx_orthographic_camera_init(
+                                &gfx_state.world_camera, 
+                                WORLD_CAMERA_COORDINATE_SPACE, 
+                                vector3_add(
+                                    vector2_to_vector3(world_camera_entity->global_transform.position), 
+                                    CAMERA_POSITIONAL_OFFSET
+                                ), 
+                                world_camera_entity->camera_near_z, 
+                                world_camera_entity->camera_far_z, 
+                                world_camera_entity->camera_orthographic_size
+                            );
+
+                        }                        
+                    }
+                    
+                    { // uploading_ubo();
+
+                        /**
+                            NOTE:
+                            this might have to be swapped for the final render target resolution, maybe idk.
+                        **/
+                        f32 aspect_ratio = platform_window_calc_aspect_ratio(*gfx_state.window_ctx);
+                        gfx_camera_update_projection_matrix(&gfx_state.world_camera, aspect_ratio);
+                        gfx_camera_update_projection_matrix(&gfx_state.screen_camera, aspect_ratio);
+                    
+                        Ubo ubo = {
+                            .world_camera_matrix =
+                                matrix4x4_mul(
+                                    matrix4x4_mul(
+                                        gfx_state.world_camera.projection,
+                                        gfx_state.world_camera.view
+                                    ),
+                                gfx_state.world_camera.model
+                            ),
+                            .screen_camera_matrix =
+                                matrix4x4_mul(
+                                    matrix4x4_mul(
+                                        gfx_state.screen_camera.projection,
+                                        gfx_state.screen_camera.view
+                                    ),
+                                gfx_state.screen_camera.model
+                            ),
+                            .world_camera_far_z     = gfx_state.world_camera.far_z,
+                            .world_camera_near_z    = gfx_state.world_camera.near_z,            
+                        };
+                       
+                        gfx_write_to_user_uniform_buffer(&gfx_state, &ubo, sizeof(Ubo));
+                    
+                    }
+                }
+            }
+
             if(in_editor_mode)
             { // editor update.
 
                 editor_state_update(&editor_state, &game_state, transient, delta_time);
             }
 
-            { // app end update.
+            { // draw();
+            
                 game_state_draw(&game_state, transient, delta_time);
                 gfx_state_draw(&gfx_state);
+            }
+            
+            // prepare_for_next_frame();
+            {
                 transient->stride = 0;
+                was_in_editor_mode = in_editor_mode;
             }
         }
     }

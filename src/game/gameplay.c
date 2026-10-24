@@ -1001,8 +1001,6 @@ void load_board_level_callback(GameState* game_state, void* user_data){
     Transform2D transform = TRANSFORM2D_IDENTITY;;
     transform.scale = vector2_mul_val(transform.scale, 20.0f);
     
-    
-    
     // hoisting invariance.
     BoardState* board_state = &game_state->board_state;
     GenIdAllocator* gid_allocator = &game_state->entity_manager.gen_id_allocator;
@@ -1127,35 +1125,6 @@ GenId entity_spawn_board_turn_text(EntityManager* entity_manager, String name, T
 #define UI_CAMERA_COORDINATE_SPACE GFX_CoordinateSpace_Rasterised 
 #define UI_CAMERA_DEFAULT_NEAR_Z 0.01f
 #define UI_CAMERA_DEFAULT_FAR_Z 100.0f
-
-void camera_update(Entity* entity, GFX_State* gfx_state, f32 delta_time){    
-    GFX_Camera* camera;
-    GFX_CoordinateSpace coord_space;
-    
-    switch(entity->type_id){
-        default:{
-            ASSERT(false, "entity is not a camera.");
-            return;
-        };
-        case EntityTypeId_WorldCamera: {
-            camera = &gfx_state->world_camera;
-            coord_space = WORLD_CAMERA_COORDINATE_SPACE;
-        } break;
-        case EntityTypeId_UiCamera: {
-            camera = &gfx_state->screen_camera;
-            coord_space = UI_CAMERA_COORDINATE_SPACE;
-        } break;
-    }
-    
-    gfx_orthographic_camera_init(
-        camera, 
-        coord_space, 
-        vector3_add(vector2_to_vector3(entity->global_transform.position), CAMERA_POSITIONAL_OFFSET), 
-        entity->camera_near_z, 
-        entity->camera_far_z, 
-        entity->camera_orthographic_size * MAX(entity->global_transform.scale.x, entity->global_transform.scale.y)
-    );
-}
 
 GenId entity_spawn_world_camera(EntityManager* entity_manager, String name, Transform2D transform, GenId parent_entity_gid){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent_entity_gid);
@@ -2942,8 +2911,6 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             switch(entity->type_id){
                 case EntityTypeId_BallCue:{ball_cue_update(entity, game_state, delta_time);}break;
                 case EntityTypeId_WindMillHinge:{windmill_hinge_update(entity, i, game_state, delta_time);}break;
-                case EntityTypeId_WorldCamera:{camera_update(entity, gfx_state, delta_time);}break;
-                case EntityTypeId_UiCamera:{camera_update(entity, gfx_state, delta_time);}break;
             }
         }
     }
@@ -3062,65 +3029,6 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                 );
             }
         }
-    }
-        
-    { // gfx_handling();
-        
-        // hoisting invariance.
-        EntityManager* entity_manager = &game_state->entity_manager;
-        GFX_State* gfx_state = entity_manager->gfx_state;
-        
-        f32 camera_speed = 100.0f * delta_time;
-    
-        Entity* world_camera;
-        if(entity_manager_get_world_camera(*entity_manager, &world_camera)){
-            Transform2D global_transform = world_camera->global_transform;
-            if(input_is_key_pressed(Key_Up)){
-                global_transform.position.y += camera_speed;
-            }
-            if(input_is_key_pressed(Key_Down)){
-                global_transform.position.y -= camera_speed;
-            }
-            if(input_is_key_pressed(Key_Left)){
-                global_transform.position.x -= camera_speed;
-            }
-            if(input_is_key_pressed(Key_Right)){
-                global_transform.position.x += camera_speed;
-            }
-            
-            entity_set_global_transform(entity_manager, entity_manager->world_camera_entity_gid, global_transform);   
-        }
-    
-        /**
-            NOTE:
-            this might have to be swapped for the final render target resolution, maybe idk.
-        **/
-        f32 aspect_ratio = platform_window_calc_aspect_ratio(*gfx_state->window_ctx);
-        gfx_camera_update_projection_matrix(&gfx_state->world_camera, aspect_ratio);
-        gfx_camera_update_projection_matrix(&gfx_state->screen_camera, aspect_ratio);
-    
-        Ubo ubo = {
-            .world_camera_matrix =
-                matrix4x4_mul(
-                    matrix4x4_mul(
-                        gfx_state->world_camera.projection,
-                        gfx_state->world_camera.view
-                    ),
-                gfx_state->world_camera.model
-            ),
-            .screen_camera_matrix =
-                matrix4x4_mul(
-                    matrix4x4_mul(
-                        gfx_state->screen_camera.projection,
-                        gfx_state->screen_camera.view
-                    ),
-                gfx_state->screen_camera.model
-            ),
-            .world_camera_far_z     = gfx_state->world_camera.far_z,
-            .world_camera_near_z    = gfx_state->world_camera.near_z,
-        };
-    
-        gfx_write_to_user_uniform_buffer(gfx_state, &ubo, sizeof(Ubo));
     }
 }
 
@@ -3400,8 +3308,4 @@ void game_state_draw(GameState* game_state, MemoryArena* transient_arena, f32 de
 #endif
     
     gfx_clay_end_layout(gfx_state, delta_time, SPRITE_LAYER_GAME_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
-}
-
-void shit_my_pants(){
-    platform_output_message("shit my pants!");
 }
