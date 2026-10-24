@@ -19,8 +19,6 @@ struct GameState;
 ///
 
 
-#define BOARD_STATE_MAX_BALLS 10
-
 typedef enum{
 
     // the stage where the player can direct the cue ball.
@@ -123,7 +121,7 @@ typedef struct{
     Transform2D sprite_local_transform;
     
     // this is only applicable to the root entity that was loaded from a file.
-    String loaded_from_file_path;
+    String serialisation_file_path;
     
     String name;
     Aabb clickable_aabb;
@@ -175,6 +173,8 @@ typedef struct{
 typedef GenId TimerHandle;
 
 typedef struct{
+    String name;
+    String serialisation_file_path;
     // the transform to spawn the entity at.
     Transform2D spawn_transform;
     /*
@@ -295,9 +295,16 @@ typedef struct{
 
 
 ///
-/// Definitions.
+/// @ defines
 ///
 
+
+#define BOARD_STATE_MAX_BALLS 10
+
+#define ASSET_DIRECTORY_PATH "../assets/"
+#define ASSET_DIRECTORY_PATH_LENGTH 10
+#define LEVEL_ASSET_DIRECTORY_PATH "../assets/levels/"
+#define LEVEL_ASSET_DIRECTORY_PATH_LENGTH 17
 
 #define BALL_FIZX_SHAPE_MATERIAL (FIZX_Material) {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 1.7f, .restitution = 0.167f, .rotational_response = true}
 #define BALL_FIZX_BODY_LINEAR_DRAG 0.75f
@@ -702,14 +709,14 @@ void entity_manager_dealloc_entity_data_unsafe(EntityManager* manager, i32 idx){
     
     String name = entity->name;
     string_clear(&name);
-    String loaded_from_file_path = entity->loaded_from_file_path;
-    string_clear(&loaded_from_file_path);
+    String serialisation_file_path = entity->serialisation_file_path;
+    string_clear(&serialisation_file_path);
     
     *entity = (Entity){0};
     
     // ensure that the name tag isnt fucked with.
     entity->name = name;
-    entity->loaded_from_file_path;
+    entity->serialisation_file_path;
 }
 
 void entity_on_entity_hierarchy_dealloc(IntrusiveList* list, i32 node_idx, void* user_data){
@@ -757,13 +764,18 @@ void entity_manager_init(
     ASSERT(!manager->is_init, "already init.");
 
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->entity, &manager->entity_length, entity_amount);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->deserialised_entity, &manager->deserialised_entity_length, entity_amount);
-    manager->deserialised_entity_count = 0;
-
-    for(i32 i = 0; i < entity_amount; i++){
+    for(i32 i = 0; i < manager->entity_length; i++){
         Entity* entity = &manager->entity[i];
         string_init(&entity->name, arena, ENTITY_NAME_LENGTH);
-        string_init(&entity->loaded_from_file_path, arena, platform_get_max_file_path_length());
+        string_init(&entity->serialisation_file_path, arena, platform_get_max_file_path_length());
+    }
+    
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->deserialised_entity, &manager->deserialised_entity_length, entity_amount);
+    manager->deserialised_entity_count = 0;
+    for(i32 i = 0; i < manager->deserialised_entity_length; i++){
+        DeserialisedEntity* deserialised_entity = &manager->deserialised_entity[i];
+        string_init(&deserialised_entity->name, arena, ENTITY_NAME_LENGTH);
+        string_init(&deserialised_entity->serialisation_file_path, arena, platform_get_max_file_path_length());
     }
 
     gen_id_allocator_init(&manager->gen_id_allocator, arena, entity_amount);
@@ -2409,17 +2421,12 @@ GenId level_manager_load_level_file(LevelManager* level_manager, String file_pat
         BOUNDS_CHECK(entity_manager->deserialised_entity_count, entity_manager->deserialised_entity_length);
         deserialised_entity = &entity_manager->deserialised_entity[entity_manager->deserialised_entity_count-1];
 
-        // NOTE:
-        // this can corrupt the stack, as sscanf doesnt bounds check at all for name strings.
-        // be very careful here, if the program nukes itself when loadiing saved data, this is probs why.
-        // have fun champ :)
-        String name = {.chars =  (char[ENTITY_NAME_LENGTH]){0}, .length = ENTITY_NAME_LENGTH};
         deserialised_entity->spawn_transform = TRANSFORM2D_IDENTITY;
         lines_read = sscanf(
             file_data,
             "%[^;]%n;%i;%i;%f;%f;%f;%f;%f;%f;%n",
-            name.chars,
-            &name.count,
+            deserialised_entity->name.chars,
+            &deserialised_entity->name.count,
             &deserialised_entity->entity_type_id,
             &deserialised_entity->parent_deserialised_entity_idx,
             &deserialised_entity->spawn_transform.position.x,
@@ -2437,22 +2444,38 @@ GenId level_manager_load_level_file(LevelManager* level_manager, String file_pat
         //
         // EXAMPLE:
         // [0] is the NIL.
-        // [1] parent_deserialised_entity_idx = 0;
+        // [1] parent_deserialised_entity_idx = 0; // the root.
         // [2] parent_deserialised_entity_idx = 1; // references the line above.
         // [3] parent_deserialised_entity_idx = 4; // this is not okay as it is a later in the list and hasnt been loaded yet, also its out of bounds.
-        i32 parent_idx = deserialised_entity->parent_deserialised_entity_idx;
+        i32 parent_idx = deserialised_entity->parent_deserialised_entity_idx; // note that parenting is by line in the level file.
         BOUNDS_CHECK(parent_idx, entity_manager->deserialised_entity_count);
+                
         GenId parent_gid = parent_idx <= 0
         ? 0
         : entity_manager->deserialised_entity[parent_idx].entity_gid;
 
         if(lines_read == 9){
-            deserialised_entity->entity_gid = entity_spawn(entity_manager, deserialised_entity->entity_type_id, name, deserialised_entity->spawn_transform, parent_gid);
-        }
-
-        if(lines_read == 9){
+            deserialised_entity->entity_gid = entity_spawn(
+                entity_manager, 
+                deserialised_entity->entity_type_id, 
+                deserialised_entity->name, 
+                deserialised_entity->spawn_transform, 
+                parent_gid
+            );
             file_data += bytes_consumed + 1; // add 2 to account for the ';' delimiter and the subsequent '\n'.
-        }
+   
+            // root entity from file.
+            if(parent_idx == 0){
+                Entity* root_entity;
+                if(entity_manager_get_entity(*entity_manager, deserialised_entity->entity_gid, &root_entity)){
+                    // set the root entity's serialisation file path to the file path we just loaded it from.
+                    string_push(&root_entity->serialisation_file_path, file_path);
+                }
+                else{
+                    ASSERT(false, "failed to retrieve root entity.");
+                }
+            }
+        }    
         else{
             break;
         }

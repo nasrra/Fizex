@@ -19,9 +19,11 @@
 #define WINDOW_HEIGHT 1080
 #define GFX_DEFAULT_WIREFRAME_THICKNESS 0.05f
 
-/**====================
-    functions
-====================**//**/
+
+///
+/// @ functions
+///
+
 
 void app_main(){
 
@@ -146,7 +148,7 @@ void app_main(){
 
         { // load level.
             string_clear(&file_path);
-            string_push_chars(&file_path, "../assets/saved.scsv", 22);
+            string_push_chars(&file_path,    "../assets/levels/level_001.scsv", 31);
             LoadBoardLevelCallbackContext load_board_level_callback_ctx = {
                 .game_state = &game_state
             };

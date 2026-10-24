@@ -887,7 +887,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
         i32 first_idx = sprite_idx;
         i32 idx = first_idx;
         while(true){
-            gfx_sprite_set_colour_unsafe(state, sprite_idx, colour);
+            gfx_sprite_set_colour_unsafe(state, idx, colour);
             BOUNDS_CHECK(idx, state->sprite_manager.host_sprite_length);
             GFX_HostSprite* host = &state->sprite_manager.host_sprite[idx];
             idx = host->next_in_chain;
@@ -3617,6 +3617,15 @@ void gfxclay_handle_errors(Clay_ErrorData errorData) {
     }
 }
 
+inline GFX_Colour gfx_clay_colour_to_gfx_colour(Clay_Color clay_colour){
+    return (GFX_Colour){
+        .r = clay_colour.r > 0 ? 255.0f / (f32)clay_colour.r : 0.0f,
+        .g = clay_colour.g > 0 ? 255.0f / (f32)clay_colour.g : 0.0f,
+        .b = clay_colour.b > 0 ? 255.0f / (f32)clay_colour.b : 0.0f,
+        .a = clay_colour.a > 0 ? 255.0f / (f32)clay_colour.a : 0.0f
+    };
+}
+
 // Example measure text function
 static inline Clay_Dimensions MeasureText(Clay_StringSlice text, Clay_TextElementConfig *config, uintptr_t userData) {
     // Clay_TextElementConfig contains members such as fontId, fontSize, letterSpacing etc
@@ -3721,6 +3730,10 @@ void gfx_clay_end_layout(GFX_State* gfx_state, f32 delta_time, u32 sprite_layer,
 
                 GenId sprite_gid = gfx_one_frame_sprite_chain_alloc(gfx_state, str.length);
                 
+                if(renderCommand->renderData.text.textColor.b == 0){
+                    platform_output_message("farts\n");
+                }
+                
                 // order matters here: text->transform.
                 gfx_sprite_string_set_active(gfx_state, sprite_gid);
                 gfx_sprite_string_set_text(gfx_state, sprite_gid, font_virtual_texture, str);
@@ -3728,7 +3741,7 @@ void gfx_clay_end_layout(GFX_State* gfx_state, f32 delta_time, u32 sprite_layer,
                 gfx_sprite_string_set_material(gfx_state, sprite_gid, text_material);
                 gfx_sprite_string_set_layer(gfx_state, sprite_gid, sprite_layer);
                 gfx_sprite_string_set_depth(gfx_state, sprite_gid, depth);
-
+                gfx_sprite_string_set_colour(gfx_state, sprite_gid, gfx_clay_colour_to_gfx_colour(renderCommand->renderData.text.textColor));
             }break;
             default:{
                 ASSERT(false, "attempted to use unimplemented clay feature!");
