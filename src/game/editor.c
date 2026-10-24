@@ -499,7 +499,7 @@ void editor_save_level_entity_recurssive(
             );
         }
 
-        // TODO: in relase, dont do this!
+        // TODO: in release, dont do this!
         if(line_idx == 1){
             char* chars = (char*)platform_alloc_memory(platform_get_max_file_path_length());
             String dst_file_path = {.chars = chars, .length = platform_get_max_file_path_length()};

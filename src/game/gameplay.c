@@ -697,18 +697,13 @@ void entity_manager_dealloc_entity_data_unsafe(EntityManager* manager, i32 idx){
     BOUNDS_CHECK(idx, manager->entity_length);
     Entity* entity = &manager->entity[idx];
 
-    if(entity->type_id == EntityTypeId_WindMillHinge){
-        platform_output_message("a");
-    }
-
     if(entity->is_physics_body){
         fizx_body_dealloc(&manager->fizx_state, entity->physics_body_gid);
     }
 
     if(entity->sprite_gid){
         gfx_sprite_dealloc(manager->gfx_state, entity->sprite_gid);
-    }
-    
+    }    
     
     String name = entity->name;
     string_clear(&name);
@@ -2385,7 +2380,15 @@ void level_manager_defer_load_level(
     level_manager->deferred_level_load_count++;
 }
 
-GenId level_manager_load_level_file(LevelManager* level_manager, String file_path, MemoryArena* transient){
+/*
+    `parameters`:
+    `parent_idx_offset`: this should be set to `0` when calling this outside of the function; i.e, just always set it to `0`.
+    `root_parent_idx`: the index of the current root entity's parent in the deserialised entity array; this should be set to `1` when first calling the recursion/this function.
+*/
+GenId level_manager_load_level_file_recurssive(
+    LevelManager* level_manager, String file_path, MemoryArena* transient, 
+    i32 parent_idx_offset, i32 root_parent_idx
+){
     
     EntityManager* entity_manager = level_manager->entity_manager;
 
@@ -2405,29 +2408,34 @@ GenId level_manager_load_level_file(LevelManager* level_manager, String file_pat
     i32 lines_read = 1;
     i32 bytes_consumed = 0;
     
-    // zero the first two deserialised entities.
-    // this is to preserve the NIL as well as the first loaded entity.
-    // specifically for the first loaded entity, in the case that the 'while'
-    // loop fails on the first iteration, this ensures that the later returning of 
-    // 'entity_manager->deserialised_entity[1].entity_gid' is zero when the level cannot be loaded at all.
-    ZERO_MEMORY(entity_manager->deserialised_entity, 2);
-
-    // skip the NIL
-    // this is because the level files (.scsv) ordering defines what is the parent of an entity.
-    // for instance, an entity on line 12 can specify that it is the a child of the entity on line 3.
-    // 0 means that it doesnt have a parent at all. 
-    entity_manager->deserialised_entity_count = 1;
-
+    // only reset the deserialised entity storage on the first call so that
+    // any asset entity entries in the level file dont reset the shared deserialised entity storage.
+    // otherwise the returned GenID of this function would be the root of the last entity asset file that was loaded
+    // rather than the parent of all of them, i.e, the level we want to load.
+    ASSERT(parent_idx_offset >= 0, "invalid offset");
+    if(parent_idx_offset <= 0){
+        // zero the first two deserialised entities.
+        // this is to preserve the NIL as well as the first loaded entity.
+        // specifically for the first loaded entity, in the case that the 'while'
+        // loop fails on the first iteration, this ensures that the later returning of 
+        // 'entity_manager->deserialised_entity[1].entity_gid' is zero when the level cannot be loaded at all.
+        ZERO_MEMORY(entity_manager->deserialised_entity, 2);
+    
+        // skip the NIL
+        // this is because the level files (.scsv) ordering defines what is the parent of an entity.
+        // for instance, an entity on line 12 can specify that it is the a child of the entity on line 3.
+        // 0 means that it doesnt have a parent at all. 
+        entity_manager->deserialised_entity_count = 1;
+    }
+    
     while(true){
-        entity_manager->deserialised_entity_count += 1;
-        if(entity_manager->deserialised_entity_count > entity_manager->deserialised_entity_length){
+    
+        // ensure that we can load the entity.
+        i32 next_count = entity_manager->deserialised_entity_count + 1;
+        if(next_count > entity_manager->deserialised_entity_length){
             ASSERT(false, "cannot store all required deserialised entities from level file.");
             break;
         }
-
-        BOUNDS_CHECK(entity_manager->deserialised_entity_count, entity_manager->deserialised_entity_length);
-        deserialised_entity = &entity_manager->deserialised_entity[entity_manager->deserialised_entity_count-1];
-
 
         // get the entity token.
         char token;
@@ -2464,9 +2472,13 @@ GenId level_manager_load_level_file(LevelManager* level_manager, String file_pat
                     break;
                 }
                 
-                level_manager_load_level_file(level_manager, scratch_space, transient);
+                level_manager_load_level_file_recurssive(level_manager, scratch_space, transient, entity_manager->deserialised_entity_count-1, root_parent_idx);
             }break;
             case LEVEL_FILE_NATIVE_ENTITY_TOKEN: {
+
+                // get the slot to load into.
+                BOUNDS_CHECK(entity_manager->deserialised_entity_count, entity_manager->deserialised_entity_length);
+                deserialised_entity = &entity_manager->deserialised_entity[entity_manager->deserialised_entity_count];
 
                 deserialised_entity->spawn_transform = TRANSFORM2D_IDENTITY;
                 lines_read = sscanf(
@@ -2485,23 +2497,46 @@ GenId level_manager_load_level_file(LevelManager* level_manager, String file_pat
                     &bytes_consumed
                 );
         
-                // NOTE:
-                // deserialsied entities should be in the order (from 0 to length) parent->child.
-                // such that entities at the end can be parented to ones near the start.
-                //
-                // EXAMPLE:
-                // [0] is the NIL.
-                // [1] parent_deserialised_entity_idx = 0; // the root.
-                // [2] parent_deserialised_entity_idx = 1; // references the line above.
-                // [3] parent_deserialised_entity_idx = 4; // this is not okay as it is a later in the list and hasnt been loaded yet, also its out of bounds.
-                i32 parent_idx = deserialised_entity->parent_deserialised_entity_idx; // note that parenting is by line in the level file.
-                BOUNDS_CHECK(parent_idx, entity_manager->deserialised_entity_count);
-                        
-                GenId parent_gid = parent_idx <= 0
-                ? 0
-                : entity_manager->deserialised_entity[parent_idx].entity_gid;
-        
                 if(lines_read == 9){
+            
+                    // NOTE:
+                    // deserialsied entities should be in the order (from 0 to length) parent->child.
+                    // such that entities at the end can be parented to ones near the start.
+                    //
+                    // EXAMPLE:
+                    // [0] is the NIL.
+                    // [1] parent_deserialised_entity_idx = 0; // the root.
+                    // [2] parent_deserialised_entity_idx = 1; // references the line above.
+                    // [3] parent_deserialised_entity_idx = 4; // this is not okay as it is a later in the list and hasnt been loaded yet, also its out of bounds.
+                    i32 parent_idx = deserialised_entity->parent_deserialised_entity_idx; // note that parenting is by line in the level file.
+                    BOUNDS_CHECK(parent_idx, entity_manager->deserialised_entity_count);
+                    
+                    GenId parent_gid;
+                    if(parent_idx <= 0){
+                        
+                        // this it is an asset entity file's root entity (parent_idx_offset > 0), 
+                        // it should be parented to the previous entity tree's root. 
+                        // if not, it shouldnt be parented to anything.
+                        
+                        parent_gid = parent_idx_offset > 0
+                        ? entity_manager->deserialised_entity[root_parent_idx].entity_gid
+                        : 0;
+                        
+                        // this is the parent of the next asset entity's root.
+                        root_parent_idx = entity_manager->deserialised_entity_count;
+                    }
+                    else{
+                        
+                        if(parent_idx_offset > 0){
+                            platform_output_message("asd");
+                        }
+                        
+                        // this isa native entity within the asset entity file.
+                        
+                        parent_gid = entity_manager->deserialised_entity[parent_idx + parent_idx_offset].entity_gid;
+                    }
+                                        
+                    // create the new deserialised entity.
                     deserialised_entity->entity_gid = entity_spawn(
                         entity_manager, 
                         deserialised_entity->entity_type_id, 
@@ -2519,8 +2554,11 @@ GenId level_manager_load_level_file(LevelManager* level_manager, String file_pat
                         }
                         else{
                             ASSERT(false, "failed to retrieve root entity.");
+                            break;
                         }
                     }
+                    
+                    entity_manager->deserialised_entity_count += 1;
                 }    
                 else{
                     ASSERT(false, "mangled entity serialisation found.");
@@ -2538,7 +2576,13 @@ GenId level_manager_load_level_file(LevelManager* level_manager, String file_pat
     
     // return the root entity.
     BOUNDS_CHECK(1, entity_manager->deserialised_entity_length);
-    return entity_manager->deserialised_entity[1].entity_gid;    
+    return entity_manager->deserialised_entity[1].entity_gid;  
+}
+
+GenId level_manager_load_level_file(
+    LevelManager* level_manager, String file_path, MemoryArena* transient 
+){
+    return level_manager_load_level_file_recurssive(level_manager, file_path, transient, 0, 1);
 }
 
 void level_manager_defer_reload_world_level(
