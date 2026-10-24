@@ -420,6 +420,18 @@ typedef struct{
     }                                                                                               \
 } while(0)
 
+#define MEMORY_ARENA_ALLOC_STRUCT(arena, out_ptr) do{                                               \
+                                                                                                    \
+    size_t MEMORY_ARENA_ALLOC_MEMORY_new_stride = (arena)->stride + sizeof(*out_ptr);               \
+    if(MEMORY_ARENA_ALLOC_MEMORY_new_stride <= (arena)->size){                                      \
+        (out_ptr) = (void*)((char*)(arena)->ptr + (arena)->stride);                                 \
+        (arena)->stride = MEMORY_ARENA_ALLOC_MEMORY_new_stride;                                     \
+    }                                                                                               \
+    else{                                                                                           \
+        PANIC(false, "insufficient space to push data onto memory arena.");                         \
+    }                                                                                               \
+} while(0)
+
 // binary: 0000 0000 0000 0000 0000 0000 0000 0000 1111 1111 1111 1111 1111 1111 1111 1111.
 
 /*

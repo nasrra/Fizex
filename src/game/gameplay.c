@@ -59,6 +59,7 @@ typedef struct{
     String turn_text_scratch_space;
     i32 turn_number;
     bool display_turn_text;
+    bool show_pause_menu;
     
     bool is_init;
 } BoardState;
@@ -677,12 +678,14 @@ void board_state_init(BoardState* state, MemoryArena* arena, i32 max_turn_based_
 }
 
 void board_state_reset(BoardState* state){
+    state->cue_ball_entity_gid = 0;
     state->turn = BoardTurn_Player;
     state->stage = BoardStage_Playing;
     state->number_ball_count = 0;
     state->turn_based_entity_count = 0;
     state->turn_number = 0;
     state->display_turn_text = false;
+    state->show_pause_menu = false;
 }
 
 
@@ -1021,21 +1024,41 @@ typedef struct {
     GameState* game_state;
 }LoadBoardLevelCallbackContext;
 
+void load_level_callback(GameState* game_state, void* user_data){
+    // hoisting invariance.
+    EntityManager* entity_manager = &game_state->entity_manager;
+    BoardState* board_state = &game_state->board_state;
+
+    clickable_area_hierarchy_reset(&game_state->entity_manager.clickable_area_hierarchy);
+    game_state->mouse_state.clicked_entity_idx = 0;
+    board_state_reset(board_state);
+    
+    // reset_entity_manager();
+    entity_manager->world_camera_entity_gid = 0;
+    entity_manager->ui_camera_entity_gid = 0;    
+}
+
+typedef struct{
+    MenuStage stage_to_load_to;
+} LoadMenuLevelCallbackContext;
+
+void load_menu_level_callback(GameState* game_state, void* user_data){
+    LoadMenuLevelCallbackContext* ctx = (LoadMenuLevelCallbackContext*)user_data;
+    
+    load_level_callback(game_state, user_data);
+    game_state->stage = GameStage_Menu;
+    game_state->menu_state.stage = ctx->stage_to_load_to; 
+}
+
 void load_board_level_callback(GameState* game_state, void* user_data){    
+    
+    load_level_callback(game_state, user_data);
+    
     // hoisting invariance.
     BoardState* board_state = &game_state->board_state;
     GenIdAllocator* gid_allocator = &game_state->entity_manager.gen_id_allocator;
     
-    Transform2D transform = TRANSFORM2D_IDENTITY;;
-    transform.scale = vector2_mul_val(transform.scale, 20.0f);
-
-    
-    clickable_area_hierarchy_reset(&game_state->entity_manager.clickable_area_hierarchy);
-    game_state->mouse_state.clicked_entity_idx = 0;
-    
-    game_state->stage = GameStage_Board;
-    
-    board_state_reset(board_state);
+    game_state->stage = GameStage_Board;    
     
     for(i32 i = 0; i < gid_allocator->length; i++){
     
@@ -2750,6 +2773,10 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             if(input_is_key_just_pressed(Key_4)){
                 // fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
             }
+            
+            if(input_is_key_just_pressed(Key_Escape)){
+                board_state->show_pause_menu = !board_state->show_pause_menu;
+            }
         }
 
         if(input_is_key_just_pressed(Key_Tilde)){
@@ -3071,6 +3098,28 @@ CLAY(CLAY_SIDI(CLAY_STRING("Board Turn Text"), game_gfx_clay_element_id++), {   
     .backgroundColor = GFX_CLAY_BG_COLOUR                                       \
 })
 
+#define GFX_CLAY_PAUSE_MENU_CONTAINER()                                                 \
+CLAY(CLAY_SIDI(CLAY_STRING("Pause Menu Container"), game_gfx_clay_element_id++), {      \
+    .layout = {                                                                         \
+        .sizing = {                                                                     \
+            .width = CLAY_SIZING_PERCENT(0.75f),                                        \
+            .height = CLAY_SIZING_PERCENT(0.5f)                                         \
+        },                                                                              \
+        .layoutDirection = CLAY_TOP_TO_BOTTOM,                                          \
+        .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },                 \
+        .childGap = 16                                                                  \
+    },                                                                                  \
+    .floating = {                                                                       \
+        .zIndex = 1,                                                                    \
+        .attachPoints = {                                                               \
+            .element = CLAY_ATTACH_POINT_CENTER_CENTER,                                 \
+            .parent = CLAY_ATTACH_POINT_CENTER_CENTER                                   \
+        },                                                                              \
+        .attachTo = CLAY_ATTACH_TO_PARENT                                               \
+    },                                                                                  \
+    .backgroundColor = GFX_CLAY_BG_COLOUR                                               \
+})
+
 #define GAME_GFX_CLAY_TEXT_CONFIG   \
 (Clay_TextElementConfig){           \
     .fontSize = 1,                  \
@@ -3083,9 +3132,21 @@ CLAY(CLAY_SIDI(CLAY_STRING("Board Turn Text"), game_gfx_clay_element_id++), {   
     }                               \
 }
 
+#define GAME_GFX_CLAY_SUB_HEADER_TEXT_CONFIG    \
+(Clay_TextElementConfig){                       \
+    .fontSize = 2,                           \
+    .lineHeight = 24,                           \
+    .textColor = {                              \
+        .r = 255,                               \
+        .g = 255,                               \
+        .b = 255,                               \
+        .a = 255                                \
+    }                                           \
+}
+
 #define GAME_GFX_CLAY_HEADER_TEXT_CONFIG    \
 (Clay_TextElementConfig){                   \
-    .fontSize = 2,                          \
+    .fontSize = 3,                          \
     .lineHeight = 24,                       \
     .textColor = {                          \
         .r = 255,                           \
@@ -3168,7 +3229,7 @@ void load_world_level_button_on_hover_callback(Clay_ElementId element_id, Clay_P
     string_push_chars(&GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.file_path, _file_path_chars, _file_path_length);                                                                               \
     GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.load_type = LevelLoadType_World;                                                                                                                  \
     GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.callback = _level_load_callback;                                                                                                                  \
-    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.callback_user_data = _level_load_callback_user_data;                                                                                              \
+    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.callback_user_data = (char*)_level_load_callback_user_data;                                                                                              \
     GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.callback_user_data_length = _level_load_call_back_user_data_length;                                                                               \
     GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.level_manager = _level_manager;                                                                                                                   \
                                                                                                                                                                                                 \
@@ -3185,7 +3246,7 @@ CLAY(CLAY_SIDI(CLAY_STRING("Level Select Button Container"), game_gfx_clay_eleme
     .layout = {                                                                             \
         .sizing = {                                                                         \
             .width = CLAY_SIZING_PERCENT(0.95f),                                            \
-            .height = CLAY_SIZING_PERCENT(0.25f)                                             \
+            .height = CLAY_SIZING_PERCENT(0.25f)                                            \
         },                                                                                  \
         .layoutDirection = CLAY_LEFT_TO_RIGHT,                                              \
         .padding = CLAY_PADDING_ALL(16)                                                     \
@@ -3307,7 +3368,7 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                 });          
             }break;
             case GameStage_Board:{
-                
+                                
                 CLAY(CLAY_SIDI(CLAY_STRING("Padding Container"), game_gfx_clay_element_id++), {
                     .layout = {                                                           
                         .sizing = {                                                       
@@ -3331,6 +3392,54 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                     switch(board_state->stage){
                         default: {ASSERT(false, "undefined state");} break;
                         case BoardStage_Playing:{
+                            if(board_state->show_pause_menu){
+                                GFX_CLAY_PAUSE_MENU_CONTAINER(){
+                                    
+                                    CLAY_TEXT(CLAY_STRING("Pause Menu!"), GAME_GFX_CLAY_SUB_HEADER_TEXT_CONFIG);
+                                    
+                                    LoadMenuLevelCallbackContext* ctx;
+                                    f32 horizontal_size = 0.75f;
+                                    f32 vertical_size = 0.25f;
+
+                                    String menu_level_file_path;
+                                    string_init(&menu_level_file_path, transient, platform_get_max_file_path_length());
+                                    string_push_chars(&menu_level_file_path, "../assets/levels/menu_level.scsv", 32);
+
+                                    { // return_to_level_select_button();
+                                        
+                                    
+                                        MEMORY_ARENA_ALLOC_STRUCT(transient, ctx);
+                                        ctx->stage_to_load_to = MenuStage_LevelSelector;
+                                        GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
+                                            CLAY_STRING("Return to Level Select"),
+                                            horizontal_size,
+                                            vertical_size,
+                                            transient,
+                                            &game_state->level_manager,
+                                            menu_level_file_path.chars,
+                                            menu_level_file_path.count,
+                                            load_menu_level_callback,
+                                            ctx,
+                                            sizeof(*ctx)
+                                        );
+                                    }
+                                    
+                                    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
+                                        CLAY_STRING("Retry"),
+                                        horizontal_size,
+                                        vertical_size,
+                                        transient,
+                                        &game_state->level_manager,
+                                        game_state->level_manager.world_root_entity_file_path.chars,
+                                        game_state->level_manager.world_root_entity_file_path.count,
+                                        load_board_level_callback,
+                                        NULL,
+                                        0
+                                    );
+                              
+                                }
+                            }
+
                             if(board_state->display_turn_text){
                                 GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
                                     Clay_String clay_string = {
@@ -3343,6 +3452,7 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                     }
                                 }
                             }
+
                         }break;
                         case BoardStage_Lose:{
                             GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
