@@ -26,8 +26,11 @@ typedef enum{
 } Editor_ButtonDataStorageType;
 
 typedef enum{
-    Editor_Menu_EntitySpawner,  
-    Editor_Menu_EntityInspector
+    Editor_Menu_NativeEntitySpawner,  
+    Editor_Menu_EntityInspector,
+    Editor_Menu_AssetEntitySpawner,
+    Editor_Menu_LevelManagement,
+    Editor_Menu_EntityTreeView
 } Editor_Menu;
 
 typedef struct{
@@ -72,6 +75,11 @@ typedef struct{
 } Editor_MouseState;
 
 typedef struct{
+    i32 page;
+    i32 max_pages;
+} Editor_EntityTreeViewState;
+
+typedef struct{
     Editor_MouseState mouse_state;
     String f32_input_text_box_scratch_space;
     String string_input_text_box_scratch_space;
@@ -81,10 +89,16 @@ typedef struct{
     f32 world_camera_orthographic_size;
     
     ClickableAreaHierarchy game_entity_clickable_area_hierarchy;
-    GenId slected_game_entity_gid;
+    
+    GenId selected_game_entity_gid;
+    GenId selected_parent_game_entity_gid;
+    
     Editor_Menu menu;
     bool is_typing;
     bool is_init;
+    
+    Editor_EntityTreeViewState entity_tree_view_state;
+    
 } Editor_State;
 
 typedef struct {
@@ -135,11 +149,13 @@ static i32 editor_gfx_clay_element_id = 0;
 // max value of f32 is: 340,282,346,638,528,859,811,704,183,484,516,925,440
 // which is 39 characters long (excluding commans).
 #define EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH 39
+#define EDITOR_I32_INPUT_BUTTON_MAX_STRING_LENGTH 39
 #define EDITOR_STRING_INPUT_BUTTON_MAX_STRING_LENGTH 64
 #define EDITOR_MAX_STRING_LENGTH 64
 
 #define EDITOR_ENTTY_CLICKABLE_AREA_PASSIVE_COLOUR (GFX_Colour){.r = 0.25f, .g = 0.25f, .b = 0.25f, .a = 1.0f}
-#define EDITOR_ENTTY_CLICKABLE_AREA_ACTIVE_COLOUR  (GFX_Colour){.r = 0.77f, .g = 0.77f, .b = 0.77f, .a = 1.0f}
+#define EDITOR_ENTTY_CLICKABLE_AREA_PARENT_ACTIVE_COLOUR  (GFX_Colour){.r = 0.77f, .g = 0.77f, .b = 0.77f, .a = 1.0f}
+#define EDITOR_ENTTY_CLICKABLE_AREA_ACTIVE_COLOUR  (GFX_Colour){.r = 1.0f, .g = 0.8f, .b = 0.0f, .a = 1.0f}
 
 #define EDITOR_MOUSE_BEHAVIOUR_NAVIGATE_KEYBINDING Key_Q
 #define EDITOR_MOUSE_BEHAVIOUR_MOVE_KEYBINDING Key_W
@@ -172,15 +188,27 @@ static i32 editor_gfx_clay_element_id = 0;
     }                                       \
 }
 
+#define EDITOR_GFX_CLAY_HEADER_TEXT_CONFIG  \
+(Clay_TextElementConfig){                   \
+    .fontSize = 2,                          \
+    .lineHeight = 24,                       \
+    .textColor = {                          \
+        .r = 255,                           \
+        .g = 255,                           \
+        .b = 255,                           \
+        .a = 255                            \
+    }                                       \
+}
+
 #define EDITOR_GFX_CLAY_SIDE_PANEL()                                        \
 CLAY(CLAY_SIDI(CLAY_STRING("Side Panel"), editor_gfx_clay_element_id++), {  \
     .layout = {                                                             \
         .sizing = {                                                         \
-            .width = CLAY_SIZING_PERCENT(0.25),                             \
+            .width = CLAY_SIZING_PERCENT(0.3f),                             \
             .height = CLAY_SIZING_GROW(0)                                   \
         },                                                                  \
-        .padding = CLAY_PADDING_ALL(6),                                     \
-        .childGap = 4,                                                      \
+        .padding = CLAY_PADDING_ALL(16),                                    \
+        .childGap = 6,                                                      \
         .layoutDirection = CLAY_TOP_TO_BOTTOM                               \
     },                                                                      \
     .backgroundColor = EDITOR_GFX_CLAY_WIDGET_COLOUR,                       \
@@ -221,11 +249,11 @@ CLAY(                                                                           
     CLAY_TEXT(clay_string_name, EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);                                                                               \
 }
 
-#define GFX_CLAY_SPAWN_ENTITY_BUTTON(_clay_string_name, _horizontal_percent_size, _vertical_percent_size, _transient_arena, _editor_state, _entity_type_id)do{              \
-    Editor_SpawnEntityButtonOnHoverContext GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx = {.editor_state = _editor_state, .entity_type_id = _entity_type_id};                           \
-    void* GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx_ptr;                                                                                                                             \
-    MEMORY_ARENA_PUSH_STRUCT(_transient_arena, GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx, GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx_ptr);                                                     \
-    EDITOR_GFX_CLAY_BUTTON(_clay_string_name, _horizontal_percent_size, _vertical_percent_size, editor_spawn_entity_button_on_hover, GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx_ptr); \
+#define EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(_clay_string_name, _horizontal_percent_size, _vertical_percent_size, _transient_arena, _editor_state, _entity_type_id)do{              \
+    Editor_SpawnEntityButtonOnHoverContext EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx = {.editor_state = _editor_state, .entity_type_id = _entity_type_id};                           \
+    void* EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx_ptr;                                                                                                                             \
+    MEMORY_ARENA_PUSH_STRUCT(_transient_arena, EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx, EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx_ptr);                                                     \
+    EDITOR_GFX_CLAY_BUTTON(_clay_string_name, _horizontal_percent_size, _vertical_percent_size, editor_spawn_entity_button_on_hover_callback, EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON_ctx_ptr); \
 }while(0)                                                                                                                                                                   \
 
 /*
@@ -292,7 +320,7 @@ CLAY(                                                                           
     };                                                                                                                                      \
     void* GFX_CLAY_INPUT_TEXT_BOX_ctx_ptr;                                                                                                  \
     MEMORY_ARENA_PUSH_STRUCT(_transient_arena, GFX_CLAY_INPUT_TEXT_BOX_ctx, GFX_CLAY_INPUT_TEXT_BOX_ctx_ptr);                               \
-    Clay_OnHover(editor_input_field_on_hover, GFX_CLAY_INPUT_TEXT_BOX_ctx_ptr);                                                             \
+    Clay_OnHover(editor_input_field_on_hover_callback, GFX_CLAY_INPUT_TEXT_BOX_ctx_ptr);                                                             \
                                                                                                                                             \
     if(                                                                                                                                     \
         GFX_CLAY_INPUT_TEXT_BOX_clay_element_id.id       == editor_state->mouse_state.selected_editor_ui_entity.clay_element_id.id &&       \
@@ -344,37 +372,6 @@ void editor_state_init(Editor_State* state, MemoryArena* arena, GFX_State* gfx_s
     }
     
     state->is_init = true;
-}
-
-void editor_input_field_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    Editor_InputTextBoxOnClickContext* ctx = (Editor_InputTextBoxOnClickContext*)user_data;
-    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        ctx->editor_state->mouse_state.selected_editor_ui_entity = ctx->src;
-        ctx->editor_state->is_typing = true;
-        String label_string = {
-            .chars = (char*)ctx->input_text_box_label_string.chars,
-            .length = ctx->input_text_box_label_string.length,
-            .count = ctx->input_text_box_label_string.length
-        };
-        
-        String* typing_scratch_space;
-        
-        switch(ctx->src.data_storage_type){
-            default: {ASSERT(false, "unknown data storage type.");}break;
-            case Editor_ButtonDataStorageType_F32:{typing_scratch_space = &ctx->editor_state->f32_input_text_box_scratch_space;} break;
-            case Editor_ButtonDataStorageType_String:{typing_scratch_space = &ctx->editor_state->string_input_text_box_scratch_space;} break;
-        }
-
-        string_clear(typing_scratch_space);
-        string_push(typing_scratch_space, label_string);
-    }
-}
-
-void editor_spawn_entity_button_on_hover(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    Editor_SpawnEntityButtonOnHoverContext* ctx = (Editor_SpawnEntityButtonOnHoverContext*)user_data;
-    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        ctx->editor_state->mouse_state.entity_to_spawn = ctx->entity_type_id;
-    } 
 }
 
 /*
@@ -525,12 +522,118 @@ void editor_save_level_entity_recurssive(
     }
 }
 
-void editor_on_hover_save_level_button(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+
+///
+/// @ Editor_EntityTreeViewState
+///
+
+
+void editor_entity_tree_view_state_set_max_pages(Editor_EntityTreeViewState* state, i32 max_pages){
+    max_pages = CLAMP(max_pages, 0, I32_MAX);
+    state->max_pages = max_pages;
+    state->page = CLAMP(state->page, 0, max_pages-1);
+}
+
+void editor_entity_tree_view_state_set_page(Editor_EntityTreeViewState* state, i32 page){
+    state->page = CLAMP(page, 0, state->max_pages-1);
+}
+
+
+///
+/// @ Clay On Hover Callbacks.
+///
+
+
+typedef struct{
+    GameState* game_state;
+    Editor_State* editor_state;
+} Editor_EntityTreeMakeChildButtonContext;
+
+void editor_entity_tree_make_child_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        
+        // hoist some invariace.
+        Editor_EntityTreeMakeChildButtonContext* ctx = (Editor_EntityTreeMakeChildButtonContext*)user_data;
+        EntityManager* entity_manager = &ctx->game_state->entity_manager;
+        
+        i32 selected_idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, ctx->editor_state->selected_game_entity_gid);
+        i32 parent_idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, ctx->editor_state->selected_parent_game_entity_gid);
+        
+        if(!selected_idx || !parent_idx){
+            return;
+        }
+        
+        BOUNDS_CHECK(selected_idx, entity_manager->entity_length);
+        Entity* selected_entity = &entity_manager->entity[selected_idx];
+        Transform2D global_transform = selected_entity->global_transform;
+        
+        intrusive_list_set_node_parent(&entity_manager->entity_hierarchy, selected_idx, parent_idx);
+    
+        entity_set_global_transform_unsafe(entity_manager, selected_idx, global_transform);
+    }
+}
+
+typedef struct{
+    Editor_State* editor_state;
+} Editor_EntityTreePageButtonContext;
+
+void editor_entity_tree_next_page_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        Editor_EntityTreePageButtonContext* ctx = (Editor_EntityTreePageButtonContext*)user_data;
+        Editor_EntityTreeViewState* entity_tree_view_state = &ctx->editor_state->entity_tree_view_state;
+        // this is fine as the layout code clamps the page number.
+        editor_entity_tree_view_state_set_page(entity_tree_view_state, entity_tree_view_state->page + 1);
+    }
+}
+
+void editor_entity_tree_previous_page_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        Editor_EntityTreePageButtonContext* ctx = (Editor_EntityTreePageButtonContext*)user_data;
+        Editor_EntityTreeViewState* entity_tree_view_state = &ctx->editor_state->entity_tree_view_state;
+        // this is fine as the layout code clamps the page number.
+        editor_entity_tree_view_state_set_page(entity_tree_view_state, entity_tree_view_state->page - 1);
+    }
+}
+
+void editor_input_field_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        Editor_InputTextBoxOnClickContext* ctx = (Editor_InputTextBoxOnClickContext*)user_data;
+        ctx->editor_state->mouse_state.selected_editor_ui_entity = ctx->src;
+        ctx->editor_state->is_typing = true;
+        String label_string = {
+            .chars = (char*)ctx->input_text_box_label_string.chars,
+            .length = ctx->input_text_box_label_string.length,
+            .count = ctx->input_text_box_label_string.length
+        };
+        
+        String* typing_scratch_space;
+        
+        switch(ctx->src.data_storage_type){
+            default: {ASSERT(false, "unknown data storage type.");}break;
+            case Editor_ButtonDataStorageType_F32:{typing_scratch_space = &ctx->editor_state->f32_input_text_box_scratch_space;} break;
+            case Editor_ButtonDataStorageType_String:{typing_scratch_space = &ctx->editor_state->string_input_text_box_scratch_space;} break;
+        }
+
+        string_clear(typing_scratch_space);
+        string_push(typing_scratch_space, label_string);
+    }
+}
+
+void editor_spawn_entity_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    Editor_SpawnEntityButtonOnHoverContext* ctx = (Editor_SpawnEntityButtonOnHoverContext*)user_data;
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        ctx->editor_state->mouse_state.entity_to_spawn = ctx->entity_type_id;
+    } 
+}
+
+void editor_save_level_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
     if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
 
         SaveLevelButtonOnHoverContext* ctx = (SaveLevelButtonOnHoverContext*)user_data;
 
-        i32 level_idx = gen_id_get_index(ctx->editor_state->mouse_state.entity_to_spawn_parent_gid);
+        i32 root_idx = 1; // 1, as 0 is the NIL; this is the first (and only) root entity (the world's root). 
+        BOUNDS_CHECK(root_idx, ctx->game_state->entity_manager.entity_hierarchy.root_index_count);
+        i32 level_idx = ctx->game_state->entity_manager.entity_hierarchy.root_index[root_idx];
 
         String entity_char_buffer = {
             .chars = (char[LEVEL_FILE_LINE_LENGTH]){0},
@@ -558,14 +661,297 @@ void editor_on_hover_save_level_button(Clay_ElementId element_id, Clay_PointerDa
     }
 }
 
-void editor_on_hover_select_level_button(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    SelectLevelButtonOnHoverContext* ctx = (SelectLevelButtonOnHoverContext*)user_data;
+void editor_select_level_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
     if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        SelectLevelButtonOnHoverContext* ctx = (SelectLevelButtonOnHoverContext*)user_data;
         ctx->editor_state->mouse_state.entity_to_spawn_parent_gid = ctx->level_root_entity_gid;
     }
 }
 
-void gfx_clay_entity_spawner_layout(Editor_State* editor_state, GameState* game_state, MemoryArena* transient){
+typedef struct{
+    Editor_State* editor_state;
+}Editor_SetParentGameEntityGidButtonOnHoverContext;
+
+void editor_set_parent_game_entity_gid_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        Editor_SetParentGameEntityGidButtonOnHoverContext* ctx = (Editor_SetParentGameEntityGidButtonOnHoverContext*)user_data;
+        ctx->editor_state->selected_parent_game_entity_gid = ctx->editor_state->selected_game_entity_gid;
+    }
+} 
+
+typedef struct{
+    Editor_State* editor_state;
+    GenId entity_gid;
+} Editor_SelectEntityButtonOnHoverContext;
+
+void editor_select_entity_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        Editor_SelectEntityButtonOnHoverContext* ctx = (Editor_SelectEntityButtonOnHoverContext*)user_data;
+        ctx->editor_state->selected_game_entity_gid = ctx->entity_gid;
+    }
+}
+
+typedef struct{
+    Editor_State* editor_state;
+    GameState* game_state;
+} Editor_GoUpSelectedEntityTreeButtonHoverContext;
+
+void editor_go_up_selected_entity_tree_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+                
+        // hoisting invariance;
+        Editor_GoUpSelectedEntityTreeButtonHoverContext* ctx = (Editor_GoUpSelectedEntityTreeButtonHoverContext*)user_data;
+        EntityManager* entity_manager = &ctx->game_state->entity_manager;
+        IntrusiveList* entity_hierarchy = &entity_manager->entity_hierarchy;
+        
+        i32 selected_entity_idx = 
+            gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, ctx->editor_state->selected_game_entity_gid);
+    
+        if(!selected_entity_idx){
+            return;
+        }
+        
+        BOUNDS_CHECK(selected_entity_idx, entity_hierarchy->length);
+        IntrusiveListNode* node = &entity_hierarchy->node[selected_entity_idx];
+        
+        // don't do anything if this is a root scene node.
+        if(!node->parent){
+            return;
+        }
+        
+        BOUNDS_CHECK(node->parent, entity_manager->gen_id_allocator.length);
+        GenId parent_gid = entity_manager->gen_id_allocator.gen_ids[node->parent];
+        
+        ctx->editor_state->selected_game_entity_gid = parent_gid;
+    }
+}
+
+
+///
+/// @ Clay Layouts
+///
+
+
+void gfx_clay_level_management(Editor_State* editor_state, GameState* game_state, MemoryArena* transient){
+    EDITOR_GFX_CLAY_SIDE_PANEL(){
+
+        if(Clay_Hovered()){
+            editor_state->mouse_state.hovering_element = true;
+        }
+
+        CLAY_TEXT(CLAY_STRING("Level Management"), EDITOR_GFX_CLAY_HEADER_TEXT_CONFIG);
+
+        f32 button_width = 1.0f;
+        f32 button_height = 0.1f;
+
+        SaveLevelButtonOnHoverContext ctx = {.editor_state = editor_state, .game_state = game_state, .transient = transient};
+        SaveLevelButtonOnHoverContext* ctx_ptr;
+        MEMORY_ARENA_PUSH_STRUCT(transient, ctx, ctx_ptr);
+        EDITOR_GFX_CLAY_BUTTON(CLAY_STRING("Save Level"), button_width, button_height, editor_save_level_button_on_hover_callback, ctx_ptr);
+        
+    }
+}
+
+void gfx_clay_entity_tree_view(Editor_State* editor_state, GameState* game_state, MemoryArena* transient){
+
+    EntityManager* entity_manager = &game_state->entity_manager;
+    IntrusiveList* entity_hierarchy = &entity_manager->entity_hierarchy;
+    EDITOR_GFX_CLAY_SIDE_PANEL(){
+
+        if(Clay_Hovered()){
+            editor_state->mouse_state.hovering_element = true;
+        }
+
+        CLAY_TEXT(CLAY_STRING("Entity Tree View"), EDITOR_GFX_CLAY_HEADER_TEXT_CONFIG);
+
+        CLAY_TEXT(CLAY_STRING("Selected Parent Entity"), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
+        {
+            Entity* entity;
+            if(entity_manager_get_entity(game_state->entity_manager, editor_state->selected_parent_game_entity_gid, &entity)){
+                CLAY_TEXT(gfx_string_to_clay_string(entity->name), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
+            }
+            else{
+                CLAY_TEXT(CLAY_STRING("..."), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);    
+            }        
+        }
+                
+        CLAY_TEXT(CLAY_STRING("Selected Entity"), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
+        {        
+            Entity* entity;
+            if(entity_manager_get_entity(game_state->entity_manager, editor_state->selected_game_entity_gid, &entity)){
+                CLAY_TEXT(gfx_string_to_clay_string(entity->name), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
+            }
+            else{
+                CLAY_TEXT(CLAY_STRING("..."), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);    
+            }
+        }
+        
+        // set_selected_parent_button();
+        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.05f){
+                
+            Editor_GoUpSelectedEntityTreeButtonHoverContext* go_up_selected_entity_tree_ctx;
+            MEMORY_ARENA_ALLOC_MEMORY(transient, go_up_selected_entity_tree_ctx, sizeof(*go_up_selected_entity_tree_ctx));
+            *go_up_selected_entity_tree_ctx = (Editor_GoUpSelectedEntityTreeButtonHoverContext){
+                .game_state = game_state,
+                .editor_state = editor_state
+            };
+            EDITOR_GFX_CLAY_BUTTON(
+                CLAY_STRING("Go Up Tree"), 0.33f, 1.0f, 
+                editor_go_up_selected_entity_tree_button_on_hover_callback, 
+                go_up_selected_entity_tree_ctx
+            );
+        
+            Editor_SetParentGameEntityGidButtonOnHoverContext* set_selected_parent_ctx;
+            MEMORY_ARENA_ALLOC_MEMORY(transient, set_selected_parent_ctx, sizeof(*set_selected_parent_ctx));
+            *set_selected_parent_ctx = (Editor_SetParentGameEntityGidButtonOnHoverContext){
+                .editor_state = editor_state
+            };
+            EDITOR_GFX_CLAY_BUTTON(
+                CLAY_STRING("Set Parent"), 0.33f, 1.0f, 
+                editor_set_parent_game_entity_gid_button_on_hover_callback, 
+                set_selected_parent_ctx
+            );
+
+            Editor_EntityTreeMakeChildButtonContext* make_child_ctx;
+            MEMORY_ARENA_ALLOC_MEMORY(transient, make_child_ctx, sizeof(*make_child_ctx));
+            *make_child_ctx = (Editor_EntityTreeMakeChildButtonContext){
+                .editor_state = editor_state,
+                .game_state = game_state
+            };
+            EDITOR_GFX_CLAY_BUTTON(
+                CLAY_STRING("Make Child"), 0.33f, 1.0f, 
+                editor_entity_tree_make_child_button_on_hover_callback, 
+                make_child_ctx
+            );
+        }
+        
+        
+        // selected_entity_children();
+        
+        
+        
+        CLAY_TEXT(CLAY_STRING("Selected Entity Children"), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
+        i32 page_max_selectable_entity_buttons = 14;
+        i32 selectable_entity_count = 0 ;
+        i32 selected_game_entity_idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, editor_state->selected_game_entity_gid);
+        if(selected_game_entity_idx){
+            BOUNDS_CHECK(selected_game_entity_idx, entity_hierarchy->length);
+            IntrusiveListNode* parent = &entity_hierarchy->node[selected_game_entity_idx];
+            i32 node_idx = parent->first_child;
+            
+            // get_page_data();
+            i32 total_entity_select_button_count = 0; 
+            node_idx = parent->first_child;
+            while(node_idx){                
+                BOUNDS_CHECK(node_idx, entity_hierarchy->length);
+                IntrusiveListNode* node = &entity_hierarchy->node[node_idx];
+                node_idx = node->next_sibling;
+                total_entity_select_button_count++;
+                if(
+                    node_idx == parent->first_child ||
+                    selectable_entity_count == page_max_selectable_entity_buttons
+                ){
+                    break;
+                }
+            }
+            editor_entity_tree_view_state_set_max_pages(
+                &editor_state->entity_tree_view_state,
+                (i32)ceil((f32)total_entity_select_button_count / (f32)page_max_selectable_entity_buttons)
+            );
+
+            { // display_page_info.
+                            
+                EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.05f){
+                    
+                    Editor_EntityTreePageButtonContext* page_button_ctx;
+                    MEMORY_ARENA_ALLOC_MEMORY(transient, page_button_ctx, sizeof(*page_button_ctx));
+                    *page_button_ctx = (Editor_EntityTreePageButtonContext){
+                        .editor_state = editor_state
+                    };
+                    
+                    EDITOR_GFX_CLAY_BUTTON(CLAY_STRING("Previous Page"), 0.5f, 1.0f, editor_entity_tree_previous_page_button_on_hover_callback, page_button_ctx);
+                    EDITOR_GFX_CLAY_BUTTON(CLAY_STRING("Next Page"), 0.5f, 1.0f, editor_entity_tree_next_page_button_on_hover_callback, page_button_ctx);
+                }
+
+                String scratch_space;
+                string_init(&scratch_space, transient, EDITOR_I32_INPUT_BUTTON_MAX_STRING_LENGTH);
+
+                String page_info_string;
+                string_init(&page_info_string, transient, (EDITOR_I32_INPUT_BUTTON_MAX_STRING_LENGTH * 2) + 24);
+                STRING_PUSH_LITERAL(&page_info_string, "page (");
+                
+                scratch_space.count = snprintf(scratch_space.chars, scratch_space.length, "%i", editor_state->entity_tree_view_state.page + 1);
+                string_push(&page_info_string, scratch_space);        
+            
+                STRING_PUSH_LITERAL(&page_info_string, ") of (");
+                
+                scratch_space.count = snprintf(scratch_space.chars, scratch_space.length, "%i", editor_state->entity_tree_view_state.max_pages);
+                string_push(&page_info_string, scratch_space);
+                
+                STRING_PUSH_LITERAL(&page_info_string, ").");
+                
+                CLAY_TEXT(gfx_string_to_clay_string(page_info_string), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
+
+            }
+
+            // display_entity_select_buttons();
+            node_idx = parent->first_child;
+            i32 start_loop_idx = editor_state->entity_tree_view_state.page * page_max_selectable_entity_buttons; 
+            i32 counter = 0;
+            while(node_idx){
+                
+                BOUNDS_CHECK(node_idx, entity_hierarchy->length);
+                IntrusiveListNode* node = &entity_hierarchy->node[node_idx];
+                node_idx = node->next_sibling;
+                
+                if(counter >= start_loop_idx){
+                    
+                    BOUNDS_CHECK(node_idx, entity_manager->entity_length);
+                    Entity* entity = &entity_manager->entity[node_idx];
+                                    
+                    BOUNDS_CHECK(node_idx, entity_manager->gen_id_allocator.length);
+                    GenId entity_gid = entity_manager->gen_id_allocator.gen_ids[node_idx];
+                    
+                    Editor_SelectEntityButtonOnHoverContext* select_entity_button_on_hover_ctx;
+                    MEMORY_ARENA_ALLOC_MEMORY(transient, select_entity_button_on_hover_ctx, sizeof(Editor_SelectEntityButtonOnHoverContext));
+                    *select_entity_button_on_hover_ctx = (Editor_SelectEntityButtonOnHoverContext){
+                        .editor_state = editor_state,
+                        .entity_gid = entity_gid
+                    };
+    
+                    EDITOR_GFX_CLAY_BUTTON(
+                        gfx_string_to_clay_string(entity->name), 1.0f, 0.05f, 
+                        editor_select_entity_button_on_hover_callback, 
+                        select_entity_button_on_hover_ctx
+                    );
+
+                    selectable_entity_count++;
+                }
+
+                counter++;
+                
+                if(
+                    node_idx == parent->first_child ||
+                    selectable_entity_count == page_max_selectable_entity_buttons
+                ){
+                    break;
+                }
+            }
+
+        }
+                            
+        // CLAY_TEXT(CLAY_STRING(" "), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);    
+        // for(i32 i = 1; i < entity_manager->entity_hierarchy.root_index_count; i++){
+        //     i32 idx = entity_manager->entity_hierarchy.root_index[i];
+        //     BOUNDS_CHECK(idx, entity_manager->entity_length);
+        //     Entity* entity = &entity_manager->entity[idx];
+        //     CLAY_TEXT(gfx_string_to_clay_string(entity->name), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
+        // }
+
+    }
+}
+
+void gfx_clay_native_entity_spawner_layout(Editor_State* editor_state, GameState* game_state, MemoryArena* transient){
 
     // hoisting invariance.
     EntityManager* entity_manager = &game_state->entity_manager;
@@ -575,61 +961,44 @@ void gfx_clay_entity_spawner_layout(Editor_State* editor_state, GameState* game_
             editor_state->mouse_state.hovering_element = true;
         }
 
+        CLAY_TEXT(CLAY_STRING("Native Entity Spawner"), EDITOR_GFX_CLAY_HEADER_TEXT_CONFIG);
+
         f32 button_width = 0.2f;
         f32 button_height = 1.0f;
+        
+        i32 root_idx = 1; // 1, as 0 is the NIL; this is the first (and only) root entity (the world's root). 
+        BOUNDS_CHECK(root_idx, entity_manager->entity_hierarchy.root_index_count);
+        i32 entity_idx = entity_manager->entity_hierarchy.root_index[root_idx];
+        BOUNDS_CHECK(entity_idx, entity_manager->gen_id_allocator.length);
+        editor_state->mouse_state.entity_to_spawn_parent_gid = entity_manager->gen_id_allocator.gen_ids[entity_idx]; 
 
         EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
-            for(i32 i = 1; i < entity_manager->entity_hierarchy.root_index_count; i++){
-                i32 idx = entity_manager->entity_hierarchy.root_index[i];
-                BOUNDS_CHECK(idx, entity_manager->entity_length);
-                Entity* entity = &entity_manager->entity[idx];
-                Clay_String name = {.length = entity->name.count, .chars = entity->name.chars};
-                SelectLevelButtonOnHoverContext ctx = {
-                    .editor_state = editor_state,
-                    .level_root_entity_gid = entity_manager->gen_id_allocator.gen_ids[idx]
-                };
-                SelectLevelButtonOnHoverContext* ctx_ptr;
-                MEMORY_ARENA_PUSH_STRUCT(transient, ctx, ctx_ptr);
-                EDITOR_GFX_CLAY_BUTTON(name, button_width, button_height, editor_on_hover_select_level_button, ctx_ptr);
-            }
-        }
-
-        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Wall"), button_width, button_height, transient, editor_state, EntityTypeId_Wall);
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Cue"), button_width, button_height, transient, editor_state, EntityTypeId_BallCue);
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball One"), button_width, button_height, transient, editor_state, EntityTypeId_BallOne);
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Two"), button_width, button_height, transient, editor_state, EntityTypeId_BallTwo);
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Three"), button_width, button_height, transient, editor_state, EntityTypeId_BallThree);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Wall"), button_width, button_height, transient, editor_state, EntityTypeId_Wall);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Cue"), button_width, button_height, transient, editor_state, EntityTypeId_BallCue);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball One"), button_width, button_height, transient, editor_state, EntityTypeId_BallOne);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Two"), button_width, button_height, transient, editor_state, EntityTypeId_BallTwo);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Three"), button_width, button_height, transient, editor_state, EntityTypeId_BallThree);
         }
         
         EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Four"), button_width, button_height, transient, editor_state, EntityTypeId_BallFour);
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Five"), button_width, button_height, transient, editor_state, EntityTypeId_BallFive);
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Six"), button_width, button_height, transient, editor_state, EntityTypeId_BallSix);
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Seven"), button_width, button_height, transient, editor_state, EntityTypeId_BallSeven);
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Eight"), button_width, button_height, transient, editor_state, EntityTypeId_BallEight);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Four"), button_width, button_height, transient, editor_state, EntityTypeId_BallFour);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Five"), button_width, button_height, transient, editor_state, EntityTypeId_BallFive);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Six"), button_width, button_height, transient, editor_state, EntityTypeId_BallSix);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Seven"), button_width, button_height, transient, editor_state, EntityTypeId_BallSeven);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Eight"), button_width, button_height, transient, editor_state, EntityTypeId_BallEight);
         }
 
         EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Nine"), button_width, button_height, transient, editor_state, EntityTypeId_BallNine);
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Zero"), button_width, button_height, transient, editor_state, EntityTypeId_BallZero);
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Pocket"), button_width, button_height, transient, editor_state, EntityTypeId_Pocket);
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Boost Pad"), button_width, button_height, transient, editor_state, EntityTypeId_BoostPad);
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Windmill"), button_width, button_height, transient, editor_state, EntityTypeId_WindMill);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Nine"), button_width, button_height, transient, editor_state, EntityTypeId_BallNine);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Zero"), button_width, button_height, transient, editor_state, EntityTypeId_BallZero);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Pocket"), button_width, button_height, transient, editor_state, EntityTypeId_Pocket);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Boost Pad"), button_width, button_height, transient, editor_state, EntityTypeId_BoostPad);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Windmill"), button_width, button_height, transient, editor_state, EntityTypeId_WindMill);
         }
         
         EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Thwamper"), button_width, button_height, transient, editor_state, EntityTypeId_Thwamper);
-            GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("World Camera"), button_width, button_height, transient, editor_state, EntityTypeId_WorldCamera);
-        }
-
-        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
-            // for some reason this only works down here?
-            // the save button user data gets corrupted for some reason when above the the earlier button container?
-            SaveLevelButtonOnHoverContext ctx = {.editor_state = editor_state, .game_state = game_state, .transient = transient};
-            SaveLevelButtonOnHoverContext* ctx_ptr;
-            MEMORY_ARENA_PUSH_STRUCT(transient, ctx, ctx_ptr);
-            EDITOR_GFX_CLAY_BUTTON(CLAY_STRING("Save Level"), button_width, button_height, editor_on_hover_save_level_button, ctx_ptr);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Thwamper"), button_width, button_height, transient, editor_state, EntityTypeId_Thwamper);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("World Camera"), button_width, button_height, transient, editor_state, EntityTypeId_WorldCamera);
         }
     }
 }
@@ -645,6 +1014,8 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
         if(Clay_Hovered()){
             editor_state->mouse_state.hovering_element = true;
         }
+        
+        CLAY_TEXT(CLAY_STRING("Entity Inspector"), EDITOR_GFX_CLAY_HEADER_TEXT_CONFIG);
 
         ClickableArea* clickable_area;
         if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &clickable_area)){
@@ -948,8 +1319,8 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
     // hoisting invariance.
     Editor_MouseState*      editor_mouse_state = &editor_state->mouse_state;
     GFX_State*              editor_gfx_state = editor_state->gfx_state;
-    EntityManager*          game_entity_manager = &game_state->entity_manager;
-    GFX_State*              game_gfx_state = game_entity_manager->gfx_state;
+    EntityManager*          entity_manager = &game_state->entity_manager;
+    GFX_State*              game_gfx_state = entity_manager->gfx_state;
     ClickableAreaHierarchy* clickable_area_hierarchy = &editor_state->game_entity_clickable_area_hierarchy;
 
     // retrieve necessary data.
@@ -977,11 +1348,17 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
         );
         
         switch(editor_state->menu){
-            case Editor_Menu_EntitySpawner:{
-                gfx_clay_entity_spawner_layout(editor_state, game_state, transient);
+            case Editor_Menu_NativeEntitySpawner:{
+                gfx_clay_native_entity_spawner_layout(editor_state, game_state, transient);
             }break;
             case Editor_Menu_EntityInspector:{
                 gfx_clay_entity_inspector_layout(editor_state, game_state, transient);
+            }break;
+            case Editor_Menu_EntityTreeView:{
+                gfx_clay_entity_tree_view(editor_state, game_state, transient);
+            }break;
+            case Editor_Menu_LevelManagement:{
+                gfx_clay_level_management(editor_state, game_state, transient);
             }break;
         }
         gfx_clay_end_layout(editor_gfx_state, delta_time, SPRITE_LAYER_EDITOR_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
@@ -989,17 +1366,17 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
 
     { // set_clickable_area_hierarchy_areas();
 
-        for(i32 idx = 1; idx < game_entity_manager->entity_length; idx++){
+        for(i32 idx = 1; idx < entity_manager->entity_length; idx++){
             u64 depth_layer = 0;
             PolygonRectangle rectangle = {0};
             void* user_data = NULL;
             
             // get_clickable_area();
-            if(entity_manager_is_entity_allocated_unsafe(*game_entity_manager, idx)){
+            if(entity_manager_is_entity_allocated_unsafe(*entity_manager, idx)){
             
                 Transform2D preferred_transform = {0};
                 
-                Entity* entity = &game_entity_manager->entity[idx];
+                Entity* entity = &entity_manager->entity[idx];
                 user_data = entity;
 
                 // note that we infer this is a sprite; no need to check 'is_sprite' flag or 'sprite_gid'.
@@ -1119,9 +1496,9 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                     
                         // refresh the local transform because it might have been updated.
                         i32 entity_idx = editor_mouse_state->selected_editor_ui_entity.entity_idx;
-                        BOUNDS_CHECK(entity_idx, game_entity_manager->entity_length);
-                        Transform2D local_transform = game_entity_manager->entity[entity_idx].local_transform;
-                        entity_set_local_transform_unsafe(game_entity_manager, entity_idx, local_transform);
+                        BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
+                        Transform2D local_transform = entity_manager->entity[entity_idx].local_transform;
+                        entity_set_local_transform_unsafe(entity_manager, entity_idx, local_transform);
                     }
                 }
 
@@ -1144,15 +1521,21 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 editor_mouse_state->current_behaviour = Editor_MouseStateBehaviour_Rotate;
             }
             if(input_is_key_just_pressed(Key_D)){
-                entity_manager_dealloc_entity(game_entity_manager, editor_state->slected_game_entity_gid);
-                editor_state->slected_game_entity_gid = 0;
+                entity_manager_dealloc_entity(entity_manager, editor_state->selected_game_entity_gid);
+                editor_state->selected_game_entity_gid = 0;
+            }
+            if(input_is_key_just_pressed(Key_F)){
+                Entity* selected_entity;
+                if(entity_manager_get_entity(*entity_manager, editor_state->selected_game_entity_gid, &selected_entity)){
+                    editor_state->world_camera_position = selected_entity->global_transform.position;
+                }
             }
             
             
             { // camera_input();
         
                 
-                f32 camera_move_speed = 1.334f * delta_time * editor_state->world_camera_orthographic_size;
+                f32 camera_move_speed = 5.0f * delta_time * editor_state->world_camera_orthographic_size;
                 f32 camera_zoom_speed = 0.156f * delta_time * editor_state->world_camera_orthographic_size;
                 
                 { // movement();
@@ -1187,8 +1570,8 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                             
                             i32 selected_entity_idx = clickable_area_hierarchy->selected_idx;
                             if(clickable_area_hierarchy->selected_idx){
-                                BOUNDS_CHECK(selected_entity_idx, game_entity_manager->gen_id_allocator.length);
-                                editor_state->slected_game_entity_gid = game_entity_manager->gen_id_allocator.gen_ids[selected_entity_idx];
+                                BOUNDS_CHECK(selected_entity_idx, entity_manager->gen_id_allocator.length);
+                                editor_state->selected_game_entity_gid = entity_manager->gen_id_allocator.gen_ids[selected_entity_idx];
                             }
                         }
         
@@ -1209,7 +1592,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                             }
         
                             entity_spawn(
-                                game_entity_manager, 
+                                entity_manager, 
                                 editor_mouse_state->entity_to_spawn,
                                 (String){.chars = "entity", .length = 6, .count = 6}, 
                                 spawn_transform, 
@@ -1220,12 +1603,12 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                     case Editor_MouseStateBehaviour_Move:{
                         
                         Entity* game_entity;
-                        if(!entity_manager_get_entity(*game_entity_manager, editor_state->slected_game_entity_gid, &game_entity)){
+                        if(!entity_manager_get_entity(*entity_manager, editor_state->selected_game_entity_gid, &game_entity)){
                             // failed to retrieve selected entity data.
                             break;
                         }
     
-                        i32 entity_idx = gen_id_get_index(editor_state->slected_game_entity_gid);
+                        i32 entity_idx = gen_id_get_index(editor_state->selected_game_entity_gid);
                         
                         // this can be 0 because of deletion.
                         if(!entity_idx){
@@ -1267,13 +1650,13 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                             Vector2 new_position = vector2_add(mouse_world_position, editor_mouse_state->move_behaviour_state.selected_game_entity_positional_offset);
                             Transform2D new_transform = game_entity->global_transform;
                             new_transform.position = new_position;
-                            entity_set_global_transform_unsafe(game_entity_manager, entity_idx, new_transform);
+                            entity_set_global_transform_unsafe(entity_manager, entity_idx, new_transform);
                         }
                     }break;
                     case Editor_MouseStateBehaviour_Rotate:{
-                        GenId game_entity_gid = editor_state->slected_game_entity_gid;
+                        GenId game_entity_gid = editor_state->selected_game_entity_gid;
                         Entity* game_entity;
-                        if(!entity_manager_get_entity(*game_entity_manager, game_entity_gid, &game_entity)){
+                        if(!entity_manager_get_entity(*entity_manager, game_entity_gid, &game_entity)){
                             // failed to retrieve selected entity.
                             break;
                         }
@@ -1285,7 +1668,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                         if(editor_mouse_state->previous_behaviour == Editor_MouseStateBehaviour_Rotate){
                             Vector2 prev_diff = editor_mouse_state->rotate_behaviour_state.previous_positional_difference;
                             f32 radians = vector2_radian_difference_scalar(diff.x, diff.y, prev_diff.x, prev_diff.y);
-                            entity_set_local_transform_unsafe(game_entity_manager, entity_idx, transform2d_rotate(game_entity->local_transform, radians));
+                            entity_set_local_transform_unsafe(entity_manager, entity_idx, transform2d_rotate(game_entity->local_transform, radians));
                         }
     
                         editor_mouse_state->rotate_behaviour_state.previous_positional_difference = diff;
@@ -1297,32 +1680,32 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
         
     // { // set entity transforms; specifcally to update sprite or physics body data.
 
-    //     for(i32 i = 0; i < game_entity_manager->entity_length; i++){
-    //         BOUNDS_CHECK(i, game_entity_manager->gen_id_allocator.length);
-    //         if(!game_entity_manager->gen_id_allocator.allocated[i]){
+    //     for(i32 i = 0; i < entity_manager->entity_length; i++){
+    //         BOUNDS_CHECK(i, entity_manager->gen_id_allocator.length);
+    //         if(!entity_manager->gen_id_allocator.allocated[i]){
     //             continue;
     //         }
-    //         GenId game_entity_gid = game_entity_manager->gen_id_allocator.gen_ids[i];
-    //         Entity* game_entity = &game_entity_manager->entity[i];
-    //         entity_set_transform(game_entity_manager, game_entity_gid, game_entity->transform);
+    //         GenId game_entity_gid = entity_manager->gen_id_allocator.gen_ids[i];
+    //         Entity* game_entity = &entity_manager->entity[i];
+    //         entity_set_transform(entity_manager, game_entity_gid, game_entity->transform);
     //     }
     // }
     
     // debug_gizmos();
     {
-        i32 selected_game_entity_idx = -1;
-        if(editor_state->slected_game_entity_gid){
-            selected_game_entity_idx = gen_id_get_index(editor_state->slected_game_entity_gid);
-        }
+        i32 selected_game_entity_idx = gen_id_allocator_is_gen_id_valid(&game_state->entity_manager.gen_id_allocator, editor_state->selected_game_entity_gid);
+        i32 selected_parent_game_entity_idx = gen_id_allocator_is_gen_id_valid(&game_state->entity_manager.gen_id_allocator, editor_state->selected_parent_game_entity_gid);
     
-        for(i32 i = 1; i < game_entity_manager->entity_length; i++){
+        for(i32 i = 1; i < entity_manager->entity_length; i++){
                         
-            if(!entity_manager_is_entity_allocated_unsafe(*game_entity_manager, i)){
+            if(!entity_manager_is_entity_allocated_unsafe(*entity_manager, i)){
                 continue;
             }
                         
-            Entity* game_entity = &game_entity_manager->entity[i];
-                        
+            Entity* game_entity = &entity_manager->entity[i];
+                
+            GFX_Colour clickable_area_colour;
+                
             if(selected_game_entity_idx == i){
                 switch(editor_mouse_state->current_behaviour){
                     case Editor_MouseStateBehaviour_Move:{
@@ -1335,18 +1718,26 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                         gfx_draw_line(editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->global_transform.position, mouse_world_position, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
                     }
                 }
+                clickable_area_colour = EDITOR_ENTTY_CLICKABLE_AREA_ACTIVE_COLOUR;
             }
+            else if(selected_parent_game_entity_idx == i){
+                clickable_area_colour = EDITOR_ENTTY_CLICKABLE_AREA_PARENT_ACTIVE_COLOUR;                
+            }
+            else{
+                clickable_area_colour = EDITOR_ENTTY_CLICKABLE_AREA_PASSIVE_COLOUR;
+            }
+            
                 
             ClickableArea* clickable_area;
             clickable_area_hierarchy_get_clickable_area_unsafe(clickable_area_hierarchy, i, &clickable_area);
             // draw the clickable area.
             i32 sprite_depth = 100;
-            gfx_draw_wire_poly(
+            gfx_draw_wire_poly( 
                 editor_gfx_state,
                 clickable_area->rectangle.x,
                 clickable_area->rectangle.y,
                 EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH,
-                selected_game_entity_idx == i ? EDITOR_ENTTY_CLICKABLE_AREA_ACTIVE_COLOUR : EDITOR_ENTTY_CLICKABLE_AREA_PASSIVE_COLOUR,
+                clickable_area_colour,
                 SPRITE_LAYER_EDITOR_WORLD,
                 sprite_depth,
                 SPRITE_MATERIAL_DEBUG

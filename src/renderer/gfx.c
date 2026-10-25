@@ -3655,7 +3655,7 @@ static inline Clay_Dimensions gfx_clay_measure_text(Clay_StringSlice text, Clay_
     // Note: Clay_String->chars is not guaranteed to be null terminated
     return (Clay_Dimensions) {
             .width = (f32)(text.length * (config->fontSize * 0.5f) * config->lineHeight), // <- this will only work for monospace fonts, see the renderers / directory for more advanced text measurement
-            .height = config->fontSize
+            .height = (f32)config->fontSize
     };
 }
 

@@ -2058,6 +2058,7 @@ void clickable_area_hierarchy_update(ClickableAreaHierarchy* hierarchy, Vector2 
     }
     
     hierarchy->selected_idx = 0;
+    i32 overlap_count = 0;
 
     for(i32 idx = 1; idx < hierarchy->area_length; idx++){
 
@@ -2080,6 +2081,8 @@ void clickable_area_hierarchy_update(ClickableAreaHierarchy* hierarchy, Vector2 
         if(!overlaps){
             continue;
         }
+        
+        overlap_count += 1;
 
         // loop through all of the previously selected entities
         // and skip this one if it was previously selected.
@@ -2108,15 +2111,17 @@ void clickable_area_hierarchy_update(ClickableAreaHierarchy* hierarchy, Vector2 
         }
     }
         
-    // if the mouse didnt find anything to select.
+    // if the mouse didn't click on anything, or had only clicked on a single area; clear the stack entirely.    
+    if(overlap_count <= 1){
+        hierarchy->previous_idx_count = 0;
+    }
+        
+    // if the mouse didnt find anything to select, but we did overlap with something.
     if(!hierarchy->selected_idx){
-
         if(hierarchy->previous_idx_count){
             hierarchy->selected_idx = hierarchy->previous_idx[0];
         }
-        
-        // if the mouse didn't click on anything, clear the stack entirely.
-        hierarchy->previous_idx_count = 0;
+        hierarchy->previous_idx_count = 0;   
     }
     
     if(hierarchy->selected_idx){

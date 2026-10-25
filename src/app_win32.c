@@ -138,8 +138,20 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
                 case VK_UP:         {input_set_key_down(Key_Up);}break;
                 case VK_DOWN:       {input_set_key_down(Key_Down);}break;
                 case VK_SPACE:      {input_set_key_down(Key_Space);}break;
+
                 case VK_F1:         {input_set_key_down(Key_F1);}break;
                 case VK_F2:         {input_set_key_down(Key_F2);}break;
+                case VK_F3:         {input_set_key_down(Key_F3);}break;
+                case VK_F4:         {input_set_key_down(Key_F4);}break;
+                case VK_F5:         {input_set_key_down(Key_F5);}break;
+                case VK_F6:         {input_set_key_down(Key_F6);}break;
+                case VK_F7:         {input_set_key_down(Key_F7);}break;
+                case VK_F8:         {input_set_key_down(Key_F8);}break;
+                case VK_F9:         {input_set_key_down(Key_F9);}break;
+                case VK_F10:        {input_set_key_down(Key_F10);}break;
+                case VK_F11:        {input_set_key_down(Key_F11);}break;
+                case VK_F12:        {input_set_key_down(Key_F12);}break;
+
                 case VK_OEM_PERIOD: {input_set_key_down(Key_Period);}break;
                 case VK_BACK:       {input_set_key_down(Key_Backspace);}break;
                 case VK_OEM_MINUS:  {input_set_key_down(Key_Minus);}break;
@@ -197,8 +209,20 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
                 case VK_UP:         {input_set_key_up(Key_Up);}break;
                 case VK_DOWN:       {input_set_key_up(Key_Down);}break;
                 case VK_SPACE:      {input_set_key_up(Key_Space);}break;
+
                 case VK_F1:         {input_set_key_up(Key_F1);}break;
                 case VK_F2:         {input_set_key_up(Key_F2);}break;
+                case VK_F3:         {input_set_key_up(Key_F3);}break;
+                case VK_F4:         {input_set_key_up(Key_F4);}break;
+                case VK_F5:         {input_set_key_up(Key_F5);}break;
+                case VK_F6:         {input_set_key_up(Key_F6);}break;
+                case VK_F7:         {input_set_key_up(Key_F7);}break;
+                case VK_F8:         {input_set_key_up(Key_F8);}break;
+                case VK_F9:         {input_set_key_up(Key_F9);}break;
+                case VK_F10:        {input_set_key_up(Key_F10);}break;
+                case VK_F11:        {input_set_key_up(Key_F11);}break;
+                case VK_F12:        {input_set_key_up(Key_F12);}break;
+
                 case VK_OEM_PERIOD: {input_set_key_up(Key_Period);}break;
                 case VK_BACK:       {input_set_key_up(Key_Backspace);}break;
                 case VK_OEM_MINUS:  {input_set_key_up(Key_Minus);}break;

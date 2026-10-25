@@ -158,8 +158,6 @@ void app_main(){
         // }
     }    
 
-    GenId level_gid = entity_spawn_level_root(&game_state.entity_manager, (String){.chars = "level 0", .length = 7, .count = 7}, TRANSFORM2D_IDENTITY, 0);
-
     bool was_in_editor_mode = false;
     bool in_editor_mode = false;
     Key last_editor_key_pressed = Key_None;
@@ -188,7 +186,7 @@ void app_main(){
                     }
                     else{
                         in_editor_mode = true;
-                        editor_state.menu = Editor_Menu_EntitySpawner;
+                        editor_state.menu = Editor_Menu_LevelManagement;
                         last_editor_key_pressed = Key_F1;
                     }
                 }
@@ -199,8 +197,30 @@ void app_main(){
                     }
                     else{
                         in_editor_mode = true;
-                        editor_state.menu = Editor_Menu_EntityInspector;
+                        editor_state.menu = Editor_Menu_NativeEntitySpawner;
                         last_editor_key_pressed = Key_F2;
+                    }
+                }
+                else if(input_is_key_just_pressed(Key_F3)){
+                    if(last_editor_key_pressed == Key_F3){
+                        in_editor_mode = false;
+                        last_editor_key_pressed = Key_None;
+                    }
+                    else{
+                        in_editor_mode = true;
+                        editor_state.menu = Editor_Menu_EntityInspector;
+                        last_editor_key_pressed = Key_F3;
+                    }
+                }
+                else if(input_is_key_just_pressed(Key_F4)){
+                    if(last_editor_key_pressed == Key_F4){
+                        in_editor_mode = false;
+                        last_editor_key_pressed = Key_None;
+                    }
+                    else{
+                        in_editor_mode = true;
+                        editor_state.menu = Editor_Menu_EntityTreeView;
+                        last_editor_key_pressed = Key_F4;
                     }
                 }
             }

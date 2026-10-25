@@ -746,7 +746,7 @@ void entity_manager_dealloc_entity_data_unsafe(EntityManager* manager, i32 idx){
     
     // ensure that the name tag isnt fucked with.
     entity->name = name;
-    entity->serialisation_file_path;
+    entity->serialisation_file_path = serialisation_file_path;
 }
 
 void entity_on_entity_hierarchy_dealloc(IntrusiveList* list, i32 node_idx, void* user_data){
@@ -3368,8 +3368,13 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                         string_init(&full_file_path, transient, os_get_max_file_path_length());
                                         STRING_PUSH_LITERAL(&full_file_path, LEVEL_ASSET_DIRECTORY_PATH);
                                         string_push(&full_file_path, partial_file_path);
+                                        
+                                        // remove the file extension from the partial_file_path, making it formatted
+                                        // as the label for the load world level button.
+                                        partial_file_path.count -= 5;
+                                        
                                         GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
-                                            gfx_string_to_clay_string(file_paths[idx]),
+                                            gfx_string_to_clay_string(partial_file_path),
                                             load_world_button_horizontal_percent,
                                             load_world_button_vertical_percent,
                                             transient,
