@@ -12,7 +12,6 @@
 /*
     used in:
     - base_memory
-    - base_linux
 */
 #include <string.h>
 #include <time.h>
@@ -679,12 +678,25 @@ i32 gen_id_get_generation(GenId gen_id);
 */
 bool gen_id_equals(GenId a, GenId b);
 
+///
+/// @ String
+/// 
+
+#define STRING_FROM_LITERAL(literal, arena)             \
+string_from_chars(arena, (literal), sizeof(literal) - 1)
+
+#define STRING_PUSH_LITERAL(string, literal)        \
+string_push_chars(string, literal, sizeof(literal) - 1)
+
+String string_from_chars(MemoryArena* arena, char* chars, i32 length);
 void string_init(String* string, MemoryArena* arena, i32 size);
 void string_clear(String* string);
 void string_push_chars(String* string, char* chars, i32 chars_length);
 void string_push_char(String* string, char c);
 void string_push(String* dst, String src);
 char string_pop(String* string);
+void string_to_ntstring(String string, MemoryArena* arena, char** out_ntstring, i32* out_length);
+void string_push_ntstring(String* string, char* ntstring);
 
 void gen_id_allocator_init(GenIdAllocator* allocator, MemoryArena* arena, i32 length);
 /**

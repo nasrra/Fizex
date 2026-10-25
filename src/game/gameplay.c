@@ -3249,7 +3249,8 @@ CLAY(CLAY_SIDI(CLAY_STRING("Level Select Button Container"), game_gfx_clay_eleme
             .height = CLAY_SIZING_PERCENT(0.25f)                                            \
         },                                                                                  \
         .layoutDirection = CLAY_LEFT_TO_RIGHT,                                              \
-        .padding = CLAY_PADDING_ALL(16)                                                     \
+        .padding = CLAY_PADDING_ALL(16),                                                    \
+        .childGap = 16,                                                                     \
     },                                                                                      \
 })
 
@@ -3332,29 +3333,53 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                             .childGap = 16
                         },
                     }){
-                        
-                        String level_001_file_path;                                                
-                        string_init(&level_001_file_path, transient, os_get_max_file_path_length());
-                        string_push_chars(&level_001_file_path,  "../assets/levels/level_001.scsv", 31); 
-                        
+                    
                         CLAY_TEXT(CLAY_STRING("Level Select"), GAME_GFX_CLAY_HEADER_TEXT_CONFIG);   
                         
-                        GAME_GFX_CLAY_LEVEL_SELECT_BUTTON_CONTAINER(){
-                            GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
-                                CLAY_STRING("Level 001"),
-                                0.25f,
-                                1.0f,
-                                transient,
-                                level_manager,
-                                level_001_file_path.chars,
-                                level_001_file_path.count,
-                                load_board_level_callback,
-                                NULL,
-                                0
-                            );
+                        i32 file_count;
+                        os_get_all_file_paths(STRING_FROM_LITERAL("../assets/levels/*", transient), NULL, &file_count);
+                        
+                        String* file_paths = NULL;
+                        i32 file_paths_length = 0;
+                        MEMORY_ARENA_ALLOC_ARRAY(transient, file_paths, &file_paths_length, file_count);
+                        for(i32 i = 0; i < file_paths_length; i++){
+                            string_init(&file_paths[i], transient, os_get_max_file_path_length()); 
                         }
-                        GAME_GFX_CLAY_LEVEL_SELECT_BUTTON_CONTAINER();
-                        GAME_GFX_CLAY_LEVEL_SELECT_BUTTON_CONTAINER();
+                        os_alloc_memory(sizeof(String) * file_count);
+                        
+                        os_get_all_file_paths(STRING_FROM_LITERAL("../assets/levels/*", transient), file_paths, &file_count);
+                        
+                        f32 load_world_button_horizontal_percent = 0.25f;
+                        f32 load_world_button_vertical_percent = 1.0f;
+
+                        for(i32 i = 0; i < file_count; i += 4){
+                            GAME_GFX_CLAY_LEVEL_SELECT_BUTTON_CONTAINER(){
+                                
+                                i32 idx = i;
+                                for(i32 j = 0; j < 4; j++){
+                                    i32 idx = i + j;
+                                    if(idx < file_count){
+                                        String partial_file_path = file_paths[idx];
+                                        String full_file_path;
+                                        string_init(&full_file_path, transient, os_get_max_file_path_length());
+                                        STRING_PUSH_LITERAL(&full_file_path, LEVEL_ASSET_DIRECTORY_PATH);
+                                        string_push(&full_file_path, partial_file_path);
+                                        GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
+                                            gfx_string_to_clay_string(file_paths[idx]),
+                                            load_world_button_horizontal_percent,
+                                            load_world_button_vertical_percent,
+                                            transient,
+                                            level_manager,
+                                            full_file_path.chars,
+                                            full_file_path.count,
+                                            load_board_level_callback,
+                                            NULL,
+                                            0
+                                        );
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 

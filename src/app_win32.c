@@ -212,12 +212,12 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
         case WM_RBUTTONDOWN:{input_set_mouse_button_down(MouseButton_Right);}break;
         case WM_RBUTTONUP:{input_set_mouse_button_up(MouseButton_Right);}break;
         case WM_MOUSEMOVE:{
-            int32_t mouse_x = GET_X_LPARAM(l_param);
-            int32_t mouse_y = GET_Y_LPARAM(l_param);
+            i32 mouse_x = GET_X_LPARAM(l_param);
+            i32 mouse_y = GET_Y_LPARAM(l_param);
             input_set_mouse_position(mouse_x, mouse_y);
         }break;
         case WM_MOUSEWHEEL:{
-            input_increment_mouse_scroll_wheel_value((int32_t)GET_WHEEL_DELTA_WPARAM(w_param));
+            input_increment_mouse_scroll_wheel_value((i32)GET_WHEEL_DELTA_WPARAM(w_param));
         }break;
         case WM_MBUTTONDOWN:{
             input_set_mouse_button_down(MouseButton_Middle);
@@ -302,7 +302,7 @@ MemoryArena* os_get_transient_memory(){
     return &transient_memory;
 }
 
-WindowContext* os_window_create(int32_t width, int32_t height){
+WindowContext* os_window_create(i32 width, i32 height){
     WindowContext* ctx = (WindowContext*)os_alloc_memory(sizeof(WindowContext));
 
     HWND window_handle = NULL;
@@ -331,8 +331,8 @@ WindowContext* os_window_create(int32_t width, int32_t height){
             to be within the requested size.
         **/
         AdjustWindowRectEx(&window_rect, window_style, FALSE, 0);
-        int32_t adjusted_width = window_rect.right - window_rect.left;
-        int32_t adjusted_height = window_rect.bottom - window_rect.top;
+        i32 adjusted_width = window_rect.right - window_rect.left;
+        i32 adjusted_height = window_rect.bottom - window_rect.top;
 
         window_handle = CreateWindowEx(
             0,
@@ -395,16 +395,14 @@ bool os_load_file_into_memory_arena(String file_path, MemoryArena* arena){
     /**
         convert to null terminated string.
     **/
-    char* null_terminated_file_path;
-    int32_t null_terminated_file_path_length;
-    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.count+1);
-    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.count);
-    null_terminated_file_path[file_path.count] = '\0';
-
+    char* nt_file_path = NULL;
+    i32 nt_file_path_length = 0;
+    string_to_ntstring(file_path, &transient_memory, &nt_file_path, &nt_file_path_length);
+    
     /**
         open file.
     **/
-    HANDLE file = CreateFileA(null_terminated_file_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    HANDLE file = CreateFileA(nt_file_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if(file == INVALID_HANDLE_VALUE){
         ASSERT(false, "failed to open file.");
         return false;
@@ -450,16 +448,14 @@ void* os_load_file(String file_path, size_t* out_buffer_size){
     /**
         convert to null terminated string.
     **/
-    char* null_terminated_file_path;
-    int32_t null_terminated_file_path_length;
-    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.count+1);
-    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.count);
-    null_terminated_file_path[file_path.count] = '\0';
+    char* nt_file_path = NULL;
+    i32 nt_file_path_length = 0;
+    string_to_ntstring(file_path, &transient_memory, &nt_file_path, &nt_file_path_length);
 
     /**
         open file.
     **/
-    HANDLE file = CreateFileA(null_terminated_file_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    HANDLE file = CreateFileA(nt_file_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if(file == INVALID_HANDLE_VALUE){
         ASSERT(false, "failed to open file.");
         return NULL;
@@ -503,21 +499,19 @@ void* os_load_file(String file_path, size_t* out_buffer_size){
     return buffer;
 }
 
-int32_t os_write_file(String file_path, void* data, size_t data_size, FileWriteType write_type){
+i32 os_write_file(String file_path, void* data, size_t data_size, FileWriteType write_type){
     /**
         convert to null terminated string.
     **/
-    char* null_terminated_file_path;
-    int32_t null_terminated_file_path_length;
-    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.count+1);
-    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.count);
-    null_terminated_file_path[file_path.count] = '\0';
-
+    char* nt_file_path = NULL;
+    i32 nt_file_path_length = 0;
+    string_to_ntstring(file_path, &transient_memory, &nt_file_path, &nt_file_path_length);
+    
     HANDLE h;
     switch(write_type){
         case FileWriteType_Truncate:{
             h = CreateFileA(
-                null_terminated_file_path,
+                nt_file_path,
                 GENERIC_WRITE,              // we want to write.
                 0,                          // no sharing while we write.
                 NULL,                       // default security attributes.
@@ -528,7 +522,7 @@ int32_t os_write_file(String file_path, void* data, size_t data_size, FileWriteT
         }break;
         case FileWriteType_Append:{
             h = CreateFileA(
-                null_terminated_file_path,
+                nt_file_path,
                 FILE_APPEND_DATA,           // request append-specific access.
                 0,                          // no sharing while we write.
                 NULL,                       // default security attributes.
@@ -566,13 +560,11 @@ bool os_delete_file(String file_path){
     /**
         convert to null terminated string.
     **/
-    char* null_terminated_file_path;
-    int32_t null_terminated_file_path_length;
-    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_file_path, &null_terminated_file_path_length, file_path.count+1);
-    COPY_MEMORY(null_terminated_file_path, file_path.chars, file_path.count);
-    null_terminated_file_path[file_path.count] = '\0';
+    char* nt_file_path = NULL;
+    i32 nt_file_path_length = 0;
+    string_to_ntstring(file_path, &transient_memory, &nt_file_path, &nt_file_path_length);    
 
-    if(DeleteFileA(null_terminated_file_path)){
+    if(DeleteFileA(nt_file_path)){
         return true;
     }
     return false;
@@ -588,9 +580,9 @@ void os_print_msg(char* msg){
 
 bool os_load_image(Image* out_image, String file_path){
     ASSERT(out_image->pixel == NULL, "image already init.");
-    int32_t comp;
+    i32 comp;
     // 4 channels for RGBA always being output.
-    int32_t desired_channels = 4;
+    i32 desired_channels = 4;
     size_t buffer_size = (file_path.length + 1) * sizeof(char);
     void* buffer = os_alloc_memory(buffer_size);
     ZERO_MEMORY(buffer, buffer_size);
@@ -619,24 +611,17 @@ bool os_free_image(Image* image){
 
 bool os_copy_file(String dst_file_path, String src_file_path, bool fail_if_exists){
 
-    /**
-        convert to null terminated string.
-    **/
-    char* null_terminated_src_file_path;
-    int32_t null_terminated_src_file_path_length;
-    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_src_file_path, &null_terminated_src_file_path_length, src_file_path.count+1);
-    COPY_MEMORY(null_terminated_src_file_path, src_file_path.chars, src_file_path.count);
-    null_terminated_src_file_path[src_file_path.count] = '\0';
+    char* nt_src_file_path = NULL;
+    i32 nt_src_file_path_length = 0;
+    string_to_ntstring(src_file_path, &transient_memory, &nt_src_file_path, &nt_src_file_path_length);    
 
-    char* null_terminated_dst_file_path;
-    int32_t null_terminated_dst_file_path_length;
-    MEMORY_ARENA_ALLOC_ARRAY(&transient_memory, null_terminated_dst_file_path, &null_terminated_dst_file_path_length, dst_file_path.count+1);
-    COPY_MEMORY(null_terminated_dst_file_path, dst_file_path.chars, dst_file_path.count);
-    null_terminated_dst_file_path[dst_file_path.count] = '\0';
+    char* nt_dst_file_path = NULL;
+    i32 nt_dst_file_path_length = 0;
+    string_to_ntstring(dst_file_path, &transient_memory, &nt_dst_file_path, &nt_dst_file_path_length);    
     
     BOOL success = CopyFile(
-      null_terminated_src_file_path,
-      null_terminated_dst_file_path,
+      nt_src_file_path,
+      nt_dst_file_path,
       fail_if_exists // bFailIfExists
     );
     
@@ -645,4 +630,50 @@ bool os_copy_file(String dst_file_path, String src_file_path, bool fail_if_exist
 
 i32 os_get_max_file_path_length(){
     return MAX_PATH; 
+}
+
+/*
+    `remarks`:
+    `in_file_path`: is only written to when supplied with a valid pointer; passing NULL will do nothing. 
+    `out_file_path_length`: always returns the amount of file paths that are required to be written; to the `in_file_path`.
+*/
+void os_get_all_file_paths(String directory_path, String* in_file_path, i32* out_file_path_length){
+    WIN32_FIND_DATAA find_data;
+    HANDLE handle;
+    
+    char* nt_directory_path;
+    i32 nt_directory_path_length;
+    string_to_ntstring(directory_path, &transient_memory, &nt_directory_path, &nt_directory_path_length);
+
+    // example:
+    // // "*" matches everything; use "*.txt" to filter by extension
+    // handle = FindFirstFileA("C:\\MyFolder\\*", &findData);
+    handle = FindFirstFileA(nt_directory_path, &find_data);
+    
+    *out_file_path_length = 0;
+    
+    if(handle == INVALID_HANDLE_VALUE){
+        ASSERT(false, "invalid file path.");
+        return;
+    }
+    
+    while(true){
+        // skip dot files ('.') and sub directories ('..').
+        if(
+            strcmp(find_data.cFileName, ".") != 0 &&
+            strcmp(find_data.cFileName, "..") != 0 &&
+            !(find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+        ){
+            if(in_file_path){
+                string_push_ntstring(&in_file_path[*out_file_path_length], find_data.cFileName);
+            }
+            *out_file_path_length += 1;
+        }
+        
+        if(!FindNextFileA(handle, &find_data)){
+            break;
+        }
+    }
+
+    FindClose(handle);
 }

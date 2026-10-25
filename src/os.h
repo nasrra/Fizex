@@ -73,6 +73,8 @@ f32 os_window_calc_aspect_ratio(WindowContext window_ctx);
 u128 os_get_system_tick();
 u128 os_get_proccess_tick();
 
+void os_get_all_file_paths(String directory_path, String* out_file_path, i32* out_file_length);
+
 void os_print_msg(char* msg);
 
 bool os_load_image(Image* out_image, String file_path);

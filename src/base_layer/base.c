@@ -139,9 +139,22 @@ GenId gen_id_increment_index(GenId gen_id){
     return curr_gen | next_index;
 }
 
+
+///
+/// @ String
+///
+
+
 void string_init(String* string, MemoryArena* arena, i32 length){
     MEMORY_ARENA_ALLOC_ARRAY(arena, string->chars, &string->length, length);
     string->count = 0;
+}
+
+String string_from_chars(MemoryArena* arena, char* chars, i32 length){
+    String str;
+    string_init(&str, arena, length);
+    string_push_chars(&str, chars, length);
+    return str;
 }
 
 void string_clear(String* string){
@@ -157,6 +170,18 @@ void string_push_chars(String* string, char* chars, i32 chars_length){
         string->chars[string->count + i] = chars[i];
     }
     string->count += available_space;
+}
+
+void string_push_ntstring(String* string, char* ntstring){
+    i32 start_idx = string->count;
+    for(i32 i = start_idx; i < string->length; i++){
+        char c = ntstring[i - start_idx];
+        if(c=='\0'){
+            break;
+        }
+        string->chars[i] = c;
+        string->count+=1;
+    }
 }
 
 void string_push_char(String* string, char c){
@@ -182,6 +207,24 @@ char string_pop(String* string){
     string->count-=1;
     return string->chars[string->count+1];
 }
+
+/*
+    creates a null-terminated string from another string
+    
+    `remarks`
+    the null-terminated string is allocated onto the passed memory arena.
+*/
+void string_to_ntstring(String string, MemoryArena* arena, char** out_ntstring, i32* out_length){
+    MEMORY_ARENA_ALLOC_ARRAY(arena, *out_ntstring, out_length, string.count+1);
+    COPY_MEMORY(*out_ntstring, string.chars, string.count);
+    (*out_ntstring)[string.count] = '\0';
+}
+
+
+//
+// @ GenIdAllocator
+//
+
 
 void gen_id_allocator_init(GenIdAllocator* allocator, MemoryArena* arena, i32 length){
     ASSERT(!allocator->is_init, "already initialised.");

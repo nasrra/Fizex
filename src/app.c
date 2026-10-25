@@ -91,7 +91,7 @@ void app_main(){
             .image_textures_init_infos_length = image_textures_init_info_length,
             .final_render_texture_width = WINDOW_WIDTH,
             .final_render_texture_height = WINDOW_HEIGHT,
-            .graphics_pipeline_shader_file_path = (String){.chars = "../assets/shader.wgsl", .length = 21, .count = 21},
+            .graphics_pipeline_shader_file_path = STRING_FROM_LITERAL("../assets/shader.wgsl", transient),
             .max_sprites = 1024,
             .draw_wireframe_thickness = GFX_DEFAULT_WIREFRAME_THICKNESS,
             .draw_circle_vertex_count = 24,
@@ -136,12 +136,12 @@ void app_main(){
 
         { // load textures.
             string_clear(&file_path);
-            string_push_chars(&file_path, "../assets/sprites/GameBoard.png", 31);
+            STRING_PUSH_LITERAL(&file_path, "../assets/sprites/GameBoard.png");
             gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_GAME_BOARD);
 
             string_clear(&file_path);
-            string_push_chars(&file_path, "../assets/fonts/PixelOperatorSC-Bold.ttf", 40);
+            STRING_PUSH_LITERAL(&file_path, "../assets/fonts/PixelOperatorSC-Bold.ttf");
             gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_FONT);
             gfx_load_font_texture(&gfx_state, transient, VIRTUAL_TEXTURE_ID_FONT, 24, 32, 12);
         }
@@ -156,7 +156,7 @@ void app_main(){
             
         //     level_manager_defer_load_level(&game_state.level_manager, file_path, LevelLoadType_World, load_board_level_callback, &load_board_level_callback_ctx, sizeof(load_board_level_callback_ctx));
         // }
-    }
+    }    
 
     GenId level_gid = entity_spawn_level_root(&game_state.entity_manager, (String){.chars = "level 0", .length = 7, .count = 7}, TRANSFORM2D_IDENTITY, 0);
 
