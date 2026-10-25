@@ -724,14 +724,18 @@ GenId entity_manager_alloc_entity(EntityManager* manager, GenId parent){
 void entity_manager_dealloc_entity_data_unsafe(EntityManager* manager, i32 idx){
     BOUNDS_CHECK(idx, manager->entity_length);
     Entity* entity = &manager->entity[idx];
-
+    
     if(entity->is_physics_body){
         fizx_body_dealloc(&manager->fizx_state, entity->physics_body_gid);
     }
 
     if(entity->sprite_gid){
         gfx_sprite_dealloc(manager->gfx_state, entity->sprite_gid);
-    }    
+    }
+    
+    if(entity->is_clickable_in_game){
+        clickable_area_hierarchy_dealloc_clickable_area(&manager->clickable_area_hierarchy, entity->game_clickable_area_gid);
+    }
     
     String name = entity->name;
     string_clear(&name);

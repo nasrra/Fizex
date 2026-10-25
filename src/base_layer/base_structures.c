@@ -2019,6 +2019,18 @@ GenId clickable_area_hierarchy_alloc_clickable_area(ClickableAreaHierarchy* hier
     return gen_id_allocator_alloc(&hierarchy->gen_id_allocator);
 }
 
+bool clickable_area_hierarchy_dealloc_clickable_area(ClickableAreaHierarchy* hierarchy, GenId area_gid){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&hierarchy->gen_id_allocator, area_gid);
+    if(!idx){
+        return false;
+    }
+    
+    BOUNDS_CHECK(idx, hierarchy->area_length);
+    hierarchy->area[idx] = (ClickableArea){0};
+    gen_id_allocator_dealloc_unsafe(&hierarchy->gen_id_allocator, idx);
+    return true;
+}
+
 void clickable_area_hierarchy_clear_previous_selected_stack(ClickableAreaHierarchy* hierarchy){
     hierarchy->previous_idx_count = 0;
 }
