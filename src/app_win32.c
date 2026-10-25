@@ -3,7 +3,7 @@
 #include <windowsx.h>
 #include "app.h"
 #include "stdint.h"
-#include "platform.h"
+#include "os.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "vendors/stb/stb_image.h"
@@ -81,7 +81,7 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
 
         case WM_CLOSE:{
             OutputDebugStringA("WM_CLOSE\n");
-            platform_window_destroy(ctx);
+            os_window_destroy(ctx);
         }break;
 
         case WM_ACTIVATEAPP:{
@@ -233,18 +233,18 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
     return result;
 }
 
-long long platform_get_system_tick(){
+long long os_get_system_tick(){
     LARGE_INTEGER time;
     QueryPerformanceCounter(&time);
     return (long long)time.QuadPart;
 }
 
-long long platform_get_proccess_tick(){
-    return platform_get_system_tick() - win32_global_process_start_time;
+long long os_get_proccess_tick(){
+    return os_get_system_tick() - win32_global_process_start_time;
 }
 
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_code){
-    win32_global_process_start_time = platform_get_system_tick();
+    win32_global_process_start_time = os_get_system_tick();
     app_main();
     return(0);
 }
@@ -253,11 +253,11 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line
     public functions.
 ====================*//**/
 
-void platform_output_message(char* msg){
+void os_output_message(char* msg){
     OutputDebugStringA(msg);
 }
 
-void* platform_alloc_memory(size_t size){
+void* os_alloc_memory(size_t size){
     /*
         `MEM_COMMIT` tells windows to begin actively tracking the page and virtual address space that has been allocated.
         an alternative is `MEM_RESERVE` if a page should be allocated but not actively tracked yet.
@@ -265,45 +265,45 @@ void* platform_alloc_memory(size_t size){
     return VirtualAlloc(0, size, MEM_COMMIT, PAGE_READWRITE);
 }
 
-void platform_free_memory(void* memory){
+void os_free_memory(void* memory){
     /*
         `SIZE_T dwSize` is passed as 0 as magically windows remembers the size of the allocation for the pointer.
     */
     VirtualFree(memory, 0, MEM_RELEASE);
 }
 
-void platform_init_persistent_memory(size_t size){
+void os_init_persistent_memory(size_t size){
     if(persistent_memory.ptr!=NULL){
         assert("platform persistent memory already init.");
     }
-    persistent_memory.ptr = platform_alloc_memory(size);
+    persistent_memory.ptr = os_alloc_memory(size);
     persistent_memory.size = size;
     persistent_memory.stride = 0;
 }
 
-void platform_init_transient_memory(size_t size){
+void os_init_transient_memory(size_t size){
     if(transient_memory.ptr!=NULL){
         assert("transient persistent memory already init.");
     }
-    transient_memory.ptr = platform_alloc_memory(size);
+    transient_memory.ptr = os_alloc_memory(size);
     transient_memory.size = size;
     transient_memory.stride = 0;
 }
 
-void platform_error_message_box(char* msg){
+void os_error_message_box(char* msg){
     MessageBox(0, msg, "win32app", MB_OK | MB_ICONERROR);
 }
 
-MemoryArena* platform_get_persistent_memory(){
+MemoryArena* os_get_persistent_memory(){
     return &persistent_memory;
 }
 
-MemoryArena* platform_get_transient_memory(){
+MemoryArena* os_get_transient_memory(){
     return &transient_memory;
 }
 
-WindowContext* platform_window_create(int32_t width, int32_t height){
-    WindowContext* ctx = (WindowContext*)platform_alloc_memory(sizeof(WindowContext));
+WindowContext* os_window_create(int32_t width, int32_t height){
+    WindowContext* ctx = (WindowContext*)os_alloc_memory(sizeof(WindowContext));
 
     HWND window_handle = NULL;
     HINSTANCE instance = GetModuleHandle(0);
@@ -364,7 +364,7 @@ WindowContext* platform_window_create(int32_t width, int32_t height){
     return ctx;
 }
 
-void platform_window_update(WindowContext* ctx){
+void os_window_update(WindowContext* ctx){
     ASSERT(ctx->win32_hwnd != (HWND){0}, "window context doesnt have an init win32 window handle.");
     ASSERT(ctx->win32_hdc != (HDC){0}, "window context doesnt have an init win32 device context handle.");
     ASSERT(ctx->win32_hinstance != (HINSTANCE){0}, "window context doesnt have an init win32 instance handle");
@@ -377,7 +377,7 @@ void platform_window_update(WindowContext* ctx){
     }
 }
 
-void platform_window_destroy(WindowContext* ctx){
+void os_window_destroy(WindowContext* ctx){
     ASSERT(ctx->win32_hwnd != (HWND){0}, "window context doesnt have an init win32 window handle.");
     ASSERT(ctx->win32_hdc != (HDC){0}, "window context doesnt have an init win32 device context handle.");
     ASSERT(ctx->win32_hinstance != (HINSTANCE){0}, "window context doesnt have an init win32 instance handle");
@@ -386,11 +386,11 @@ void platform_window_destroy(WindowContext* ctx){
     ctx->is_destroyed = true;
 }
 
-void platform_window_context_free(WindowContext* ctx){
-    platform_free_memory(ctx);
+void os_window_context_free(WindowContext* ctx){
+    os_free_memory(ctx);
 }
 
-bool platform_load_file_into_memory_arena(String file_path, MemoryArena* arena){
+bool os_load_file_into_memory_arena(String file_path, MemoryArena* arena){
 
     /**
         convert to null terminated string.
@@ -445,7 +445,7 @@ bool platform_load_file_into_memory_arena(String file_path, MemoryArena* arena){
     return true;
 }
 
-void* platform_load_file(String file_path, size_t* out_buffer_size){
+void* os_load_file(String file_path, size_t* out_buffer_size){
 
     /**
         convert to null terminated string.
@@ -474,7 +474,7 @@ void* platform_load_file(String file_path, size_t* out_buffer_size){
         return NULL;
     }
     size_t bytes_to_read = (size_t)file_size.QuadPart;
-    void* buffer = platform_alloc_memory(bytes_to_read+1); // add +1 for the NULL terminator.
+    void* buffer = os_alloc_memory(bytes_to_read+1); // add +1 for the NULL terminator.
 
     /**
         read file into buffer.
@@ -485,7 +485,7 @@ void* platform_load_file(String file_path, size_t* out_buffer_size){
         BOOL read_success = ReadFile(file, (u8*)buffer + total_bytes_read, (DWORD)bytes_to_read, &bytes_read, NULL);
         if(!read_success){
             ASSERT(false, "failed to read file contents.");
-            platform_free_memory(buffer);
+            os_free_memory(buffer);
             return NULL;
         }
         total_bytes_read += (size_t)bytes_read;
@@ -503,7 +503,7 @@ void* platform_load_file(String file_path, size_t* out_buffer_size){
     return buffer;
 }
 
-int32_t platform_write_file(String file_path, void* data, size_t data_size, FileWriteType write_type){
+int32_t os_write_file(String file_path, void* data, size_t data_size, FileWriteType write_type){
     /**
         convert to null terminated string.
     **/
@@ -562,7 +562,7 @@ int32_t platform_write_file(String file_path, void* data, size_t data_size, File
     return ok && (bytes_written == data_size);
 }
 
-bool platform_delete_file(String file_path){
+bool os_delete_file(String file_path){
     /**
         convert to null terminated string.
     **/
@@ -578,25 +578,25 @@ bool platform_delete_file(String file_path){
     return false;
 }
 
-f32 platform_window_calc_aspect_ratio(WindowContext ctx){
+f32 os_window_calc_aspect_ratio(WindowContext ctx){
     return (f32)ctx.width / (f32)ctx.height;
 }
 
-void platform_print_msg(char* msg){
+void os_print_msg(char* msg){
     OutputDebugStringA(msg);
 }
 
-bool platform_load_image(Image* out_image, String file_path){
+bool os_load_image(Image* out_image, String file_path){
     ASSERT(out_image->pixel == NULL, "image already init.");
     int32_t comp;
     // 4 channels for RGBA always being output.
     int32_t desired_channels = 4;
     size_t buffer_size = (file_path.length + 1) * sizeof(char);
-    void* buffer = platform_alloc_memory(buffer_size);
+    void* buffer = os_alloc_memory(buffer_size);
     ZERO_MEMORY(buffer, buffer_size);
     COPY_MEMORY(buffer, file_path.chars, file_path.length);
     u8* ptr = stbi_load((char*)buffer, &out_image->width, &out_image->height, &comp, desired_channels);
-    platform_free_memory(buffer);
+    os_free_memory(buffer);
     if(ptr == NULL){
         ASSERT(false, "failed to load image.");
         return false;
@@ -606,7 +606,7 @@ bool platform_load_image(Image* out_image, String file_path){
     return true;
 }
 
-bool platform_free_image(Image* image){
+bool os_free_image(Image* image){
     if(image->pixel == NULL){
         return false;
     }
@@ -617,7 +617,7 @@ bool platform_free_image(Image* image){
     return true;
 }
 
-bool platform_copy_file(String dst_file_path, String src_file_path, bool fail_if_exists){
+bool os_copy_file(String dst_file_path, String src_file_path, bool fail_if_exists){
 
     /**
         convert to null terminated string.
@@ -643,6 +643,6 @@ bool platform_copy_file(String dst_file_path, String src_file_path, bool fail_if
     return success;
 }
 
-i32 platform_get_max_file_path_length(){
+i32 os_get_max_file_path_length(){
     return MAX_PATH; 
 }

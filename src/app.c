@@ -1,4 +1,4 @@
-#include "platform.h"
+#include "os.h"
 #include "base_layer/base.h"
 #include "base_layer/base_cpu.c"
 #include "base_layer/base_math.c"
@@ -30,10 +30,10 @@ void app_main(){
     /**
         memory allocation.
     **/
-    platform_init_persistent_memory(MEGABYTE(500));
-    platform_init_transient_memory(MEGABYTE(4));
-    MemoryArena* persistent = platform_get_persistent_memory();
-    MemoryArena* transient = platform_get_transient_memory();
+    os_init_persistent_memory(MEGABYTE(500));
+    os_init_transient_memory(MEGABYTE(4));
+    MemoryArena* persistent = os_get_persistent_memory();
+    MemoryArena* transient = os_get_transient_memory();
 
     IntrusiveList intrsuive_list = {0};
     intrusive_list_init(&intrsuive_list, transient, 16, false);
@@ -49,7 +49,7 @@ void app_main(){
     f32 latest_active_key_print_rate = 0.05f;
     input_init(persistent, latest_active_key_print_delay, latest_active_key_print_rate);
 
-    WindowContext* window_ctx = platform_window_create(WINDOW_WIDTH, WINDOW_HEIGHT);
+    WindowContext* window_ctx = os_window_create(WINDOW_WIDTH, WINDOW_HEIGHT);
     GFX_State gfx_state = {0};
     { // init gfx
 
@@ -82,7 +82,7 @@ void app_main(){
 
         // context.
         GFX_StateInitInfo gfx_init_info = {
-            .max_file_path_length = platform_get_max_file_path_length(),
+            .max_file_path_length = os_get_max_file_path_length(),
             .max_user_uniform_buffer_size_in_bytes = sizeof(Ubo),
             .max_user_storage_buffer_size_in_bytes = 4, // this should be 4 when not used for some reason idk.
             .max_virtual_textures = 1024,
@@ -132,7 +132,7 @@ void app_main(){
     { // load assets.
 
         String file_path = {0};
-        string_init(&file_path, transient, platform_get_max_file_path_length());
+        string_init(&file_path, transient, os_get_max_file_path_length());
 
         { // load textures.
             string_clear(&file_path);
@@ -170,7 +170,7 @@ void app_main(){
         f32 previous_time_in_seconds    = 0.0f;
         f32 fixed_update_accumulator    = 0.0f;
         while(!window_ctx->is_destroyed){
-            u128 process_tick = platform_get_proccess_tick();
+            u128 process_tick = os_get_proccess_tick();
             // micro to mili.
             u128 process_tick_in_mili = process_tick / 1000;
             u128 delta_tick_in_mili = process_tick_in_mili - prev_process_tick_in_mili;
@@ -179,7 +179,7 @@ void app_main(){
             prev_process_tick_in_mili = process_tick_in_mili;
 
             { // app begin update.
-                platform_window_update(window_ctx);
+                os_window_update(window_ctx);
                 input_update(delta_time);
                 if(input_is_key_just_pressed(Key_F1)){
                     if(last_editor_key_pressed == Key_F1){
@@ -270,7 +270,7 @@ void app_main(){
                             NOTE:
                             this might have to be swapped for the final render target resolution, maybe idk.
                         **/
-                        f32 aspect_ratio = platform_window_calc_aspect_ratio(*gfx_state.window_ctx);
+                        f32 aspect_ratio = os_window_calc_aspect_ratio(*gfx_state.window_ctx);
                         gfx_camera_update_projection_matrix(&gfx_state.world_camera, aspect_ratio);
                         gfx_camera_update_projection_matrix(&gfx_state.screen_camera, aspect_ratio);
                     
@@ -323,6 +323,6 @@ void app_main(){
 
     { // clean up.
 
-        platform_window_context_free(window_ctx);
+        os_window_context_free(window_ctx);
     }
 }

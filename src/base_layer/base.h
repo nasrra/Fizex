@@ -168,8 +168,8 @@ typedef struct{
 #   define ARCH_ARM64 0
 #endif
 
-#ifdef PLATFORM_H
-#   define ABORT(msg) do { platform_error_message_box(msg); abort(); } while(0)
+#ifdef OS_H
+#   define ABORT(msg) do { os_error_message_box(msg); abort(); } while(0)
 #else
 #   define ABORT(msg) do { abort(); } while(0)
 #endif

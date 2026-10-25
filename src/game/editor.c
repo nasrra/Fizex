@@ -401,8 +401,8 @@ void editor_save_level_entity_recurssive(
         // string_push(file_path, entity->name);
         string_push(file_path, entity->serialisation_file_path);
         
-        if(!platform_delete_file(*file_path)){
-            platform_output_message("[Warning]: failed to delete level file whilst serialising entity; as the file wasn't present previously.");
+        if(!os_delete_file(*file_path)){
+            os_output_message("[Warning]: failed to delete level file whilst serialising entity; as the file wasn't present previously.");
         }
     }
 
@@ -488,7 +488,7 @@ void editor_save_level_entity_recurssive(
             string_push_chars(entity_char_buffer, "\n", 1);
         }
                 
-        platform_write_file(
+        os_write_file(
             *file_path,
             entity_char_buffer->chars,
             entity_char_buffer->count,
@@ -509,12 +509,12 @@ void editor_save_level_entity_recurssive(
 
         // TODO: in release, dont do this!
         if(line_idx == 1){
-            char* chars = (char*)platform_alloc_memory(platform_get_max_file_path_length());
-            String dst_file_path = {.chars = chars, .length = platform_get_max_file_path_length()};
+            char* chars = (char*)os_alloc_memory(os_get_max_file_path_length());
+            String dst_file_path = {.chars = chars, .length = os_get_max_file_path_length()};
             string_push_chars(&dst_file_path, "../", 3);
             string_push(&dst_file_path, *file_path);
-            platform_copy_file(dst_file_path, *file_path, false);
-            platform_free_memory(chars);
+            os_copy_file(dst_file_path, *file_path, false);
+            os_free_memory(chars);
         }
         
         // loop through branch level.
@@ -543,7 +543,7 @@ void editor_on_hover_save_level_button(Clay_ElementId element_id, Clay_PointerDa
                 
         // debug build path.
         String file_path_scratch_space;
-        string_init(&file_path_scratch_space, ctx->transient, platform_get_max_file_path_length());
+        string_init(&file_path_scratch_space, ctx->transient, os_get_max_file_path_length());
         
         editor_save_level_entity_recurssive(
             &ctx->game_state->entity_manager,

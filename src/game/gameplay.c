@@ -793,7 +793,7 @@ void entity_manager_init(
     for(i32 i = 0; i < manager->entity_length; i++){
         Entity* entity = &manager->entity[i];
         string_init(&entity->name, arena, ENTITY_NAME_LENGTH);
-        string_init(&entity->serialisation_file_path, arena, platform_get_max_file_path_length());
+        string_init(&entity->serialisation_file_path, arena, os_get_max_file_path_length());
     }
     
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->deserialised_entity, &manager->deserialised_entity_length, entity_amount);
@@ -801,7 +801,7 @@ void entity_manager_init(
     for(i32 i = 0; i < manager->deserialised_entity_length; i++){
         DeserialisedEntity* deserialised_entity = &manager->deserialised_entity[i];
         string_init(&deserialised_entity->name, arena, ENTITY_NAME_LENGTH);
-        string_init(&deserialised_entity->serialisation_file_path, arena, platform_get_max_file_path_length());
+        string_init(&deserialised_entity->serialisation_file_path, arena, os_get_max_file_path_length());
     }
 
     gen_id_allocator_init(&manager->gen_id_allocator, arena, entity_amount);
@@ -1230,7 +1230,7 @@ void thwamper_smackdown_area_query_callback(FIZX_State* state, FIZX_QueryCollisi
 }
 
 void thwamper_on_turn_end_callback(GameState* game_state, i32 entity_idx){
-    platform_output_message("thwamp! thwamp! thwamp!\n");
+    os_output_message("thwamp! thwamp! thwamp!\n");
     BOUNDS_CHECK(entity_idx, game_state->entity_manager.entity_length);
     Entity* entity = &game_state->entity_manager.entity[entity_idx];
     i32 body_idx = gen_id_get_index(entity->physics_body_gid);
@@ -1774,7 +1774,7 @@ void ball_cue_fragment_timer_timeout(void* user_data){
 }
 
 void ball_cue_update(Entity* entity, GameState* game_state, f32 delta_time){
-    // platform_output_message("update cue ball!\n");
+    // os_output_message("update cue ball!\n");
     if(input_is_key_just_pressed(Key_A)){
 
         if(entity->is_physics_body){            
@@ -2279,7 +2279,7 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String n
             return (GenId){0};
         }break;
         case EntityTypeId_None:{
-            platform_output_message("[Warning]: editor attempted to spawn an entity without a entity type id; (EntityTypeId_None).\n");
+            os_output_message("[Warning]: editor attempted to spawn an entity without a entity type id; (EntityTypeId_None).\n");
             return 0;
         }break;
         case EntityTypeId_LevelRoot:{
@@ -2355,7 +2355,7 @@ void level_manager_init(
     ASSERT(!level_manager->is_init, "level manager is already init.");
     *level_manager = (LevelManager){0};
     
-    i32 file_path_length = platform_get_max_file_path_length();
+    i32 file_path_length = os_get_max_file_path_length();
     string_init(&level_manager->world_root_entity_file_path, arena, file_path_length);
     string_init(&level_manager->ui_root_entity_file_path, arena, file_path_length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, level_manager->deferred_level_load, &level_manager->deferred_level_load_length, deferred_level_load_length);
@@ -2418,7 +2418,7 @@ GenId level_manager_load_level_file_recurssive(
     */
 
     size_t buffer_size;
-    void* raw_file = platform_load_file(file_path, &buffer_size);
+    void* raw_file = os_load_file(file_path, &buffer_size);
     char* file_data = (char*)raw_file;
 
     DeserialisedEntity* deserialised_entity;
@@ -2474,7 +2474,7 @@ GenId level_manager_load_level_file_recurssive(
             default :{ASSERT(false, "unknown entity file line token.");}break;
             case LEVEL_FILE_ASSET_ENTITY_TOKEN:{
                 String scratch_space = {0};
-                string_init(&scratch_space, transient, platform_get_max_file_path_length());
+                string_init(&scratch_space, transient, os_get_max_file_path_length());
     
                 lines_read = sscanf(
                     file_data,
@@ -2584,7 +2584,7 @@ GenId level_manager_load_level_file_recurssive(
         file_data += bytes_consumed + 1; // add 1 to account for the subsequent '\n'.
     
     }
-    platform_free_memory(raw_file);
+    os_free_memory(raw_file);
     
     // return the root entity.
     BOUNDS_CHECK(1, entity_manager->deserialised_entity_length);
@@ -2740,7 +2740,7 @@ void game_state_preupdate(GameState* game_state, f32 delta_time, MemoryArena* tr
 
 void foo(void* user_data){
     i32 x = *(i32*)user_data;
-    platform_output_message("loaded level!\n");
+    os_output_message("loaded level!\n");
 }
 
 void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryArena* transient, f32 delta_time, bool in_editor_mode){
@@ -2877,7 +2877,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                     switch(board_state->turn){
                         case BoardTurn_Player:{
                             board_state->turn = BoardTurn_Ball;
-                            platform_output_message("ball turn\n");
+                            os_output_message("ball turn\n");
                         }break;
                     }
                 }else{
@@ -2898,7 +2898,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                                     }
                                 }
                             }
-                            platform_output_message("turn based.\n");
+                            os_output_message("turn based.\n");
                         }break;
                         case BoardTurn_TurnBased:{
                             board_state->turn = BoardTurn_Player;
@@ -2934,7 +2934,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                                 );                        
                             }
                             
-                            platform_output_message("player turn\n");
+                            os_output_message("player turn\n");
                         }break;
                     }
                 }        
@@ -2994,7 +2994,7 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
             
             if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
                 clicked_entity = (Entity*)area->user_data;
-                platform_output_message("farts\n");        
+                os_output_message("farts\n");        
             }
             
             if(
@@ -3334,7 +3334,7 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                     }){
                         
                         String level_001_file_path;                                                
-                        string_init(&level_001_file_path, transient, platform_get_max_file_path_length());
+                        string_init(&level_001_file_path, transient, os_get_max_file_path_length());
                         string_push_chars(&level_001_file_path,  "../assets/levels/level_001.scsv", 31); 
                         
                         CLAY_TEXT(CLAY_STRING("Level Select"), GAME_GFX_CLAY_HEADER_TEXT_CONFIG);   
@@ -3402,7 +3402,7 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                     f32 vertical_size = 0.25f;
 
                                     String menu_level_file_path;
-                                    string_init(&menu_level_file_path, transient, platform_get_max_file_path_length());
+                                    string_init(&menu_level_file_path, transient, os_get_max_file_path_length());
                                     string_push_chars(&menu_level_file_path, "../assets/levels/menu_level.scsv", 32);
 
                                     { // return_to_level_select_button();

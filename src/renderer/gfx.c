@@ -713,7 +713,7 @@ bool gfx_freetype_load_font(
             ASSERT(false, "failed to release font lib data.");
             return false;
         }
-        platform_free_memory(n_path);
+        os_free_memory(n_path);
     }
 
     return true;
@@ -2084,11 +2084,11 @@ void gfx_shader_module_init(WGPUShaderModule* module, WGPUDevice device, String 
 
 WGPUShaderModule gfx_shader_module_load_from_file(String file_path, WGPUDevice device){
     size_t buffer_size;
-    void* buffer = platform_load_file(file_path,&buffer_size);
+    void* buffer = os_load_file(file_path,&buffer_size);
     WGPUShaderSourceWGSL wgsl = {.chain.sType = WGPUSType_ShaderSourceWGSL, .code = (WGPUStringView){.data = buffer, .length = WGPU_STRLEN}};
     WGPUShaderModuleDescriptor desc = {.nextInChain = &wgsl.chain};
     WGPUShaderModule shader_module = wgpuDeviceCreateShaderModule(device, &desc);
-    platform_free_memory(buffer);
+    os_free_memory(buffer);
     return shader_module;
 }
 
@@ -3410,7 +3410,7 @@ bool gfx_load_image_texture(GFX_State* ctx, i32 virtual_texture_idx){
     GFX_HostVirtualTexture* hvt = &ctx->virtual_texture_manager.host_virtual_texture[virtual_texture_idx];
 
     Image image = (Image){0};
-    if(!platform_load_image(&image, hvt->file_path)){
+    if(!os_load_image(&image, hvt->file_path)){
         return false;
     }
 
@@ -3428,14 +3428,14 @@ bool gfx_load_image_texture(GFX_State* ctx, i32 virtual_texture_idx){
     }
     if(texture_array_binding == -1){
         ASSERT(false, "failed to load image texture; required image resolution storage has not been registered.");
-        platform_free_image(&image);
+        os_free_image(&image);
         return false;
     }
 
     // get the next available slot to load into.
     if(texture_array->free_layer_idx_stack_count == 0){
         ASSERT(false, "gpu memory limit hit: cannot load any more images of the desired resolution.");
-        platform_free_image(&image);
+        os_free_image(&image);
         return false;
     }
 
@@ -3445,7 +3445,7 @@ bool gfx_load_image_texture(GFX_State* ctx, i32 virtual_texture_idx){
 
     // write the pixel data to the texture array.
     gfx_write_to_texture_array(texture_array, ctx->device, WGPUTextureFormat_RGBA8Unorm, dvt->texture_array_layer_index, image.pixel, image.pixel_length);
-    platform_free_image(&image);
+    os_free_image(&image);
     return true;
 }
 
@@ -3661,7 +3661,7 @@ static inline Clay_Dimensions gfx_clay_measure_text(Clay_StringSlice text, Clay_
 
 Clay_Context* gfx_clay_create_context(size_t clay_arena_size, i32 screen_height, i32 screen_width){
     // TODO: this should change to use the persistent memory arena.
-    Clay_Arena arena = Clay_CreateArenaWithCapacityAndMemory(clay_arena_size, platform_alloc_memory(clay_arena_size));
+    Clay_Arena arena = Clay_CreateArenaWithCapacityAndMemory(clay_arena_size, os_alloc_memory(clay_arena_size));
     Clay_Context* ctx = Clay_Initialize(
         arena,
         (Clay_Dimensions){(f32)screen_width, (f32)screen_height},
