@@ -150,6 +150,26 @@ void string_init(String* string, MemoryArena* arena, i32 length){
     string->count = 0;
 }
 
+/*
+    `returns`
+    true, if the two strings have the same contents; otherwise false.
+*/
+bool string_contents_equal(String a, String b){
+    
+    if(a.count != b.count){
+        return false;
+    }
+    
+    i32 val = a.count;
+    for(i32 i = 0; i < a.count; i++){
+        if(a.chars[i] != b.chars[i]){
+            return false;
+        }
+    }
+    
+    return true;
+}
+
 String string_from_chars(MemoryArena* arena, char* chars, i32 length){
     String str;
     string_init(&str, arena, length);
@@ -294,3 +314,4 @@ i32 gen_id_allocator_is_gen_id_valid(const GenIdAllocator* allocator, GenId gen_
     }
     return idx;
 }
+

@@ -697,6 +697,7 @@ void string_push(String* dst, String src);
 char string_pop(String* string);
 void string_to_ntstring(String string, MemoryArena* arena, char** out_ntstring, i32* out_length);
 void string_push_ntstring(String* string, char* ntstring);
+bool string_contents_equal(String a, String b);
 
 void gen_id_allocator_init(GenIdAllocator* allocator, MemoryArena* arena, i32 length);
 /**

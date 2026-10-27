@@ -549,12 +549,16 @@ typedef struct{
     Editor_State* editor_state;
 } Editor_EntityTreeMakeChildButtonContext;
 
+/*
+    this function makes the selected entity a child of the selected parent entity.
+*/
 void editor_entity_tree_make_child_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
     if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
         
         // hoist some invariace.
         Editor_EntityTreeMakeChildButtonContext* ctx = (Editor_EntityTreeMakeChildButtonContext*)user_data;
         EntityManager* entity_manager = &ctx->game_state->entity_manager;
+        IntrusiveList* entity_hierarchy = &entity_manager->entity_hierarchy;
         
         i32 selected_idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, ctx->editor_state->selected_game_entity_gid);
         i32 parent_idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, ctx->editor_state->selected_parent_game_entity_gid);
@@ -567,8 +571,66 @@ void editor_entity_tree_make_child_button_on_hover_callback(Clay_ElementId eleme
         Entity* selected_entity = &entity_manager->entity[selected_idx];
         Transform2D global_transform = selected_entity->global_transform;
         
+        i32 current_node_idx;
+        
+        // get_selected_serialisation_root_entity.
+        i32 selected_serialisation_root_idx = 0;
+        current_node_idx = selected_idx;
+        while(current_node_idx){
+            
+            // check if the node is the 'root' serialisable entity.
+            BOUNDS_CHECK(current_node_idx, entity_hierarchy->length);
+            Entity* entity = &entity_manager->entity[current_node_idx];
+            if(entity->serialisation_file_path.count){
+                selected_serialisation_root_idx = current_node_idx;
+                break;
+            }
+            
+            // move up to the next parent if it isnt.
+            BOUNDS_CHECK(current_node_idx, entity_hierarchy->length);
+            current_node_idx = entity_hierarchy->node[current_node_idx].parent;
+        }
+        
+        // get_parent_root_entity;
+        i32 parent_serialisation_root_idx = 0;
+        current_node_idx = parent_idx;
+        while(current_node_idx){
+            
+            // check if the node is the 'root' serialisable entity.
+            BOUNDS_CHECK(current_node_idx, entity_hierarchy->length);
+            Entity* entity = &entity_manager->entity[current_node_idx];
+            if(entity->serialisation_file_path.count){
+                parent_serialisation_root_idx = current_node_idx;
+                break;
+            }
+            
+            // move up to the next parent if it isnt.
+            BOUNDS_CHECK(current_node_idx, entity_hierarchy->length);
+            current_node_idx = entity_hierarchy->node[current_node_idx].parent;        
+        }
+        
+        if(!parent_serialisation_root_idx || !selected_serialisation_root_idx){
+            os_output_message("[WARNING]: cannot child selected to parent entity; the parent or selected entity gid is invalid.\n");
+        }
+        
+        BOUNDS_CHECK(parent_serialisation_root_idx, entity_manager->entity_length);
+        Entity* parent_serialisation_root_entity = &entity_manager->entity[parent_serialisation_root_idx];
+        
+        BOUNDS_CHECK(selected_serialisation_root_idx, entity_manager->entity_length);
+        Entity* selected_serialation_root_entity = &entity_manager->entity[selected_serialisation_root_idx];
+        
+        // ensure that both the entities are native to the same asset file.
+        // if they're not, then they shouldn't be interacting with eachother in the first place;
+        // otherwise duplication/serialisation bugs can happen where the native entity is part of nested asset files.
+        bool equal = string_contents_equal(
+            parent_serialisation_root_entity->serialisation_file_path,
+            selected_serialation_root_entity->serialisation_file_path
+        );
+        if(!equal){
+            os_output_message("[WARNING]: cannot child selected to parent entity; the selected and parent entities are native entities within the same asset file.\n");
+        }
+        
         intrusive_list_set_node_parent(&entity_manager->entity_hierarchy, selected_idx, parent_idx);
-    
         entity_set_global_transform_unsafe(entity_manager, selected_idx, global_transform);
     }
 }
@@ -825,10 +887,7 @@ void gfx_clay_entity_tree_view(Editor_State* editor_state, GameState* game_state
             );
         }
         
-        
         // selected_entity_children();
-        
-        
         
         CLAY_TEXT(CLAY_STRING("Selected Entity Children"), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
         i32 page_max_selectable_entity_buttons = 14;
@@ -1310,9 +1369,96 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
 
 
 ///
-/// functions: Editor_State
+/// @ Editor_State
 ///
 
+
+void editor_state_update_clickable_area_hierarchy_area_recurssive(
+    Editor_State* editor_state, GameState* game_state, i32 node_idx, bool traverse_asset_entity
+){
+
+    // hoisting invariance.
+    Editor_MouseState*      editor_mouse_state = &editor_state->mouse_state;
+    GFX_State*              editor_gfx_state = editor_state->gfx_state;
+    EntityManager*          entity_manager = &game_state->entity_manager;
+    GFX_State*              game_gfx_state = entity_manager->gfx_state;
+    ClickableAreaHierarchy* clickable_area_hierarchy = &editor_state->game_entity_clickable_area_hierarchy;
+    
+    // BOUNDS_CHECK(node_idx, game_state->entity_hierarchy.){
+    
+    // }
+    
+    while(node_idx){
+        
+    }
+    
+    for(i32 idx = 1; idx < entity_manager->entity_length; idx++){
+        u64 depth_layer = 0;
+        PolygonRectangle rectangle = {0};
+        void* user_data = NULL;
+        
+        // get_clickable_area();
+        if(entity_manager_is_entity_allocated_unsafe(*entity_manager, idx)){
+        
+            Transform2D preferred_transform = {0};
+            
+            Entity* entity = &entity_manager->entity[idx];
+            user_data = entity;
+
+            // note that we infer this is a sprite; no need to check 'is_sprite' flag or 'sprite_gid'.
+            if(gfx_sprite_get_transform(*game_gfx_state, entity->sprite_gid, &preferred_transform)){
+
+                GFX_SpriteOrigin sprite_origin;
+
+                // falback to entity transform if we failed to get the sprite origin.
+                if(!gfx_sprite_get_sprite_origin(*game_gfx_state, entity->sprite_gid, &sprite_origin)){
+                    preferred_transform = entity->global_transform;
+                    rectangle = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+                }
+
+                switch(sprite_origin){
+                    default:
+                        ASSERT(false, "unknown sprite origin");
+                    case GFX_SpriteOrigin_Center:{
+                        rectangle = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+                    }break;
+                    case GFX_SpriteOrigin_TopLeft:{
+                        rectangle = transform2d_to_polygon_rectangle_top_left_origin(preferred_transform);
+                    }break;
+                }
+                gfx_sprite_get_depth_layer(game_gfx_state, entity->sprite_gid, &depth_layer);
+            }
+
+            // is not a sprite.
+            else{
+                preferred_transform = entity->global_transform;
+                rectangle = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+            }
+        }
+    
+        { // set_clickable_area();
+        
+            clickable_area_hierarchy_set_clickable_area_user_data_unsafe(
+                clickable_area_hierarchy,
+                idx,
+                user_data
+            );
+            
+            clickable_area_hierarchy_set_clickable_area_rectangle_shape_unsafe(
+                clickable_area_hierarchy,
+                idx,
+                rectangle.x,
+                rectangle.y
+            );
+        
+            clickable_area_hierarchy_set_clickable_area_depth_layer_unsafe(
+                clickable_area_hierarchy,
+                idx,
+                depth_layer
+            );
+        }
+    }
+}
 
 void editor_state_update(Editor_State* editor_state, GameState* game_state, MemoryArena* transient, f32 delta_time){
 
