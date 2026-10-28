@@ -333,7 +333,9 @@ typedef struct{
 #define ENTITY_NAME_LENGTH 32
 #define PLAYER_MOUSE_MAX_DRAW_RADIUS 2.5f
 #define PLAYER_MOUSE_LAUNCH_FORCE 7.5f
-#define LEVEL_FILE_LINE_LENGTH 512
+
+#define LEVEL_FILE_LINE_LENGTH 2048
+     
 // timer manager's `is_ticking` value that indicates a boolean `true`.
 #define TIMER_MANAGER_IS_TICKING_TRUE 1.0f
 // timer manager's `is_ticking` value that indicates a boolean `false`.
@@ -2385,11 +2387,11 @@ void level_manager_defer_load_level(LevelManager* level_manager, DeferredLevelLo
     `parameters`:
     `parent_idx_offset`: this should be set to `0` when calling this outside of the function; i.e, just always set it to `0`.
     `root_parent_idx`: the index of the current root entity's parent in the deserialised entity array; this should be set to `1` when first calling the recursion/this function.
-    `transform`: an additional transform added to the root entity.
+    `root_transform`: the transform override for the loaded asset root entity.
 */
 GenId level_manager_load_level_file_recurssive(
     LevelManager* level_manager, String file_path, MemoryArena* transient, 
-    i32 parent_idx_offset, i32 root_parent_idx, Transform2D transform
+    i32 parent_idx_offset, i32 root_parent_idx, Transform2D root_transform
 ){
     
     EntityManager* entity_manager = level_manager->entity_manager;
@@ -2460,21 +2462,27 @@ GenId level_manager_load_level_file_recurssive(
             case LEVEL_FILE_ASSET_ENTITY_TOKEN:{
                 String scratch_space = {0};
                 string_init(&scratch_space, transient, os_get_max_file_path_length());
-    
+                
                 lines_read = sscanf(
                     file_data,
-                    "%[^;]%n;%n",
+                    "%[^;]%n;%f;%f;%f;%f;%f;%f;%n",
                     scratch_space.chars,
                     &scratch_space.count,
+                    &root_transform.position.x,
+                    &root_transform.position.y,
+                    &root_transform.scale.x,
+                    &root_transform.scale.y,
+                    &root_transform.sine,
+                    &root_transform.cosine,
                     &bytes_consumed
                 );
                 
-                if(lines_read != 1){
+                if(lines_read != 7){
                     ASSERT(false, "mangled entity serialisation found.");
                     break;
                 }
                 
-                level_manager_load_level_file_recurssive(level_manager, scratch_space, transient, entity_manager->deserialised_entity_count-1, root_parent_idx, TRANSFORM2D_IDENTITY);
+                level_manager_load_level_file_recurssive(level_manager, scratch_space, transient, entity_manager->deserialised_entity_count-1, root_parent_idx, root_transform);
             }break;
             case LEVEL_FILE_NATIVE_ENTITY_TOKEN: {
 
@@ -2516,9 +2524,8 @@ GenId level_manager_load_level_file_recurssive(
                     GenId parent_gid;
                     if(parent_idx <= 0){
                         
-                        if(parent_idx_offset == 0){
-                            deserialised_entity->spawn_transform = transform2d_transform(deserialised_entity->spawn_transform, transform);
-                        }
+                        // override the transform whenever it is a root (both for the level root and neseted asset file root).
+                        deserialised_entity->spawn_transform = root_transform;
 
                         // this it is an asset entity file's root entity (parent_idx_offset > 0), 
                         // it should be parented to the previous entity tree's root. 

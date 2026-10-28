@@ -591,14 +591,15 @@ static void FUNCTION_NAME##_dsc(TYPE* array_ptr, i32 array_length){             
 #define GEN_ID_ALLOCATOR_MIN_LENGTH 2
 #define GEN_ID_ALLOCATOR_MAX_LENGTH GENID_UNIQUE_INDICES_COUNT
 
-
+// max value of f32 is: 340,282,346,638,528,859,811,704,183,484,516,925,440
+// which is 39 characters long (excluding commans).
+#define F32_STRING_MIN_LENGTH 39
+#define I32_STRING_MIN_LENGTH 39
 
 
 /*========================================
     globals.
 ========================================*//**/
-
-
 
 
 /*

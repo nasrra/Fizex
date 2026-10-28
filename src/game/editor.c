@@ -146,10 +146,6 @@ static i32 editor_gfx_clay_element_id = 0;
 // the length of the clickable area struct's vertex arrays.
 #define EDITOR_ENTITY_CLICKABLE_AREA_VERTEX_LENGTH 4
 
-// max value of f32 is: 340,282,346,638,528,859,811,704,183,484,516,925,440
-// which is 39 characters long (excluding commans).
-#define EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH 39
-#define EDITOR_I32_INPUT_BUTTON_MAX_STRING_LENGTH 39
 #define EDITOR_STRING_INPUT_BUTTON_MAX_STRING_LENGTH 64
 #define EDITOR_MAX_STRING_LENGTH 64
 
@@ -424,7 +420,7 @@ void editor_state_init(Editor_State* state, MemoryArena* arena, GFX_State* gfx_s
     ASSERT(!state->is_init, "already init.");
     state->mouse_state = (Editor_MouseState){0};
     
-    string_init(&state->f32_input_text_box_scratch_space, arena, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH);
+    string_init(&state->f32_input_text_box_scratch_space, arena, F32_STRING_MIN_LENGTH);
     string_init(&state->string_input_text_box_scratch_space, arena, EDITOR_STRING_INPUT_BUTTON_MAX_STRING_LENGTH);
     
     state->gfx_state = gfx_state;
@@ -446,7 +442,7 @@ void editor_save_level_entity_recurssive(
     EntityManager* entity_manager,
     String* file_path,
     String* entity_char_buffer,
-    char* char_scratch_space, i32 char_scratch_space_length,
+    char* sprtinf_scratch_space, i32 sprtinf_scratch_space_length,
     i32 entity_idx, i32 parent_line_idx, i32 line_idx
 ){
 
@@ -487,11 +483,10 @@ void editor_save_level_entity_recurssive(
 
         // asset entity.
         if(is_asset_entity){
-        
             string_push_char(entity_char_buffer, LEVEL_FILE_ASSET_ENTITY_TOKEN);
             string_push_char(entity_char_buffer, ';');
             string_push(entity_char_buffer, entity->serialisation_file_path);
-            string_push_chars(entity_char_buffer, ";\n", 2);
+            string_push_char(entity_char_buffer, ';');            
         }
         
         // native entity serialisation.
@@ -506,48 +501,48 @@ void editor_save_level_entity_recurssive(
             string_push_chars(entity_char_buffer, ";", 1);
 
             // entity type id.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%i", entity->type_id);
-            string_push_chars(entity_char_buffer, char_scratch_space, written);
+            written = snprintf(sprtinf_scratch_space, sprtinf_scratch_space_length, "%i", entity->type_id);
+            string_push_chars(entity_char_buffer, sprtinf_scratch_space, written);
             string_push_chars(entity_char_buffer, ";", 1);
 
             // parent idx.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%i", parent_line_idx);
-            string_push_chars(entity_char_buffer, char_scratch_space, written);
+            written = snprintf(sprtinf_scratch_space, sprtinf_scratch_space_length, "%i", parent_line_idx);
+            string_push_chars(entity_char_buffer, sprtinf_scratch_space, written);
             string_push_chars(entity_char_buffer, ";", 1);
-
-            // transform position x.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->local_transform.position.x);
-            string_push_chars(entity_char_buffer, char_scratch_space, written);
-            string_push_chars(entity_char_buffer, ";", 1);
-
-            // transform position y.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->local_transform.position.y);
-            string_push_chars(entity_char_buffer, char_scratch_space, written);
-            string_push_chars(entity_char_buffer, ";", 1);
-
-            // transform scale x.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->local_transform.scale.x);
-            string_push_chars(entity_char_buffer, char_scratch_space, written);
-            string_push_chars(entity_char_buffer, ";", 1);
-
-            // transform scale y.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->local_transform.scale.y);
-            string_push_chars(entity_char_buffer, char_scratch_space, written);
-            string_push_chars(entity_char_buffer, ";", 1);
-
-            // transform sine.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->local_transform.sine);
-            string_push_chars(entity_char_buffer, char_scratch_space, written);
-            string_push_chars(entity_char_buffer, ";", 1);
-
-            // transform cosine.
-            written = snprintf(char_scratch_space, char_scratch_space_length, "%f", entity->local_transform.cosine);
-            string_push_chars(entity_char_buffer, char_scratch_space, written);
-            string_push_chars(entity_char_buffer, ";", 1);
-
-            // new line.
-            string_push_chars(entity_char_buffer, "\n", 1);
         }
+
+        // transform position x.
+        written = snprintf(sprtinf_scratch_space, sprtinf_scratch_space_length, "%f", entity->local_transform.position.x);
+        string_push_chars(entity_char_buffer, sprtinf_scratch_space, written);
+        string_push_chars(entity_char_buffer, ";", 1);
+
+        // transform position y.
+        written = snprintf(sprtinf_scratch_space, sprtinf_scratch_space_length, "%f", entity->local_transform.position.y);
+        string_push_chars(entity_char_buffer, sprtinf_scratch_space, written);
+        string_push_chars(entity_char_buffer, ";", 1);
+
+        // transform scale x.
+        written = snprintf(sprtinf_scratch_space, sprtinf_scratch_space_length, "%f", entity->local_transform.scale.x);
+        string_push_chars(entity_char_buffer, sprtinf_scratch_space, written);
+        string_push_chars(entity_char_buffer, ";", 1);
+
+        // transform scale y.
+        written = snprintf(sprtinf_scratch_space, sprtinf_scratch_space_length, "%f", entity->local_transform.scale.y);
+        string_push_chars(entity_char_buffer, sprtinf_scratch_space, written);
+        string_push_chars(entity_char_buffer, ";", 1);
+
+        // transform sine.
+        written = snprintf(sprtinf_scratch_space, sprtinf_scratch_space_length, "%f", entity->local_transform.sine);
+        string_push_chars(entity_char_buffer, sprtinf_scratch_space, written);
+        string_push_chars(entity_char_buffer, ";", 1);
+
+        // transform cosine.
+        written = snprintf(sprtinf_scratch_space, sprtinf_scratch_space_length, "%f", entity->local_transform.cosine);
+        string_push_chars(entity_char_buffer, sprtinf_scratch_space, written);
+        string_push_chars(entity_char_buffer, ";", 1);
+
+        // new line.
+        string_push_chars(entity_char_buffer, ";\n", 2);
                 
         os_write_file(
             *file_path,
@@ -564,7 +559,7 @@ void editor_save_level_entity_recurssive(
         // go further into tree.
         if(node->first_child != 0 && !is_asset_entity){
             editor_save_level_entity_recurssive(
-                entity_manager, file_path, entity_char_buffer, char_scratch_space, char_scratch_space_length, node->first_child, line_idx, line_idx
+                entity_manager, file_path, entity_char_buffer, sprtinf_scratch_space, sprtinf_scratch_space_length, node->first_child, line_idx, line_idx
             );
         }
 
@@ -761,14 +756,15 @@ void editor_save_level_button_on_hover_callback(Clay_ElementId element_id, Clay_
         BOUNDS_CHECK(root_idx, ctx->game_state->entity_manager.entity_hierarchy.root_index_count);
         i32 level_idx = ctx->game_state->entity_manager.entity_hierarchy.root_index[root_idx];
 
-        String entity_char_buffer = {
-            .chars = (char[LEVEL_FILE_LINE_LENGTH]){0},
-            .length = LEVEL_FILE_LINE_LENGTH
-        };
+
         
-        i32 char_scratch_space_length;
-        char* char_scratch_space;
-        MEMORY_ARENA_ALLOC_ARRAY(ctx->transient, char_scratch_space, &char_scratch_space_length, 512);
+        String entity_char_buffer = {0};
+        string_init(&entity_char_buffer, ctx->transient, LEVEL_FILE_LINE_LENGTH);
+                
+        i32 sprintf_scratch_space_length;
+        char* sprintf_scratch_space;
+        // note: ensure that the scratch space holds the maximum amount of characters for any given attribute (';' separated value) within a level file row.  
+        MEMORY_ARENA_ALLOC_ARRAY(ctx->transient, sprintf_scratch_space, &sprintf_scratch_space_length, os_get_max_file_path_length());
                 
         // debug build path.
         String file_path_scratch_space;
@@ -778,7 +774,7 @@ void editor_save_level_button_on_hover_callback(Clay_ElementId element_id, Clay_
             &ctx->game_state->entity_manager,
             &file_path_scratch_space,
             &entity_char_buffer,
-            char_scratch_space,
+            sprintf_scratch_space,
             64,
             level_idx,
             0,
@@ -997,10 +993,10 @@ void gfx_clay_entity_tree_view(Editor_State* editor_state, GameState* game_state
                 }
 
                 String scratch_space;
-                string_init(&scratch_space, transient, EDITOR_I32_INPUT_BUTTON_MAX_STRING_LENGTH);
+                string_init(&scratch_space, transient, I32_STRING_MIN_LENGTH);
 
                 String page_info_string;
-                string_init(&page_info_string, transient, (EDITOR_I32_INPUT_BUTTON_MAX_STRING_LENGTH * 2) + 24);
+                string_init(&page_info_string, transient, (I32_STRING_MIN_LENGTH * 2) + 24);
                 STRING_PUSH_LITERAL(&page_info_string, "page (");
                 
                 scratch_space.count = snprintf(scratch_space.chars, scratch_space.length, "%i", editor_state->entity_tree_view_state.page + 1);
@@ -1167,37 +1163,37 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
             
             // allocate_floating_point_strings();            
             
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH);
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
             Clay_String position_x_val_string = {.chars = (const char*)chars};
             
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
             Clay_String position_x_label_string = {.chars = (const char*)chars};
             
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH);
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
             Clay_String position_y_val_string = {.chars = (const char*)chars};
             
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
             Clay_String position_y_label_string = {.chars = (const char*)chars};
             
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH);
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
             Clay_String scale_x_val_string = {.chars = (const char*)chars};
             
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
             Clay_String scale_x_label_string = {.chars = (const char*)chars};
             
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH);
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
             Clay_String scale_y_val_string = {.chars = (const char*)chars};
             
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
             Clay_String scale_y_label_string = {.chars = (const char*)chars};
             
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH);
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
             Clay_String sine_val_string = {.chars = (const char*)chars};
             
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
             Clay_String sine_label_string = {.chars = (const char*)chars};
             
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH);
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
             Clay_String cosine_val_string = {.chars = (const char*)chars};
             
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
@@ -1252,7 +1248,7 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                 
                 { // draw_value();
                     position_x_val_string.length = 
-                    snprintf((char*)position_x_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.position.x);
+                    snprintf((char*)position_x_val_string.chars, F32_STRING_MIN_LENGTH, "%f", entity->local_transform.position.x);
                     ASSERT(position_x_val_string.length > 0, "failed to encode float.");
                     
                     if(is_world_root){
@@ -1291,7 +1287,7 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
             
                 { // draw_value();
                     position_y_val_string.length = 
-                        snprintf((char*)position_y_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.position.y);
+                        snprintf((char*)position_y_val_string.chars, F32_STRING_MIN_LENGTH, "%f", entity->local_transform.position.y);
                     ASSERT(position_y_val_string.length > 0, "failed to encode float.");
                     
                     if(is_world_root){
@@ -1328,7 +1324,7 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                 }
                 
                 { // draw_value();
-                    scale_x_val_string.length = snprintf((char*)scale_x_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.scale.x);
+                    scale_x_val_string.length = snprintf((char*)scale_x_val_string.chars, F32_STRING_MIN_LENGTH, "%f", entity->local_transform.scale.x);
                     ASSERT(scale_x_val_string.length > 0, "failed to encode float.");
                     if(is_world_root){
                         GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(
@@ -1364,7 +1360,7 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                 }
                 
                 { // draw_value();
-                    scale_y_val_string.length = snprintf((char*)scale_y_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.scale.y);
+                    scale_y_val_string.length = snprintf((char*)scale_y_val_string.chars, F32_STRING_MIN_LENGTH, "%f", entity->local_transform.scale.y);
                     ASSERT(scale_y_val_string.length > 0, "failed to encode float.");
                     if(is_world_root){
                         GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(
@@ -1400,7 +1396,7 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                 }
             
                 { // draw_value();
-                    sine_val_string.length = snprintf((char*)sine_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.sine);
+                    sine_val_string.length = snprintf((char*)sine_val_string.chars, F32_STRING_MIN_LENGTH, "%f", entity->local_transform.sine);
                     ASSERT(sine_val_string.length > 0, "failed to encode float.");
                     if(is_world_root){
                         GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(
@@ -1438,7 +1434,7 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                 { // draw_value();
 
                     // cosine.
-                    cosine_val_string.length = snprintf((char*)cosine_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.cosine);
+                    cosine_val_string.length = snprintf((char*)cosine_val_string.chars, F32_STRING_MIN_LENGTH, "%f", entity->local_transform.cosine);
                     ASSERT(cosine_val_string.length > 0, "failed to encode float.");
                     if(is_world_root){
                         GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(
@@ -1480,17 +1476,27 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                     char* label_chars = (char*)serialisation_file_path_val_string.chars;
                     COPY_MEMORY(label_chars, entity->serialisation_file_path.chars, serialisation_file_path_val_string.length);
                 
-                    GFX_CLAY_INPUT_TEXT_BOX(
-                        CLAY_STRING("Serialisation File Path"),
-                        serialisation_file_path_val_string,
-                        horizontal_percent_size,
-                        vertical_percent_size,
-                        editor_state, 
-                        (void*)(&entity->serialisation_file_path),
-                        Editor_ButtonDataStorageType_String, 
-                        transient,
-                        entity_idx
-                    );
+                    if(is_world_root){
+                        GFX_CLAY_INPUT_TEXT_BOX(
+                            CLAY_STRING("Serialisation File Path"),
+                            serialisation_file_path_val_string,
+                            horizontal_percent_size,
+                            vertical_percent_size,
+                            editor_state, 
+                            (void*)(&entity->serialisation_file_path),
+                            Editor_ButtonDataStorageType_String, 
+                            transient,
+                            entity_idx
+                        );
+                    }
+                    else{
+                        GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(
+                            CLAY_STRING("Serialisation File Path"),
+                            serialisation_file_path_val_string,
+                            horizontal_percent_size,
+                            vertical_percent_size
+                        );
+                    }    
                 }            
             }
         }
@@ -1754,7 +1760,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                         default: {ASSERT(false, "unknown data storage type.");}break;
                         case Editor_ButtonDataStorageType_F32:{
                             
-                            char* null_terminated_scratch_space = (char[EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH]){0};
+                            char* null_terminated_scratch_space = (char[F32_STRING_MIN_LENGTH]){0};
                             COPY_MEMORY(null_terminated_scratch_space, scratch_space->chars, scratch_space->count);
                             
                             sscanf(
