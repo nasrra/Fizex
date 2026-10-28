@@ -44,7 +44,7 @@ typedef enum {
     Key_BackTick,
     Key_Comma,
     Key_Period,
-    Key_Slash,
+    Key_ForwardSlash,
     Key_Capslock,
     Key_Tilde,
 

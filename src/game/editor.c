@@ -125,12 +125,12 @@ typedef struct{
     Editor_State* editor_state;
     GameState* game_state;
     MemoryArena* transient;
-} SaveLevelButtonOnHoverContext;
+} Editor_SaveLevelButtonOnHoverContext;
 
 typedef struct{
     Editor_State* editor_state;
     GenId level_root_entity_gid;
-} SelectLevelButtonOnHoverContext;
+} Editor_SelectLevelButtonOnHoverContext;
 
 typedef struct{
     Editor_State* editor_state;
@@ -203,7 +203,7 @@ static i32 editor_gfx_clay_element_id = 0;
     .lineHeight = 24,                       \
     .textColor = {                          \
         .r = 255,                           \
-        .g = 150,                           \
+        .g = 235,                           \
         .b = 0,                             \
         .a = 255                            \
     }                                       \
@@ -301,7 +301,7 @@ CLAY(                                                                           
         _clay_string_name,                                                                  \
         _horizontal_percent_size,                                                           \
         _vertical_percent_size,                                                             \
-        editor_spawn_native_entity_button_on_hover_callback,                                       \
+        editor_spawn_native_entity_button_on_hover_callback,                                \
         __editor001_ctx_ptr                                                                 \
     );                                                                                      \
 }while(0)
@@ -310,7 +310,7 @@ typedef struct{
     Editor_State* editor_state;
     String file_path;
     String entity_name;
-} LoadAssetEntityButtonOnHoverContext;
+} Editor_LoadAssetEntityButtonOnHoverContext;
 
 /*
     `typed example`
@@ -347,7 +347,7 @@ typedef struct{
     _file_path_length                                                                                           \
 ) do {                                                                                                          \
                                                                                                                 \
-    LoadAssetEntityButtonOnHoverContext __editor002_ctx = {0};                                                  \
+    Editor_LoadAssetEntityButtonOnHoverContext __editor002_ctx = {0};                                                  \
     string_init(&__editor002_ctx.file_path, _transient_arena, _file_path_length);                               \
     string_push_chars(&__editor002_ctx.file_path, _file_path_chars, _file_path_length);                         \
     __editor002_ctx.editor_state = _editor_state;                                                               \
@@ -360,7 +360,7 @@ typedef struct{
         _clay_string_name,                                                                                      \
         (f32)_horizontal_percent_size,                                                                          \
         (f32)_vertical_percent_size,                                                                            \
-        editor_spawn_asset_entity_button_on_hover_callback,                                                             \
+        editor_spawn_asset_entity_button_on_hover_callback,                                                     \
         __editor002_ctx_ptr                                                                                     \
     );                                                                                                          \
 }while(0)
@@ -689,7 +689,7 @@ void editor_save_level_entity_recurssive(
         string_push_chars(entity_char_buffer, ";", 1);
 
         // new line.
-        string_push_chars(entity_char_buffer, ";\n", 2);
+        string_push_chars(entity_char_buffer, "\n", 1);
                 
         os_write_file(
             *file_path,
@@ -750,9 +750,44 @@ void editor_entity_tree_view_state_set_page(Editor_EntityTreeViewState* state, i
 ///
 
 
-void editor_spawn_asset_entity_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    LoadAssetEntityButtonOnHoverContext* ctx = (LoadAssetEntityButtonOnHoverContext*)user_data;
+typedef struct{
+    GameState* game_state;
+    MemoryArena* transient;
+} Editor_NewLevelButtonOnHoverContext;
+
+void editor_new_level_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
     if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        Editor_NewLevelButtonOnHoverContext* ctx = (Editor_NewLevelButtonOnHoverContext*)user_data;
+        
+        EntityManager* entity_manager = &ctx->game_state->entity_manager;
+        LevelManager* level_manager = &ctx->game_state->level_manager;
+        
+        entity_manager_dealloc_entity(entity_manager, level_manager->world_root_entity_gid);
+        level_manager->world_root_entity_gid = entity_spawn_level_root(
+            entity_manager, 
+            STRING_FROM_LITERAL("new level", ctx->transient),
+            TRANSFORM2D_IDENTITY, 
+            0
+        );
+        Entity* world_entity;
+        if(entity_manager_get_entity(*entity_manager, level_manager->world_root_entity_gid, &world_entity)){
+            level_manager->world_root_entity_file_path = &world_entity->serialisation_file_path;
+        }
+        else{
+            ASSERT(false, "failed to set world root entity file path");
+        }
+        
+        // reset to a well defined state.
+        // note that this will most likely need to change in the future
+        // perhaps a 'game_state_reset()' function? maybe idk lol.
+        load_level_callback(ctx->game_state, NULL);
+    }    
+}
+
+void editor_spawn_asset_entity_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        
+        Editor_LoadAssetEntityButtonOnHoverContext* ctx = (Editor_LoadAssetEntityButtonOnHoverContext*)user_data;
         
         string_clear(&ctx->editor_state->mouse_state.asset_entity_to_spawn_name);
         string_push(&ctx->editor_state->mouse_state.asset_entity_to_spawn_name, ctx->entity_name);
@@ -910,7 +945,7 @@ void editor_spawn_native_entity_button_on_hover_callback(Clay_ElementId element_
 void editor_save_level_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
     if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
 
-        SaveLevelButtonOnHoverContext* ctx = (SaveLevelButtonOnHoverContext*)user_data;
+        Editor_SaveLevelButtonOnHoverContext* ctx = (Editor_SaveLevelButtonOnHoverContext*)user_data;
 
         i32 root_idx = 1; // 1, as 0 is the NIL; this is the first (and only) root entity (the world's root). 
         BOUNDS_CHECK(root_idx, ctx->game_state->entity_manager.entity_hierarchy.root_index_count);
@@ -1017,11 +1052,35 @@ void gfx_clay_level_management(Editor_State* editor_state, GameState* game_state
         f32 button_width = 1.0f;
         f32 button_height = 0.1f;
 
-        SaveLevelButtonOnHoverContext ctx = {.editor_state = editor_state, .game_state = game_state, .transient = transient};
-        SaveLevelButtonOnHoverContext* ctx_ptr;
-        MEMORY_ARENA_PUSH_STRUCT(transient, ctx, ctx_ptr);
-        EDITOR_GFX_CLAY_BUTTON(CLAY_STRING("Save Level"), button_width, button_height, editor_save_level_button_on_hover_callback, ctx_ptr);
+        Editor_SaveLevelButtonOnHoverContext save_ctx = {
+            .editor_state = editor_state, 
+            .game_state = game_state, 
+            .transient = transient
+        };
+        Editor_SaveLevelButtonOnHoverContext* save_ctx_ptr;
+        MEMORY_ARENA_PUSH_STRUCT(transient, save_ctx, save_ctx_ptr);
+        EDITOR_GFX_CLAY_BUTTON(
+            CLAY_STRING("Save Level"), 
+            button_width, 
+            button_height, 
+            editor_save_level_button_on_hover_callback, 
+            save_ctx_ptr
+        );
         
+        
+        Editor_NewLevelButtonOnHoverContext new_ctx = {
+            .game_state = game_state,
+            .transient = transient
+        };
+        Editor_NewLevelButtonOnHoverContext* new_ctx_ptr;
+        MEMORY_ARENA_PUSH_STRUCT(transient, new_ctx, new_ctx_ptr);
+        EDITOR_GFX_CLAY_BUTTON(
+            CLAY_STRING("New Level"), 
+            button_width, 
+            button_height, 
+            editor_new_level_button_on_hover_callback, 
+            new_ctx_ptr
+        );
     }
 }
 
