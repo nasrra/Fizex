@@ -2048,14 +2048,15 @@ void clickable_area_hierarchy_update(ClickableAreaHierarchy* hierarchy, Vector2 
         hierarchy->previous_idx_count = 0;
     }
 
-    if(hierarchy->selected_idx != 0){
-        ARRAY_PUSH(
-            hierarchy->previous_idx,
-            hierarchy->previous_idx_length,
-            &hierarchy->previous_idx_count,
-            hierarchy->selected_idx
-        );
-    }
+    // this may be useful later idk, this is how it used to be.
+    // if(hierarchy->selected_idx != 0){
+    //     ARRAY_PUSH(
+    //         hierarchy->previous_idx,
+    //         hierarchy->previous_idx_length,
+    //         &hierarchy->previous_idx_count,
+    //         hierarchy->selected_idx
+    //     );
+    // }
     
     hierarchy->selected_idx = 0;
     i32 overlap_count = 0;
@@ -2110,7 +2111,12 @@ void clickable_area_hierarchy_update(ClickableAreaHierarchy* hierarchy, Vector2 
             selected_area_depth_layer = area->depth_layer;
         }
     }
-        
+    
+    // the same sole clickable area was clicked on again.
+    if(!hierarchy->selected_idx && overlap_count == 1){
+        hierarchy->selected_idx = hierarchy->previous_idx[0];        
+    }
+           
     // if the mouse didn't click on anything, or had only clicked on a single area; clear the stack entirely.    
     if(overlap_count <= 1){
         hierarchy->previous_idx_count = 0;
@@ -2124,7 +2130,8 @@ void clickable_area_hierarchy_update(ClickableAreaHierarchy* hierarchy, Vector2 
         hierarchy->previous_idx_count = 0;   
     }
     
-    if(hierarchy->selected_idx){
+    // if we selected something that is stacked ontop of another, add it to the previous stack.
+    if(hierarchy->selected_idx && overlap_count > 1){
         ARRAY_PUSH(hierarchy->previous_idx, hierarchy->previous_idx_length, &hierarchy->previous_idx_count, hierarchy->selected_idx);
     }
 }

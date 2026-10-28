@@ -3755,6 +3755,13 @@ void gfx_clay_end_layout(GFX_State* gfx_state, f32 delta_time, u32 sprite_layer,
     }
 }
 
+bool gfx_clay_element_id_equals(Clay_ElementId a, Clay_ElementId b){
+    return 
+        a.id       == b.id &&
+        a.offset   == b.offset &&
+        a.baseId   == b.baseId
+    ;
+}
 
 ///
 /// @ Sprite
