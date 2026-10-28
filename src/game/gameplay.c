@@ -322,6 +322,8 @@ typedef struct{
 #define ASSET_DIRECTORY_PATH_LENGTH 10
 #define LEVEL_ASSET_DIRECTORY_PATH "../assets/levels/"
 #define LEVEL_ASSET_DIRECTORY_PATH_LENGTH 17
+#define ENTITY_ASSET_DIRECTORY_PATH "../assets/entities/"
+#define ENTITY_ASSET_DIRECTORY_PATH_LENGTH 19
 
 #define LEVEL_FILE_NATIVE_ENTITY_TOKEN 'N'
 #define LEVEL_FILE_ASSET_ENTITY_TOKEN 'A'
@@ -1023,6 +1025,36 @@ bool entity_set_global_transform(EntityManager* entity_manager, GenId entity_gid
     }
     entity_set_global_transform_unsafe(entity_manager, idx, global_transform);
     return true;
+}
+
+bool entity_set_parent_unsafe(EntityManager* entity_manager, i32 child_idx, i32 parent_idx){
+
+    if(!intrusive_list_set_node_parent(&entity_manager->entity_hierarchy, child_idx, parent_idx)){
+        return false;
+    }
+
+    BOUNDS_CHECK(child_idx, entity_manager->entity_length);
+    Entity* child_entity = &entity_manager->entity[child_idx];
+    Transform2D global_transform = child_entity->global_transform;
+    
+    entity_set_global_transform_unsafe(entity_manager, child_idx, global_transform);
+    
+    return true;
+}
+
+bool entity_set_parent(EntityManager* entity_manager, GenId child_gid, GenId parent_gid){
+    
+    i32 child_idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, child_gid);
+    if(!child_idx){
+        return false;
+    }
+    
+    i32 parent_idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, parent_gid);
+    if(!parent_idx){
+        return false;
+    }
+    
+    return entity_set_parent_unsafe(entity_manager, child_idx, parent_idx);
 }
 
 
@@ -2687,6 +2719,7 @@ void game_state_preupdate(GameState* game_state, f32 delta_time, MemoryArena* tr
 
     // hoist invariance.
     LevelManager* level_manager = &game_state->level_manager;
+    EntityManager* entity_manager = &game_state->entity_manager;
 
     { // level_manager_update();
     
@@ -2697,14 +2730,20 @@ void game_state_preupdate(GameState* game_state, f32 delta_time, MemoryArena* tr
                 default:{
                     ASSERT(false, "undefined level load type.");
                 }break;
+                case LevelLoadType_WorldEntity:{
+                    // spawn entity.
+                    GenId entity_gid = level_manager_load_level_file(level_manager, ctx->file_path, transient, ctx->transform);
+                    // add to world tree.
+                    entity_set_parent(entity_manager, entity_gid, level_manager->world_root_entity_gid);
+                }break;
                 case LevelLoadType_World:{
-                    entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->world_root_entity_gid);
+                    entity_manager_dealloc_entity(entity_manager, level_manager->world_root_entity_gid);
                     level_manager->world_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path, transient, ctx->transform);
                     string_clear(&level_manager->world_root_entity_file_path);
                     string_push(&level_manager->world_root_entity_file_path, ctx->file_path);
                 }break;
                 case LevelLoadType_Ui:{
-                    entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->ui_root_entity_gid);
+                    entity_manager_dealloc_entity(entity_manager, level_manager->ui_root_entity_gid);
                     level_manager->ui_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path, transient, ctx->transform);
                     string_clear(&level_manager->ui_root_entity_file_path);
                     string_push(&level_manager->ui_root_entity_file_path, ctx->file_path);
@@ -2717,7 +2756,6 @@ void game_state_preupdate(GameState* game_state, f32 delta_time, MemoryArena* tr
         level_manager->deferred_level_load_count = 0;
     }
 
-    EntityManager* entity_manager = &game_state->entity_manager;
     for(i32 i = 0; i < entity_manager->entity_length; i++){
         Entity* entity = &entity_manager->entity[i];
         if(!entity->is_physics_body){
@@ -3235,31 +3273,35 @@ void load_world_level_button_on_hover_callback(Clay_ElementId element_id, Clay_P
     `_level_load_callback`: the callback for when the level is loaded. 
     `_level_load_callback_user_data`: the user_data to supply to the callback.
 */
-#define GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(                                                                                                                                                  \
-    _clay_string_name,                                                                                                                                                                          \
-    _horizontal_percent_size,                                                                                                                                                                   \
-    _vertical_percent_size,                                                                                                                                                                     \
-    _transient_arena,                                                                                                                                                                           \
-    _level_manager,                                                                                                                                                                             \
-    _file_path_chars,                                                                                                                                                                           \
-    _file_path_length,                                                                                                                                                                          \
-    _level_load_callback,                                                                                                                                                                       \
-    _level_load_callback_user_data                                                                                                                                                              \
-) do {                                                                                                                                                                                          \
-                                                                                                                                                                                                \
-    String GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_file_path = {0};                                                                                                                               \
-    LoadLevelButtonOnHoverContext GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx = {0};                                                                                                              \
-    string_init(&GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.file_path, _transient_arena, _file_path_length);                                                                                     \
-    string_push_chars(&GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.file_path, _file_path_chars, _file_path_length);                                                                               \
-    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.load_type = LevelLoadType_World;                                                                                                                  \
-    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.callback = _level_load_callback;                                                                                                                  \
-    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.callback_user_data = (char*)_level_load_callback_user_data;                                                                                       \
-    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.level_manager = _level_manager;                                                                                                                   \
-                                                                                                                                                                                                \
-    void* GAME_GFX_CLAY_LOAD_LEVEL_BUTTON_ctx_ptr;                                                                                                                                              \
-    MEMORY_ARENA_PUSH_STRUCT(_transient_arena, GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx, GAME_GFX_CLAY_LOAD_LEVEL_BUTTON_ctx_ptr);                                                             \
-    GAME_GFX_CLAY_BUTTON(_clay_string_name, (f32)_horizontal_percent_size, (f32)_vertical_percent_size, load_world_level_button_on_hover_callback, GAME_GFX_CLAY_LOAD_LEVEL_BUTTON_ctx_ptr);    \
-                                                                                                                                                                                                \
+#define GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(                                          \
+    _clay_string_name,                                                                  \
+    _horizontal_percent_size,                                                           \
+    _vertical_percent_size,                                                             \
+    _transient_arena,                                                                   \
+    _level_manager,                                                                     \
+    _file_path_chars,                                                                   \
+    _file_path_length,                                                                  \
+    _level_load_callback,                                                               \
+    _level_load_callback_user_data                                                      \
+) do {                                                                                  \
+                                                                                        \
+    LoadLevelButtonOnHoverContext __ggclwlb_ctx = {0};                                  \
+    string_init(&__ggclwlb_ctx.file_path, _transient_arena, _file_path_length);         \
+    string_push_chars(&__ggclwlb_ctx.file_path, _file_path_chars, _file_path_length);   \
+    __ggclwlb_ctx.load_type = LevelLoadType_World;                                      \
+    __ggclwlb_ctx.callback = _level_load_callback;                                      \
+    __ggclwlb_ctx.callback_user_data = (char*)_level_load_callback_user_data;           \
+    __ggclwlb_ctx.level_manager = _level_manager;                                       \
+                                                                                        \
+    void* GAME__ggclwlb_ptr;                                                            \
+    MEMORY_ARENA_PUSH_STRUCT(_transient_arena, __ggclwlb_ctx, GAME__ggclwlb_ptr);       \
+    GAME_GFX_CLAY_BUTTON(                                                               \
+        _clay_string_name,                                                              \
+        (f32)_horizontal_percent_size,                                                  \
+        (f32)_vertical_percent_size,                                                    \
+        load_world_level_button_on_hover_callback,                                      \
+        GAME__ggclwlb_ptr                                                               \
+    );                                                                                  \
 }while(0)
 
 #define GAME_GFX_CLAY_LEVEL_SELECT_BUTTON_CONTAINER()                                       \
@@ -3368,7 +3410,6 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                         for(i32 i = 0; i < file_paths_length; i++){
                             string_init(&file_paths[i], transient, os_get_max_file_path_length()); 
                         }
-                        os_alloc_memory(sizeof(String) * file_count);
                         
                         os_get_all_file_paths(STRING_FROM_LITERAL("../assets/levels/*", transient), file_paths, &file_count);
                         

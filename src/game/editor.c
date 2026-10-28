@@ -61,8 +61,11 @@ typedef struct{
 
 typedef struct{
     // the entity_id of the entity to spawn.
-    EntityTypeId entity_to_spawn;
-    String entity_to_spawn_name;
+    EntityTypeId native_entity_to_spawn;
+    String native_entity_to_spawn_name;
+    
+    String asset_entity_to_spawn_file_path;
+    String asset_entity_to_spawn_name;
 
     // whether or not the selected entity was just set this update tick.
     Editor_MouseStateBehaviour previous_behaviour;
@@ -252,47 +255,114 @@ CLAY(                                                                           
 #define EDITOR_GFX_CLAY_BUTTON_HOVER_COLOUR (Clay_Color){155.0f,155.0f,155.0f,255.0f}
 #define EDITOR_GFX_CLAY_BUTTON_SELECTED_COLOUR (Clay_Color){200.0f,155.0f, 25.0f,255.0f};
 
-#define EDITOR_GFX_CLAY_BUTTON(clay_string_name, horizontal_percent_size, vertical_percent_size, on_hover_callback, on_hover_user_data)     \
-CLAY(                                                                                                                                       \
-    CLAY_SIDI(clay_string_name, editor_gfx_clay_element_id++),                                                                              \
-    {                                                                                                                                       \
-        .backgroundColor = Clay_Hovered() ? EDITOR_GFX_CLAY_BUTTON_HOVER_COLOUR : EDITOR_GFX_CLAY_BUTTON_IDLE_COLOUR,                       \
-        .layout = {                                                                                                                         \
-            .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },                                                                 \
-            .sizing = {                                                                                                                     \
-                CLAY_SIZING_PERCENT(horizontal_percent_size),                                                                               \
-                CLAY_SIZING_PERCENT(vertical_percent_size)                                                                                  \
-            },                                                                                                                              \
-        }                                                                                                                                   \
-    }                                                                                                                                       \
-) {                                                                                                                                         \
-    Clay_OnHover(on_hover_callback, on_hover_user_data);                                                                                    \
-    CLAY_TEXT(clay_string_name, EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);                                                                       \
-}
+#define EDITOR_GFX_CLAY_BUTTON(                                                 \
+    _clay_string_name,                                                          \
+    _horizontal_percent_size,                                                   \
+    _vertical_percent_size,                                                     \
+    _on_hover_callback,                                                         \
+    _on_hover_user_data                                                         \
+)do{                                                                            \
+    CLAY(                                                                       \
+        CLAY_SIDI(_clay_string_name, editor_gfx_clay_element_id++),             \
+        {                                                                       \
+            .backgroundColor = Clay_Hovered()                                   \
+                ? EDITOR_GFX_CLAY_BUTTON_HOVER_COLOUR                           \
+                : EDITOR_GFX_CLAY_BUTTON_IDLE_COLOUR,                           \
+            .layout = {                                                         \
+                .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER }, \
+                .sizing = {                                                     \
+                    CLAY_SIZING_PERCENT(_horizontal_percent_size),              \
+                    CLAY_SIZING_PERCENT(_vertical_percent_size)                 \
+                },                                                              \
+            }                                                                   \
+        }                                                                       \
+    ) {                                                                         \
+        Clay_OnHover(_on_hover_callback, _on_hover_user_data);                  \
+        CLAY_TEXT(_clay_string_name, EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);      \
+    }                                                                           \
+}while(0)
 
+#define EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(                                                \
+    _clay_string_name,                                                                      \
+    _horizontal_percent_size,                                                               \
+    _vertical_percent_size,                                                                 \
+    _transient_arena,                                                                       \
+    _editor_state,                                                                          \
+    _entity_type_id                                                                         \
+)do{                                                                                        \
+    Editor_SpawnEntityButtonOnHoverContext __editor001_ctx = {                              \
+        .editor_state = _editor_state,                                                      \
+        .entity_type_id = _entity_type_id,                                                  \
+        .button_label = _clay_string_name                                                   \
+    };                                                                                      \
+    void* __editor001_ctx_ptr;                                                              \
+    MEMORY_ARENA_PUSH_STRUCT(_transient_arena, __editor001_ctx, __editor001_ctx_ptr);       \
+    EDITOR_GFX_CLAY_BUTTON(                                                                 \
+        _clay_string_name,                                                                  \
+        _horizontal_percent_size,                                                           \
+        _vertical_percent_size,                                                             \
+        editor_spawn_native_entity_button_on_hover_callback,                                       \
+        __editor001_ctx_ptr                                                                 \
+    );                                                                                      \
+}while(0)
 
-#define EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(                    \
-    _clay_string_name,                                          \
-    _horizontal_percent_size,                                   \
-    _vertical_percent_size,                                     \
-    _transient_arena,                                           \
-    _editor_state,                                              \
-    _entity_type_id                                             \
-)do{                                                            \
-    Editor_SpawnEntityButtonOnHoverContext ctx = {              \
-        .editor_state = _editor_state,                          \
-        .entity_type_id = _entity_type_id,                      \
-        .button_label = _clay_string_name                       \
-    };                                                          \
-    void* ctx_ptr;                                              \
-    MEMORY_ARENA_PUSH_STRUCT(_transient_arena, ctx, ctx_ptr);   \
-    EDITOR_GFX_CLAY_BUTTON(                                     \
-        _clay_string_name,                                      \
-        _horizontal_percent_size,                               \
-        _vertical_percent_size,                                 \
-        editor_spawn_entity_button_on_hover_callback,           \
-        ctx_ptr                                                 \
-    );                                                          \
+typedef struct{
+    Editor_State* editor_state;
+    String file_path;
+    String entity_name;
+} LoadAssetEntityButtonOnHoverContext;
+
+/*
+    `typed example`
+    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
+        Clay_String _clay_string_name, 
+        f32 _horizontal_percent_size, 
+        f32 _vertical_percent, 
+        MemoryArena* _transient_arena,
+        LevelManager* _level_manager,
+        char* _file_path_chars,
+        i32 _file_path_length,
+        DeferredLevelLoadCallback _level_load_callback,
+        char* _level_load_callback_user_data,
+    );
+    
+    `parameters`
+    `_clay_string_name`: the display label of the button.
+    `_horizontal_percent_size`: the horizontal percentage size of the button within the container widget.
+    `_vertical_percent_size`: the horizontal percentage size of the button within the container widget.
+    `_transient_arena`: the transient arena to allocate the function capture onto.
+    `_level_manager`: the level manager to push the generated defer load level onto.                        
+    `_file_path_chars`: the file path to the level asset to load
+    `_file_path_length`: the length of the file path to the asset to load.
+    `_level_load_callback`: the callback for when the level is loaded. 
+    `_level_load_callback_user_data`: the user_data to supply to the callback.
+*/
+#define EDITOR_GFX_CLAY_LOAD_ASSET_ENTITY_BUTTON(                                                               \
+    _clay_string_name,                                                                                          \
+    _horizontal_percent_size,                                                                                   \
+    _vertical_percent_size,                                                                                     \
+    _transient_arena,                                                                                           \
+    _editor_state,                                                                                              \
+    _file_path_chars,                                                                                           \
+    _file_path_length                                                                                           \
+) do {                                                                                                          \
+                                                                                                                \
+    LoadAssetEntityButtonOnHoverContext __editor002_ctx = {0};                                                  \
+    string_init(&__editor002_ctx.file_path, _transient_arena, _file_path_length);                               \
+    string_push_chars(&__editor002_ctx.file_path, _file_path_chars, _file_path_length);                         \
+    __editor002_ctx.editor_state = _editor_state;                                                               \
+    string_init(&__editor002_ctx.entity_name, _transient_arena, _clay_string_name.length);                      \
+    string_push_chars(&__editor002_ctx.entity_name, (char*)_clay_string_name.chars, _clay_string_name.length);  \
+                                                                                                                \
+    void* __editor002_ctx_ptr;                                                                                  \
+    MEMORY_ARENA_PUSH_STRUCT(_transient_arena, __editor002_ctx, __editor002_ctx_ptr);                           \
+    EDITOR_GFX_CLAY_BUTTON(                                                                                     \
+        _clay_string_name,                                                                                      \
+        (f32)_horizontal_percent_size,                                                                          \
+        (f32)_vertical_percent_size,                                                                            \
+        editor_spawn_asset_entity_button_on_hover_callback,                                                             \
+        __editor002_ctx_ptr                                                                                     \
+    );                                                                                                          \
 }while(0)
 
 /*
@@ -332,9 +402,9 @@ CLAY(                                                                           
     _transient_arena,                                                                                                       \
     _entity_idx                                                                                                             \
 ) do{                                                                                                                       \
-    Clay_ElementId clay_element_id = CLAY_SIDI(_clay_string_button_sid, editor_gfx_clay_element_id++);                      \
+    Clay_ElementId __editor003_clay_element_id = CLAY_SIDI(_clay_string_button_sid, editor_gfx_clay_element_id++);          \
     CLAY(                                                                                                                   \
-        clay_element_id,                                                                                                    \
+        __editor003_clay_element_id,                                                                                        \
         {                                                                                                                   \
             .backgroundColor = Clay_Hovered() ? EDITOR_GFX_CLAY_BUTTON_HOVER_COLOUR : EDITOR_GFX_CLAY_BUTTON_IDLE_COLOUR,   \
             .layout = {                                                                                                     \
@@ -347,38 +417,44 @@ CLAY(                                                                           
         }                                                                                                                   \
     ) {                                                                                                                     \
                                                                                                                             \
-        Editor_InputTextBoxOnClickContext ctx = {                                                                           \
+        Editor_InputTextBoxOnClickContext __editor003_ctx = {                                                               \
             .src = {                                                                                                        \
                 .data_storage_type = _data_storage_type,                                                                    \
                 .data_storage = _data_storage,                                                                              \
-                .clay_element_id = clay_element_id,                                                                         \
+                .clay_element_id = __editor003_clay_element_id,                                                             \
                 .entity_idx = _entity_idx,                                                                                  \
             },                                                                                                              \
             .editor_state = _editor_state,                                                                                  \
             .input_text_box_label_string = _clay_string_button_label                                                        \
         };                                                                                                                  \
-        void* ctx_ptr;                                                                                                      \
-        MEMORY_ARENA_PUSH_STRUCT(_transient_arena, ctx, ctx_ptr);                                                           \
-        Clay_OnHover(editor_input_field_on_hover_callback, ctx_ptr);                                                        \
+        void* __editor003_ctx_ptr;                                                                                          \
+        MEMORY_ARENA_PUSH_STRUCT(_transient_arena, __editor003_ctx, __editor003_ctx_ptr);                                   \
+        Clay_OnHover(editor_input_field_on_hover_callback, __editor003_ctx_ptr);                                            \
                                                                                                                             \
-        if(gfx_clay_element_id_equals(clay_element_id, editor_state->mouse_state.selected_editor_ui_entity.clay_element_id))\
+        bool __editor003_is_selected =                                                                                      \
+            gfx_clay_element_id_equals(                                                                                     \
+                __editor003_clay_element_id,                                                                                \
+                editor_state->mouse_state.selected_editor_ui_entity.clay_element_id                                         \
+            );                                                                                                              \
+                                                                                                                            \
+        if(__editor003_is_selected)                                                                                         \
         {                                                                                                                   \
                                                                                                                             \
-            String* scratch_space_string;                                                                                   \
+            String* __editor003_scratch_space_string;                                                                       \
             switch(_editor_state->mouse_state.selected_editor_ui_entity.data_storage_type){                                 \
                 case Editor_ButtonDataStorageType_F32:{                                                                     \
-                    scratch_space_string = &_editor_state->f32_input_text_box_scratch_space;                                \
+                    __editor003_scratch_space_string = &_editor_state->f32_input_text_box_scratch_space;                    \
                 }break;                                                                                                     \
                 case Editor_ButtonDataStorageType_String:{                                                                  \
-                    scratch_space_string = &_editor_state->string_input_text_box_scratch_space;                             \
+                    __editor003_scratch_space_string = &_editor_state->string_input_text_box_scratch_space;                 \
                 }break;                                                                                                     \
             }                                                                                                               \
                                                                                                                             \
-            Clay_String clay_scratch_space_string = {                                                                       \
-                .chars = (const char*)scratch_space_string->chars,                                                          \
-                .length = scratch_space_string->count                                                                       \
+            Clay_String __editor003_clay_scratch_space_string = {                                                           \
+                .chars = (const char*)__editor003_scratch_space_string->chars,                                              \
+                .length = __editor003_scratch_space_string->count                                                           \
             };                                                                                                              \
-            CLAY_TEXT(clay_scratch_space_string, EDITOR_GFX_CLAY_TYPING_TEXT_CONFIG);                                       \
+            CLAY_TEXT(__editor003_clay_scratch_space_string, EDITOR_GFX_CLAY_TYPING_TEXT_CONFIG);                           \
         }                                                                                                                   \
         else{                                                                                                               \
             CLAY_TEXT(_clay_string_button_label, EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);                                      \
@@ -402,38 +478,43 @@ CLAY(                                                                           
     `horizontal_percent_size`: the horizontal percentage size of the button within the container widget.
     `vertical_percent_size`: the horizontal percentage size of the button within the container widget.
 */
-#define GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(                                                                                                  \
-    _clay_string_button_sid,                                                                                                                \
-    _clay_string_button_label,                                                                                                              \
-    _horizontal_percent_size,                                                                                                               \
-    _vertical_percent_size                                                                                                                  \
-) do{                                                                                                                                       \
-Clay_ElementId clay_element_id = CLAY_SIDI(_clay_string_button_sid, editor_gfx_clay_element_id++);                  \
-CLAY(                                                                                                                                       \
-    clay_element_id,                                                                                                \
-    {                                                                                                                                       \
-        .backgroundColor = EDITOR_GFX_CLAY_BUTTON_IMMUTABLE_COLOUR,                                                                              \
-        .layout = {                                                                                                                         \
-            .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },                                                                 \
-            .sizing = {                                                                                                                     \
-                CLAY_SIZING_PERCENT(_horizontal_percent_size),                                                                              \
-                CLAY_SIZING_PERCENT(_vertical_percent_size)                                                                                 \
-            },                                                                                                                              \
-        }                                                                                                                                   \
-    }                                                                                                                                       \
-) {                                                                                                                                         \
-                                                                                                                                            \
-    CLAY_TEXT(_clay_string_button_label, EDITOR_GFX_CLAY_IMMUTABLE_TEXT_CONFIG);                                                            \
-}                                                                                                                                           \
+#define GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(                                                                                  \
+    _clay_string_button_sid,                                                                                                \
+    _clay_string_button_label,                                                                                              \
+    _horizontal_percent_size,                                                                                               \
+    _vertical_percent_size                                                                                                  \
+) do{                                                                                                                       \
+CLAY(                                                                                                                       \
+    CLAY_SIDI(_clay_string_button_sid, editor_gfx_clay_element_id++),                                                       \
+    {                                                                                                                       \
+        .backgroundColor = EDITOR_GFX_CLAY_BUTTON_IMMUTABLE_COLOUR,                                                         \
+        .layout = {                                                                                                         \
+            .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },                                                 \
+            .sizing = {                                                                                                     \
+                CLAY_SIZING_PERCENT(_horizontal_percent_size),                                                              \
+                CLAY_SIZING_PERCENT(_vertical_percent_size)                                                                 \
+            },                                                                                                              \
+        }                                                                                                                   \
+    }                                                                                                                       \
+) {                                                                                                                         \
+                                                                                                                            \
+    CLAY_TEXT(_clay_string_button_label, EDITOR_GFX_CLAY_IMMUTABLE_TEXT_CONFIG);                                            \
+}                                                                                                                           \
 }while(0)
 
 #define EDITOR_GFX_CLAY_DISPLAY_SELECTED_ENTITY_INFO(_game_state, _editor_state) do{                                        \
                                                                                                                             \
     CLAY_TEXT(CLAY_STRING("Selected Parent Entity"), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);                                  \
     {                                                                                                                       \
-        Entity* entity;                                                                                                     \
-        if(entity_manager_get_entity(_game_state->entity_manager, _editor_state->selected_parent_game_entity_gid, &entity)){\
-            CLAY_TEXT(gfx_string_to_clay_string(entity->name), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);                        \
+        Entity* __editor004_entity;                                                                                         \
+        bool __editor004_success =                                                                                          \
+            entity_manager_get_entity(                                                                                      \
+                _game_state->entity_manager,                                                                                \
+                _editor_state->selected_parent_game_entity_gid,                                                             \
+                &__editor004_entity                                                                                         \
+            );                                                                                                              \
+        if(__editor004_success){                                                                                            \
+            CLAY_TEXT(gfx_string_to_clay_string(__editor004_entity->name), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);            \
         }                                                                                                                   \
         else{                                                                                                               \
             CLAY_TEXT(CLAY_STRING("..."), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);                                             \
@@ -442,9 +523,16 @@ CLAY(                                                                           
                                                                                                                             \
     CLAY_TEXT(CLAY_STRING("Selected Entity"), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);                                         \
     {                                                                                                                       \
-        Entity* entity;                                                                                                     \
-        if(entity_manager_get_entity(_game_state->entity_manager, _editor_state->selected_game_entity_gid, &entity)){       \
-            CLAY_TEXT(gfx_string_to_clay_string(entity->name), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);                        \
+        Entity* __editor004_entity;                                                                                         \
+        bool __editor004_success =                                                                                          \
+            entity_manager_get_entity(                                                                                      \
+                _game_state->entity_manager,                                                                                \
+                _editor_state->selected_game_entity_gid,                                                                    \
+                &__editor004_entity                                                                                         \
+            );                                                                                                              \
+                                                                                                                            \
+        if(__editor004_success){                                                                                            \
+            CLAY_TEXT(gfx_string_to_clay_string(__editor004_entity->name), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);            \
         }                                                                                                                   \
         else{                                                                                                               \
             CLAY_TEXT(CLAY_STRING("..."), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);                                             \
@@ -455,13 +543,15 @@ CLAY(                                                                           
 
 
 ///
-///
+/// @ Editor_MouseState
 ///
 
 
 void editor_mouse_state_init(Editor_MouseState* state, MemoryArena* arena){
     ASSERT(!state->is_init, "already init.");
-    string_init(&state->entity_to_spawn_name, arena, 512);
+    string_init(&state->asset_entity_to_spawn_name, arena, 512);
+    string_init(&state->native_entity_to_spawn_name, arena, 512);
+    string_init(&state->asset_entity_to_spawn_file_path, arena, os_get_max_file_path_length());
     state->is_init = true;
 }
 
@@ -660,6 +750,18 @@ void editor_entity_tree_view_state_set_page(Editor_EntityTreeViewState* state, i
 ///
 
 
+void editor_spawn_asset_entity_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    LoadAssetEntityButtonOnHoverContext* ctx = (LoadAssetEntityButtonOnHoverContext*)user_data;
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        
+        string_clear(&ctx->editor_state->mouse_state.asset_entity_to_spawn_name);
+        string_push(&ctx->editor_state->mouse_state.asset_entity_to_spawn_name, ctx->entity_name);
+        
+        string_clear(&ctx->editor_state->mouse_state.asset_entity_to_spawn_file_path);
+        string_push(&ctx->editor_state->mouse_state.asset_entity_to_spawn_file_path, ctx->file_path);
+    }    
+}
+
 typedef struct{
     GameState* game_state;
     Editor_State* editor_state;
@@ -682,10 +784,6 @@ void editor_entity_tree_make_child_button_on_hover_callback(Clay_ElementId eleme
         if(!selected_idx || !parent_idx){
             return;
         }
-        
-        BOUNDS_CHECK(selected_idx, entity_manager->entity_length);
-        Entity* selected_entity = &entity_manager->entity[selected_idx];
-        Transform2D global_transform = selected_entity->global_transform;
         
         i32 current_node_idx;
         
@@ -746,8 +844,7 @@ void editor_entity_tree_make_child_button_on_hover_callback(Clay_ElementId eleme
             os_output_message("[WARNING]: cannot child selected to parent entity; the selected and parent entities are native entities within the same asset file.\n");
         }
         
-        intrusive_list_set_node_parent(&entity_manager->entity_hierarchy, selected_idx, parent_idx);
-        entity_set_global_transform_unsafe(entity_manager, selected_idx, global_transform);
+        entity_set_parent_unsafe(entity_manager, selected_idx, parent_idx);        
     }
 }
 
@@ -797,13 +894,13 @@ void editor_input_field_on_hover_callback(Clay_ElementId element_id, Clay_Pointe
     }
 }
 
-void editor_spawn_entity_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+void editor_spawn_native_entity_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
     Editor_SpawnEntityButtonOnHoverContext* ctx = (Editor_SpawnEntityButtonOnHoverContext*)user_data;
     if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        ctx->editor_state->mouse_state.entity_to_spawn = ctx->entity_type_id;
-        string_clear(&ctx->editor_state->mouse_state.entity_to_spawn_name);
+        ctx->editor_state->mouse_state.native_entity_to_spawn = ctx->entity_type_id;
+        string_clear(&ctx->editor_state->mouse_state.native_entity_to_spawn_name);
         string_push_chars(
-            &ctx->editor_state->mouse_state.entity_to_spawn_name,
+            &ctx->editor_state->mouse_state.native_entity_to_spawn_name,
             (char*)ctx->button_label.chars, 
             ctx->button_label.length
         );
@@ -1107,34 +1204,6 @@ void gfx_clay_native_entity_spawner_layout(Editor_State* editor_state, GameState
 
         CLAY_TEXT(CLAY_STRING("Native Entity Spawner"), EDITOR_GFX_CLAY_HEADER_TEXT_CONFIG);
 
-        // set_selected_parent_button();
-        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.05f){
-                
-            Editor_GoUpSelectedEntityTreeButtonHoverContext* go_up_selected_entity_tree_ctx;
-            MEMORY_ARENA_ALLOC_MEMORY(transient, go_up_selected_entity_tree_ctx, sizeof(*go_up_selected_entity_tree_ctx));
-            *go_up_selected_entity_tree_ctx = (Editor_GoUpSelectedEntityTreeButtonHoverContext){
-                .game_state = game_state,
-                .editor_state = editor_state
-            };
-            EDITOR_GFX_CLAY_BUTTON(
-                CLAY_STRING("Go Up Tree"), 0.33f, 1.0f, 
-                editor_go_up_selected_entity_tree_button_on_hover_callback, 
-                go_up_selected_entity_tree_ctx
-            );
-        
-            Editor_SetParentGameEntityGidButtonOnHoverContext* set_selected_parent_ctx;
-            MEMORY_ARENA_ALLOC_MEMORY(transient, set_selected_parent_ctx, sizeof(*set_selected_parent_ctx));
-            *set_selected_parent_ctx = (Editor_SetParentGameEntityGidButtonOnHoverContext){
-                .editor_state = editor_state
-            };
-            EDITOR_GFX_CLAY_BUTTON(
-                CLAY_STRING("Set Parent"), 0.33f, 1.0f, 
-                editor_set_parent_game_entity_gid_button_on_hover_callback, 
-                set_selected_parent_ctx
-            );
-
-        }
-
         f32 button_width = 0.2f;
         f32 button_height = 1.0f;
         
@@ -1167,22 +1236,95 @@ void gfx_clay_native_entity_spawner_layout(Editor_State* editor_state, GameState
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("World Camera"), button_width, button_height, transient, editor_state, EntityTypeId_WorldCamera);
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Wall"), button_width, button_height, transient, editor_state, EntityTypeId_Wall);
         }
-
-        CLAY_TEXT(CLAY_STRING("Entity To Spawn:"), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);        
-        if(editor_state->mouse_state.entity_to_spawn){
+        
+        CLAY_TEXT(CLAY_STRING("Entity To Spawn:"), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);  
+        if(editor_state->mouse_state.native_entity_to_spawn){                             
             CLAY_TEXT(
-                gfx_string_to_clay_string(editor_state->mouse_state.entity_to_spawn_name), 
-                EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
-            );
-        }
-        else{
-            CLAY_TEXT(
-                CLAY_STRING("None"), 
-                EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
-            );
-        }
-
+                gfx_string_to_clay_string(editor_state->mouse_state.native_entity_to_spawn_name),
+                EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG                                       
+            );                                                                            
+        }                                                                                 
+        else{                                                                             
+            CLAY_TEXT(                                                                    
+                CLAY_STRING("None"),                                                      
+                EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG                                       
+            );                                                                            
+        }                                                                                 
     }
+}
+
+void gfx_clay_asset_entity_spawner_layout(Editor_State* editor_state, GameState* game_state, MemoryArena* transient){
+    
+    LevelManager* level_manager = &game_state->level_manager;
+    
+    EDITOR_GFX_CLAY_SIDE_PANEL(){
+
+        if(Clay_Hovered()){
+            editor_state->mouse_state.hovering_element = true;
+        }
+        
+        CLAY_TEXT(CLAY_STRING("Asset Entity Spawner"), EDITOR_GFX_CLAY_HEADER_TEXT_CONFIG);
+
+        i32 file_count;
+        os_get_all_file_paths(STRING_FROM_LITERAL("../assets/entities/*", transient), NULL, &file_count);
+        
+        String* file_paths = NULL;
+        i32 file_paths_length = 0;
+        MEMORY_ARENA_ALLOC_ARRAY(transient, file_paths, &file_paths_length, file_count + 1);
+        for(i32 i = 0; i < file_paths_length; i++){
+            string_init(&file_paths[i], transient, os_get_max_file_path_length()); 
+        }
+        
+        os_get_all_file_paths(STRING_FROM_LITERAL("../assets/entities/*", transient), file_paths, &file_count);
+                        
+        f32 horizontal_percent = 0.25f;
+        f32 vertical_percent = 1.0f;
+    
+        for(i32 i = 0; i < file_count; i += 4){
+            EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+                
+                i32 idx = i;
+                for(i32 j = 0; j < 4; j++){
+                    i32 idx = i + j;
+                    if(idx < file_count){
+                        String partial_file_path = file_paths[idx];
+                        String full_file_path;
+                        string_init(&full_file_path, transient, os_get_max_file_path_length());
+                        STRING_PUSH_LITERAL(&full_file_path, ENTITY_ASSET_DIRECTORY_PATH);
+                        string_push(&full_file_path, partial_file_path);
+                        
+                        // remove the file extension from the partial_file_path, making it formatted
+                        // as the label for the load world level button.
+                        partial_file_path.count -= 5;
+                        
+                        EDITOR_GFX_CLAY_LOAD_ASSET_ENTITY_BUTTON(
+                            gfx_string_to_clay_string(partial_file_path),
+                            horizontal_percent,
+                            vertical_percent,
+                            transient,
+                            editor_state,
+                            full_file_path.chars,
+                            full_file_path.count
+                        );
+                    }
+                }
+            }
+        }
+        
+        CLAY_TEXT(CLAY_STRING("Entity To Spawn:"), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);  
+        if(editor_state->mouse_state.asset_entity_to_spawn_file_path.count){                             
+            CLAY_TEXT(                                                                    
+                gfx_string_to_clay_string(editor_state->mouse_state.asset_entity_to_spawn_name),
+                EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG                                       
+            );                                                                            
+        }                                                                                 
+        else{
+            CLAY_TEXT(                                                                    
+                CLAY_STRING("None"),                                                      
+                EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG                                       
+            );                                                                            
+        }                                                                                 
+    }    
 }
 
 void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* game_state, MemoryArena* transient){
@@ -1708,6 +1850,9 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
             case Editor_Menu_LevelManagement:{
                 gfx_clay_level_management(editor_state, game_state, transient);
             }break;
+            case Editor_Menu_AssetEntitySpawner:{
+                gfx_clay_asset_entity_spawner_layout(editor_state, game_state, transient);
+            }break;
         }
         gfx_clay_end_layout(editor_gfx_state, delta_time, SPRITE_LAYER_EDITOR_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
     }
@@ -1911,7 +2056,6 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 
                 // handle entity spawning if we are not moving a selected entity around.
                 if(
-                    editor_state->menu == Editor_Menu_NativeEntitySpawner &&
                     !*selected_entity_gid &&
                     input_is_mouse_button_just_pressed(MouseButton_Left)
                 ){
@@ -1922,13 +2066,29 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                     Transform2D spawn_transform = TRANSFORM2D_IDENTITY;
                     spawn_transform.position = mouse_world_position; // we use the game state's gfx_state; just in case.
                     
-                    entity_spawn(
-                        entity_manager, 
-                        editor_mouse_state->entity_to_spawn,
-                        (String){.chars = "entity", .length = 6, .count = 6}, 
-                        spawn_transform, 
-                        world_root_gid
-                    );        
+                    if(editor_state->menu == Editor_Menu_NativeEntitySpawner){
+                        entity_spawn(
+                            entity_manager, 
+                            editor_mouse_state->native_entity_to_spawn,
+                            (String){.chars = "entity", .length = 6, .count = 6}, 
+                            spawn_transform, 
+                            world_root_gid
+                        );
+                    }
+                    else if(editor_state->menu == Editor_Menu_AssetEntitySpawner){
+                        
+                        if(editor_mouse_state->asset_entity_to_spawn_file_path.count){
+                            DeferredLevelLoadContext level_load_ctx = {
+                                .transform = spawn_transform,
+                                .file_path = editor_mouse_state->asset_entity_to_spawn_file_path,
+                                .load_type = LevelLoadType_WorldEntity
+                            };
+                            level_manager_defer_load_level(level_manager, level_load_ctx);
+                        }
+                        else{
+                            os_output_message("[Warning]: editor attempted to spawn an asset entity without a filepath; i.e, None Asset Entity.\n");
+                        }                        
+                    }
                 }
             }
                 

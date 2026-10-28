@@ -216,7 +216,7 @@ void app_main(){
                     }
                     else{
                         in_editor_mode = true;
-                        editor_state.menu = Editor_Menu_EntityInspector;
+                        editor_state.menu = Editor_Menu_AssetEntitySpawner;
                         last_editor_key_pressed = Key_F3;
                     }
                 }
@@ -227,8 +227,19 @@ void app_main(){
                     }
                     else{
                         in_editor_mode = true;
-                        editor_state.menu = Editor_Menu_EntityTreeView;
+                        editor_state.menu = Editor_Menu_EntityInspector;
                         last_editor_key_pressed = Key_F4;
+                    }
+                }
+                else if(input_is_key_just_pressed(Key_F5)){
+                    if(last_editor_key_pressed == Key_F5){
+                        in_editor_mode = false;
+                        last_editor_key_pressed = Key_None;
+                    }
+                    else{
+                        in_editor_mode = true;
+                        editor_state.menu = Editor_Menu_EntityTreeView;
+                        last_editor_key_pressed = Key_F5;
                     }
                 }
             }
