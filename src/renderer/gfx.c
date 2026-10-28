@@ -3613,12 +3613,12 @@ void gfxclay_handle_errors(Clay_ErrorData errorData) {
     }
 }
 
-inline GFX_Colour gfx_clay_colour_to_gfx_colour(Clay_Color clay_colour){
+inline GFX_Colour gfx_clay_colour_to_gfx_colour(Clay_Color clay_colour){    
     return (GFX_Colour){
-        .r = clay_colour.r > 0 ? 255.0f / (f32)clay_colour.r : 0.0f,
-        .g = clay_colour.g > 0 ? 255.0f / (f32)clay_colour.g : 0.0f,
-        .b = clay_colour.b > 0 ? 255.0f / (f32)clay_colour.b : 0.0f,
-        .a = clay_colour.a > 0 ? 255.0f / (f32)clay_colour.a : 0.0f
+        .r = clay_colour.r > 0 ? (f32)clay_colour.r / 255.0f : 0.0f,
+        .g = clay_colour.g > 0 ? (f32)clay_colour.g / 255.0f : 0.0f,
+        .b = clay_colour.b > 0 ? (f32)clay_colour.b / 255.0f : 0.0f,
+        .a = clay_colour.a > 0 ? (f32)clay_colour.a / 255.0f : 0.0f
     };
 }
 
@@ -3733,6 +3733,12 @@ void gfx_clay_end_layout(GFX_State* gfx_state, f32 delta_time, u32 sprite_layer,
 
                 GenId sprite_gid = gfx_one_frame_sprite_chain_alloc(gfx_state, str.length);
                                 
+                                
+                if(renderCommand->renderData.text.textColor.r == 10){
+                    i32 x = 0;
+                }
+                
+                
                 // order matters here: text->transform.
                 gfx_sprite_string_set_active(gfx_state, sprite_gid);
                 gfx_sprite_string_set_text(gfx_state, sprite_gid, font_virtual_texture, str);

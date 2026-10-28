@@ -176,6 +176,18 @@ static i32 editor_gfx_clay_element_id = 0;
     }                                       \
 }
 
+#define EDITOR_GFX_CLAY_IMMUTABLE_TEXT_CONFIG   \
+(Clay_TextElementConfig){                       \
+    .fontSize = 1,                              \
+    .lineHeight = 24,                           \
+    .textColor = {                              \
+        .r = 125,                               \
+        .g = 125,                               \
+        .b = 125,                               \
+        .a = 255                                \
+    }                                           \
+}
+
 #define EDITOR_GFX_CLAY_TYPING_TEXT_CONFIG  \
 (Clay_TextElementConfig){                   \
     .fontSize = 1,                          \
@@ -230,6 +242,7 @@ CLAY(                                                                           
 )
 
 #define EDITOR_GFX_CLAY_BUTTON_IDLE_COLOUR (Clay_Color){100.0f,100.0f,100.0f,225.0f}
+#define EDITOR_GFX_CLAY_BUTTON_IMMUTABLE_COLOUR (Clay_Color){75.0f,75.0f,75.0f,225.0f}
 #define EDITOR_GFX_CLAY_BUTTON_HOVER_COLOUR (Clay_Color){155.0f,155.0f,155.0f,255.0f}
 #define EDITOR_GFX_CLAY_BUTTON(clay_string_name, horizontal_percent_size, vertical_percent_size, on_hover_callback, on_hover_user_data)     \
 CLAY(                                                                                                                                       \
@@ -350,6 +363,57 @@ CLAY(                                                                           
 }                                                                                                                                           \
 }while(0)
 
+
+/*
+    `typed example`
+    GFX_CLAY_INPUT_TEXT_BOX(
+        Clay_String clay_string_button_sid, 
+        Clay_String clay_string_button_label, 
+        f32 horizontal_percent_size, 
+        f32 vertical_percent, 
+        Editor_State* editor_state, 
+        void* data_storage_ptr, 
+        Editor_ButtonDataStorageType data_storage_type,
+        Memory_Arena* transient_arena,
+        i32 entity_idx
+    );
+    
+    `parameters`
+    `clay_string_button_sid`: the string id of the button clay ui element.
+    `clay_string_button_label`: the contents of the textual label displayed ontop of the button rectangle.
+    `horizontal_percent_size`: the horizontal percentage size of the button within the container widget.
+    `vertical_percent_size`: the horizontal percentage size of the button within the container widget.
+    `editor_state`: a pointer to the editor state to set the `selected_editor_ui_entity` and `is_typing` when clicked. 
+    `data_storage`: a pointer to the data this button is assigned to / is displaying. 
+    `data_storage_type`: the type of data stored.
+    `transient_arena`: the transient arena to allocate the function capture onto.
+    `entity_idx`: the index of the entity whom the data_storage is attached to; otherwise 0 if not an entity data_storage.
+*/
+
+#define GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(                                                                                                  \
+    _clay_string_button_sid,                                                                                                                \
+    _clay_string_button_label,                                                                                                              \
+    _horizontal_percent_size,                                                                                                               \
+    _vertical_percent_size                                                                                                                  \
+) do{                                                                                                                                       \
+Clay_ElementId GFX_CLAY_INPUT_TEXT_BOX_clay_element_id = CLAY_SIDI(_clay_string_button_sid, editor_gfx_clay_element_id++);                  \
+CLAY(                                                                                                                                       \
+    GFX_CLAY_INPUT_TEXT_BOX_clay_element_id,                                                                                                \
+    {                                                                                                                                       \
+        .backgroundColor = EDITOR_GFX_CLAY_BUTTON_IMMUTABLE_COLOUR,                                                                              \
+        .layout = {                                                                                                                         \
+            .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER },                                                                 \
+            .sizing = {                                                                                                                     \
+                CLAY_SIZING_PERCENT(_horizontal_percent_size),                                                                              \
+                CLAY_SIZING_PERCENT(_vertical_percent_size)                                                                                 \
+            },                                                                                                                              \
+        }                                                                                                                                   \
+    }                                                                                                                                       \
+) {                                                                                                                                         \
+                                                                                                                                            \
+    CLAY_TEXT(_clay_string_button_label, EDITOR_GFX_CLAY_IMMUTABLE_TEXT_CONFIG);                                                            \
+}                                                                                                                                           \
+}while(0)
 
 ///
 /// functions.
@@ -1067,6 +1131,7 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
     // hoist invariance.
     EntityManager* entity_manager = &game_state->entity_manager;
     ClickableAreaHierarchy* clickable_area_hierarchy = &editor_state->game_entity_clickable_area_hierarchy;
+    LevelManager* level_manager = &game_state->level_manager;
 
     EDITOR_GFX_CLAY_SIDE_PANEL(){
 
@@ -1142,6 +1207,9 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
             f32 vertical_percent_size = 0.05f;
             
             i32 entity_idx = clickable_area_hierarchy->selected_idx;
+            
+            i32 world_root_entity_idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, level_manager->world_root_entity_gid);
+            bool is_world_root = (world_root_entity_idx == entity_idx);
 
             { // draw_name_tag();
             
@@ -1169,7 +1237,7 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                         Editor_ButtonDataStorageType_String, 
                         transient,
                         entity_idx
-                    );
+                    );                
                 }            
             }
 
@@ -1186,17 +1254,28 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                     position_x_val_string.length = 
                     snprintf((char*)position_x_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.position.x);
                     ASSERT(position_x_val_string.length > 0, "failed to encode float.");
-                    GFX_CLAY_INPUT_TEXT_BOX(
-                        CLAY_STRING("Entity Position X"), 
-                        position_x_val_string, 
-                        horizontal_percent_size, 
-                        vertical_percent_size, 
-                        editor_state, 
-                        (void*)(&entity->local_transform.position.x), 
-                        Editor_ButtonDataStorageType_F32, 
-                        transient, 
-                        entity_idx
-                    );
+                    
+                    if(is_world_root){
+                        GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(
+                            CLAY_STRING("Entity Position X"),
+                            position_x_val_string,
+                            horizontal_percent_size,
+                            vertical_percent_size
+                        );
+                    }
+                    else{
+                        GFX_CLAY_INPUT_TEXT_BOX(
+                            CLAY_STRING("Entity Position X"), 
+                            position_x_val_string, 
+                            horizontal_percent_size, 
+                            vertical_percent_size, 
+                            editor_state, 
+                            (void*)(&entity->local_transform.position.x), 
+                            Editor_ButtonDataStorageType_F32, 
+                            transient, 
+                            entity_idx
+                        );
+                    }
                 }
             
             }
@@ -1214,17 +1293,28 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                     position_y_val_string.length = 
                         snprintf((char*)position_y_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.position.y);
                     ASSERT(position_y_val_string.length > 0, "failed to encode float.");
-                    GFX_CLAY_INPUT_TEXT_BOX(
-                        CLAY_STRING("Entity Position Y"), 
-                        position_y_val_string, 
-                        horizontal_percent_size, 
-                        vertical_percent_size, 
-                        editor_state, 
-                        (void*)(&entity->local_transform.position.y), 
-                        Editor_ButtonDataStorageType_F32, 
-                        transient, 
-                        entity_idx
-                    );
+                    
+                    if(is_world_root){
+                        GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(
+                            CLAY_STRING("Entity Position Y"),
+                            position_y_val_string,
+                            horizontal_percent_size,
+                            vertical_percent_size
+                        );
+                    }
+                    else{
+                        GFX_CLAY_INPUT_TEXT_BOX(
+                            CLAY_STRING("Entity Position Y"), 
+                            position_y_val_string, 
+                            horizontal_percent_size, 
+                            vertical_percent_size, 
+                            editor_state, 
+                            (void*)(&entity->local_transform.position.y), 
+                            Editor_ButtonDataStorageType_F32, 
+                            transient,
+                            entity_idx
+                        );
+                    }                    
                 }
             }
             
@@ -1240,17 +1330,27 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                 { // draw_value();
                     scale_x_val_string.length = snprintf((char*)scale_x_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.scale.x);
                     ASSERT(scale_x_val_string.length > 0, "failed to encode float.");
-                    GFX_CLAY_INPUT_TEXT_BOX(
-                        CLAY_STRING("Entity Scale X"), 
-                        scale_x_val_string, 
-                        horizontal_percent_size, 
-                        vertical_percent_size,
-                        editor_state, 
-                        (void*)(&entity->local_transform.scale.x), 
-                        Editor_ButtonDataStorageType_F32, 
-                        transient,
-                        entity_idx
-                    );
+                    if(is_world_root){
+                        GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(
+                            CLAY_STRING("Entity Scale X"),
+                            scale_x_val_string,
+                            horizontal_percent_size,
+                            vertical_percent_size
+                        );
+                    }
+                    else{
+                        GFX_CLAY_INPUT_TEXT_BOX(
+                            CLAY_STRING("Entity Scale X"), 
+                            scale_x_val_string, 
+                            horizontal_percent_size, 
+                            vertical_percent_size, 
+                            editor_state, 
+                            (void*)(&entity->local_transform.scale.x), 
+                            Editor_ButtonDataStorageType_F32, 
+                            transient,
+                            entity_idx
+                        );
+                    }                    
                 }
             }            
         
@@ -1266,17 +1366,27 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                 { // draw_value();
                     scale_y_val_string.length = snprintf((char*)scale_y_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.scale.y);
                     ASSERT(scale_y_val_string.length > 0, "failed to encode float.");
-                    GFX_CLAY_INPUT_TEXT_BOX(
-                        CLAY_STRING("Entity Scale Y"), 
-                        scale_y_val_string, 
-                        horizontal_percent_size, 
-                        vertical_percent_size,
-                        editor_state, 
-                        (void*)(&entity->local_transform.scale.y), 
-                        Editor_ButtonDataStorageType_F32, 
-                        transient, 
-                        entity_idx
-                    );
+                    if(is_world_root){
+                        GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(
+                            CLAY_STRING("Entity Scale Y"),
+                            scale_y_val_string,
+                            horizontal_percent_size,
+                            vertical_percent_size
+                        );
+                    }
+                    else{
+                        GFX_CLAY_INPUT_TEXT_BOX(
+                            CLAY_STRING("Entity Scale Y"), 
+                            scale_y_val_string, 
+                            horizontal_percent_size, 
+                            vertical_percent_size, 
+                            editor_state, 
+                            (void*)(&entity->local_transform.scale.y), 
+                            Editor_ButtonDataStorageType_F32, 
+                            transient,
+                            entity_idx
+                        );
+                    }     
                 }            
             }
             
@@ -1292,17 +1402,27 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                 { // draw_value();
                     sine_val_string.length = snprintf((char*)sine_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.sine);
                     ASSERT(sine_val_string.length > 0, "failed to encode float.");
-                    GFX_CLAY_INPUT_TEXT_BOX(
-                        CLAY_STRING("Entity Rotation"), 
-                        sine_val_string, 
-                        horizontal_percent_size,
-                        vertical_percent_size,
-                        editor_state, 
-                        (void*)(&entity->local_transform.sine), 
-                        Editor_ButtonDataStorageType_F32, 
-                        transient, 
-                        entity_idx
-                    );
+                    if(is_world_root){
+                        GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(
+                            CLAY_STRING("Entity Sine"),
+                            sine_val_string,
+                            horizontal_percent_size,
+                            vertical_percent_size
+                        );
+                    }
+                    else{
+                        GFX_CLAY_INPUT_TEXT_BOX(
+                            CLAY_STRING("Entity Sine"), 
+                            sine_val_string, 
+                            horizontal_percent_size, 
+                            vertical_percent_size, 
+                            editor_state, 
+                            (void*)(&entity->local_transform.sine), 
+                            Editor_ButtonDataStorageType_F32, 
+                            transient,
+                            entity_idx
+                        );
+                    }     
                 }
             }
             
@@ -1320,17 +1440,27 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                     // cosine.
                     cosine_val_string.length = snprintf((char*)cosine_val_string.chars, EDITOR_F32_INPUT_BUTTON_MAX_STRING_LENGTH, "%f", entity->local_transform.cosine);
                     ASSERT(cosine_val_string.length > 0, "failed to encode float.");
-                    GFX_CLAY_INPUT_TEXT_BOX(
-                        CLAY_STRING("Entity Rotation"), 
-                        cosine_val_string, 
-                        horizontal_percent_size, 
-                        vertical_percent_size, 
-                        editor_state, 
-                        (void*)(&entity->local_transform.cosine), 
-                        Editor_ButtonDataStorageType_F32, 
-                        transient, 
-                        entity_idx
-                    );
+                    if(is_world_root){
+                        GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(
+                            CLAY_STRING("Entity Cosine"),
+                            cosine_val_string,
+                            horizontal_percent_size,
+                            vertical_percent_size
+                        );
+                    }
+                    else{
+                        GFX_CLAY_INPUT_TEXT_BOX(
+                            CLAY_STRING("Entity Cosine5"), 
+                            cosine_val_string, 
+                            horizontal_percent_size, 
+                            vertical_percent_size, 
+                            editor_state, 
+                            (void*)(&entity->local_transform.cosine), 
+                            Editor_ButtonDataStorageType_F32, 
+                            transient,
+                            entity_idx
+                        );
+                    }     
                 }
             }
             
