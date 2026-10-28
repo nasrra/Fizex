@@ -146,16 +146,24 @@ void app_main(){
             gfx_load_font_texture(&gfx_state, transient, VIRTUAL_TEXTURE_ID_FONT, 24, 32, 12);
         }
 
-        // { // load level.
-        //     string_clear(&file_path);
-        //     string_push_chars(&file_path,    "../assets/levels/level_001.scsv", 31);
-        //     // string_push_chars(&file_path,    "../assets/levels/hamburger.scsv", 31);
-        //     LoadBoardLevelCallbackContext load_board_level_callback_ctx = {
-        //         .game_state = &game_state
-        //     };
+        { // load level.
+            // string_clear(&file_path);
+            // string_push_chars(&file_path,    "../assets/levels/level_001.scsv", 31);
+            // LoadBoardLevelCallbackContext load_board_level_callback_ctx = {
+            //     .game_state = &game_state
+            // };
             
-        //     level_manager_defer_load_level(&game_state.level_manager, file_path, LevelLoadType_World, load_board_level_callback, &load_board_level_callback_ctx, sizeof(load_board_level_callback_ctx));
-        // }
+            // Transform2D transform = TRANSFORM2D_IDENTITY;
+            // transform.scale.x = 1.2f;
+            
+            // DeferredLevelLoadContext dll_ctx = {
+            //     .transform = transform,
+            //     .file_path = file_path,
+            //     .load_type = LevelLoadType_World,
+            //     .callback = load_board_level_callback,
+            //     .callback_user_data = &load_board_level_callback_ctx
+            // };
+        }
     }    
 
     bool was_in_editor_mode = false;

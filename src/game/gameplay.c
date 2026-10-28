@@ -241,11 +241,11 @@ typedef enum{
 typedef void (*DeferredLevelLoadCallback)(GameState* game_state, void* user_data);
 
 typedef struct{
+    Transform2D transform;
     String file_path;
     LevelLoadType load_type;
     DeferredLevelLoadCallback callback;
-    char* callback_user_data;
-    i32 callback_user_data_length;
+    void* callback_user_data;
 } DeferredLevelLoadContext;
 
 typedef struct{
@@ -420,14 +420,8 @@ typedef struct{
 ///
 
 
-GenId level_manager_load_level_file(LevelManager* level_manager, String file_path, MemoryArena* transient);
-void level_manager_defer_reload_world_level(
-    LevelManager* level_manager, DeferredLevelLoadCallback callback, void* callback_user_data, i32 callback_user_data_size
-);
-void level_manager_defer_load_level(
-    LevelManager* level_manager, String file_path, LevelLoadType load_type, 
-    DeferredLevelLoadCallback callback, void* callback_user_data, i32 callback_user_data_size
-);
+GenId level_manager_load_level_file(LevelManager* level_manager, String file_path, MemoryArena* transient, Transform2D transform);
+void level_manager_defer_load_level(LevelManager* level_manager, DeferredLevelLoadContext ctx);
 
 
 ///
@@ -730,7 +724,8 @@ void entity_manager_dealloc_entity_data_unsafe(EntityManager* manager, i32 idx){
     }
 
     if(entity->sprite_gid){
-        gfx_sprite_dealloc(manager->gfx_state, entity->sprite_gid);
+        bool success = gfx_sprite_dealloc(manager->gfx_state, entity->sprite_gid);
+        ASSERT(success, "f");
     }
     
     if(entity->is_clickable_in_game){
@@ -747,6 +742,8 @@ void entity_manager_dealloc_entity_data_unsafe(EntityManager* manager, i32 idx){
     // ensure that the name tag isnt fucked with.
     entity->name = name;
     entity->serialisation_file_path = serialisation_file_path;
+    
+    gen_id_allocator_dealloc_unsafe(&manager->gen_id_allocator, idx);
 }
 
 void entity_on_entity_hierarchy_dealloc(IntrusiveList* list, i32 node_idx, void* user_data){
@@ -755,10 +752,10 @@ void entity_on_entity_hierarchy_dealloc(IntrusiveList* list, i32 node_idx, void*
 }
 
 bool entity_manager_dealloc_entity(EntityManager* manager, GenId gid){
-    if(!gen_id_allocator_dealloc(&manager->gen_id_allocator, gid)){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, gid);
+    if(!idx){
         return false;
     }
-    i32 idx = gen_id_get_index(gid);
 
     // TODO:
     // may want to add functionality later so the user can deallocate an entity independently from its children.
@@ -848,7 +845,7 @@ bool entity_manager_get_ui_camera(EntityManager entity_manager, Entity** out_ent
 ///
 
 
-void entity_set_local_transform_unsafe(EntityManager* manager, i32 entity_idx, Transform2D transform){
+void entity_set_local_transform_unsafe_ext(EntityManager* manager, i32 entity_idx, Transform2D transform, bool update_components_transform){
 
     BOUNDS_CHECK(entity_idx, manager->entity_length);
     Entity* entity = &manager->entity[entity_idx];
@@ -874,7 +871,7 @@ void entity_set_local_transform_unsafe(EntityManager* manager, i32 entity_idx, T
         BOUNDS_CHECK(child_idx, manager->entity_length);
         Entity* child_entity = &manager->entity[child_idx];
         
-        entity_set_local_transform_unsafe(manager, child_idx, child_entity->local_transform);    
+        entity_set_local_transform_unsafe_ext(manager, child_idx, child_entity->local_transform, update_components_transform);
 
         BOUNDS_CHECK(child_idx, manager->entity_hierarchy.length);
         IntrusiveListNode* child_node = &manager->entity_hierarchy.node[child_idx];
@@ -884,7 +881,11 @@ void entity_set_local_transform_unsafe(EntityManager* manager, i32 entity_idx, T
             break;
         }
     }
-        
+    
+    if(!update_components_transform){
+        return;
+    }
+    
     // after calculate the global transform.
 
     if(entity->is_sprite){
@@ -902,6 +903,11 @@ void entity_set_local_transform_unsafe(EntityManager* manager, i32 entity_idx, T
     }
 }
 
+void entity_set_local_transform_unsafe(EntityManager* manager, i32 entity_idx, Transform2D transform){
+    bool update_components_transform = true;
+    entity_set_local_transform_unsafe_ext(manager, entity_idx, transform, update_components_transform);
+}
+
 bool entity_set_local_transform(EntityManager* manager, GenId entity_gid, Transform2D transform){
     i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, entity_gid); 
     if(!idx){
@@ -913,7 +919,7 @@ bool entity_set_local_transform(EntityManager* manager, GenId entity_gid, Transf
     return true;
 }
 
-void entity_set_global_transform_unsafe(EntityManager* manager, i32 entity_idx, Transform2D transform){
+void entity_set_global_transform_unsafe_ext(EntityManager* manager, i32 entity_idx, Transform2D transform, bool update_components_transform){
     BOUNDS_CHECK(entity_idx, manager->entity_length);
     Entity* entity = &manager->entity[entity_idx];
     
@@ -932,16 +938,6 @@ void entity_set_global_transform_unsafe(EntityManager* manager, i32 entity_idx, 
                 entity->global_transform.scale,
                 parent_entity->global_transform.scale 
             );
-            
-            #if 0
-                // this way is slower but still valid.
-                f32 radians = vector2_radian_difference_scalar(
-                    entity->global_transform.sine, entity->global_transform.cosine,
-                    parent_entity->global_transform.sine, parent_entity->global_transform.cosine
-                );
-                result.sine = f32_sin(radians);
-                result.cosine = f32_cos(radians);
-            #endif
             
             result.cosine = 
                 entity->global_transform.cosine * parent_entity->global_transform.cosine + 
@@ -989,7 +985,7 @@ void entity_set_global_transform_unsafe(EntityManager* manager, i32 entity_idx, 
         BOUNDS_CHECK(child_idx, manager->entity_length);
         Entity* child_entity = &manager->entity[child_idx];
         
-        entity_set_local_transform_unsafe(manager, child_idx, child_entity->local_transform);    
+        entity_set_local_transform_unsafe_ext(manager, child_idx, child_entity->local_transform, update_components_transform);    
 
         BOUNDS_CHECK(child_idx, manager->entity_hierarchy.length);
         IntrusiveListNode* child_node = &manager->entity_hierarchy.node[child_idx];
@@ -1000,6 +996,10 @@ void entity_set_global_transform_unsafe(EntityManager* manager, i32 entity_idx, 
         }
     }
     
+    if(!update_components_transform){
+        return;
+    }
+    
     if(entity->is_sprite){
         gfx_sprite_set_transform(manager->gfx_state, entity->sprite_gid, transform2d_transform(entity->sprite_local_transform, entity->global_transform));
     }
@@ -1007,6 +1007,11 @@ void entity_set_global_transform_unsafe(EntityManager* manager, i32 entity_idx, 
     if(entity->is_physics_body){
         fizx_body_set_global_transform(&manager->fizx_state, entity->physics_body_gid, entity->global_transform);
     }
+}
+
+void entity_set_global_transform_unsafe(EntityManager* manager, i32 entity_idx, Transform2D transform){
+    bool update_components_transform = true;
+    entity_set_global_transform_unsafe_ext(manager, entity_idx, transform, update_components_transform);
 }
 
 bool entity_set_global_transform(EntityManager* entity_manager, GenId entity_gid, Transform2D global_transform){
@@ -1109,13 +1114,7 @@ void load_board_level_callback(GameState* game_state, void* user_data){
         else{
             ASSERT(false, "gid is allocated but failed to get entity.");
         }
-
-        if(board_state->number_ball_count == BOARD_STATE_MAX_BALLS){
-            break;
-        }
     }
-    
-    i32 x = 0;
 }
 
 
@@ -1394,6 +1393,7 @@ void windmill_hinge_update(Entity* entity, i32 entity_idx, GameState* game_state
 
 GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, String name, Transform2D transform, GenId parent){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
+        
     Entity* entity;
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
 
@@ -1418,7 +1418,7 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, String name, Tr
                 WINDMILL_HINGE_DEFAULT_PHYSICS_MASK,
                 is_gravity_affected
             );
-            
+                
             // start spinning
             fizx_body_impulse_angular_force(&entity_manager->fizx_state, entity->physics_body_gid, to_radians(66.64f));
         }
@@ -1518,7 +1518,7 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, String name, Transfor
                 WINDMILL_PHYSICS_MATERIAL
             );
         }
-        
+                
         { // sprite_alloc();
 
             entity->is_sprite = true;
@@ -2352,8 +2352,7 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String n
 
 void level_manager_init(
     LevelManager* level_manager, MemoryArena* arena, 
-    EntityManager* entity_manager, i32 deferred_level_load_length,
-    i32 deferred_level_load_user_data_size
+    EntityManager* entity_manager, i32 deferred_level_load_length
 ){
     
     ASSERT(!level_manager->is_init, "level manager is already init.");
@@ -2366,38 +2365,19 @@ void level_manager_init(
     for(i32 i = 0; i < deferred_level_load_length; i++){
         DeferredLevelLoadContext* ctx = &level_manager->deferred_level_load[i];
         string_init(&ctx->file_path, arena, file_path_length);
-        MEMORY_ARENA_ALLOC_ARRAY(arena, ctx->callback_user_data, &ctx->callback_user_data_length, deferred_level_load_user_data_size);
     }
     
     level_manager->entity_manager = entity_manager;
     level_manager->is_init = false;
 }
 
-void level_manager_defer_load_level(
-    LevelManager* level_manager, String file_path, LevelLoadType load_type, 
-    DeferredLevelLoadCallback callback, void* callback_user_data, i32 callback_user_data_size
-){
+void level_manager_defer_load_level(LevelManager* level_manager, DeferredLevelLoadContext ctx){
     // get ctx.
     i32 idx = level_manager->deferred_level_load_count;
     BOUNDS_CHECK(idx, level_manager->deferred_level_load_length);
-    DeferredLevelLoadContext* ctx = &level_manager->deferred_level_load[idx];
+    DeferredLevelLoadContext* internal_ctx = &level_manager->deferred_level_load[idx];
     
-    // set file path.
-    string_clear(&ctx->file_path);
-    string_push(&ctx->file_path, file_path);
-    
-    // set load type.
-    ctx->load_type = load_type;
-    
-    // set callback user data.
-    if(callback_user_data_size > 0){
-        ASSERT(callback_user_data_size <= ctx->callback_user_data_length, "buffer overflow");
-        COPY_MEMORY(ctx->callback_user_data, callback_user_data, callback_user_data_size);
-    }
-    
-    // set callback.
-    ctx->callback = callback;
-    
+    *internal_ctx = ctx;            
     level_manager->deferred_level_load_count++;
 }
 
@@ -2405,10 +2385,11 @@ void level_manager_defer_load_level(
     `parameters`:
     `parent_idx_offset`: this should be set to `0` when calling this outside of the function; i.e, just always set it to `0`.
     `root_parent_idx`: the index of the current root entity's parent in the deserialised entity array; this should be set to `1` when first calling the recursion/this function.
+    `transform`: an additional transform added to the root entity.
 */
 GenId level_manager_load_level_file_recurssive(
     LevelManager* level_manager, String file_path, MemoryArena* transient, 
-    i32 parent_idx_offset, i32 root_parent_idx
+    i32 parent_idx_offset, i32 root_parent_idx, Transform2D transform
 ){
     
     EntityManager* entity_manager = level_manager->entity_manager;
@@ -2493,7 +2474,7 @@ GenId level_manager_load_level_file_recurssive(
                     break;
                 }
                 
-                level_manager_load_level_file_recurssive(level_manager, scratch_space, transient, entity_manager->deserialised_entity_count-1, root_parent_idx);
+                level_manager_load_level_file_recurssive(level_manager, scratch_space, transient, entity_manager->deserialised_entity_count-1, root_parent_idx, TRANSFORM2D_IDENTITY);
             }break;
             case LEVEL_FILE_NATIVE_ENTITY_TOKEN: {
 
@@ -2535,6 +2516,10 @@ GenId level_manager_load_level_file_recurssive(
                     GenId parent_gid;
                     if(parent_idx <= 0){
                         
+                        if(parent_idx_offset == 0){
+                            deserialised_entity->spawn_transform = transform2d_transform(deserialised_entity->spawn_transform, transform);
+                        }
+
                         // this it is an asset entity file's root entity (parent_idx_offset > 0), 
                         // it should be parented to the previous entity tree's root. 
                         // if not, it shouldnt be parented to anything.
@@ -2596,15 +2581,9 @@ GenId level_manager_load_level_file_recurssive(
 }
 
 GenId level_manager_load_level_file(
-    LevelManager* level_manager, String file_path, MemoryArena* transient 
+    LevelManager* level_manager, String file_path, MemoryArena* transient, Transform2D transform 
 ){
-    return level_manager_load_level_file_recurssive(level_manager, file_path, transient, 0, 1);
-}
-
-void level_manager_defer_reload_world_level(
-    LevelManager* level_manager, DeferredLevelLoadCallback callback, void* callback_user_data, i32 callback_user_data_size
-){
-    level_manager_defer_load_level(level_manager, level_manager->world_root_entity_file_path, LevelLoadType_World, callback, callback_user_data, callback_user_data_size);
+    return level_manager_load_level_file_recurssive(level_manager, file_path, transient, 0, 1, transform);
 }
 
 
@@ -2690,8 +2669,7 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
         false
     );
     
-    i32 callback_user_data_size = 64;
-    level_manager_init(&game_state->level_manager, persistent, &game_state->entity_manager, 256, callback_user_data_size);
+    level_manager_init(&game_state->level_manager, persistent, &game_state->entity_manager, 256);
         
     board_state_init(&game_state->board_state, persistent, entity_amount);
     
@@ -2714,19 +2692,19 @@ void game_state_preupdate(GameState* game_state, f32 delta_time, MemoryArena* tr
                 }break;
                 case LevelLoadType_World:{
                     entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->world_root_entity_gid);
-                    level_manager->world_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path, transient);
+                    level_manager->world_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path, transient, ctx->transform);
                     string_clear(&level_manager->world_root_entity_file_path);
                     string_push(&level_manager->world_root_entity_file_path, ctx->file_path);
                 }break;
                 case LevelLoadType_Ui:{
                     entity_manager_dealloc_entity(level_manager->entity_manager, level_manager->ui_root_entity_gid);
-                    level_manager->ui_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path, transient);
+                    level_manager->ui_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path, transient, ctx->transform);
                     string_clear(&level_manager->ui_root_entity_file_path);
                     string_push(&level_manager->ui_root_entity_file_path, ctx->file_path);
                 }break;
             }
             if(ctx->callback){
-                ctx->callback(game_state, (void*)ctx->callback_user_data);
+                ctx->callback(game_state, ctx->callback_user_data);
             }
         }
         level_manager->deferred_level_load_count = 0;
@@ -2757,6 +2735,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
     FIZX_State* fizx_state = &entity_manager->fizx_state;
     BoardState* board_state = &game_state->board_state;
     GameMouseState* mouse_state = &game_state->mouse_state;
+    LevelManager* level_manager = &game_state->level_manager;
 
     // retrieve necessary data.
     Vector2 mouse_world_position = gfx_get_mouse_world_position(gfx_state);
@@ -2784,8 +2763,16 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         }
 
         if(input_is_key_just_pressed(Key_Tilde)){
-            level_manager_defer_reload_world_level(&game_state->level_manager, load_board_level_callback, NULL, 0);
-            // entity_manager_dealloc_entity(&game_state->entity_manager, game_state->level_manager.world_root_entity_gid);
+            
+            String file_path = string_duplicate(game_state->level_manager.world_root_entity_file_path, transient);
+            
+            DeferredLevelLoadContext ctx = {
+                .transform = TRANSFORM2D_IDENTITY,
+                .file_path = file_path,
+                .load_type = LevelLoadType_World,
+                .callback = load_board_level_callback
+            };
+            level_manager_defer_load_level(&game_state->level_manager, ctx);
         }
     }
     
@@ -2821,6 +2808,24 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
 
             { // set_entity_positions_to_fizx_positions();
             
+                // note that for this loop we don't set the entity component transforms
+                // they are set at the end by updating the global transform of the root entity
+                // which cascades down to all other entities in the tree. This is done as
+                // setting the global transform of an entity is 'order' sensitive; relative to how the tree is structured.
+                //
+                // Example (transform update order is left to right, i.e, the start to the end of loop):
+                //
+                //  - this is bad as the child physics component transform is lost (when 'update_components_transform' = true).
+                //      new_parent_global -> current_child_local
+                //
+                //  - this is would 'half' work (when 'update_components_transform' = true) as child physics transform isnt lost but the parent's is.
+                //      new_child_global -> current_parent_local
+                //
+                // the entity allocation system doesnt guarantee that a parent will come after its child in the collection.
+                // thus we have to set the transforms of the entities - without updating the components - in order to properly
+                // set the new transform data. componets are then updated by updating the transform of the level root entity; 
+                // which then cascades down to all other entities in the level.  
+            
                 for(i32 i = 0; i < entity_manager->entity_length; i++){
                     Entity* entity = &entity_manager->entity[i];
         
@@ -2830,14 +2835,18 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                             if(fizx_body_get_transform(fizx_state, entity->physics_body_gid, &transform)){
                                 
                                 transform.scale = entity->global_transform.scale;
-                                entity_set_global_transform_unsafe(entity_manager, i, transform);   
+                                bool update_components_transform = false;
+                                entity_set_global_transform_unsafe_ext(entity_manager, i, transform, update_components_transform);   
                             }
                         }
-                    }
-        
-                    if(entity->is_sprite){
-                        Transform2D sprite_transform = transform2d_transform(entity->sprite_local_transform, entity->global_transform);
-                        gfx_sprite_set_transform(gfx_state, entity->sprite_gid, sprite_transform);
+                    }        
+                }
+                
+                Entity* world_root_entity;
+                if(entity_manager_get_entity(*entity_manager, level_manager->world_root_entity_gid, &world_root_entity)){
+                    i32 idx = gen_id_get_index(level_manager->world_root_entity_gid);
+                    if(idx){
+                        entity_set_global_transform_unsafe(entity_manager, idx, world_root_entity->global_transform);
                     }
                 }
             }
@@ -3183,7 +3192,14 @@ CLAY(                                                                           
 void load_world_level_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
     LoadLevelButtonOnHoverContext* ctx = (LoadLevelButtonOnHoverContext*)user_data;
     if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        level_manager_defer_load_level(ctx->level_manager, ctx->file_path, ctx->load_type, ctx->callback, ctx->callback_user_data, ctx->callback_user_data_length);
+        DeferredLevelLoadContext level_load_ctx = {
+            .transform = TRANSFORM2D_IDENTITY,
+            .file_path = ctx->file_path,
+            .load_type = ctx->load_type,
+            .callback = ctx->callback,
+            .callback_user_data = ctx->callback_user_data
+        };
+        level_manager_defer_load_level(ctx->level_manager, level_load_ctx);
     }    
 }
 
@@ -3199,7 +3215,6 @@ void load_world_level_button_on_hover_callback(Clay_ElementId element_id, Clay_P
         i32 _file_path_length,
         DeferredLevelLoadCallback _level_load_callback,
         char* _level_load_callback_user_data,
-        i32 _level_load_call_back_user_data_length 
     );
     
     `parameters`
@@ -3212,7 +3227,6 @@ void load_world_level_button_on_hover_callback(Clay_ElementId element_id, Clay_P
     `_file_path_length`: the length of the file path to the asset to load.
     `_level_load_callback`: the callback for when the level is loaded. 
     `_level_load_callback_user_data`: the user_data to supply to the callback.
-    `_level_load_call_back_user_data_length`: the size of the user_data in bytes.
 */
 #define GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(                                                                                                                                                  \
     _clay_string_name,                                                                                                                                                                          \
@@ -3223,8 +3237,7 @@ void load_world_level_button_on_hover_callback(Clay_ElementId element_id, Clay_P
     _file_path_chars,                                                                                                                                                                           \
     _file_path_length,                                                                                                                                                                          \
     _level_load_callback,                                                                                                                                                                       \
-    _level_load_callback_user_data,                                                                                                                                                             \
-    _level_load_call_back_user_data_length                                                                                                                                                      \
+    _level_load_callback_user_data                                                                                                                                                              \
 ) do {                                                                                                                                                                                          \
                                                                                                                                                                                                 \
     String GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_file_path = {0};                                                                                                                               \
@@ -3233,8 +3246,7 @@ void load_world_level_button_on_hover_callback(Clay_ElementId element_id, Clay_P
     string_push_chars(&GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.file_path, _file_path_chars, _file_path_length);                                                                               \
     GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.load_type = LevelLoadType_World;                                                                                                                  \
     GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.callback = _level_load_callback;                                                                                                                  \
-    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.callback_user_data = (char*)_level_load_callback_user_data;                                                                                              \
-    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.callback_user_data_length = _level_load_call_back_user_data_length;                                                                               \
+    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.callback_user_data = (char*)_level_load_callback_user_data;                                                                                       \
     GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON_ctx.level_manager = _level_manager;                                                                                                                   \
                                                                                                                                                                                                 \
     void* GAME_GFX_CLAY_LOAD_LEVEL_BUTTON_ctx_ptr;                                                                                                                                              \
@@ -3382,8 +3394,7 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                             full_file_path.chars,
                                             full_file_path.count,
                                             load_board_level_callback,
-                                            NULL,
-                                            0
+                                            NULL
                                         );
                                     }
                                 }
@@ -3453,8 +3464,7 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                             menu_level_file_path.chars,
                                             menu_level_file_path.count,
                                             load_menu_level_callback,
-                                            ctx,
-                                            sizeof(*ctx)
+                                            ctx
                                         );
                                     }
                                     
@@ -3467,8 +3477,7 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                         game_state->level_manager.world_root_entity_file_path.chars,
                                         game_state->level_manager.world_root_entity_file_path.count,
                                         load_board_level_callback,
-                                        NULL,
-                                        0
+                                        NULL
                                     );
                               
                                 }
@@ -3502,8 +3511,7 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                     game_state->level_manager.world_root_entity_file_path.chars,
                                     game_state->level_manager.world_root_entity_file_path.count,
                                     load_board_level_callback,
-                                    NULL,
-                                    0
+                                    NULL
                                 );
                             }
                         }break;
@@ -3522,8 +3530,7 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                     game_state->level_manager.world_root_entity_file_path.chars,
                                     game_state->level_manager.world_root_entity_file_path.count,
                                     load_board_level_callback,
-                                    NULL,
-                                    0
+                                    NULL
                                 );
                             }
                         }break;

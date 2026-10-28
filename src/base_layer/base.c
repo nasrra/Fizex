@@ -150,6 +150,13 @@ void string_init(String* string, MemoryArena* arena, i32 length){
     string->count = 0;
 }
 
+String string_duplicate(String str, MemoryArena* arena){
+    String other;
+    string_init(&other, arena, str.length);
+    string_push(&other, str);
+    return other;
+}
+
 /*
     `returns`
     true, if the two strings have the same contents; otherwise false.

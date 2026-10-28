@@ -2752,20 +2752,18 @@ void fizx_body_dealloc_unsafe(FIZX_State* state, i32 body_idx){
     IntrusiveListNode* node = state->body_hierarchy.node;
     BOUNDS_CHECK(body_idx, state->body_hierarchy.length);
     i32 first_shape_idx = node[body_idx].first_child;
-    BOUNDS_CHECK(first_shape_idx, state->body_hierarchy.length);
-    i32 last_shape_idx = node[first_shape_idx].previous_sibling;
-    if(last_shape_idx != 0){
-        i32 shape_idx = last_shape_idx;
+    if(first_shape_idx){
+        i32 shape_idx = first_shape_idx;
         i32 previous_shape_idx = 0;
-        while(shape_idx != 0){
-            if(shape_idx == previous_shape_idx){
-                break;
-            }
+        while(shape_idx){
             previous_shape_idx = shape_idx;
             BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
             i32 next_idx = node[shape_idx].previous_sibling;
             fizx_entity_clear_unsafe(state, shape_idx);
             shape_idx = next_idx;
+            if(shape_idx == previous_shape_idx){
+                break;
+            }
         }
     }
 
@@ -4204,7 +4202,7 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                 f32 linear_drag         = state->entities.linear_drag[body_idx];
                 BOUNDS_CHECK(body_idx, state->entities.angular_drag_length);
                 f32 angular_drag        = state->entities.angular_drag[body_idx];
-
+                
                 if(gravity_affected){
                     *lin_vel_x += gravity.x;
                     *lin_vel_y += gravity.y;
