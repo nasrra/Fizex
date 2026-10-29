@@ -1560,8 +1560,12 @@ bool intrusive_list_remove_node(IntrusiveList* list, i32 node_idx, void* user_da
 
         // if this node doesnt have any children;
         if(node->first_child == 0){
-            // nil the parents child.
-            if(parent->first_child == node_idx){
+            // make the first child the next node in the node chain of this layer.
+            if(node->next_sibling != node_idx){
+                parent->first_child = node->next_sibling;                
+            }
+            // the parent no longer has any children; as the node we are removing is it's sole child.
+            else{
                 parent->first_child = 0;
             }
         }
@@ -1765,7 +1769,7 @@ bool intrusive_list_set_node_parent(IntrusiveList* list, i32 node_idx, i32 paren
     this is an internal function for `intrusive_list_remove_node_and_children()`
     and shouldnt be used.
 **/
-void intrusive_list_remove_node_and_children_update_node_recursive(
+void intrusive_list_remove_node_and_children_update_node_recurssive(
     IntrusiveList* list, i32 parent_index, i32 node_idx, i32 parent_first_child_index, void* user_data
 ){
     BOUNDS_CHECK(node_idx, list->length);
@@ -1779,13 +1783,13 @@ void intrusive_list_remove_node_and_children_update_node_recursive(
     *node = (IntrusiveListNode){0};
     
     if(first_child_index != 0){
-        intrusive_list_remove_node_and_children_update_node_recursive(list, node_idx, first_child_index, first_child_index, user_data);
+        intrusive_list_remove_node_and_children_update_node_recurssive(list, node_idx, first_child_index, first_child_index, user_data);
     }
     if(next_index == parent_first_child_index){
         return;
     }
     else{
-        intrusive_list_remove_node_and_children_update_node_recursive(list, parent_index, next_index, parent_first_child_index, user_data);
+        intrusive_list_remove_node_and_children_update_node_recurssive(list, parent_index, next_index, parent_first_child_index, user_data);
     }
 }
 /**
@@ -1812,15 +1816,22 @@ bool intrusive_list_remove_node_and_children(IntrusiveList* list, i32 node_idx, 
     if(node->first_child != 0){
         BOUNDS_CHECK(node->first_child, list->length);
         IntrusiveListNode* child = &list->node[node->first_child];
-        intrusive_list_remove_node_and_children_update_node_recursive(list, node_idx, node->first_child, node->first_child, user_data);
+        intrusive_list_remove_node_and_children_update_node_recurssive(list, node_idx, node->first_child, node->first_child, user_data);
     }
 
     // dealloc from parent
     if(parent_index!=0){
         BOUNDS_CHECK(parent_index, list->length);
         IntrusiveListNode* parent = &list->node[parent_index];
-        if(parent->first_child == node_idx){
-            parent->first_child = 0;
+        if(parent->first_child == node_idx){            
+            // make the first child the next node in the node chain of this layer.
+            if(node->next_sibling != node_idx){
+                parent->first_child = node->next_sibling;                
+            }
+            // the parent no longer has any children; as the node we are removing is it's sole child.
+            else{
+                parent->first_child = 0;
+            }
         }
     }
     else{

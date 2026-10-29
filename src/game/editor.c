@@ -104,6 +104,9 @@ typedef struct{
         
     Editor_EntityTreeViewState entity_tree_view_state;
     
+    f32 grid_step;
+    bool grid_enabled;
+    
 } Editor_State;
 
 typedef struct {
@@ -253,7 +256,6 @@ CLAY(                                                                           
 #define EDITOR_GFX_CLAY_BUTTON_IDLE_COLOUR (Clay_Color){100.0f,100.0f,100.0f,225.0f}
 #define EDITOR_GFX_CLAY_BUTTON_IMMUTABLE_COLOUR (Clay_Color){75.0f,75.0f,75.0f,225.0f}
 #define EDITOR_GFX_CLAY_BUTTON_HOVER_COLOUR (Clay_Color){155.0f,155.0f,155.0f,255.0f}
-#define EDITOR_GFX_CLAY_BUTTON_SELECTED_COLOUR (Clay_Color){200.0f,155.0f, 25.0f,255.0f};
 
 #define EDITOR_GFX_CLAY_BUTTON(                                                 \
     _clay_string_name,                                                          \
@@ -347,7 +349,7 @@ typedef struct{
     _file_path_length                                                                                           \
 ) do {                                                                                                          \
                                                                                                                 \
-    Editor_LoadAssetEntityButtonOnHoverContext __editor002_ctx = {0};                                                  \
+    Editor_LoadAssetEntityButtonOnHoverContext __editor002_ctx = {0};                                           \
     string_init(&__editor002_ctx.file_path, _transient_arena, _file_path_length);                               \
     string_push_chars(&__editor002_ctx.file_path, _file_path_chars, _file_path_length);                         \
     __editor002_ctx.editor_state = _editor_state;                                                               \
@@ -539,6 +541,56 @@ CLAY(                                                                           
         }                                                                                                                   \
     }                                                                                                                       \
                                                                                                                             \
+}while(0)
+
+#define EDITOR_GFX_CLAY_TOGGLE_BUTTON_IDLE_COLOUR (Clay_Color){100.0f,100.0f,100.0f,225.0f}
+#define EDITOR_GFX_CLAY_TOGGLE_BUTTON_HOVER_COLOUR (Clay_Color){155.0f,155.0f,155.0f,255.0f}
+#define EDITOR_GFX_CLAY_TOGGLE_BUTTON_SELECTED_COLOUR (Clay_Color){255.0f, 235.0f, 25.0f,255.0f}
+
+#define EDITOR_GFX_CLAY_TOGGLE_BUTTON(                                              \
+    _clay_string_name,                                                              \
+    _horizontal_percent_size,                                                       \
+    _vertical_percent_size,                                                         \
+    _boolean_flag                                                                   \
+)do{                                                                                \
+    CLAY(                                                                           \
+        CLAY_SIDI(CLAY_STRING("Toggle Container"), editor_gfx_clay_element_id++),   \
+        {                                                                           \
+            .layout = {                                                             \
+                .sizing = {                                                         \
+                    CLAY_SIZING_PERCENT(_horizontal_percent_size),                  \
+                    CLAY_SIZING_PERCENT(_vertical_percent_size)                     \
+                },                                                                  \
+                .childGap = 4                                                       \
+            }                                                                       \
+        }                                                                           \
+    ){                                                                              \
+                                                                                    \
+        CLAY(                                                                       \
+            CLAY_SIDI(CLAY_STRING("Toggle Button"), editor_gfx_clay_element_id++),  \
+            {                                                                       \
+                .backgroundColor = (                                                \
+                    *_boolean_flag                                                  \
+                    ? EDITOR_GFX_CLAY_TOGGLE_BUTTON_SELECTED_COLOUR                 \
+                    : (                                                             \
+                        Clay_Hovered()                                              \
+                        ? EDITOR_GFX_CLAY_TOGGLE_BUTTON_HOVER_COLOUR                \
+                        : EDITOR_GFX_CLAY_TOGGLE_BUTTON_IDLE_COLOUR                 \
+                    )                                                               \
+                ),                                                                  \
+                .layout = {                                                         \
+                    .sizing = {                                                     \
+                        .width  = CLAY_SIZING_PERCENT(0.1f),                        \
+                        .height = CLAY_SIZING_PERCENT(1.0f)                         \
+                    }                                                               \
+                }                                                                   \
+            }                                                                       \
+        ) {                                                                         \
+            Clay_OnHover(editor_toggle_button_on_hover_callback, _boolean_flag);    \
+        }                                                                           \
+                                                                                    \
+        CLAY_TEXT(_clay_string_name, EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);          \
+    }                                                                               \
 }while(0)
 
 
@@ -749,6 +801,38 @@ void editor_entity_tree_view_state_set_page(Editor_EntityTreeViewState* state, i
 /// @ Clay On Hover Callbacks.
 ///
 
+
+void editor_toggle_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        bool* toggle = (bool*) user_data;
+        *toggle = !(*toggle); 
+    }
+}
+
+typedef struct{
+    GameState* game_state;
+    Editor_State* editor_state;
+} Editor_OpenAssetButtonOnHoverContext;
+
+void editor_open_asset_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        
+        Editor_OpenAssetButtonOnHoverContext* ctx = (Editor_OpenAssetButtonOnHoverContext*)user_data;
+        
+        if(ctx->editor_state->mouse_state.asset_entity_to_spawn_file_path.count){
+            DeferredLevelLoadContext level_load_ctx = {
+                .transform = TRANSFORM2D_IDENTITY,
+                .file_path = ctx->editor_state->mouse_state.asset_entity_to_spawn_file_path,
+                .load_type = LevelLoadType_World,
+                .callback = load_level_callback
+            };
+            level_manager_defer_load_level(&ctx->game_state->level_manager, level_load_ctx);
+        }
+        else{
+            os_output_message("[Warning]: attempted to open asset with no asset entity selected.");
+        }
+    }    
+}
 
 typedef struct{
     GameState* game_state;
@@ -1067,7 +1151,6 @@ void gfx_clay_level_management(Editor_State* editor_state, GameState* game_state
             save_ctx_ptr
         );
         
-        
         Editor_NewLevelButtonOnHoverContext new_ctx = {
             .game_state = game_state,
             .transient = transient
@@ -1081,6 +1164,61 @@ void gfx_clay_level_management(Editor_State* editor_state, GameState* game_state
             editor_new_level_button_on_hover_callback, 
             new_ctx_ptr
         );
+        
+        { // draw_grid_settings();
+
+            CLAY_TEXT(
+                gfx_string_to_clay_string(STRING_FROM_LITERAL("Grid Settings", transient)), 
+                EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
+            );  
+
+            char* chars;                        
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
+            Clay_String grid_step_val_string = {.chars = (const char *) chars};
+            
+            f32 horizontal_percent_size = 0.75f;
+            f32 vertical_percent_size = 0.05f;
+            
+            // grid_toggle
+            EDITOR_GFX_CLAY_TOGGLE_BUTTON(
+                gfx_string_to_clay_string(STRING_FROM_LITERAL("Toggle Grid", transient)),
+                horizontal_percent_size,
+                vertical_percent_size,
+                &editor_state->grid_enabled
+            );
+            
+            { // draw_grid_step();
+                
+                { // draw_label();
+
+                    CLAY_TEXT(
+                        gfx_string_to_clay_string(STRING_FROM_LITERAL("Grid Step", transient)), 
+                        EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
+                    );                
+                }
+                
+                { // draw_value();
+                
+                    grid_step_val_string.length = 
+                    snprintf((char*)grid_step_val_string.chars, F32_STRING_MIN_LENGTH, "%f", editor_state->grid_step);
+                    ASSERT(grid_step_val_string.length > 0, "failed to encode float.");
+                
+                    GFX_CLAY_INPUT_TEXT_BOX(
+                        CLAY_STRING("Grid Step"),
+                        grid_step_val_string,
+                        horizontal_percent_size,
+                        vertical_percent_size,
+                        editor_state, 
+                        (void*)(&editor_state->grid_step), 
+                        Editor_ButtonDataStorageType_F32, 
+                        transient,
+                        0
+                    );
+                }
+            }
+        
+        }
+
     }
 }
 
@@ -1382,7 +1520,22 @@ void gfx_clay_asset_entity_spawner_layout(Editor_State* editor_state, GameState*
                 CLAY_STRING("None"),                                                      
                 EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG                                       
             );                                                                            
-        }                                                                                 
+        }
+        
+        Editor_OpenAssetButtonOnHoverContext* select_entity_button_on_hover_ctx;
+        MEMORY_ARENA_ALLOC_MEMORY(transient, select_entity_button_on_hover_ctx, sizeof(Editor_OpenAssetButtonOnHoverContext));
+        *select_entity_button_on_hover_ctx = (Editor_OpenAssetButtonOnHoverContext){
+            .editor_state = editor_state,
+            .game_state = game_state
+        };
+        
+        EDITOR_GFX_CLAY_BUTTON(
+            CLAY_STRING("Open Asset"),
+            1.0f,
+            0.05f,
+            editor_open_asset_button_on_hover_callback,
+            select_entity_button_on_hover_ctx
+        );
     }    
 }
 
@@ -1403,66 +1556,45 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
 
         ClickableArea* clickable_area;
         if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &clickable_area)){
-
-            Entity* entity = (Entity*)clickable_area->user_data;
-
-            char* chars;
-                        
-            i32 val_label_max_chars = 64;
-            i32 string_label_max_chars = 64;
             
+            Entity* entity = (Entity*)clickable_area->user_data;
+            
+            // entity can be null, as clickable area hierarchy only updates when clicking.
+            // meaning that if you delete the entity out from under the hierarchy, it resets
+            // the clickable area to zero, meaning that the entity pointer can be null. 
+            if(!entity){
+                continue;
+            }
+                
+            char* chars;
             
             // allocator_entity_name_strings();
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_STRING_INPUT_BUTTON_MAX_STRING_LENGTH);
             Clay_String entity_name_val_string = {.chars = (const char*) chars};
-            
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, string_label_max_chars);
-            Clay_String entity_name_label_string = {.chars = (const char *) chars};
-            
+                        
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_STRING_INPUT_BUTTON_MAX_STRING_LENGTH);
             Clay_String serialisation_file_path_val_string = {.chars = (const char*) chars};
-            
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, string_label_max_chars);
-            Clay_String serialisation_file_label_string = {.chars = (const char*) chars};
-            
+
             // allocate_floating_point_strings();            
             
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
             Clay_String position_x_val_string = {.chars = (const char*)chars};
-            
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
-            Clay_String position_x_label_string = {.chars = (const char*)chars};
-            
+                        
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
             Clay_String position_y_val_string = {.chars = (const char*)chars};
-            
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
-            Clay_String position_y_label_string = {.chars = (const char*)chars};
-            
+                        
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
             Clay_String scale_x_val_string = {.chars = (const char*)chars};
-            
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
-            Clay_String scale_x_label_string = {.chars = (const char*)chars};
-            
+                        
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
             Clay_String scale_y_val_string = {.chars = (const char*)chars};
-            
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
-            Clay_String scale_y_label_string = {.chars = (const char*)chars};
-            
+                        
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
             Clay_String sine_val_string = {.chars = (const char*)chars};
-            
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
-            Clay_String sine_label_string = {.chars = (const char*)chars};
-            
+                        
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
             Clay_String cosine_val_string = {.chars = (const char*)chars};
             
-            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, val_label_max_chars);
-            Clay_String cosine_label_string = {.chars = (const char*)chars};
-
             f32 horizontal_percent_size = 0.75f;
             f32 vertical_percent_size = 0.05f;
             
@@ -1475,10 +1607,10 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
             
                 { // draw_label();
 
-                    entity_name_label_string.length = 11;
-                    char* label_chars = (char*)entity_name_label_string.chars;
-                    COPY_MEMORY(label_chars, "Entity Name", entity_name_label_string.length);
-                    CLAY_TEXT(entity_name_label_string, EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);                
+                    CLAY_TEXT(
+                        gfx_string_to_clay_string(STRING_FROM_LITERAL("Entity Name", transient)), 
+                        EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
+                    );                
                 }
                 
                 { // draw_value();
@@ -1504,10 +1636,10 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
             { // draw_position_x();
             
                 { // draw_label();
-                    position_x_label_string.length = 10;
-                    char* label_chars = (char*)position_x_label_string.chars;
-                    COPY_MEMORY(label_chars, "Position X", position_x_label_string.length);
-                    CLAY_TEXT(position_x_label_string, EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
+                    CLAY_TEXT(
+                        gfx_string_to_clay_string(STRING_FROM_LITERAL("Position X", transient)), 
+                        EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
+                    );
                 }
                 
                 { // draw_value();
@@ -1543,10 +1675,10 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
             { // draw_position_y();
             
                 { // draw_label();
-                    position_y_label_string.length = 10;
-                    char* label_chars = (char*)position_y_label_string.chars;
-                    COPY_MEMORY(label_chars, "Position Y", position_y_label_string.length);
-                    CLAY_TEXT(position_y_label_string, EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
+                    CLAY_TEXT(
+                        gfx_string_to_clay_string(STRING_FROM_LITERAL("Position Y", transient)), 
+                        EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
+                    );
                 }
             
                 { // draw_value();
@@ -1581,10 +1713,10 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
             { // draw_scale_x();
                 
                 { // draw_label();
-                    scale_x_label_string.length = 7;
-                    char* label_chars = (char*)scale_x_label_string.chars;
-                    COPY_MEMORY(label_chars, "Scale X", scale_x_label_string.length);
-                    CLAY_TEXT(scale_x_label_string, EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
+                    CLAY_TEXT(
+                        gfx_string_to_clay_string(STRING_FROM_LITERAL("Scale X", transient)), 
+                        EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
+                    );
                 }
                 
                 { // draw_value();
@@ -1617,10 +1749,10 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
             { // draw_scale_y();
                 
                 { // draw_label();
-                    scale_y_label_string.length = 7;
-                    char* label_chars = (char*)scale_y_label_string.chars;
-                    COPY_MEMORY(label_chars, "Scale Y", scale_y_label_string.length);
-                    CLAY_TEXT(scale_y_label_string, EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
+                    CLAY_TEXT(
+                        gfx_string_to_clay_string(STRING_FROM_LITERAL("Scale Y", transient)), 
+                        EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
+                    );                    
                 }
                 
                 { // draw_value();
@@ -1653,10 +1785,10 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
             { // draw_sine();
             
                 { // draw_label();
-                    sine_label_string.length = 4;
-                    char* label_chars = (char*)sine_label_string.chars;
-                    COPY_MEMORY(label_chars, "Sine", sine_label_string.length);
-                    CLAY_TEXT(sine_label_string, EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
+                    CLAY_TEXT(
+                        gfx_string_to_clay_string(STRING_FROM_LITERAL("Sine", transient)), 
+                        EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
+                    );
                 }
             
                 { // draw_value();
@@ -1689,10 +1821,10 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
             { // draw_cosine();
                 
                 { // draw_label();
-                    cosine_label_string.length = 6;
-                    char* label_chars = (char*)cosine_label_string.chars;
-                    COPY_MEMORY(label_chars, "Cosine", cosine_label_string.length);
-                    CLAY_TEXT(cosine_label_string, EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
+                    CLAY_TEXT(
+                        gfx_string_to_clay_string(STRING_FROM_LITERAL("Cosine", transient)), 
+                        EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
+                    );
                 }
                 
                 { // draw_value();
@@ -1728,10 +1860,10 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
             
                 { // draw_label();
 
-                    serialisation_file_label_string.length = 23;
-                    char* label_chars = (char*)serialisation_file_label_string.chars;
-                    COPY_MEMORY(label_chars, "Serialisation File Path", serialisation_file_label_string.length);
-                    CLAY_TEXT(serialisation_file_label_string, EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);                
+                    CLAY_TEXT(
+                        gfx_string_to_clay_string(STRING_FROM_LITERAL("Serialisation File Path", transient)), 
+                        EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
+                    );                
                 }
                 
                 { // draw_value();
@@ -1763,6 +1895,7 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                     }    
                 }            
             }
+            
         }
     }
 }
@@ -2218,6 +2351,15 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                             // drag the selected entity with the mouse if we are clicking down.
                             if(input_is_mouse_button_pressed(MouseButton_Left)){                                            
                                 Vector2 new_position = vector2_add(mouse_world_position, editor_mouse_state->move_behaviour_state.selected_game_entity_positional_offset);
+                                
+                                if(
+                                    editor_state->grid_enabled &&
+                                    editor_state->grid_step > F32_EPSILON
+                                ){
+                                    new_position.x = f32_step_clamp(new_position.x, editor_state->grid_step);
+                                    new_position.y = f32_step_clamp(new_position.y, editor_state->grid_step);
+                                }
+                                
                                 Transform2D new_transform = game_entity->global_transform;
                                 new_transform.position = new_position;
                                 entity_set_global_transform_unsafe(entity_manager, entity_idx, new_transform);

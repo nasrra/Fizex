@@ -3200,7 +3200,7 @@ CLAY(CLAY_SIDI(CLAY_STRING("Pause Menu Container"), game_gfx_clay_element_id++),
 
 #define GAME_GFX_CLAY_SUB_HEADER_TEXT_CONFIG    \
 (Clay_TextElementConfig){                       \
-    .fontSize = 2,                           \
+    .fontSize = 2,                              \
     .lineHeight = 24,                           \
     .textColor = {                              \
         .r = 255,                               \
@@ -3240,20 +3240,6 @@ CLAY(                                                                           
 ) {                                                                                                                                     \
     Clay_OnHover(on_hover_callback, on_hover_user_data);                                                                                \
     CLAY_TEXT(clay_string_name, GAME_GFX_CLAY_TEXT_CONFIG);                                                                           \
-}
-
-void load_world_level_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
-    LoadLevelButtonOnHoverContext* ctx = (LoadLevelButtonOnHoverContext*)user_data;
-    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
-        DeferredLevelLoadContext level_load_ctx = {
-            .transform = TRANSFORM2D_IDENTITY,
-            .file_path = ctx->file_path,
-            .load_type = ctx->load_type,
-            .callback = ctx->callback,
-            .callback_user_data = ctx->callback_user_data
-        };
-        level_manager_defer_load_level(ctx->level_manager, level_load_ctx);
-    }    
 }
 
 /*
@@ -3326,6 +3312,27 @@ CLAY(CLAY_SIDI(CLAY_STRING("Level Select Button Container"), game_gfx_clay_eleme
         .childGap = 16,                                                                     \
     },                                                                                      \
 })
+
+
+///
+/// @ Button On Hover Callback
+///
+
+
+void load_world_level_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
+    LoadLevelButtonOnHoverContext* ctx = (LoadLevelButtonOnHoverContext*)user_data;
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+        DeferredLevelLoadContext level_load_ctx = {
+            .transform = TRANSFORM2D_IDENTITY,
+            .file_path = ctx->file_path,
+            .load_type = ctx->load_type,
+            .callback = ctx->callback,
+            .callback_user_data = ctx->callback_user_data
+        };
+        level_manager_defer_load_level(ctx->level_manager, level_load_ctx);
+    }    
+}
+
 
 void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_time, bool in_editor_mode){
 

@@ -203,11 +203,14 @@ typedef struct{
 #define ABS(val) ((val) < 0 ? (-(val)) : (val))
 #define CLAMP(val, min, max) ((val) < min ? (min) : ((val) > max ? (max) : (val)))
 
-
 ///
 /// @ functions: f32
 ///
 
+
+f32 f32_step_clamp(f32 val, f32 step){
+    return (f32)round(val / step) * step;
+}
 
 bool f32_nearly_equal(f32 a, f32 b, f32 epsilon){
     /**
