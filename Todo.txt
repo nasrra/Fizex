@@ -1,6 +1,17 @@
 
-// native and asset entity loading/saving.
-// clear selected entity when loading a new board level.
+
+// implement two stage editor:
+//
+// level editor mode: only move and edit native entities.
+//
+// edit play mode: move around and edit any entity.
+
+// add step clamp to rotating entities with mouse.
+
+// do these to get better break on balls.
+// increase cue stick power?
+// increase cue stick action range?
+
 
 DONT DO THIS:
 // Ball Power Ups:

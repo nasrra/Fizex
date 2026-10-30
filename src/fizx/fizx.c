@@ -2163,7 +2163,6 @@ inline void fizx_body_set_active_unsafe(FIZX_State* state, i32 body_idx, bool is
     IntrusiveListNode* node = &state->body_hierarchy.node[body_idx];
     node->is_active = is_active;
 
-
     // set all of the shapes for the body to inactive.
     i32 first_shape_idx = node->first_child;
     if(first_shape_idx == 0){
@@ -2687,8 +2686,6 @@ GenId fizx_body_alloc(
     ASSERT(gid != (GenId){0}, "memory limit hit");
     i32 body_idx = gen_id_get_index(gid);
 
-    fizx_body_set_active_unsafe(state, body_idx, true);
-
     BOUNDS_CHECK(body_idx, state->entities.global_transform.position.length);
     state->entities.global_transform.position.x[body_idx] = global_transform.position.x;
     state->entities.global_transform.position.y[body_idx] = global_transform.position.y;
@@ -2729,10 +2726,14 @@ GenId fizx_body_alloc(
 
     fizx_body_clear_forces_and_velocities_unsafe(state, body_idx);
 
-    bool added_root = intrusive_list_add_root(&state->body_hierarchy, body_idx);
-    if(!added_root){
+    if(intrusive_list_add_root(&state->body_hierarchy, body_idx)){
+        // set inactive by default
+        state->body_hierarchy.node[body_idx].is_active = false;
+    }
+    else{
         ASSERT(false, "failed to make physics body a root node.");
         gen_id_allocator_dealloc(&state->gen_id_allocator, gid);
+        // TODO: dealloc the entity here.
         fizx_body_set_active_unsafe(state, body_idx, false);
         return (GenId){0};
     }
@@ -2944,7 +2945,13 @@ GenId fizx_shape_init(
 
         fizx_soa_entity_transform_shape_vertices(&state->entities, shape_idx);
 
-        intrusive_list_add_branch(&state->body_hierarchy, shape_idx, body_idx);
+        if(intrusive_list_add_branch(&state->body_hierarchy, shape_idx, body_idx)){
+            // set inactive by default.
+            state->body_hierarchy.node[shape_idx].is_active = false;
+        }
+        else{
+            ASSERT(false, "[FIZX]: failed to child shape to parent entity in entity hierarchy.");
+        }
     }
 
     { // shape_specific();

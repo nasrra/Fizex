@@ -60,6 +60,7 @@ typedef struct{
     i32 turn_number;
     bool display_turn_text;
     bool show_pause_menu;
+    bool cue_ball_is_pocketed;
     
     bool is_init;
 } BoardState;
@@ -328,13 +329,13 @@ typedef struct{
 #define LEVEL_FILE_NATIVE_ENTITY_TOKEN 'N'
 #define LEVEL_FILE_ASSET_ENTITY_TOKEN 'A'
 
-#define BALL_FIZX_SHAPE_MATERIAL (FIZX_Material) {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 1.7f, .restitution = 0.167f, .rotational_response = true}
-#define BALL_FIZX_BODY_LINEAR_DRAG 0.75f
-#define BALL_FIZX_BODY_ANGULAR_DRAG 1.0f
+#define BALL_FIZX_SHAPE_MATERIAL (FIZX_Material) {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 1.85f, .restitution = 0.45f, .rotational_response = true}
+#define BALL_FIZX_BODY_LINEAR_DRAG 1.1f
+#define BALL_FIZX_BODY_ANGULAR_DRAG 1.35f
 
 #define ENTITY_NAME_LENGTH 32
-#define PLAYER_MOUSE_MAX_DRAW_RADIUS 2.5f
-#define PLAYER_MOUSE_LAUNCH_FORCE 7.5f
+#define PLAYER_MOUSE_MAX_DRAW_RADIUS 3.5f
+#define PLAYER_MOUSE_LAUNCH_FORCE 7.0f
 
 #define LEVEL_FILE_LINE_LENGTH 2048
      
@@ -684,6 +685,7 @@ void board_state_reset(BoardState* state){
     state->turn_number = 0;
     state->display_turn_text = false;
     state->show_pause_menu = false;
+    state->cue_ball_is_pocketed = false;
 }
 
 
@@ -1153,8 +1155,122 @@ void load_board_level_callback(GameState* game_state, void* user_data){
 
 
 ///
-/// @ Entities.
+/// @ Entity.
 ///
+
+
+void generic_entity_update(Entity* entity, EntityManager* entity_manager){
+    
+    ClickableAreaHierarchy* clickable_area_hierarchy = &entity_manager->clickable_area_hierarchy;
+    GFX_State* gfx_state = entity_manager->gfx_state;
+    
+    if(entity->is_clickable_in_game)
+    { // recalculate_clickable_area();
+        
+        Transform2D preferred_transform = {0};
+        PolygonRectangle clickable_area_shape = {0};
+        u64 depth_layer = 0;
+        
+        // note that we infer this is a sprite; no need to check 'is_sprite' flag or 'sprite_gid'.
+        if(gfx_sprite_get_transform(*gfx_state, entity->sprite_gid, &preferred_transform)){
+
+            GFX_SpriteOrigin sprite_origin;
+
+            // falback to entity transform if we failed to get the sprite origin.
+            if(!gfx_sprite_get_sprite_origin(*gfx_state, entity->sprite_gid, &sprite_origin)){
+                preferred_transform = entity->global_transform;
+                clickable_area_shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+            }
+
+            switch(sprite_origin){
+                default:
+                    ASSERT(false, "unknown sprite origin");
+                case GFX_SpriteOrigin_Center:{
+                    clickable_area_shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+                }break;
+                case GFX_SpriteOrigin_TopLeft:{
+                    clickable_area_shape = transform2d_to_polygon_rectangle_top_left_origin(preferred_transform);
+                }break;
+            }
+            gfx_sprite_get_depth_layer(gfx_state, entity->sprite_gid, &depth_layer);
+        }
+
+        // is not a sprite.
+        else{
+            preferred_transform = entity->global_transform;
+            clickable_area_shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);        
+        }
+        
+        clickable_area_hierarchy_set_clickable_area_depth_layer(
+            clickable_area_hierarchy,
+            entity->game_clickable_area_gid,
+            depth_layer
+        );
+        
+        // draw_clickable_wireframe();
+        // gfx_draw_wire_poly(
+        //     gfx_state, 
+        //     clickable_area_shape.x,
+        //     clickable_area_shape.y,
+        //     4, 
+        //     GFX_COLOUR_RED, 
+        //     SPRITE_LAYER_EDITOR_WORLD, 
+        //     0, 
+        //     SPRITE_MATERIAL_DEBUG
+        // );
+
+        clickable_area_hierarchy_set_clickable_area_rectangle_shape(
+            clickable_area_hierarchy,
+            entity->game_clickable_area_gid,
+            clickable_area_shape.x,
+            clickable_area_shape.y
+        );
+    }
+}
+
+bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_active){
+
+    i32 entity_idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, entity_gid);
+    if(!entity_idx){
+        return false;
+    }
+
+    BOUNDS_CHECK(entity_idx, entity_manager->entity_hierarchy.length);
+    entity_manager->entity_hierarchy.node[entity_idx].is_active = is_active;
+
+    BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
+    Entity* entity = &entity_manager->entity[entity_idx];
+    
+    if(entity->is_physics_body){
+        fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, is_active);
+    }
+    
+    if(entity->is_sprite){
+        switch(is_active){
+            case true:{
+                gfx_sprite_set_active(entity_manager->gfx_state, entity->sprite_gid);
+            }break;
+            case false:{
+                gfx_sprite_set_inactive(entity_manager->gfx_state, entity->sprite_gid);
+            }break;
+        }
+    }
+    
+    return true;
+}
+
+inline bool entity_is_active_unsafe(EntityManager entity_manager, i32 entity_idx){
+    BOUNDS_CHECK(entity_idx, entity_manager.entity_hierarchy.length);
+    return entity_manager.entity_hierarchy.node[entity_idx].is_active;
+}
+
+bool entity_is_active(EntityManager entity_manager, GenId entity_gid){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&entity_manager.gen_id_allocator, entity_gid);
+    if(!idx){
+        return false;
+    }
+    return entity_is_active_unsafe(entity_manager, idx);
+}
 
 
 ///
@@ -1286,12 +1402,10 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, String name, Transfor
         { // physics_body_alloc();
 
             entity->is_physics_body = true;
-            Circle physics_shape = {.radius = 0.5f};
-            Transform2D physics_shape_transform = TRANSFORM2D_IDENTITY;
             f32 linear_drag = 0.0f;
             f32 angular_drag = 0.0f;
             bool is_gravity_affected = false;
-            void* shape_user_data = &entity_gid;
+            
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state,
                 TRANSFORM2D_IDENTITY,
@@ -1301,6 +1415,11 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, String name, Transfor
                 THWAMPER_DEFAULT_PHYSICS_MASK,
                 is_gravity_affected
             );
+
+            Circle physics_shape = {.radius = 0.5f};
+            Transform2D physics_shape_transform = TRANSFORM2D_IDENTITY;
+            void* shape_user_data = &entity_gid;
+                        
             GenId shape_gid = fizx_circle_rigid_alloc(
                 &entity_manager->fizx_state,
                 entity->physics_body_gid,
@@ -1311,6 +1430,8 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, String name, Transfor
                 physics_shape,
                 THWAMPER_PHYSICS_MATERIAL
             );
+            
+            fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
         }
 
         { // sprite_alloc();
@@ -1362,15 +1483,16 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, String name, Tr
 
         { // physics_shape_alloc();
 
-            Rectangle physics_shape = {.x = 0.0f, .y = 0.0f, .width = width, .height = height};
-            Transform2D physics_shape_transform = transform;
-            void* shape_user_data = &entity_gid;
-
             Entity* parent_entity;            
             if(
                 entity_manager_get_entity(*entity_manager, parent, &parent_entity) &&
                 parent_entity->is_physics_body                
             ){
+
+                Rectangle physics_shape = {.x = 0.0f, .y = 0.0f, .width = width, .height = height};
+                Transform2D physics_shape_transform = transform;
+                void* shape_user_data = &entity_gid;
+
                 GenId shape_gid = fizx_rectangle_rigid_alloc(
                     &entity_manager->fizx_state,
                     parent_entity->physics_body_gid,
@@ -1498,7 +1620,10 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, String name, Tr
                 return 0;
             }
             blade_entity = NULL;
-        }            
+        }
+        
+        // set the fizx body active here as the blades allocate their shapes into the hinge's body.
+        fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
     
         entity_set_local_transform(entity_manager, entity_gid, transform);
     }
@@ -1526,12 +1651,10 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, String name, Transfor
         { // physics_body_alloc();
 
             entity->is_physics_body = true;
-            Circle physics_shape = {.radius = 0.5f};
-            Transform2D physics_shape_transform = TRANSFORM2D_IDENTITY;
             f32 linear_drag = 0.0f;
             f32 angular_drag = 0.0f;
             bool is_gravity_affected = false;
-            void* shape_user_data = &entity_gid;
+
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state,
                 TRANSFORM2D_IDENTITY,
@@ -1541,6 +1664,11 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, String name, Transfor
                 WINDMILL_DEFAULT_PHYSICS_MASK,
                 is_gravity_affected
             );
+            
+            Circle physics_shape = {.radius = 0.5f};
+            Transform2D physics_shape_transform = TRANSFORM2D_IDENTITY;
+            void* shape_user_data = &entity_gid;
+            
             GenId shape_gid = fizx_circle_rigid_alloc(
                 &entity_manager->fizx_state,
                 entity->physics_body_gid,
@@ -1551,6 +1679,8 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, String name, Transfor
                 physics_shape,
                 WINDMILL_PHYSICS_MATERIAL
             );
+            
+            fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
         }
                 
         { // sprite_alloc();
@@ -1602,32 +1732,9 @@ void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_d
         
         switch(entity->type_id){
             case EntityTypeId_BallCue:{
-                ctx->game_state->board_state.stage = BoardStage_Lose;
-                // level_manager_defer_reload_world_level(&ctx->game_state->level_manager, load_board_level_callback, NULL, 0);
-            }break;
-            case EntityTypeId_BallEight:{
-                
-                for(i32 i = 0; i < ctx->game_state->board_state.number_ball_count; i++){
-                    GenId ball_entity_gid = ctx->game_state->board_state.number_ball[i];
-                    if(source_entity_gid == ball_entity_gid){
-                        ARRAY_UNORDERED_REMOVE_AT(
-                            ctx->game_state->board_state.number_ball, 
-                            ctx->game_state->board_state.number_ball_length, 
-                            &ctx->game_state->board_state.number_ball_count, 
-                            i
-                        );
-                        break;
-                    }
-                }
-                
-                if(ctx->game_state->board_state.number_ball_count > 1){
-                    ctx->game_state->board_state.stage = BoardStage_Lose;
-                    // level_manager_defer_reload_world_level(&ctx->game_state->level_manager);
-                }
-                else{
-                    ctx->game_state->board_state.stage = BoardStage_Win;
-                }
-            }break;
+                ctx->game_state->board_state.cue_ball_is_pocketed = true;
+            }
+            case EntityTypeId_BallEight:
             case EntityTypeId_BallOne:
             case EntityTypeId_BallTwo:
             case EntityTypeId_BallThree:
@@ -1637,22 +1744,10 @@ void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_d
             case EntityTypeId_BallSeven:
             case EntityTypeId_BallNine:
             case EntityTypeId_BallZero:{
-                for(i32 i = 0; i < ctx->game_state->board_state.number_ball_count; i++){
-                    GenId ball_entity_gid = ctx->game_state->board_state.number_ball[i];
-                    if(source_entity_gid == ball_entity_gid){
-                        ARRAY_UNORDERED_REMOVE_AT(
-                            ctx->game_state->board_state.number_ball, 
-                            ctx->game_state->board_state.number_ball_length, 
-                            &ctx->game_state->board_state.number_ball_count, 
-                            i
-                        );
-                        break;
-                    }
-                }
+                entity_set_active(&ctx->game_state->entity_manager, source_entity_gid, false);
             }break;
         }
                 
-        entity_manager_dealloc_entity(&ctx->game_state->entity_manager, source_entity_gid);
     }
 }
 
@@ -1667,12 +1762,9 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
         { // physics_body_alloc();
 
             entity->is_physics_body = true;
-            Circle physics_shape = {.radius = 0.55f};
-            Transform2D physics_shape_transform = TRANSFORM2D_IDENTITY;
             f32 linear_drag = 0.0f;
             f32 angular_drag = 0.0f;
             bool is_gravity_affected = false;
-            void* shape_user_data = &entity_gid;
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state,
                 TRANSFORM2D_IDENTITY,
@@ -1682,6 +1774,11 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
                 PHYSICS_LAYER_ALL,
                 is_gravity_affected
             );
+
+            Circle physics_shape = {.radius = 0.55f};
+            Transform2D physics_shape_transform = TRANSFORM2D_IDENTITY;
+            void* shape_user_data = &entity_gid;
+            
             GenId shape_gid = fizx_circle_collider_alloc(
                 &entity_manager->fizx_state,
                 entity->physics_body_gid,
@@ -1691,11 +1788,14 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
                 shape_user_data,
                 physics_shape
             );
+            
             fizx_shape_set_on_sustain_callback(
                 &entity_manager->fizx_state,
                 shape_gid,
                 pocket_fizx_shape_on_sustain_callback
             );
+            
+            fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
         }
 
         { // sprite_alloc();
@@ -1738,8 +1838,6 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
         { // physics_body_alloc();
 
             entity->is_physics_body = true;
-            Circle circle = {.radius = 0.55f};
-            Transform2D shape_transform = TRANSFORM2D_IDENTITY;
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state,
                 TRANSFORM2D_IDENTITY,
@@ -1749,6 +1847,9 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
                 BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK,
                 false
             );
+
+            Circle circle = {.radius = 0.55f};
+            Transform2D shape_transform = TRANSFORM2D_IDENTITY;
             fizx_circle_rigid_alloc(
                 &entity_manager->fizx_state,
                 entity->physics_body_gid,
@@ -1759,6 +1860,8 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
                 circle,
                 BALL_FIZX_SHAPE_MATERIAL
             );
+            
+            fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
         }
 
         { // set_is_clickable_in_game();
@@ -1901,47 +2004,61 @@ GenId entity_spawn_wall(EntityManager* entity_manager, String name, Transform2D 
         string_push(&entity->name, name);
 
         entity->type_id = EntityTypeId_Wall;
-        entity->is_physics_body = true;
+        
+        { // alloc_physics_body();
+            entity->is_physics_body = true;
+            
+            f32 linear_drag = 0.75f;
+            f32 angular_drag = 0.75f;
+            bool gravity_effected = false;
+            entity->physics_body_gid = fizx_body_alloc(
+                &entity_manager->fizx_state, 
+                TRANSFORM2D_IDENTITY, 
+                linear_drag, 
+                angular_drag, 
+                PHYSICS_LAYER_ENVIRONMENT_MID,
+                PHYSICS_LAYER_ALL,
+                false
+            );
+            
+            Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
+            Transform2D shape_transform = TRANSFORM2D_IDENTITY;
+            FIZX_Material material = {
+                .static_friction = 0.75f, 
+                .kinetic_friction = 0.5f, 
+                .density = 22.6f, 
+                .restitution = 1.0f, 
+                .rotational_response = true
+            };
+            fizx_rectangle_rigid_alloc(
+                &entity_manager->fizx_state,
+                entity->physics_body_gid,
+                shape_transform,
+                FIZX_ShapeBehaviour_Kinematic,
+                FIZX_CollisionCallbackBehaviour_All,
+                &entity_gid,
+                square,
+                material
+            );
+            
+            fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);     
+        }        
 
-        Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
-        FIZX_Material material = {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 22.6f, .restitution = 1.0f, .rotational_response = true};
-
-        Transform2D shape_transform = TRANSFORM2D_IDENTITY;
-        f32 linear_drag = 0.75f;
-        f32 angular_drag = 0.75f;
-        bool gravity_effected = false;
-        entity->physics_body_gid = fizx_body_alloc(
-            &entity_manager->fizx_state, 
-            TRANSFORM2D_IDENTITY, 
-            linear_drag, 
-            angular_drag, 
-            PHYSICS_LAYER_ENVIRONMENT_MID,
-            PHYSICS_LAYER_ALL,
-            false
-        );
-        GenId entity_shape_gid = fizx_rectangle_rigid_alloc(
-            &entity_manager->fizx_state,
-            entity->physics_body_gid,
-            shape_transform,
-            FIZX_ShapeBehaviour_Kinematic,
-            FIZX_CollisionCallbackBehaviour_All,
-            &entity_gid,
-            square,
-            material
-        );
-
-        entity->is_sprite = true;
-        entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
-        entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
-        gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
-        gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, TEXTURE_VIEW_WALL);
-        gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
-        gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
-        gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
-        gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
-        gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
-        gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
-        gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 2);
+        { // alloc_sprite();
+        
+            entity->is_sprite = true;
+            entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
+            entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
+            gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, TEXTURE_VIEW_WALL);
+            gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
+            gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
+            gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
+            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
+            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+            gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 2);    
+        }
     
         entity_set_local_transform(entity_manager, entity_gid, transform);
     }
@@ -2032,49 +2149,52 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, String name, Transfo
         string_push(&entity->name, name);
 
         entity->type_id = type_id;
-        entity->is_physics_body = true;
 
-        Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
-        Circle circle = {.radius = 0.55f};
-
-        Transform2D shape_transform = TRANSFORM2D_IDENTITY;
-        entity->physics_body_gid = fizx_body_alloc(
-            &entity_manager->fizx_state,
-            TRANSFORM2D_IDENTITY,
-            BALL_FIZX_BODY_LINEAR_DRAG,
-            BALL_FIZX_BODY_ANGULAR_DRAG,
-            PHYSICS_LAYER_BALL_NUMBER,
-            PHYSICS_LAYER_ALL,
-            false
-        );
-
-        GenId entity_shape_gid = fizx_circle_rigid_alloc(
-            &entity_manager->fizx_state,
-            entity->physics_body_gid,
-            shape_transform,
-            FIZX_ShapeBehaviour_Dynamic,
-            FIZX_CollisionCallbackBehaviour_All,
-            &entity_gid,
-            circle,
-            BALL_FIZX_SHAPE_MATERIAL
-        );
-        
-        entity->is_health = true;
-        entity->health = 3;
-
-        entity->is_sprite = true;
-        entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
-        entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
-        gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
-        gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, texture_view);
-        gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
-        gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
-        gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
-        gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
-        gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
-        gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
-        gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
+        { // alloc_physics_body();
+            entity->is_physics_body = true;
     
+            entity->physics_body_gid = fizx_body_alloc(
+                &entity_manager->fizx_state,
+                TRANSFORM2D_IDENTITY,
+                BALL_FIZX_BODY_LINEAR_DRAG,
+                BALL_FIZX_BODY_ANGULAR_DRAG,
+                PHYSICS_LAYER_BALL_NUMBER,
+                PHYSICS_LAYER_ALL,
+                false
+            );
+            
+            Circle circle = {.radius = 0.55f};    
+            Transform2D shape_transform = TRANSFORM2D_IDENTITY;    
+            GenId entity_shape_gid = fizx_circle_rigid_alloc(
+                &entity_manager->fizx_state,
+                entity->physics_body_gid,
+                shape_transform,
+                FIZX_ShapeBehaviour_Dynamic,
+                FIZX_CollisionCallbackBehaviour_All,
+                &entity_gid,
+                circle,
+                BALL_FIZX_SHAPE_MATERIAL
+            );
+            
+            fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
+        }
+        
+        { // alloc_sprite();
+        
+            entity->is_sprite = true;
+            entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
+            entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
+            gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, texture_view);
+            gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
+            gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
+            gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
+            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
+            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+            gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0); 
+        }
+        
         entity_set_local_transform(entity_manager, entity_gid, transform);
     }
     return entity_gid;
@@ -2163,7 +2283,7 @@ void boost_pad_on_sustain_collision_callback(FIZX_CollisionInfo info, void* user
     }
     
     Vector2 forward_direction = transform2d_get_forward_angle_vector(boost_pad_entity->global_transform);    
-    f32 impulse_force = 7.5f;
+    f32 impulse_force = 5.5f;
     Vector2 impulse = vector2_mul_val(forward_direction, impulse_force);
     
     if(ball_entity->is_physics_body){
@@ -2195,8 +2315,9 @@ GenId entity_spawn_boost_pad(EntityManager* entity_manager, String name, Transfo
         f32 linear_drag = 0.0f;
         
         { // alloc_physics_body();
+        
             entity->is_physics_body = true;
-            Rectangle rect = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
+            
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state,
                 TRANSFORM2D_IDENTITY,
@@ -2206,11 +2327,20 @@ GenId entity_spawn_boost_pad(EntityManager* entity_manager, String name, Transfo
                 PHYSICS_LAYER_ALL,
                 false
             );
+            
+            Rectangle rect = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
             GenId shape_gid = fizx_rectangle_collider_alloc(
-                &entity_manager->fizx_state, entity->physics_body_gid, TRANSFORM2D_IDENTITY, FIZX_ShapeBehaviour_Trigger, 
-                FIZX_CollisionCallbackBehaviour_All, &entity_gid, rect
+                &entity_manager->fizx_state, entity->physics_body_gid, 
+                TRANSFORM2D_IDENTITY, 
+                FIZX_ShapeBehaviour_Trigger, 
+                FIZX_CollisionCallbackBehaviour_All, 
+                &entity_gid, 
+                rect
             );
+            
             fizx_shape_set_on_sustain_callback(&entity_manager->fizx_state, shape_gid, boost_pad_on_sustain_collision_callback);
+        
+            fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
         }
         
         { // alloc_sprite();
@@ -2233,81 +2363,6 @@ GenId entity_spawn_boost_pad(EntityManager* entity_manager, String name, Transfo
     }
         
     return entity_gid;
-}
-
-
-///
-/// @ GenericEntity.
-///
-
-
-void generic_entity_update(Entity* entity, EntityManager* entity_manager){
-    
-    ClickableAreaHierarchy* clickable_area_hierarchy = &entity_manager->clickable_area_hierarchy;
-    GFX_State* gfx_state = entity_manager->gfx_state;
-    
-    if(entity->is_clickable_in_game)
-    { // recalculate_clickable_area();
-        
-        Transform2D preferred_transform = {0};
-        PolygonRectangle clickable_area_shape = {0};
-        u64 depth_layer = 0;
-        
-        // note that we infer this is a sprite; no need to check 'is_sprite' flag or 'sprite_gid'.
-        if(gfx_sprite_get_transform(*gfx_state, entity->sprite_gid, &preferred_transform)){
-
-            GFX_SpriteOrigin sprite_origin;
-
-            // falback to entity transform if we failed to get the sprite origin.
-            if(!gfx_sprite_get_sprite_origin(*gfx_state, entity->sprite_gid, &sprite_origin)){
-                preferred_transform = entity->global_transform;
-                clickable_area_shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
-            }
-
-            switch(sprite_origin){
-                default:
-                    ASSERT(false, "unknown sprite origin");
-                case GFX_SpriteOrigin_Center:{
-                    clickable_area_shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
-                }break;
-                case GFX_SpriteOrigin_TopLeft:{
-                    clickable_area_shape = transform2d_to_polygon_rectangle_top_left_origin(preferred_transform);
-                }break;
-            }
-            gfx_sprite_get_depth_layer(gfx_state, entity->sprite_gid, &depth_layer);
-        }
-
-        // is not a sprite.
-        else{
-            preferred_transform = entity->global_transform;
-            clickable_area_shape = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);        
-        }
-        
-        clickable_area_hierarchy_set_clickable_area_depth_layer(
-            clickable_area_hierarchy,
-            entity->game_clickable_area_gid,
-            depth_layer
-        );
-        
-        // draw_clickable_wireframe();
-        // gfx_draw_wire_poly(
-        //     gfx_state, 
-        //     clickable_area_shape.x,
-        //     clickable_area_shape.y,
-        //     4, 
-        //     GFX_COLOUR_RED, 
-        //     SPRITE_LAYER_EDITOR_WORLD, 
-        //     0, 
-        //     SPRITE_MATERIAL_DEBUG
-        // );
-
-        clickable_area_hierarchy_set_clickable_area_rectangle_shape(
-            clickable_area_hierarchy,
-            entity->game_clickable_area_gid,
-            clickable_area_shape.x,
-            clickable_area_shape.y
-        );
-    }
 }
 
 GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, String name, Transform2D transform, GenId parent_gid){
@@ -2634,7 +2689,6 @@ void guideline_collider_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
     ctx->game_state->mouse_state.guideline_end_point = (Vector2){info.first_contact_point_x, info.first_contact_point_y};
     Vector2 end = {info.first_contact_point_x + info.normal_x, info.first_contact_point_y + info.normal_y};
-    gfx_draw_line(ctx->game_state->entity_manager.gfx_state, GFX_COLOUR_ORANGE, ctx->game_state->mouse_state.guideline_end_point, end, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
 }
 
 void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena* transient, GFX_State* gfx_state){
@@ -2904,7 +2958,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                 }
             }
             
-            { // check_ball_velocities();
+            { // evaluate_board_state();
     
                 bool balls_are_moving = false;
                                 
@@ -2933,9 +2987,6 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                             }
 
                         } 
-                    }
-                    else{
-                        ASSERT(false, "failed to get number ball entity.");
                     }
                 }
                 
@@ -2984,23 +3035,60 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                                 string_push(&board_state->turn_text, board_state->turn_text_scratch_space);
                             }
                             
-                            { // start_displaying_turn_text();
-                            
-                                board_state->display_turn_text = true;
-                                BoardStateDisplayTurnHUDTimerContext timer_ctx = {
-                                    .board_state = board_state
-                                };
-                                timer_manager_timer_start(
-                                    timer_manager, 
-                                    1.0f, 
-                                    1.0f, 
-                                    board_state_display_turn_hud_timeout, 
-                                    &timer_ctx, 
-                                    sizeof(timer_ctx)
-                                );                        
+                            bool eight_ball_present = false;
+                            bool eight_ball_pocketed = false;
+                            bool active_balls = 0;
+                            for(i32 i = 0; i < board_state->number_ball_count; i++){
+                                GenId ball_entity_gid = board_state->number_ball[i];
+                                Entity* entity;
+                                if(entity_manager_get_entity(*entity_manager, ball_entity_gid, &entity)){
+
+                                    if(entity->type_id == EntityTypeId_BallEight){
+                                        eight_ball_present = true; 
+                                    }                                    
+                                    if(!entity_is_active(*entity_manager, ball_entity_gid)){
+                                        if(entity->type_id == EntityTypeId_BallEight){
+                                            eight_ball_pocketed = true;
+                                        }
+                                        continue;
+                                    }
+                                    active_balls++;              
+                                }
                             }
                             
-                            os_output_message("player turn\n");
+                            if(board_state->cue_ball_is_pocketed){
+                                board_state->stage = BoardStage_Lose;
+                            }
+                            else if(eight_ball_pocketed && eight_ball_present){
+                                board_state->stage = active_balls > 1
+                                ? BoardStage_Lose
+                                : BoardStage_Win
+                                ;
+                            }
+                            else{
+                                if(active_balls == 0){
+                                    board_state->stage = BoardStage_Win; 
+                                }
+                                else{
+                        
+                                    // start_displaying_turn_text();
+                            
+                                    board_state->display_turn_text = true;
+                                    BoardStateDisplayTurnHUDTimerContext timer_ctx = {
+                                        .board_state = board_state
+                                    };
+                                    timer_manager_timer_start(
+                                        timer_manager, 
+                                        1.0f, 
+                                        1.0f, 
+                                        board_state_display_turn_hud_timeout, 
+                                        &timer_ctx, 
+                                        sizeof(timer_ctx)
+                                    );                        
+                                
+                                    os_output_message("player turn\n");
+                                }
+                            }
                         }break;
                     }
                 }        
@@ -3013,10 +3101,13 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
     { // entity_updates.
     
         for(i32 i = 0; i < game_state->entity_manager.entity_length; i++){
-            if(!entity_manager_is_entity_allocated_unsafe(game_state->entity_manager, i)){
+            if(
+                !entity_manager_is_entity_allocated_unsafe(game_state->entity_manager, i) ||
+                !entity_is_active_unsafe(game_state->entity_manager, i)
+            ){
                 continue;
             }
-            
+                        
             Entity* entity = &game_state->entity_manager.entity[i];
             
             generic_entity_update(entity, entity_manager);
@@ -3506,33 +3597,15 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                     CLAY_TEXT(CLAY_STRING("Pause Menu!"), GAME_GFX_CLAY_SUB_HEADER_TEXT_CONFIG);
                                     
                                     LoadMenuLevelCallbackContext* ctx;
+                                    String menu_level_file_path = STRING_FROM_LITERAL("../assets/levels/menu_level.scsv", transient);
                                     f32 horizontal_size = 0.75f;
                                     f32 vertical_size = 0.25f;
-
-                                    String menu_level_file_path;
-                                    string_init(&menu_level_file_path, transient, os_get_max_file_path_length());
-                                    string_push_chars(&menu_level_file_path, "../assets/levels/menu_level.scsv", 32);
-
-                                    { // return_to_level_select_button();
-                                        
-                                    
-                                        MEMORY_ARENA_ALLOC_STRUCT(transient, ctx);
-                                        ctx->stage_to_load_to = MenuStage_LevelSelector;
-                                        GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
-                                            CLAY_STRING("Return to Level Select"),
-                                            horizontal_size,
-                                            vertical_size,
-                                            transient,
-                                            &game_state->level_manager,
-                                            menu_level_file_path.chars,
-                                            menu_level_file_path.count,
-                                            load_menu_level_callback,
-                                            ctx
-                                        );
-                                    }
+                                                                        
+                                    MEMORY_ARENA_ALLOC_STRUCT(transient, ctx);
+                                    ctx->stage_to_load_to = MenuStage_LevelSelector;
                                     
                                     GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
-                                        CLAY_STRING("Retry"),
+                                        CLAY_STRING("Restart"),
                                         horizontal_size,
                                         vertical_size,
                                         transient,
@@ -3542,7 +3615,18 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                         load_board_level_callback,
                                         NULL
                                     );
-                              
+                                    
+                                    GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
+                                        CLAY_STRING("Return to Level Select"),
+                                        horizontal_size,
+                                        vertical_size,
+                                        transient,
+                                        &game_state->level_manager,
+                                        menu_level_file_path.chars,
+                                        menu_level_file_path.count,
+                                        load_menu_level_callback,
+                                        ctx
+                                    );
                                 }
                             }
 
@@ -3553,9 +3637,6 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                         .chars = (const char*)board_state->turn_text.chars
                                     };
                                     CLAY_TEXT(clay_string, GAME_GFX_CLAY_TEXT_CONFIG);
-                                    if(Clay_Hovered()){
-                                        mouse_state->hovering_ui_element = true;
-                                    }
                                 }
                             }
 
@@ -3575,6 +3656,22 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                     game_state->level_manager.world_root_entity_file_path->count,
                                     load_board_level_callback,
                                     NULL
+                                );
+                                
+                                LoadMenuLevelCallbackContext* ctx;
+                                String menu_level_file_path = STRING_FROM_LITERAL("../assets/levels/menu_level.scsv", transient);
+                                MEMORY_ARENA_ALLOC_STRUCT(transient, ctx);
+                                ctx->stage_to_load_to = MenuStage_LevelSelector;
+                                GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
+                                    CLAY_STRING("Return to Level Select"),
+                                    horizontal_size,
+                                    vertical_size,
+                                    transient,
+                                    &game_state->level_manager,
+                                    menu_level_file_path.chars,
+                                    menu_level_file_path.count,
+                                    load_menu_level_callback,
+                                    ctx
                                 );
                             }
                         }break;

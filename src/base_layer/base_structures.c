@@ -1740,6 +1740,30 @@ bool intrusive_list_set_node_parent(IntrusiveList* list, i32 node_idx, i32 paren
                 parent->first_child = 0;
             }
         }
+        else{
+            switch(list->preserve_root_order){
+                case true:{
+                    // move all root node dense indices backward; reflecting the ordered removal.
+                    for(i32 i = node->root_dense_index+1; i < list->root_index_count; i++){
+                        BOUNDS_CHECK(i, list->length);
+                        IntrusiveListNode* next_root = &list->node[list->root_index[i]];
+                        next_root->root_dense_index -= 1;
+                    }
+                    // remove the root index.
+                    ARRAY_ORDERED_REMOVE_AT(list->root_index, list->length, &list->root_index_count, node->root_dense_index);
+                } break;
+                case false:{
+                    /**
+                        remove the node from the roots array.
+                        performing the dense index swap as well.
+                    **/
+                    IntrusiveListNode* last_root = &list->node[list->root_index[list->root_index_count-1]];
+                    last_root->root_dense_index = node->root_dense_index;
+                    ARRAY_UNORDERED_REMOVE_AT(list->root_index, list->length, &list->root_index_count, node->root_dense_index);
+                    node->root_dense_index = 0;
+                } break;
+            }
+        }
     
         // deallocate from siblings.
         if(node->next_sibling > 0 && node->previous_sibling > 0){

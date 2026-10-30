@@ -1266,7 +1266,7 @@ bool gfx_sprite_get_depth_layer(GFX_State* state, GenId sprite_gid, u64* out_dep
         GFX_SpriteManager* sprite_manager = &state->sprite_manager;
         i32 idx = gen_id_allocator_is_gen_id_valid(&sprite_manager->gen_id_allocator, sprite_gid);
         if(!idx){return false;}
-        gfx_sprite_set_active_unsafe(state, idx);
+        gfx_sprite_set_inactive_unsafe(state, idx);
         return true;
     }
 
