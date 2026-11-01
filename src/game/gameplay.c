@@ -329,10 +329,6 @@ typedef struct{
 #define LEVEL_FILE_NATIVE_ENTITY_TOKEN 'N'
 #define LEVEL_FILE_ASSET_ENTITY_TOKEN 'A'
 
-#define BALL_FIZX_SHAPE_MATERIAL (FIZX_Material) {.static_friction = 0.75f, .kinetic_friction = 0.5f, .density = 1.85f, .restitution = 0.45f, .rotational_response = true}
-#define BALL_FIZX_BODY_LINEAR_DRAG 1.1f
-#define BALL_FIZX_BODY_ANGULAR_DRAG 1.35f
-
 #define ENTITY_NAME_LENGTH 32
 #define PLAYER_MOUSE_MAX_DRAW_RADIUS 3.5f
 #define PLAYER_MOUSE_LAUNCH_FORCE 7.0f
@@ -1322,7 +1318,7 @@ GenId entity_spawn_board_turn_text(EntityManager* entity_manager, String name, T
 #define WORLD_CAMERA_COORDINATE_SPACE GFX_CoordinateSpace_Cartesian
 #define WORLD_CAMERA_DEFAULT_NEAR_Z 0.01f
 #define WORLD_CAMERA_DEFAULT_FAR_Z 100.0f
-#define WORLD_CAMERA_DEFAULT_ORTHOGRAPHIC_SIZE 22.0f
+#define WORLD_CAMERA_DEFAULT_ORTHOGRAPHIC_SIZE 44.0f
 #define UI_CAMERA_COORDINATE_SPACE GFX_CoordinateSpace_Rasterised 
 #define UI_CAMERA_DEFAULT_NEAR_Z 0.01f
 #define UI_CAMERA_DEFAULT_FAR_Z 100.0f
@@ -1820,6 +1816,27 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
 }
 
 
+
+///
+/// @ Ball
+///
+
+
+#define BALL_FIZX_BODY_LINEAR_DRAG 1.1f
+#define BALL_FIZX_BODY_ANGULAR_DRAG 1.35f
+#define BALL_FIZX_SHAPE_MATERIAL    \
+                                    \
+    (FIZX_Material) {               \
+        .static_friction = 0.75f,   \
+        .kinetic_friction = 0.5f,   \
+        .density = 1.85f,           \
+        .restitution = 0.45f,       \
+        .rotational_response = true \
+    }
+
+#define BALL_FIZX_SHAPE_RADIUS 0.55f
+
+
 ///
 /// @ BallCue.
 ///
@@ -1848,7 +1865,7 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
                 false
             );
 
-            Circle circle = {.radius = 0.55f};
+            Circle circle = {.radius = BALL_FIZX_SHAPE_RADIUS};
             Transform2D shape_transform = TRANSFORM2D_IDENTITY;
             fizx_circle_rigid_alloc(
                 &entity_manager->fizx_state,
@@ -2163,7 +2180,7 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, String name, Transfo
                 false
             );
             
-            Circle circle = {.radius = 0.55f};    
+            Circle circle = {.radius = BALL_FIZX_SHAPE_RADIUS};    
             Transform2D shape_transform = TRANSFORM2D_IDENTITY;    
             GenId entity_shape_gid = fizx_circle_rigid_alloc(
                 &entity_manager->fizx_state,
@@ -2740,7 +2757,7 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
     );
     
     i32 x = 0;
-    game_state->mouse_state.guideline_physics_shape_gid = fizx_line_collider_alloc(
+    game_state->mouse_state.guideline_physics_shape_gid = fizx_circle_cast_collider_alloc(
         &game_state->entity_manager.fizx_state, 
         game_state->mouse_state.guideline_physics_body_gid, 
         TRANSFORM2D_IDENTITY,
@@ -2749,7 +2766,8 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
         &x,
         (Vector2){0}, 
         (Vector2){0}, 
-        0.0f
+        0.0f,
+        BALL_FIZX_SHAPE_RADIUS
     );
     
     fizx_shape_set_on_enter_callback(&game_state->entity_manager.fizx_state, game_state->mouse_state.guideline_physics_shape_gid, guideline_collider_callback);
@@ -2852,7 +2870,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         { // update fizx draw state.
 
             if(input_is_key_just_pressed(Key_1)){
-                // fizx_draw_state->draw_bvh_branches = !fizx_draw_state->draw_bvh_branches;
+                fizx_draw_state->draw_bvh_branches = !fizx_draw_state->draw_bvh_branches;
             }
             if(input_is_key_just_pressed(Key_2)){
                 // fizx_draw_state->draw_bvh_leaves = !fizx_draw_state->draw_bvh_leaves;
@@ -2861,7 +2879,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                 fizx_draw_state->draw_body_shapes = !fizx_draw_state->draw_body_shapes;
             }
             if(input_is_key_just_pressed(Key_4)){
-                // fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
+                fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
             }
             
             if(input_is_key_just_pressed(Key_Escape)){

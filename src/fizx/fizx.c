@@ -1,3 +1,5 @@
+GFX_State* global_gfx_state;
+
 /*
     TODO: (nich s)
     - add entity type checks to body and shape functions.
@@ -725,7 +727,8 @@ typedef struct{
             FIZX_COLLISION_DETECTION_CONFIG_LINE_TO_LINE                                                                                    \
         ){                                                                                                                                  \
             COLLISION_DETECTION_narrow_phase = fizx_collision_detection_polygon_to_line(                                                    \
-                manifold, entities.global_vertex, entities.user_data, entities.user_data_length, entities.user_data_element_size,           \
+                manifold, entities.global_vertex, entities.global_radius, entities.global_radius_length, entities.user_data,                \
+                entities.user_data_length, entities.user_data_element_size,                                                                 \
                 COLLISION_DETECTION_owner_bvh_idx, COLLISION_DETECTION_other_bvh_idx, &COLLISION_DETECTION_idx_pair                         \
             );                                                                                                                              \
         }                                                                                                                                   \
@@ -741,7 +744,7 @@ typedef struct{
             continue;                                                                                                                       \
         }                                                                                                                                   \
                                                                                                                                             \
-        if(FIZX_COLLISION_DETECTION_CONFIG_FLIP_COLLISION_OWNER){                                                                          \
+        if(FIZX_COLLISION_DETECTION_CONFIG_FLIP_COLLISION_OWNER){                                                                           \
             i32 temp = COLLISION_DETECTION_idx_pair.a_to_b;                                                                                 \
             COLLISION_DETECTION_idx_pair.a_to_b = COLLISION_DETECTION_idx_pair.b_to_a;                                                      \
             COLLISION_DETECTION_idx_pair.b_to_a = temp;                                                                                     \
@@ -2974,9 +2977,6 @@ GenId fizx_shape_init(
             BOUNDS_CHECK(shape_idx, state->entities.base_radius_length);
             state->entities.base_radius[shape_idx] = base_radius;
             BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
-            f32 global_radius = MAX(state->entities.global_transform.scale.x[shape_idx], state->entities.global_transform.scale.y[shape_idx]) * base_radius;
-            BOUNDS_CHECK(shape_idx, state->entities.global_radius_length);
-            state->entities.global_radius[shape_idx] = global_radius;
         }
         else if(vert_length >= FIZX_SHAPE_POLYGON_VERTICES_LENGTH){
             BOUNDS_CHECK(shape_idx, state->entities.base_height_length);
@@ -3000,6 +3000,11 @@ GenId fizx_shape_init(
             BOUNDS_CHECK(shape_idx, state->entities.inverse_rotational_inertia_length);
             state->entities.inverse_rotational_inertia[shape_idx] = inertia == 0.0f ? 0.0f : 1.0f / inertia;
         }
+        
+        // radius is ambiguous between the two because a lin segement could have a radius, making it a circle cast.   
+        f32 global_radius = MAX(state->entities.global_transform.scale.x[shape_idx], state->entities.global_transform.scale.y[shape_idx]) * base_radius;
+        BOUNDS_CHECK(shape_idx, state->entities.global_radius_length);
+        state->entities.global_radius[shape_idx] = global_radius;
     }
 
     if(is_rigid){
@@ -3111,6 +3116,37 @@ GenId fizx_line_rigid_alloc(
         0.0f, 0.0f, material
     );
 }
+
+GenId fizx_circle_cast_collider_alloc(
+    FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, 
+    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, 
+    Vector2 local_origin, Vector2 direction, f32 length, f32 radius
+){
+    direction = vector2_normalise(direction);
+    f32* verts_x = (f32[2]){local_origin.x, local_origin.x + (direction.x * length)};
+    f32* verts_y = (f32[2]){local_origin.y, local_origin.y + (direction.y * length)};
+    return fizx_shape_init(
+        state, body_gid, local_transform, behaviour, collision_callback_behaviour,
+        user_data, verts_x, verts_y, FIZX_SHAPE_LINE_VERTICES_LENGTH, radius,
+        0.0f, 0.0f, (FIZX_Material){0}
+    );
+}
+
+GenId fizx_circle_cast_rigid_alloc(
+    FIZX_State* state, GenId body_gid, Transform2D local_transform, FIZX_ShapeBehaviour behaviour, 
+    FIZX_CollisionCallbackBehaviour collision_callback_behaviour, void* user_data, 
+    Vector2 local_origin, Vector2 direction, f32 length, f32 radius, FIZX_Material material
+){
+    direction = vector2_normalise(direction);
+    f32* verts_x = (f32[2]){local_origin.x, local_origin.x + (direction.x * length)};
+    f32* verts_y = (f32[2]){local_origin.y, local_origin.y + (direction.y * length)};
+    return fizx_shape_init(
+        state, body_gid, local_transform, behaviour, collision_callback_behaviour,
+        user_data, verts_x, verts_y, FIZX_SHAPE_LINE_VERTICES_LENGTH, radius,
+        0.0f, 0.0f, material
+    );
+}
+
 
 ///
 /// extension functions: BvhCategorisedLeafOverlaps.
@@ -3257,6 +3293,7 @@ bool fizx_collision_detection_polygon_to_polygon(
 
 bool fizx_collision_detection_polygon_to_line(
     FIZX_CollisionManifold* manifold, FsSoa_Vector2 vertices,
+    f32* radius, i32 radius_length,
     char* user_data, i32 user_data_length, size_t user_data_element_size,
     i32 poly_idx, i32 line_idx,
     FIZX_IndexPair* out_idx_pair
@@ -3280,81 +3317,132 @@ bool fizx_collision_detection_polygon_to_line(
     i32 line_vert_length;
     fizx_shape_get_vertices_unsafe(vertices, poly_idx, &poly_vert_x, &poly_vert_y, &poly_vert_length);
     fizx_shape_get_vertices_unsafe(vertices, line_idx, &line_vert_x, &line_vert_y, &line_vert_length);
+    ASSERT(line_vert_length == 2, "line vertex length is not two!");
+    f32 line_start_x    = line_vert_x[0];
+    f32 line_end_x      = line_vert_x[1];
+    f32 line_start_y    = line_vert_y[0];
+    f32 line_end_y      = line_vert_y[1];
 
     // narrow phase.
-    ASSERT(line_vert_length == 2, "line vertex length is not two!");
     f32 contact_point_1_x   = 0.0f;
     f32 contact_point_1_y   = 0.0f;
     f32 contact_point_2_x   = 0.0f;
     f32 contact_point_2_y   = 0.0f;
-    f32 depth               = 0.0f;
-    f32 normal_x            = 0.0f;
-    f32 normal_y            = 0.0f;
-    bool has_first_contact_point;
-    bool has_second_contact_point;
-    bool overlaps = line_segment_overlaps_polygon(
-        line_vert_x[0], line_vert_y[0],
-        line_vert_x[1], line_vert_y[1],
+    f32 depth_1             = 0.0f;
+    f32 depth_2             = 0.0f;
+    f32 normal_1_x          = 0.0f;
+    f32 normal_1_y          = 0.0f;
+    f32 normal_2_x          = 0.0f;
+    f32 normal_2_y          = 0.0f;
+    i32 contact_point_count = 0;
+
+    bool overlaps = line_segment_overlaps_polygon_new(
+        line_vert_x, line_vert_y,
         poly_vert_x, poly_vert_y, poly_vert_length,
-        F32_EPSILON,
         &contact_point_1_x, &contact_point_1_y,
         &contact_point_2_x, &contact_point_2_y,
-        &has_first_contact_point, &has_second_contact_point,
-        &normal_x, &normal_y,
-        &depth
+        &normal_1_x, &normal_1_y,
+        &normal_2_x, &normal_2_y,
+        &depth_1,
+        &depth_2,
+        &contact_point_count
     );
-
-    if(overlaps){
-
-        if(!has_first_contact_point){
-            if(!has_second_contact_point){
-                // the line is submerged fully into the polygon's area, this is treated
-                // as "no collision", as the system only cares whether the shape is colliding
-                // with another shapes edges.
-                return false;            
-            }    
-            else{
-                *out_idx_pair = collision_manifold_set_data_two_way(
-                    manifold,
-                    line_idx,       poly_idx,
-                    line_user_data, poly_user_data,
-                    normal_x, normal_y,
-                    contact_point_2_x, contact_point_2_y,
-                    0.0f, 0.0f,
-                    depth,
-                    false
-                );
-            }
-        }
-        else{
-            if(!has_second_contact_point){
-                *out_idx_pair = collision_manifold_set_data_two_way(
-                    manifold,
-                    line_idx,       poly_idx,
-                    line_user_data, poly_user_data,
-                    normal_x, normal_y,
-                    contact_point_1_x, contact_point_1_y,
-                    0.0f, 0.0f,
-                    depth,
-                    false
-                );
-            }
-            else{
-                *out_idx_pair = collision_manifold_set_data_two_way(
-                    manifold,
-                    line_idx,       poly_idx,
-                    line_user_data, poly_user_data,
-                    normal_x, normal_y,
-                    contact_point_1_x, contact_point_1_y,
-                    contact_point_2_x, contact_point_2_y,
-                    depth,
-                    true
-                );
-            }
-        }
-        return true;
+    
+    if(!overlaps){
+        return false;
     }
-    return false;
+    
+    ASSERT(contact_point_count > 0, "unexpected contact point count");
+
+    *out_idx_pair = collision_manifold_set_data_two_way(
+        manifold,
+        line_idx,       poly_idx,
+        line_user_data, poly_user_data,
+        normal_1_x, normal_1_y,
+        contact_point_1_x, contact_point_1_y,
+        contact_point_2_x, contact_point_2_y,
+        depth_1,
+        contact_point_count > 1
+    );
+        
+    Rectangle enter = {.x = contact_point_1_x, .y = contact_point_1_y, .width = 0.25f, .height = 0.25f};
+    gfx_draw_fill_rect(global_gfx_state, enter, GFX_COLOUR_YELLOW, GFX_SpriteOrigin_Center, 2, 0, 1);
+
+    if(contact_point_count > 1){
+        Rectangle exit = {.x = contact_point_2_x, .y = contact_point_2_y, .width = 0.25f, .height = 0.25f};
+        gfx_draw_fill_rect(global_gfx_state, exit, GFX_COLOUR_ORANGE, GFX_SpriteOrigin_Center, 2, 0, 1);
+    }
+    // gfx_draw_fill_rect(GFX_State* state, Rectangle shape, GFX_Colour colour, GFX_SpriteOrigin origin, u32 layer, u32 depth, i32 material){
+
+    
+    return true;
+
+    // bool has_first_contact_point;
+    // bool has_second_contact_point;
+    // bool overlaps = line_segment_overlaps_polygon(
+    //     line_vert_x[0], line_vert_y[0],
+    //     line_vert_x[1], line_vert_y[1],
+    //     poly_vert_x, poly_vert_y, poly_vert_length,
+    //     F32_EPSILON,
+    //     &contact_point_1_x, &contact_point_1_y,
+    //     &contact_point_2_x, &contact_point_2_y,
+    //     &has_first_contact_point, &has_second_contact_point,
+    //     &normal_x, &normal_y,
+    //     &depth
+    // );
+
+    // if(overlaps){
+
+    //     if(!has_first_contact_point){
+    //         if(!has_second_contact_point){
+    //             // the line is submerged fully into the polygon's area, this is treated
+    //             // as "no collision", as the system only cares whether the shape is colliding
+    //             // with another shapes edges.
+    //             return false;            
+    //         }    
+    //         else{
+    //             *out_idx_pair = collision_manifold_set_data_two_way(
+    //                 manifold,
+    //                 line_idx,       poly_idx,
+    //                 line_user_data, poly_user_data,
+    //                 normal_x, normal_y,
+    //                 contact_point_2_x, contact_point_2_y,
+    //                 0.0f, 0.0f,
+    //                 depth,
+    //                 false
+    //             );
+    //         }
+    //     }
+    //     else{
+    //         if(!has_second_contact_point){
+    //             *out_idx_pair = collision_manifold_set_data_two_way(
+    //                 manifold,
+    //                 line_idx,       poly_idx,
+    //                 line_user_data, poly_user_data,
+    //                 normal_x, normal_y,
+    //                 contact_point_1_x, contact_point_1_y,
+    //                 0.0f, 0.0f,
+    //                 depth,
+    //                 false
+    //             );
+    //         }
+    //         else{
+    //             *out_idx_pair = collision_manifold_set_data_two_way(
+    //                 manifold,
+    //                 line_idx,       poly_idx,
+    //                 line_user_data, poly_user_data,
+    //                 normal_x, normal_y,
+    //                 contact_point_1_x, contact_point_1_y,
+    //                 contact_point_2_x, contact_point_2_y,
+    //                 depth,
+    //                 true
+    //             );
+    //         }
+    //     }
+    //     return true;
+    // }
+    // return false;
+    
 }
 
 
@@ -3382,6 +3470,11 @@ bool fizx_collision_detection_circle_to_line(
     fizx_shape_get_vertices_unsafe(vertices, line_idx, &line_vert_x, &line_vert_y, &line_vert_length);
     ASSERT(line_vert_length == FIZX_SHAPE_LINE_VERTICES_LENGTH, "line vertex array is not the expected length");
 
+    f32 line_start_x = line_vert_x[0];
+    f32 line_end_x = line_vert_x[1];    
+    f32 line_start_y = line_vert_y[0];
+    f32 line_end_y = line_vert_y[1];
+
     // get circle centroid.
     BOUNDS_CHECK(circ_idx, centroids.length);
     f32 circ_cen_x = centroids.x[circ_idx];
@@ -3390,81 +3483,138 @@ bool fizx_collision_detection_circle_to_line(
     // get circle radius.
     BOUNDS_CHECK(circ_idx, radius_length);
     f32 circ_radius = radius[circ_idx];
+    
+    BOUNDS_CHECK(line_idx, radius_length);
+    f32 line_radius = radius[line_idx];
 
     // narrow phase.
-    ASSERT(line_vert_length == 2, "line vertex length is not two!");
-    f32 contact_point_1_x   = 0.0f;
-    f32 contact_point_1_y   = 0.0f;
-    f32 contact_point_2_x   = 0.0f;
-    f32 contact_point_2_y   = 0.0f;
-    f32 depth               = 0.0f;
-    f32 normal_x            = 0.0f;
-    f32 normal_y            = 0.0f;
-    bool has_first_contact_point;
-    bool has_second_contact_point;
-    bool overlaps = line_segment_overlaps_circle(
-        line_vert_x[0], line_vert_y[0],
-        line_vert_x[1], line_vert_y[1],
-        circ_cen_x, circ_cen_y, circ_radius,
-        F32_EPSILON,
-        &contact_point_1_x, &contact_point_1_y,
-        &contact_point_2_x, &contact_point_2_y,
-        &has_first_contact_point, &has_second_contact_point,
-        &normal_x, &normal_y,
-        &depth
-    );
-
-    if(overlaps){
-
-        if(!has_first_contact_point){
-            if(!has_second_contact_point){
-                // the line is submerged fully into the circle's area, this is treated
-                // as "no collision", as the system only cares whether the shape is colliding
-                // with another shapes edges.
-                return false;
+    if(line_radius <= 0.0f){
+        f32 contact_point_1_x   = 0.0f;
+        f32 contact_point_1_y   = 0.0f;
+        f32 contact_point_2_x   = 0.0f;
+        f32 contact_point_2_y   = 0.0f;
+        f32 depth               = 0.0f;
+        f32 normal_x            = 0.0f;
+        f32 normal_y            = 0.0f;
+        bool has_first_contact_point;
+        bool has_second_contact_point;
+        bool overlaps = line_segment_overlaps_circle(
+            line_start_x, line_start_y,
+            line_end_x, line_end_y,
+            circ_cen_x, circ_cen_y, circ_radius,
+            F32_EPSILON,
+            &contact_point_1_x, &contact_point_1_y,
+            &contact_point_2_x, &contact_point_2_y,
+            &has_first_contact_point, &has_second_contact_point,
+            &normal_x, &normal_y,
+            &depth
+        );
+    
+        if(overlaps){
+    
+            if(!has_first_contact_point){
+                if(!has_second_contact_point){
+                    // the line is submerged fully into the circle's area, this is treated
+                    // as "no collision", as the system only cares whether the shape is colliding
+                    // with another shapes edges.
+                    return false;
+                }
+                else{
+                    *out_idx_pair = collision_manifold_set_data_two_way(
+                        manifold,
+                        line_idx,       circ_idx,
+                        line_user_data, circ_user_data,
+                        normal_x, normal_y,
+                        contact_point_2_x, contact_point_2_y,
+                        0.0f, 0.0f,
+                        depth,
+                        false
+                    );
+                }
             }
             else{
-                *out_idx_pair = collision_manifold_set_data_two_way(
-                    manifold,
-                    line_idx,       circ_idx,
-                    line_user_data, circ_user_data,
-                    normal_x, normal_y,
-                    contact_point_2_x, contact_point_2_y,
-                    0.0f, 0.0f,
-                    depth,
-                    false
-                );
+                if(!has_second_contact_point){
+                    *out_idx_pair = collision_manifold_set_data_two_way(
+                        manifold,
+                        line_idx,       circ_idx,
+                        line_user_data, circ_user_data,
+                        normal_x, normal_y,
+                        contact_point_1_x, contact_point_1_y,
+                        0.0f, 0.0f,
+                        depth,
+                        false
+                    );
+                }
+                else{
+                    *out_idx_pair = collision_manifold_set_data_two_way(
+                        manifold,
+                        line_idx,       circ_idx,
+                        line_user_data, circ_user_data,
+                        normal_x, normal_y,
+                        contact_point_1_x, contact_point_1_y,
+                        contact_point_2_x, contact_point_2_y,
+                        depth,
+                        true
+                    );
+                }
             }
+            return true;
         }
-        else{
-            if(!has_second_contact_point){
-                *out_idx_pair = collision_manifold_set_data_two_way(
-                    manifold,
-                    line_idx,       circ_idx,
-                    line_user_data, circ_user_data,
-                    normal_x, normal_y,
-                    contact_point_1_x, contact_point_1_y,
-                    0.0f, 0.0f,
-                    depth,
-                    false
-                );
-            }
-            else{
-                *out_idx_pair = collision_manifold_set_data_two_way(
-                    manifold,
-                    line_idx,       circ_idx,
-                    line_user_data, circ_user_data,
-                    normal_x, normal_y,
-                    contact_point_1_x, contact_point_1_y,
-                    contact_point_2_x, contact_point_2_y,
-                    depth,
-                    true
-                );
-            }
+        return false;
+    }
+    else{
+        
+        f32 normal_x;
+        f32 normal_y;
+        f32 depth;
+        f32 point_x;
+        f32 point_y;
+                
+        bool overlaps = circle_cast_overlaps_circle(
+            line_start_x, line_start_y,
+            line_end_x, line_end_y,
+            line_radius,
+            circ_cen_x, circ_cen_y,
+            circ_radius,
+            &normal_x, &normal_y, &depth,
+            &point_x, &point_y
+        );
+            
+        if(!overlaps){
+            return false;
         }
+            
+        f32 dir_x = line_end_x - line_start_x;
+        f32 dir_y = line_end_y - line_start_y;    
+        vector2_normalise_scalar(dir_x, dir_y, &dir_x, &dir_y);
+        dir_x *= circ_radius;
+        dir_y *= circ_radius;
+        
+        point_x -= dir_x;
+        point_y -= dir_y;
+        
+        f32 contact_point_x;
+        f32 contact_point_y;
+        
+        circle_calc_contact_points_scalar(
+            circ_cen_x, circ_cen_y, circ_radius, 
+            point_x, point_y, 
+            &contact_point_x, &contact_point_y
+        );
+        
+        *out_idx_pair = collision_manifold_set_data_two_way(
+            manifold,
+            line_idx,       circ_idx,
+            line_user_data, circ_user_data,
+            normal_x, normal_y,
+            contact_point_x, contact_point_y,
+            0.0f, 0.0f,
+            depth,
+            false
+        );
+        
         return true;
     }
-    return false;
 }
 
 /**

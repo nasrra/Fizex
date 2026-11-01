@@ -24,7 +24,6 @@
 /// @ functions
 ///
 
-
 void app_main(){
 
     /**
@@ -51,6 +50,7 @@ void app_main(){
 
     WindowContext* window_ctx = os_window_create(WINDOW_WIDTH, WINDOW_HEIGHT);
     GFX_State gfx_state = {0};
+    global_gfx_state = &gfx_state;  
     { // init gfx
 
         // font textures.
