@@ -311,14 +311,14 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
             gfx_draw_wire_circle(gfx, owner_location_gizmo, GFX_COLOUR_PINK, info.sprite_layer, info.sprite_depth, info.material_idx);
 
             // get normal data.
-            BOUNDS_CHECK(collision_idx, state.collision_manifold.normal.length);
-            normal_x = state.collision_manifold.normal.x[collision_idx];
-            normal_y = state.collision_manifold.normal.y[collision_idx];
+            BOUNDS_CHECK(collision_idx, state.collision_manifold.normal_1.length);
+            normal_x = state.collision_manifold.normal_1.x[collision_idx];
+            normal_y = state.collision_manifold.normal_1.y[collision_idx];
 
             // get contact point 1 data.
-                BOUNDS_CHECK(collision_idx, state.collision_manifold.first_contact_point.length);
-            contact_point_x = state.collision_manifold.first_contact_point.x[collision_idx];
-            contact_point_y = state.collision_manifold.first_contact_point.y[collision_idx];
+            BOUNDS_CHECK(collision_idx, state.collision_manifold.contact_point_1.length);
+            contact_point_x = state.collision_manifold.contact_point_1.x[collision_idx];
+            contact_point_y = state.collision_manifold.contact_point_1.y[collision_idx];
 
             // draw contact point.
             shape.x = contact_point_x;
@@ -334,12 +334,19 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
             gfx_draw_line(gfx, info.colour_collision_normal, normal_start, normal_end, info.sprite_layer, info.sprite_depth, info.material_idx, gfx->draw_wireframe_thickness);
 
             // draw second contact point if there is one.
-            BOUNDS_CHECK(collision_idx, state.collision_manifold.two_contact_points_length);
-            if(state.collision_manifold.two_contact_points[collision_idx]){
-            // get contact point 1 data.
-                BOUNDS_CHECK(collision_idx, state.collision_manifold.second_contact_point.length);
-                contact_point_x = state.collision_manifold.second_contact_point.x[collision_idx];
-                contact_point_y = state.collision_manifold.second_contact_point.y[collision_idx];
+            BOUNDS_CHECK(collision_idx, state.collision_manifold.contact_point_count_length);
+            i32 contact_point_count = state.collision_manifold.contact_point_count[collision_idx];
+            ASSERT(contact_point_count > 0 && contact_point_count <= 2, "unexpected contact point count.");
+            
+            if(contact_point_count == 2){
+                // get contact point 1 data.
+                BOUNDS_CHECK(collision_idx, state.collision_manifold.contact_point_2.length);
+                contact_point_x = state.collision_manifold.contact_point_2.x[collision_idx];
+                contact_point_y = state.collision_manifold.contact_point_2.y[collision_idx];
+
+                BOUNDS_CHECK(collision_idx, state.collision_manifold.normal_2.length);
+                normal_x = state.collision_manifold.normal_2.x[collision_idx];
+                normal_y = state.collision_manifold.normal_2.y[collision_idx];
 
                 // draw contact point.
                 shape.x = contact_point_x;

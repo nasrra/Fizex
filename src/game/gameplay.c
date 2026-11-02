@@ -1318,7 +1318,7 @@ GenId entity_spawn_board_turn_text(EntityManager* entity_manager, String name, T
 #define WORLD_CAMERA_COORDINATE_SPACE GFX_CoordinateSpace_Cartesian
 #define WORLD_CAMERA_DEFAULT_NEAR_Z 0.01f
 #define WORLD_CAMERA_DEFAULT_FAR_Z 100.0f
-#define WORLD_CAMERA_DEFAULT_ORTHOGRAPHIC_SIZE 44.0f
+#define WORLD_CAMERA_DEFAULT_ORTHOGRAPHIC_SIZE 22.0f
 #define UI_CAMERA_COORDINATE_SPACE GFX_CoordinateSpace_Rasterised 
 #define UI_CAMERA_DEFAULT_NEAR_Z 0.01f
 #define UI_CAMERA_DEFAULT_FAR_Z 100.0f
@@ -1720,7 +1720,15 @@ void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_d
         return;
     }
 
-    if(info.depth >= 0.85f){
+    f32 depth;
+    if(info.two_contact_points){
+        depth = MAX(info.depth_1, info.depth_2);
+    }
+    else{
+        depth = info.depth_1;
+    }
+
+    if(depth >= 0.85f){
         Entity* entity;
         if(!entity_manager_get_entity(ctx->game_state->entity_manager, source_entity_gid, &entity)){
             return;
@@ -2281,7 +2289,12 @@ void boost_pad_on_sustain_collision_callback(FIZX_CollisionInfo info, void* user
         return;
     }
     
-    if(info.depth <= 0.334f){
+    f32 depth = info.two_contact_points
+    ? MAX(info.depth_1, info.depth_2)
+    : info.depth_1
+    ;
+    
+    if(depth <= 0.334f){
         return;
     }
     
@@ -2704,8 +2717,8 @@ GenId level_manager_load_level_file(
 
 void guideline_collider_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    ctx->game_state->mouse_state.guideline_end_point = (Vector2){info.first_contact_point_x, info.first_contact_point_y};
-    Vector2 end = {info.first_contact_point_x + info.normal_x, info.first_contact_point_y + info.normal_y};
+    ctx->game_state->mouse_state.guideline_end_point = (Vector2){info.contact_point_1.x, info.contact_point_1.y};
+    Vector2 end = {info.contact_point_1.x + info.normal_1.x, info.contact_point_1.y + info.normal_1.y};
 }
 
 void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena* transient, GFX_State* gfx_state){

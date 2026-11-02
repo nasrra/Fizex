@@ -24,13 +24,12 @@ typedef enum{
 
 typedef struct{
 
-    f32 normal_x;
-    f32 normal_y;
-    f32 first_contact_point_x;
-    f32 first_contact_point_y;
-    f32 second_contact_point_x;
-    f32 second_contact_point_y;
-    f32 depth;
+    Vector2 contact_point_1;
+    Vector2 contact_point_2;
+    Vector2 normal_1;
+    Vector2 normal_2;
+    f32 depth_1;
+    f32 depth_2;
 
     i32 source_layer;
     // this is the entity index of the `source` in the fizx state.
@@ -476,29 +475,25 @@ typedef struct{
 } FIZX_Soa_Entity;
 
 typedef struct{
+    // The first contact point.
+    Soa_Vector2 contact_point_1;
+    // The second contact point.
+    Soa_Vector2 contact_point_2;
+    // the normal of the first contact point collision.
+    Soa_Vector2 normal_2;
+    // the normal of the second contact point collision.
+    Soa_Vector2 normal_1;
+    // the depth of the first contact point collision.
+    f32* depth_1;
+    i32 depth_1_length;
+    // the depth of the second contact point collision.
+    f32* depth_2;
+    i32 depth_2_length;    
+    // the amount of contact points for a collision.
+    // i.e, 1 or 2, never any other value (when collision entry is active).
+    i32* contact_point_count;
+    i32 contact_point_count_length;
     /**
-        The normal vector of a collision.
-    **/
-    Soa_Vector2 normal;
-    /**
-        The first contact poi32 of all collisions.
-    **/
-    Soa_Vector2 first_contact_point;
-    /**
-        The second contact poi32 of all collisions.
-    **/
-    Soa_Vector2 second_contact_point;
-    /**
-        The depth of the collisions.
-    **/
-    f32* depth;
-    i32 depth_length;
-    /**
-        Whether or not a collision has a second contact point.
-    **/
-    bool* two_contact_points;
-    i32 two_contact_points_length;
-    /**2
         The indices of `active` collision elements separated by `chunk` in the current step.
 
         `remarks`
@@ -934,10 +929,39 @@ inline void fizx_resolve_rigid_collisions(
     bool other_shape_is_kinematic
 ){
     i32 contact_points_count = 0;
-    f32 inverse_normal_x = 0;
-    f32 inverse_normal_y = 0;
 
     for(i32 i = 0; i < collision_to_resolve_length; i++){
+
+        /**
+            zero scratch-space
+
+            these have to be set to zero.
+            this function resuses these stack allocated System.Spans
+            so without this, the loop could operate on garbage data from the previous step.
+        **/
+        {
+            size_t scratch_space_size = sizeof(f32) * FIZX_COLLISION_MAX_CONTACT_POINTS;
+            ZERO_MEMORY(impulses_x_scratch_space, scratch_space_size);
+            ZERO_MEMORY(impulses_y_scratch_space, scratch_space_size);
+
+            ZERO_MEMORY(impulse_magnitude_scratch_space, scratch_space_size);
+
+            ZERO_MEMORY(contact_points_x_scratch_space, scratch_space_size);
+            ZERO_MEMORY(contact_points_y_scratch_space, scratch_space_size);
+
+            ZERO_MEMORY(owner_distance_x_scratch_space, scratch_space_size);
+            ZERO_MEMORY(owner_distance_y_scratch_space, scratch_space_size);
+
+            ZERO_MEMORY(other_distance_x_scratch_space, scratch_space_size);
+            ZERO_MEMORY(other_distance_y_scratch_space, scratch_space_size);
+
+            ZERO_MEMORY(owner_perpendicular_x_scratch_space, scratch_space_size);
+            ZERO_MEMORY(owner_perpendicular_y_scratch_space, scratch_space_size);
+
+            ZERO_MEMORY(other_perpendicular_x_scratch_space, scratch_space_size);
+            ZERO_MEMORY(other_perpendicular_y_scratch_space, scratch_space_size);
+        }
+
         i32 collision_idx = collision_to_resolve[i];
         i32 owner_shape_idx = collision_idx / manifold.collider_stride;
         i32 other_shape_idx = collision_idx % manifold.collider_stride;
@@ -956,10 +980,6 @@ inline void fizx_resolve_rigid_collisions(
         i32 owner_body_idx = body_hierarchy.node[owner_shape_idx].parent;
         BOUNDS_CHECK(other_shape_idx, body_hierarchy.length);
         i32 other_body_idx = body_hierarchy.node[other_shape_idx].parent;
-
-        BOUNDS_CHECK(collision_idx, manifold.normal.length);
-        f32 normal_x = manifold.normal.x[collision_idx];
-        f32 normal_y = manifold.normal.y[collision_idx];
 
         BOUNDS_CHECK(owner_body_idx, entity.global_transform.length);
         BOUNDS_CHECK(owner_body_idx, entity.local_center_of_mass.length);
@@ -1008,59 +1028,38 @@ inline void fizx_resolve_rigid_collisions(
         f32 owner_mass = entity.mass[owner_body_idx];
         f32 other_mass = entity.mass[other_body_idx];
 
-        inverse_normal_x = normal_x * -1.0f;
-        inverse_normal_y = normal_y * -1.0f;
-
         if(other_shape_is_kinematic){
             other_inverse_mass = 0.0f;
             other_inverse_rotational_inertia = 0.0f;
         }
 
-        /**
-            zero scratch-space
+        f32 inverse_normal_x[2] = {0};
+        f32 inverse_normal_y[2] = {0};
 
-            these have to be set to zero.
-            this function resuses these stack allocated System.Spans
-            so without this, the loop could operate on garbage data from the previous step.
-        **/
-        {
-            size_t scratch_space_size = sizeof(f32) * FIZX_COLLISION_MAX_CONTACT_POINTS;
-            ZERO_MEMORY(impulses_x_scratch_space, scratch_space_size);
-            ZERO_MEMORY(impulses_y_scratch_space, scratch_space_size);
+        BOUNDS_CHECK(collision_idx, manifold.contact_point_count_length);
+        i32 contact_point_count = manifold.contact_point_count[collision_idx];
+        ASSERT(contact_point_count > 0 && contact_point_count <= 2, "unexpected contact point count.");
+        
+        { // retrieve_collision_information();
 
-            ZERO_MEMORY(impulse_magnitude_scratch_space, scratch_space_size);
-
-            ZERO_MEMORY(contact_points_x_scratch_space, scratch_space_size);
-            ZERO_MEMORY(contact_points_y_scratch_space, scratch_space_size);
-
-            ZERO_MEMORY(owner_distance_x_scratch_space, scratch_space_size);
-            ZERO_MEMORY(owner_distance_y_scratch_space, scratch_space_size);
-
-            ZERO_MEMORY(other_distance_x_scratch_space, scratch_space_size);
-            ZERO_MEMORY(other_distance_y_scratch_space, scratch_space_size);
-
-            ZERO_MEMORY(owner_perpendicular_x_scratch_space, scratch_space_size);
-            ZERO_MEMORY(owner_perpendicular_y_scratch_space, scratch_space_size);
-
-            ZERO_MEMORY(other_perpendicular_x_scratch_space, scratch_space_size);
-            ZERO_MEMORY(other_perpendicular_y_scratch_space, scratch_space_size);
-        }
-
-        BOUNDS_CHECK(collision_idx, manifold.two_contact_points_length);
-        if(manifold.two_contact_points[collision_idx]){
-            BOUNDS_CHECK(collision_idx, manifold.first_contact_point.length);
-            BOUNDS_CHECK(collision_idx, manifold.second_contact_point.length);
-            contact_points_count = 2;
-            contact_points_x_scratch_space[0] = manifold.first_contact_point.x[collision_idx];
-            contact_points_x_scratch_space[1] = manifold.second_contact_point.x[collision_idx];
-            contact_points_y_scratch_space[0] = manifold.first_contact_point.y[collision_idx];
-            contact_points_y_scratch_space[1] = manifold.second_contact_point.y[collision_idx];
-        }
-        else{
-            BOUNDS_CHECK(collision_idx, manifold.first_contact_point.length);
-            contact_points_count = 1;
-            contact_points_x_scratch_space[0] = manifold.first_contact_point.x[collision_idx];
-            contact_points_y_scratch_space[0] = manifold.first_contact_point.y[collision_idx];
+            BOUNDS_CHECK(collision_idx, manifold.contact_point_1.length);
+            contact_points_x_scratch_space[0] = manifold.contact_point_1.x[collision_idx];
+            contact_points_y_scratch_space[0] = manifold.contact_point_1.y[collision_idx];
+            
+            BOUNDS_CHECK(collision_idx, manifold.normal_1.length);
+            inverse_normal_x[0] = manifold.normal_1.x[collision_idx] * -1.0f;
+            inverse_normal_y[0] = manifold.normal_1.y[collision_idx] * -1.0f;            
+            
+            if(contact_point_count == 2){
+                
+                BOUNDS_CHECK(collision_idx, manifold.contact_point_2.length);
+                contact_points_x_scratch_space[1] = manifold.contact_point_2.x[collision_idx];
+                contact_points_y_scratch_space[1] = manifold.contact_point_2.y[collision_idx];
+                
+                BOUNDS_CHECK(collision_idx, manifold.normal_2.length);
+                inverse_normal_x[1] = manifold.normal_2.x[collision_idx] * -1.0f;
+                inverse_normal_y[1] = manifold.normal_2.y[collision_idx] * -1.0f;
+            }
         }
 
         // resolve_rigid_collision_rotational();
@@ -1069,7 +1068,7 @@ inline void fizx_resolve_rigid_collisions(
             // note: this is okay as it is assumed that restitution is between 0 and 1.
             f32 restitution = (owner_restitution + other_restitution) * 0.5f;
 
-            for(i32 j = 0; j < contact_points_count; j++){
+            for(i32 j = 0; j < contact_point_count; j++){
                 f32 contact_point_x = contact_points_x_scratch_space[j];
                 f32 contact_point_y = contact_points_y_scratch_space[j];
 
@@ -1092,7 +1091,7 @@ inline void fizx_resolve_rigid_collisions(
                 f32 relative_velocity_x = (*other_linear_velocity_x + other_angular_velocity_x) - (*owner_linear_velocity_x + owner_angular_velocity_x);
                 f32 relative_velocity_y = (*other_linear_velocity_y + other_angular_velocity_y) - (*owner_linear_velocity_y + owner_angular_velocity_y);
 
-                f32 magnitude = vector2_dot_scalar(relative_velocity_x, relative_velocity_y, inverse_normal_x, inverse_normal_y);
+                f32 magnitude = vector2_dot_scalar(relative_velocity_x, relative_velocity_y, inverse_normal_x[j], inverse_normal_y[j]);
 
                 /**
                     this stops the edge-case when two bodies that are brushing up against one another begin rotating despite little to no forces being applied.
@@ -1103,8 +1102,8 @@ inline void fizx_resolve_rigid_collisions(
                 }
 
                 // calc the denominator.
-                f32 owner_perpendicular_dot_normal = vector2_dot_scalar(owner_perpendicular_x, owner_perpendicular_y, inverse_normal_x, inverse_normal_y);
-                f32 other_perpendicular_dot_normal = vector2_dot_scalar(other_perpendicular_x, other_perpendicular_y, inverse_normal_x, inverse_normal_y);
+                f32 owner_perpendicular_dot_normal = vector2_dot_scalar(owner_perpendicular_x, owner_perpendicular_y, inverse_normal_x[j], inverse_normal_y[j]);
+                f32 other_perpendicular_dot_normal = vector2_dot_scalar(other_perpendicular_x, other_perpendicular_y, inverse_normal_x[j], inverse_normal_y[j]);
                 f32 owner_perpendicular_dot_normal_sqrd = owner_perpendicular_dot_normal * owner_perpendicular_dot_normal;
                 f32 other_perpendicular_dot_normal_sqrd = other_perpendicular_dot_normal * other_perpendicular_dot_normal;
                 f32 denominator = owner_inverse_mass + other_inverse_mass +
@@ -1119,12 +1118,12 @@ inline void fizx_resolve_rigid_collisions(
                     divide by the contact point count to ensure that impulse is evenly spread
                     across all contact points.
                 **/
-                impulse_magnitude /= (float)contact_points_count;
+                impulse_magnitude /= (float)contact_point_count;
 
                 // chache the impulse magnitude for later friction resolution.
                 impulse_magnitude_scratch_space[j] = impulse_magnitude;
-                impulses_x_scratch_space[j] = impulse_magnitude * inverse_normal_x;
-                impulses_y_scratch_space[j] = impulse_magnitude * inverse_normal_y;
+                impulses_x_scratch_space[j] = impulse_magnitude * inverse_normal_x[j];
+                impulses_y_scratch_space[j] = impulse_magnitude * inverse_normal_y[j];
             }
 
             f32 impulse_x;
@@ -1134,7 +1133,7 @@ inline void fizx_resolve_rigid_collisions(
             f32 other_distance_x;
             f32 other_distance_y;
 
-            for(i32 j = 0; j < contact_points_count; j++){
+            for(i32 j = 0; j < contact_point_count; j++){
 
                 impulse_x = impulses_x_scratch_space[j];
                 impulse_y = impulses_y_scratch_space[j];
@@ -1176,10 +1175,10 @@ inline void fizx_resolve_rigid_collisions(
 
         // resolve_rigid_collision_basic();
         else{
-            for(i32 j = 0; j < contact_points_count; j++){
+            for(i32 j = 0; j < contact_point_count; j++){
                 f32 relative_velocity_x = *other_linear_velocity_x - *owner_linear_velocity_x;
                 f32 relative_velocity_y = *other_linear_velocity_y - *owner_linear_velocity_y;
-                f32 magnitude = vector2_dot_scalar(relative_velocity_x, relative_velocity_y, inverse_normal_x, inverse_normal_y);
+                f32 magnitude = vector2_dot_scalar(relative_velocity_x, relative_velocity_y, inverse_normal_x[j], inverse_normal_y[j]);
                 if(magnitude > 0){
                     continue;
                 }
@@ -1189,7 +1188,7 @@ inline void fizx_resolve_rigid_collisions(
                 f32 impulse_magnitude = -(1.0f + restitution) * magnitude;
                 impulse_magnitude /= owner_inverse_mass + other_inverse_mass;
                 // divide by the contact point count to ensure that impulse is evenly spread across all contact points.
-                impulse_magnitude /= (f32)contact_points_count;
+                impulse_magnitude /= (f32)contact_point_count;
 
                 BOUNDS_CHECK(j, FIZX_COLLISION_MAX_CONTACT_POINTS + 1);
                 impulse_magnitude_scratch_space[j] = impulse_magnitude;
@@ -1198,14 +1197,14 @@ inline void fizx_resolve_rigid_collisions(
             f32 impulse_force_x;
             f32 impulse_force_y;
 
-            for(i32 j = 0; j < contact_points_count; j++){
+            for(i32 j = 0; j < contact_point_count; j++){
                 BOUNDS_CHECK(j, FIZX_COLLISION_MAX_CONTACT_POINTS + 1);
                 f32 mag = impulse_magnitude_scratch_space[j];
                 
                 // `owner` to `other` response.
                 if((owner_mask & other_layer) != 0){
-                    impulse_force_x = -(mag / owner_mass * inverse_normal_x);
-                    impulse_force_y = -(mag / owner_mass * inverse_normal_y);
+                    impulse_force_x = -(mag / owner_mass * inverse_normal_x[j]);
+                    impulse_force_y = -(mag / owner_mass * inverse_normal_y[j]);
                     *owner_linear_velocity_x += impulse_force_x;
                     *owner_linear_velocity_y += impulse_force_y;
                 }
@@ -1215,8 +1214,8 @@ inline void fizx_resolve_rigid_collisions(
                     !other_shape_is_kinematic &&
                     (other_mask & owner_layer) != 0
                 ){
-                    impulse_force_x = mag / other_mass * inverse_normal_x;
-                    impulse_force_y = mag / other_mass * inverse_normal_y;
+                    impulse_force_x = mag / other_mass * inverse_normal_x[j];
+                    impulse_force_y = mag / other_mass * inverse_normal_y[j];
                     *other_linear_velocity_x += impulse_force_x;
                     *other_linear_velocity_y += impulse_force_y;
                 }
@@ -1232,7 +1231,7 @@ inline void fizx_resolve_rigid_collisions(
             f32 static_friction = (owner_static_friction + other_static_friction) * 0.5f;
             f32 kinetic_friction = (owner_kinetic_friction + other_kinetic_friction) * 0.5f;
 
-            for(i32 j = 0; j < contact_points_count; j++){
+            for(i32 j = 0; j < contact_point_count; j++){
                 /**
                     note that these are recalculated values with the new linear and angular velocities.
                     this is because these velocities were mutated in the above procedures, without the recalculation,
@@ -1261,9 +1260,9 @@ inline void fizx_resolve_rigid_collisions(
                 f32 relative_velocity_y = (*other_linear_velocity_y + other_angular_velocity_y) - (*owner_linear_velocity_y + owner_angular_velocity_y);
 
                 // this is the direction the body is travelling in along the contact point surface.
-                f32 relative_dot_normal = vector2_dot_scalar(relative_velocity_x, relative_velocity_y, inverse_normal_x, inverse_normal_y);
-                f32 tangent_x = relative_velocity_x - relative_dot_normal * inverse_normal_x;
-                f32 tangent_y = relative_velocity_y - relative_dot_normal * inverse_normal_y;
+                f32 relative_dot_normal = vector2_dot_scalar(relative_velocity_x, relative_velocity_y, inverse_normal_x[j], inverse_normal_y[j]);
+                f32 tangent_x = relative_velocity_x - relative_dot_normal * inverse_normal_x[j];
+                f32 tangent_y = relative_velocity_y - relative_dot_normal * inverse_normal_y[j];
 
                 if(f32_nearly_equal((tangent_x * tangent_x) + (tangent_y * tangent_y), 0, 1e-12f)){
 
@@ -1310,7 +1309,7 @@ inline void fizx_resolve_rigid_collisions(
                         friction_impulse_magnitude = (impulse_magnitude_scratch_space[j] * kinetic_friction) * f32_sign(friction_impulse_magnitude);
                     }
                     
-                    friction_impulse_magnitude /= (f32)contact_points_count;
+                    friction_impulse_magnitude /= (f32)contact_point_count;
 
                     // apply the capped magnitude to the tangent vector.
                     impulses_x_scratch_space[j] = friction_impulse_magnitude * tangent_x;
@@ -1325,7 +1324,7 @@ inline void fizx_resolve_rigid_collisions(
             f32 other_distance_x;
             f32 other_distance_y;
 
-            for(i32 j = 0; j < contact_points_count; j++){
+            for(i32 j = 0; j < contact_point_count; j++){
                 impulse_x = impulses_x_scratch_space[j];
                 impulse_y = impulses_y_scratch_space[j];
                 
@@ -1387,22 +1386,37 @@ inline void fizx_resolve_rigid_collisions(
 
 
 void collision_manifold_init(FIZX_CollisionManifold* manifold, MemoryArena* arena, i32 total_colliders){
+    
+    // validation.
     ASSERT(!manifold->is_init, "already init");
     ASSERT(total_colliders <= FIZX_MAX_COLLIDERS, "total colliders exceeds max supported colliders.");
+    
     total_colliders = CLAMP(total_colliders, 0, FIZX_MAX_COLLIDERS);
     manifold->collider_stride = total_colliders;
     i32 data_length = total_colliders * total_colliders;
-    soa_vector2_init(&manifold->normal, arena, data_length);
-    soa_vector2_init(&manifold->first_contact_point, arena, data_length);
-    soa_vector2_init(&manifold->second_contact_point, arena, data_length);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manifold->depth, &manifold->depth_length, data_length);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manifold->two_contact_points, &manifold->two_contact_points_length, data_length);
+
+    soa_vector2_init(&manifold->contact_point_1, arena, data_length);
+    soa_vector2_init(&manifold->contact_point_2, arena, data_length);
+    
+    soa_vector2_init(&manifold->normal_1, arena, data_length);
+    soa_vector2_init(&manifold->normal_2, arena, data_length);
+    
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manifold->depth_1, &manifold->depth_1_length, data_length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manifold->depth_2, &manifold->depth_2_length, data_length);
+    
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manifold->contact_point_count, &manifold->contact_point_count_length, data_length);
+    
     MEMORY_ARENA_ALLOC_ARRAY(arena, manifold->contact_state, &manifold->contact_state_length, data_length);
+    
     MEMORY_ARENA_ALLOC_ARRAY(arena, manifold->previous_contact_state, &manifold->previous_contact_state_length, data_length);
+    
     MEMORY_ARENA_ALLOC_ARRAY(arena, manifold->active_phase, &manifold->active_phase_length, data_length);
+    
     MEMORY_ARENA_ALLOC_ARRAY(arena, manifold->source_user_data, &manifold->source_user_data_length, data_length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, manifold->target_user_data, &manifold->target_user_data_length, data_length);
+    
     fixed_stride_array_init(&manifold->active_index, arena, total_colliders, total_colliders, sizeof(FIZX_COLLISION_MANIFOLD_ACTIVE_INDEX_TYPE));
+    
     manifold->is_init = true;
 }
 
@@ -1423,14 +1437,17 @@ inline void collision_manifold_prepare_for_next_step(FIZX_CollisionManifold* man
     `manifold`: the state instance to set.
     `target_idx`: the index in the state instance arrays to write to.
     `collider_idx`: the physics body index of the of the `colliding` collider.
-    `normal_x`: the x-component of the normal vector in relation to collider A to B.
-    `normal_y`: the y-component of the normal vector in relation to collider A to B.
-    `contact_point_1_x`: the x-component of the first contact point.
-    `contact_point_1_y`: the y-component of the first contact point.
-    `contact_point_2_x`: the x-component of the second contact point.
-    `contact_point_2_y`: the y-component of the second contact point.
-    `depth`: the depth of the collision.
-
+    `contact_point_1_x`: the x-component of the contact point 1.
+    `contact_point_1_y`: the y-component of the contact point 1.
+    `contact_point_2_x`: the x-component of the contact point 2.
+    `contact_point_2_y`: the y-component of the contact point 2.
+    `normal_1_x`: the x-component of the normal vector (`target` to `source`); for contact point 1.
+    `normal_1_y`: the y-component of the normal vector (`target` to `source`); for contact point 1.
+    `normal_1_x`: the x-component of the normal vector (`target` to `source`); for contact point 2.
+    `normal_1_y`: the y-component of the normal vector (`target` to `source`); for contact point 2.
+    `depth_1`: the depth of the collision; for contact point 1.
+    `depth_2`: the depth of the collision; for contact point 2.
+    
     `returns`
     the collision index the data was written to.
 **/
@@ -1438,11 +1455,17 @@ i32 collision_manifold_set_data_one_way(
     FIZX_CollisionManifold* manifold,
     i32 target_idx, i32 source_idx,
     char* target_user_data, char* source_user_data,
-    f32 normal_x, f32 normal_y,
     f32 contact_point_1_x, f32 contact_point_1_y,
     f32 contact_point_2_x, f32 contact_point_2_y,
-    f32 depth, bool two_contact_points
+    f32 normal_1_x, f32 normal_1_y,
+    f32 normal_2_x, f32 normal_2_y,
+    f32 depth_1, 
+    f32 depth_2, 
+    i32 contact_point_count
 ){
+    // validation.
+    ASSERT(contact_point_count > 0 && contact_point_count <= 2, "unexpected contact point count.");
+
     i32 collision_idx = fixed_stride_array_get_element_idx(target_idx, manifold->collider_stride, source_idx);
     char* idx_char_ptr = (char*)&collision_idx;
 
@@ -1453,29 +1476,44 @@ i32 collision_manifold_set_data_one_way(
     }
     *phase = 1;
 
-    BOUNDS_CHECK(collision_idx, manifold->normal.length);
-    manifold->normal.x[collision_idx] = normal_x;
-    manifold->normal.y[collision_idx] = normal_y;
+    { // normals
+        BOUNDS_CHECK(collision_idx, manifold->normal_1.length);
+        manifold->normal_1.x[collision_idx] = normal_1_x;
+        manifold->normal_1.y[collision_idx] = normal_1_y;
+    
+        BOUNDS_CHECK(collision_idx, manifold->normal_2.length);
+        manifold->normal_2.x[collision_idx] = normal_2_x;
+        manifold->normal_2.y[collision_idx] = normal_2_y;
+    }
+    
+    { // contact_points 
+        BOUNDS_CHECK(collision_idx, manifold->contact_point_1.length);
+        manifold->contact_point_1.x[collision_idx] = contact_point_1_x;
+        manifold->contact_point_1.y[collision_idx] = contact_point_1_y;
+    
+        BOUNDS_CHECK(collision_idx, manifold->contact_point_2.length);
+        manifold->contact_point_2.x[collision_idx] = contact_point_2_x;
+        manifold->contact_point_2.y[collision_idx] = contact_point_2_y;
+    }
+    
+    { // depths
+        BOUNDS_CHECK(collision_idx, manifold->depth_1_length);
+        manifold->depth_1[collision_idx] = depth_1;
+    
+        BOUNDS_CHECK(collision_idx, manifold->depth_2_length);
+        manifold->depth_2[collision_idx] = depth_2;
+    }
+    
+    { // user data
+        BOUNDS_CHECK(collision_idx, manifold->target_user_data_length);
+        manifold->target_user_data[collision_idx] = target_user_data;
+    
+        BOUNDS_CHECK(collision_idx, manifold->source_user_data_length);
+        manifold->source_user_data[collision_idx] = source_user_data;
+    }
 
-    BOUNDS_CHECK(collision_idx, manifold->first_contact_point.length);
-    manifold->first_contact_point.x[collision_idx] = contact_point_1_x;
-    manifold->first_contact_point.y[collision_idx] = contact_point_1_y;
-
-    BOUNDS_CHECK(collision_idx, manifold->second_contact_point.length);
-    manifold->second_contact_point.x[collision_idx] = contact_point_2_x;
-    manifold->second_contact_point.y[collision_idx] = contact_point_2_y;
-
-    BOUNDS_CHECK(collision_idx, manifold->depth_length);
-    manifold->depth[collision_idx] = depth;
-
-    BOUNDS_CHECK(collision_idx, manifold->two_contact_points_length);
-    manifold->two_contact_points[collision_idx] = two_contact_points;
-
-    BOUNDS_CHECK(collision_idx, manifold->target_user_data_length);
-    manifold->target_user_data[collision_idx] = target_user_data;
-
-    BOUNDS_CHECK(collision_idx, manifold->source_user_data_length);
-    manifold->source_user_data[collision_idx] = source_user_data;
+    BOUNDS_CHECK(collision_idx, manifold->contact_point_count_length);
+    manifold->contact_point_count[collision_idx] = contact_point_count;
 
     return collision_idx;
 }
@@ -1483,6 +1521,7 @@ i32 collision_manifold_set_data_one_way(
 /**
     Sets a two-way collision data entry at a given entry.
 
+    `parameters`:
     `manifold`: the state instance to append to.
     `a_idx`: the index of collider A.
     `b_idx`: the index of collider B.
@@ -1501,30 +1540,38 @@ FIZX_IndexPair collision_manifold_set_data_two_way(
     FIZX_CollisionManifold* manifold,
     i32 a_idx, i32 b_idx,
     char* a_user_data, char* b_user_data,
-    f32 normal_x, f32 normal_y,
     f32 contact_point_1_x, f32 contact_point_1_y,
     f32 contact_point_2_x, f32 contact_point_2_y,
-    f32 depth, bool two_contact_points
+    f32 normal_1_x, f32 normal_1_y,
+    f32 normal_2_x, f32 normal_2_y,
+    f32 depth_1, 
+    f32 depth_2, 
+    i32 contact_point_count
 ){
     i32 a = collision_manifold_set_data_one_way(
         manifold,
         a_idx, b_idx,
         a_user_data, b_user_data,
-        normal_x, normal_y,
         contact_point_1_x, contact_point_1_y,
         contact_point_2_x, contact_point_2_y,
-        depth, two_contact_points
+        normal_1_x, normal_1_y,
+        normal_2_x, normal_2_y,
+        depth_1, 
+        depth_2, 
+        contact_point_count
     );
 
-    // note: the normal reversing.
     i32 b = collision_manifold_set_data_one_way(
         manifold,
         b_idx, a_idx,
         b_user_data, a_user_data,
-        -normal_x, -normal_y,
         contact_point_1_x, contact_point_1_y,
         contact_point_2_x, contact_point_2_y,
-        depth, two_contact_points
+        -normal_1_x, -normal_1_y,  // reverse normals as this is `b` -> `a`.
+        -normal_2_x, -normal_2_y,  // reverse normals as this is `b` -> `a`.
+        depth_1, 
+        depth_2, 
+        contact_point_count
     );
 
     return (FIZX_IndexPair){.a_to_b = a, .b_to_a = b};
@@ -3279,11 +3326,13 @@ bool fizx_collision_detection_polygon_to_polygon(
             manifold,
             a_idx, b_idx,
             a_user_data, b_user_data,
-            normal_x, normal_y,
             contact_point_1_x, contact_point_1_y,
             contact_point_2_x, contact_point_2_y,
+            normal_x, normal_y,
+            normal_x, normal_y,
             depth,
-            contact_count == 2 ? true : false
+            depth,
+            contact_count
         );
 
         return true;
@@ -3358,11 +3407,13 @@ bool fizx_collision_detection_polygon_to_line(
         manifold,
         line_idx,       poly_idx,
         line_user_data, poly_user_data,
-        normal_1_x, normal_1_y,
         contact_point_1_x, contact_point_1_y,
         contact_point_2_x, contact_point_2_y,
+        normal_1_x, normal_1_y,
+        normal_2_x, normal_2_y,        
         depth_1,
-        contact_point_count > 1
+        depth_2,
+        contact_point_count
     );
         
     Rectangle enter = {.x = contact_point_1_x, .y = contact_point_1_y, .width = 0.25f, .height = 0.25f};
@@ -3453,6 +3504,11 @@ bool fizx_collision_detection_circle_to_line(
     i32 circ_idx, i32 line_idx,
     FIZX_IndexPair* out_idx_pair
 ){
+
+    return false;
+
+#if 0
+
     // get 'line' user data.
     size_t line_user_data_idx = line_idx * user_data_element_size;
     BOUNDS_CHECK(line_user_data_idx, user_data_length);
@@ -3615,6 +3671,9 @@ bool fizx_collision_detection_circle_to_line(
         
         return true;
     }
+    
+#endif
+
 }
 
 /**
@@ -3683,10 +3742,13 @@ bool fizx_collision_detection_polygon_to_circle(
         manifold,
         poly_idx, circ_idx,
         poly_user_data, circ_user_data,
-        normal_x, normal_y,
         contact_point_x, contact_point_y,
-        0,0,
-        depth, false
+        0.0f, 0.0f,
+        normal_x, normal_y,
+        0.0f, 0.0f,
+        depth, 
+        0.0f,
+        1
     );
     return true;
 }
@@ -3736,9 +3798,13 @@ bool fizx_collision_detection_circle_to_circle(
         manifold,
         a_idx, b_idx,
         a_user_data, b_user_data,
-        normal_x, normal_y,
         cp_x, cp_y,
-        0, 0, depth, false
+        0.0f, 0.0f,
+        normal_x, normal_y,
+        0.0f, 0.0f,
+        depth, 
+        0.0f,
+        1
     );
 
     return true;
@@ -7023,11 +7089,29 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                     FIZX_STATE_SUB_STEP_SHAPE_COLLISIONS_TO_RESOLVE_TYPE collision_idx = collisions_to_resolve[i];
                     owner_idx = collision_idx / state->collision_manifold.collider_stride; // i32 div truncates the remainder, always giving the owner index.
                     other_idx = collision_idx % state->collision_manifold.collider_stride;
-    
-                    BOUNDS_CHECK(collision_idx, state->collision_manifold.depth_length);
-                    depth = state->collision_manifold.depth[collision_idx];
-                    BOUNDS_CHECK(collision_idx, state->collision_manifold.normal.length);
                     
+                    f32 normal_x;
+                    f32 normal_y;
+                        
+                    BOUNDS_CHECK(collision_idx, state->collision_manifold.depth_1_length);
+                    f32 depth_1 = state->collision_manifold.depth_1[collision_idx];
+                    BOUNDS_CHECK(collision_idx, state->collision_manifold.depth_2_length);
+                    f32 depth_2 = state->collision_manifold.depth_2[collision_idx];
+                    
+                    // separate the body based on the contact point that is the furthest into the other collider's shape.
+                    if(depth_1 >= depth_2){
+                        depth       = depth_1;
+                        BOUNDS_CHECK(collision_idx, state->collision_manifold.normal_1.length);
+                        normal_x    = state->collision_manifold.normal_1.x[collision_idx];
+                        normal_y    = state->collision_manifold.normal_1.y[collision_idx];
+                    }
+                    else{
+                        depth       = depth_2;
+                        BOUNDS_CHECK(collision_idx, state->collision_manifold.normal_2.length);
+                        normal_x    = state->collision_manifold.normal_2.x[collision_idx];
+                        normal_y    = state->collision_manifold.normal_2.y[collision_idx];
+                    }
+                                        
                     BOUNDS_CHECK(owner_idx, state->entities.layer_length);
                     i32 owner_layer = state->entities.layer[owner_idx];
                     BOUNDS_CHECK(other_idx, state->entities.layer_length);
@@ -7044,8 +7128,8 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                         (other_mask & owner_layer) != 0
                     ){
                         // calculate body displacement.
-                        displacement_x = state->collision_manifold.normal.x[collision_idx] * depth * 0.5f;
-                        displacement_y = state->collision_manifold.normal.y[collision_idx] * depth * 0.5f;
+                        displacement_x = normal_x * depth * 0.5f;
+                        displacement_y = normal_y * depth * 0.5f;
         
                         BOUNDS_CHECK(owner_idx, state->body_hierarchy.length);
                         IntrusiveListNode* owner_node = &state->body_hierarchy.node[owner_idx];
@@ -7081,8 +7165,8 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                         }
                         
                         // calculate displacement.
-                        displacement_x = state->collision_manifold.normal.x[collision_idx] * depth;
-                        displacement_y = state->collision_manifold.normal.y[collision_idx] * depth;
+                        displacement_x = normal_x * depth;
+                        displacement_y = normal_y * depth;
         
                         BOUNDS_CHECK(sole_idx, state->body_hierarchy.length);
                         IntrusiveListNode* sole_node = &state->body_hierarchy.node[sole_idx];
@@ -7112,6 +7196,28 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                     owner_idx = collision_idx / state->collision_manifold.collider_stride; // i32 div truncates the remainder, always giving the owner index.
                     other_idx = collision_idx % state->collision_manifold.collider_stride;
     
+                    f32 normal_x;
+                    f32 normal_y;
+                        
+                    BOUNDS_CHECK(collision_idx, state->collision_manifold.depth_1_length);
+                    f32 depth_1 = state->collision_manifold.depth_1[collision_idx];
+                    BOUNDS_CHECK(collision_idx, state->collision_manifold.depth_2_length);
+                    f32 depth_2 = state->collision_manifold.depth_2[collision_idx];
+                    
+                    // separate the body based on the contact point that is the furthest into the other collider's shape.
+                    if(depth_1 >= depth_2){
+                        depth       = depth_1;
+                        BOUNDS_CHECK(collision_idx, state->collision_manifold.normal_1.length);
+                        normal_x    = state->collision_manifold.normal_1.x[collision_idx];
+                        normal_y    = state->collision_manifold.normal_1.y[collision_idx];
+                    }
+                    else{
+                        depth       = depth_2;
+                        BOUNDS_CHECK(collision_idx, state->collision_manifold.normal_2.length);
+                        normal_x    = state->collision_manifold.normal_2.x[collision_idx];
+                        normal_y    = state->collision_manifold.normal_2.y[collision_idx];
+                    }
+    
                     BOUNDS_CHECK(other_idx, state->entities.layer_length);
                     i32 other_layer = state->entities.layer[other_idx];
                     
@@ -7123,10 +7229,8 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                         continue;
                     }
     
-                    BOUNDS_CHECK(collision_idx, state->collision_manifold.depth_length);
-                    depth = state->collision_manifold.depth[collision_idx];
-                    displacement_x = state->collision_manifold.normal.x[collision_idx] * depth;
-                    displacement_y = state->collision_manifold.normal.y[collision_idx] * depth;
+                    displacement_x = normal_x * depth;
+                    displacement_y = normal_y * depth;
     
                     BOUNDS_CHECK(owner_idx, state->body_hierarchy.length);
                     IntrusiveListNode* owner_node = &state->body_hierarchy.node[owner_idx];
@@ -7263,29 +7367,66 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                             }
                             
                             // read the data.
-                            BOUNDS_CHECK(cidx, state->collision_manifold.depth_length);
-                            BOUNDS_CHECK(cidx, state->collision_manifold.normal.length);
-                            BOUNDS_CHECK(cidx, state->collision_manifold.first_contact_point.length);
-                            BOUNDS_CHECK(cidx, state->collision_manifold.second_contact_point.length);
-                            BOUNDS_CHECK(cidx, state->collision_manifold.two_contact_points_length);
+                            
+                            BOUNDS_CHECK(cidx, state->collision_manifold.contact_point_1.length);
+                            Vector2 contact_point_1 = {
+                                .x = state->collision_manifold.contact_point_1.x[cidx],
+                                .y = state->collision_manifold.contact_point_1.y[cidx]
+                            };
+                            
+                            BOUNDS_CHECK(cidx, state->collision_manifold.contact_point_2.length);
+                            Vector2 contact_point_2 = {
+                                .x = state->collision_manifold.contact_point_2.x[cidx],
+                                .y = state->collision_manifold.contact_point_2.y[cidx]
+                            };
+                            
+                            BOUNDS_CHECK(cidx, state->collision_manifold.normal_1.length);
+                            Vector2 normal_1 = {
+                                .x = state->collision_manifold.normal_1.x[cidx],
+                                .y = state->collision_manifold.normal_1.y[cidx]
+                            };
+                            
+                            BOUNDS_CHECK(cidx, state->collision_manifold.normal_2.length);
+                            Vector2 normal_2 = {
+                                .x = state->collision_manifold.normal_2.x[cidx],
+                                .y = state->collision_manifold.normal_2.y[cidx]
+                            };
+
+                            BOUNDS_CHECK(cidx, state->collision_manifold.depth_1_length);
+                            f32 depth_1 = state->collision_manifold.depth_1[cidx];
+
+                            BOUNDS_CHECK(cidx, state->collision_manifold.depth_2_length);
+                            f32 depth_2 = state->collision_manifold.depth_2[cidx];
+                            
+                            BOUNDS_CHECK(cidx, state->collision_manifold.contact_point_count_length);
+                            i32 contact_count = state->collision_manifold.contact_point_count[cidx];
+                            ASSERT(contact_count > 0 && contact_count <= 2, "unexpected contact point count");
+                            bool two_contact_points = state->collision_manifold.contact_point_count[cidx] == 2;
+                            
+                            BOUNDS_CHECK(cidx, state->collision_manifold.source_user_data_length);
+                            void* source_user_data = state->collision_manifold.source_user_data[cidx]; 
+                            
+                            BOUNDS_CHECK(cidx, state->collision_manifold.target_user_data_length);
+                            void* target_user_data = state->collision_manifold.target_user_data[cidx];
+                            
                             BOUNDS_CHECK(target_entity_idx, state->entities.layer_length);
-                            BOUNDS_CHECK(source_entity_idx, state->entities.layer_length);
+                            i32 target_layer = state->entities.layer[target_entity_idx];
+                                                        
                             collision_info = (FIZX_CollisionInfo){
-                                .depth                      = state->collision_manifold.depth[cidx],
-                                .normal_x                   = state->collision_manifold.normal.x[cidx],
-                                .normal_y                   = state->collision_manifold.normal.y[cidx],
-                                .first_contact_point_x      = state->collision_manifold.first_contact_point.x[cidx],
-                                .first_contact_point_y      = state->collision_manifold.first_contact_point.y[cidx],
-                                .second_contact_point_x     = state->collision_manifold.second_contact_point.x[cidx],
-                                .second_contact_point_y     = state->collision_manifold.second_contact_point.y[cidx],
-                                .source_user_data           = state->collision_manifold.source_user_data[cidx],
-                                .target_user_data           = state->collision_manifold.target_user_data[cidx],
-                                .two_contact_points         = state->collision_manifold.two_contact_points[cidx],
+                                .contact_point_1    = contact_point_1,
+                                .contact_point_2    = contact_point_2,
+                                .normal_1           = normal_1,
+                                .normal_2           = normal_2,
+                                .depth_1            = depth_1,
+                                .depth_2            = depth_2,
+                                .two_contact_points = two_contact_points,
+                                .source_user_data   = source_user_data,
+                                .target_user_data   = target_user_data,
                                 // see `collision_manifold_set_data_one_way` to know why and how this works.
-                                .target_entity_idx = target_entity_idx,
-                                .source_entity_idx = source_entity_idx,
-                                .target_layer = state->entities.layer[target_entity_idx],
-                                .source_layer = state->entities.layer[source_entity_idx]
+                                .target_entity_idx  = target_entity_idx,
+                                .source_entity_idx  = source_entity_idx,
+                                .target_layer       = target_layer,
+                                .source_layer       = source_layer
                             };
         
                             // pass each collision info to the user callback.
@@ -7345,9 +7486,9 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                                 continue;
                             }
                         
-                            BOUNDS_CHECK(current_collision_idx, state->collision_manifold.first_contact_point.length);
-                            f32 dx = state->collision_manifold.first_contact_point.x[current_collision_idx] - shape_x;
-                            f32 dy = state->collision_manifold.first_contact_point.y[current_collision_idx] - shape_y;
+                            BOUNDS_CHECK(current_collision_idx, state->collision_manifold.contact_point_1.length);
+                            f32 dx = state->collision_manifold.contact_point_1.x[current_collision_idx] - shape_x;
+                            f32 dy = state->collision_manifold.contact_point_1.y[current_collision_idx] - shape_y;
                             f32 f_dist = dx*dx + dy*dy;
                             if(f_dist < closest_dist){
                                 closest_dist = f_dist;
@@ -7356,10 +7497,13 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                                 closest_source_entity_idx = current_source_entity_idx; 
                             }
                         
-                            BOUNDS_CHECK(current_collision_idx, state->collision_manifold.two_contact_points_length);
-                            if(state->collision_manifold.two_contact_points[current_collision_idx]){
-                                dx = state->collision_manifold.second_contact_point.x[current_collision_idx] - shape_x;
-                                dy = state->collision_manifold.second_contact_point.y[current_collision_idx] - shape_y;
+                            BOUNDS_CHECK(current_collision_idx, state->collision_manifold.contact_point_count_length);
+                            i32 contact_point_count = state->collision_manifold.contact_point_count[current_collision_idx];
+                            ASSERT(contact_point_count > 0 && contact_point_count <= 2, "unexpected contact point count.");
+                            if(contact_point_count == 2){
+                                BOUNDS_CHECK(current_collision_idx, state->collision_manifold.contact_point_2.length);
+                                dx = state->collision_manifold.contact_point_2.x[current_collision_idx] - shape_x;
+                                dy = state->collision_manifold.contact_point_2.y[current_collision_idx] - shape_y;
                                 f32 s_dist = dx*dx + dy*dy;
                                 if(s_dist < closest_dist){
                                     closest_dist = s_dist;
@@ -7375,36 +7519,71 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                         i32 source_entity_idx = closest_collision_idx % state->collision_manifold.collider_stride;
                         
                         // read the data.
-                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.depth_length);
-                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.normal.length);
-                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.first_contact_point.length);
-                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.second_contact_point.length);
-                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.two_contact_points_length);
-                        BOUNDS_CHECK(closest_target_entity_idx, state->entities.layer_length);
-                        BOUNDS_CHECK(closest_source_entity_idx, state->entities.layer_length);
-                        collision_info = (FIZX_CollisionInfo){
-                            .depth                      = state->collision_manifold.depth                   [closest_collision_idx],
-                            .normal_x                   = state->collision_manifold.normal.x                [closest_collision_idx],
-                            .normal_y                   = state->collision_manifold.normal.y                [closest_collision_idx],
-                            .first_contact_point_x      = state->collision_manifold.first_contact_point.x   [closest_collision_idx],
-                            .first_contact_point_y      = state->collision_manifold.first_contact_point.y   [closest_collision_idx],
-                            .second_contact_point_x     = state->collision_manifold.second_contact_point.x  [closest_collision_idx],
-                            .second_contact_point_y     = state->collision_manifold.second_contact_point.y  [closest_collision_idx],
-                            .source_user_data           = state->collision_manifold.source_user_data        [closest_collision_idx],
-                            .target_user_data           = state->collision_manifold.target_user_data        [closest_collision_idx],
-                            .two_contact_points         = state->collision_manifold.two_contact_points      [closest_collision_idx],
-                            // see `collision_manifold_set_data_one_way` to know why and how this works.
-                            .target_entity_idx = target_entity_idx,
-                            .source_entity_idx = source_entity_idx,
-                            .target_layer = state->entities.layer[target_entity_idx],
-                            .source_layer = state->entities.layer[source_entity_idx]
+                        
+                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.contact_point_1.length);
+                        Vector2 contact_point_1 = {
+                            .x = state->collision_manifold.contact_point_1.x[closest_collision_idx],
+                            .y = state->collision_manifold.contact_point_1.y[closest_collision_idx]
                         };
                         
-                        // dont do anything if no collision was found to respond to.
-                        if(collision_idx == 0){
-                            break;
-                        }
+                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.contact_point_2.length);
+                        Vector2 contact_point_2 = {
+                            .x = state->collision_manifold.contact_point_2.x[closest_collision_idx],
+                            .y = state->collision_manifold.contact_point_2.y[closest_collision_idx]
+                        };
                         
+                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.normal_1.length);
+                        Vector2 normal_1 = {
+                            .x = state->collision_manifold.normal_1.x[closest_collision_idx],
+                            .y = state->collision_manifold.normal_1.y[closest_collision_idx]
+                        };
+                        
+                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.normal_2.length);
+                        Vector2 normal_2 = {
+                            .x = state->collision_manifold.normal_2.x[closest_collision_idx],
+                            .y = state->collision_manifold.normal_2.y[closest_collision_idx]
+                        };
+
+                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.depth_1_length);
+                        f32 depth_1 = state->collision_manifold.depth_1[closest_collision_idx];
+
+                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.depth_2_length);
+                        f32 depth_2 = state->collision_manifold.depth_2[closest_collision_idx];
+                        
+                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.contact_point_count_length);
+                        i32 contact_count = state->collision_manifold.contact_point_count[closest_collision_idx];
+                        ASSERT(contact_count > 0 && contact_count <= 2, "unexpected contact point count");
+                        bool two_contact_points = state->collision_manifold.contact_point_count[closest_collision_idx] == 2;
+                        
+                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.source_user_data_length);
+                        void* source_user_data = state->collision_manifold.source_user_data[closest_collision_idx]; 
+                        
+                        BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.target_user_data_length);
+                        void* target_user_data = state->collision_manifold.target_user_data[closest_collision_idx];
+                        
+                        BOUNDS_CHECK(target_entity_idx, state->entities.layer_length);
+                        i32 target_layer = state->entities.layer[target_entity_idx];
+                                                
+                        BOUNDS_CHECK(source_entity_idx, state->entities.layer_length);
+                        i32 source_layer = state->entities.layer[source_entity_idx];
+                                                    
+                        collision_info = (FIZX_CollisionInfo){
+                            .contact_point_1    = contact_point_1,
+                            .contact_point_2    = contact_point_2,
+                            .normal_1           = normal_1,
+                            .normal_2           = normal_2,
+                            .depth_1            = depth_1,
+                            .depth_2            = depth_2,
+                            .two_contact_points = two_contact_points,
+                            .source_user_data   = source_user_data,
+                            .target_user_data   = target_user_data,
+                            // see `collision_manifold_set_data_one_way` to know why and how this works.
+                            .target_entity_idx  = target_entity_idx,
+                            .source_entity_idx  = source_entity_idx,
+                            .target_layer       = target_layer,
+                            .source_layer       = source_layer
+                        };
+    
                         // pass each collision info to the user callback.
                         BOUNDS_CHECK(closest_collision_idx, state->collision_manifold.contact_state_length);
                         i32 contact_state = state->collision_manifold.contact_state[closest_collision_idx];
@@ -7425,7 +7604,7 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                         }
                         if(callback != NULL){
                             callback(collision_info, collision_callback_body_user_data);
-                        }            
+                        }        
                     }break; 
                 }
                 
