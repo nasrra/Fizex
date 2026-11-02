@@ -3472,7 +3472,7 @@ bool fizx_collision_detection_circle_to_line(
     f32 line_radius = radius[line_idx];
 
     // narrow phase.
-    if(line_radius > 0.0f){
+    if(line_radius <= 0.0f){
         i32 contact_point_count = 0;
         f32 contact_point_1_x   = 0.0f;
         f32 contact_point_1_y   = 0.0f;
@@ -3520,11 +3520,11 @@ bool fizx_collision_detection_circle_to_line(
     }
     else{
         
+        f32 contact_point_x;
+        f32 contact_point_y;
         f32 normal_x;
         f32 normal_y;
         f32 depth;
-        f32 point_x;
-        f32 point_y;
                 
         bool overlaps = circle_cast_overlaps_circle(
             line_start_x, line_start_y,
@@ -3532,31 +3532,14 @@ bool fizx_collision_detection_circle_to_line(
             line_radius,
             circ_cen_x, circ_cen_y,
             circ_radius,
-            &normal_x, &normal_y, &depth,
-            &point_x, &point_y
+            &contact_point_x, &contact_point_y,
+            &normal_x, &normal_y, 
+            &depth
         );
-            
+                    
         if(!overlaps){
             return false;
-        }
-            
-        f32 dir_x = line_end_x - line_start_x;
-        f32 dir_y = line_end_y - line_start_y;    
-        vector2_normalise_scalar(dir_x, dir_y, &dir_x, &dir_y);
-        dir_x *= circ_radius;
-        dir_y *= circ_radius;
-        
-        point_x -= dir_x;
-        point_y -= dir_y;
-        
-        f32 contact_point_x;
-        f32 contact_point_y;
-        
-        circle_calc_contact_points_scalar(
-            circ_cen_x, circ_cen_y, circ_radius, 
-            point_x, point_y, 
-            &contact_point_x, &contact_point_y
-        );
+        }        
         
         *out_idx_pair = collision_manifold_set_data_two_way(
             manifold,

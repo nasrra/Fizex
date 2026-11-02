@@ -823,57 +823,31 @@ Vector2 line_segmenet_closest_point(Vector2 line_start, Vector2 line_end, Vector
     return result;
 }
 
-void line_segment_project_point(
+void line_project_point(
     f32 line_start_x, f32 line_start_y,
-    f32 line_end_x, f32 line_end_y,
+    f32 line_dist_x, f32 line_dist_y,
     f32 point_x, f32 point_y,
     f32* out_x, f32* out_y
 ){
-    f32 ab_x = line_end_x - line_start_x;
-    f32 ab_y = line_end_y - line_start_y;
-    f32 ap_x = point_x - line_start_x;
-    f32 ap_y = point_y - line_start_y;
-
-    f32 ab_len_sqrd = ab_x * ab_x + ab_y * ab_y;
-    if (ab_len_sqrd <= 0.0f){
-        *out_x = line_start_x;
-        *out_y = line_start_y;
-        return;
+    // vector from circcle center to the line start.
+    f32 start_to_point_x = point_x - line_start_x;
+    f32 start_to_point_y = point_y - line_start_y;
+    
+    f32 line_length_sqrd = vector2_dot_scalar(line_dist_x, line_dist_y, line_dist_x, line_dist_y);
+    
+    // project the circle center onto the infinite line, as a ratio segment length
+    // a degenerate (zero length) line is just a point, so `t` stays 0.
+    f32 t = 0.0f;
+    if(line_length_sqrd  > F32_EPSILON){
+        t = vector2_dot_scalar(start_to_point_x, start_to_point_y, line_dist_x, line_dist_y) / line_length_sqrd;
     }
-
-    // t = how far along AB the projection of P lands; 0 at start, 1 at end.
-    f32 t = (ap_x * ab_x + ap_y * ab_y) / ab_len_sqrd;
+    
+    // clamp to segment so that the closest point can be one of the end points.
     t = CLAMP(t, 0.0f, 1.0f);
-
-    *out_x = line_start_x + ab_x * t;
-    *out_y = line_start_y + ab_y * t;
+    
+    *out_x = line_start_x + line_dist_x * t;
+    *out_y = line_start_y + line_dist_y * t;
 }
-
-// void line_project_point(
-//     f32 line_start_x, f32 line_start_y,
-//     f32 line_dist_x, f32 line_dist_y,
-//     f32 point_x, f32 point_y,
-//     f32* out_x, f32* out_y
-// ){
-//     // vector from circcle center to the line start.
-//     f32 start_to_point_x = point_x - line_start_x;
-//     f32 start_to_point_y = point_y - line_start_y;
-    
-//     f32 line_length_sqrd = vector2_dot_scalar(line_dist_x, line_dist_y, line_dist_x, line_dist_y);
-    
-//     // project the circle center onto the infinite line, as a ratio segment length
-//     // a degenerate (zero length) line is just a point, so `t` stays 0.
-//     f32 t = 0.0f;
-//     if(line_length_sqrd  > F32_EPSILON){
-//         t = vector2_dot_scalar(start_to_point_x, start_to_point_y, line_dist_x, line_dist_y) / line_length_sqrd;
-//     }
-    
-//     // clamp to segment so that the closest point can be one of the end points.
-//     t = CLAMP(t, 0.0f, 1.0f);
-    
-//     *out_x = line_start_x + line_dist_x * t;
-//     *out_y = line_start_y + line_dist_y * t;
-// }
 
 /*
     `remarks`:
@@ -2925,31 +2899,78 @@ bool circle_cast_overlaps_circle(
     f32 cast_radius,
     f32 circle_x, f32 circle_y,
     f32 circle_radius,
-    f32* out_normal_x, f32* out_normal_y, f32* out_depth,
-    f32* out_line_point_x, f32* out_line_point_y
+    f32* out_contact_point_x, f32* out_contact_point_y,
+    f32* out_normal_x, f32* out_normal_y, 
+    f32* out_depth
 ){
+    f32 cast_dist_x = cast_end_x - cast_start_x;
+    f32 cast_dist_y = cast_end_y - cast_start_y;
     
-    f32 projection_x;
-    f32 projection_y;
-    line_segment_project_point(
-        cast_start_x, cast_start_y,
-        cast_end_x, cast_end_y,
-        circle_x, circle_y,
-        &projection_x, &projection_y
-    );
+    // degenerate check.
+    f32 cast_length_sqrd = vector2_dot_scalar(cast_dist_x, cast_dist_y, cast_dist_x, cast_dist_y);
+    if(cast_length_sqrd < F32_EPSILON){
+        return false;
+    }
+
+    f32 start_to_circle_x = circle_x - cast_start_x;
+    f32 start_to_circle_y = circle_y - cast_start_y;
     
-    // transform from axis-projection space into world space.
-    // *out_line_point_x = cast_start_x + ((cast_end_x - cast_start_x) * projection_x);
-    // *out_line_point_y = cast_start_y + ((cast_end_y - cast_start_y) * projection_y);
+    // project the center of the circle onto the axis.
+    // note that it is not clamped between 0-1 and is a ratio. 
+    f32 t_mid = vector2_dot_scalar(start_to_circle_x, start_to_circle_y, cast_dist_x, cast_dist_y) / cast_length_sqrd;
+    f32 mid_x = cast_start_x + (cast_dist_x * t_mid);
+    f32 mid_y = cast_start_y + (cast_dist_y * t_mid);
+
+    f32 perp_x = circle_x - mid_x;
+    f32 perp_y = circle_y - mid_y;
+    f32 perp_dist_sqrd =
+        (perp_x * perp_x) +
+        (perp_y * perp_y)
+    ;
+    f32 combined_radius = cast_radius + circle_radius;
+    f32 radius_sqrd = combined_radius * combined_radius;
+        
+    // the project point on the line is not within the circle's radial area.
+    if(perp_dist_sqrd > radius_sqrd){
+        return false;
+    } 
     
-    *out_line_point_x = projection_x;
-    *out_line_point_y = projection_y;
+    // calculate the length to apply on ooposite axis to get the 'enter' and 'exit' points
+    // this is done by getting half of the 'chord' (the line connecting to points on the circle edge).
+    // note that it is done this way as the length of perpendicular vector is relative to its proximity to the circle center
+    // meaning that the closer it is, the greater the magnitude it will be, resulting in a longer chord length; which is true 
+    // in vice versa, shrinking as it moves away.
+    f32 half_chord = f32_sqrt(radius_sqrd - perp_dist_sqrd); // note that this is in world-space.
+    f32 half_cord_t = half_chord / f32_sqrt(cast_length_sqrd); // convert back into line-space (a ratio).
+    // add epsilon to avoid false 'negatives' when checking the circle overlap later.
+    // this is because the cast-circle's position is exactly it's radius away from the edge of the
+    // circle we want to check against; (floating point inaccuracies can result in false 'negative's').  
+    f32 t_enter = t_mid - half_cord_t + F32_EPSILON;
     
-    return circle_overlaps_scalar(
-        *out_line_point_x, *out_line_point_y, cast_radius,
+    // calculate the point at which to perform the circle overlap check.
+    f32 cast_circle_x = cast_start_x + cast_dist_x * t_enter;
+    f32 cast_circle_y = cast_start_y + cast_dist_y * t_enter;
+    
+    ASSERT(cast_radius>0.0f,"asd");
+    
+    bool overlaps = circle_overlaps_scalar(
+        cast_circle_x, cast_circle_y, cast_radius,
         circle_x, circle_y, circle_radius,
         out_normal_x, out_normal_y, out_depth
     );
+    
+    if(!overlaps){
+        os_output_message("asd\n");
+        return false;
+    }
+
+    circle_calc_contact_points_scalar(
+        circle_x, circle_y, circle_radius, 
+        cast_circle_x, cast_circle_y, 
+        out_contact_point_x, out_contact_point_y
+    );
+
+    return true;
 }
 
 // bool circle_cast_overlaps_polygon(
