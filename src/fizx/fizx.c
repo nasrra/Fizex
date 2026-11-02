@@ -45,20 +45,26 @@ typedef struct{
 } FIZX_CollisionInfo;
 
 typedef struct{
-    f32 normal_x;
-    f32 normal_y;
-    f32 first_contact_point_x;
-    f32 first_contact_point_y;
-    f32 second_contact_point_x;
-    f32 second_contact_point_y;
-    f32 depth;
+
+    f32 contact_point_1_x;
+    f32 contact_point_1_y;
+    f32 contact_point_2_x;
+    f32 contact_point_2_y;
+
+    f32 normal_1_x;
+    f32 normal_1_y;
+    f32 normal_2_x;
+    f32 normal_2_y;
+
+    f32 depth_1;
+    f32 depth_2;
 
     i32 target_layer;
     // this is the entity index of the `target` in the fizx state.
     i32 target_entity_idx;
     void* target_user_data;
 
-    bool two_contact_points;
+    i32 contact_point_count;
 
 } FIZX_QueryCollisionInfo;
 
@@ -3386,7 +3392,8 @@ bool fizx_collision_detection_polygon_to_line(
     i32 contact_point_count = 0;
 
     bool overlaps = line_segment_overlaps_polygon_new(
-        line_vert_x, line_vert_y,
+        line_vert_x[0], line_vert_y[0],
+        line_vert_x[1], line_vert_y[1],
         poly_vert_x, poly_vert_y, poly_vert_length,
         &contact_point_1_x, &contact_point_1_y,
         &contact_point_2_x, &contact_point_2_y,
@@ -3415,85 +3422,8 @@ bool fizx_collision_detection_polygon_to_line(
         depth_2,
         contact_point_count
     );
-        
-    Rectangle enter = {.x = contact_point_1_x, .y = contact_point_1_y, .width = 0.25f, .height = 0.25f};
-    gfx_draw_fill_rect(global_gfx_state, enter, GFX_COLOUR_YELLOW, GFX_SpriteOrigin_Center, 2, 0, 1);
-
-    if(contact_point_count > 1){
-        Rectangle exit = {.x = contact_point_2_x, .y = contact_point_2_y, .width = 0.25f, .height = 0.25f};
-        gfx_draw_fill_rect(global_gfx_state, exit, GFX_COLOUR_ORANGE, GFX_SpriteOrigin_Center, 2, 0, 1);
-    }
-    // gfx_draw_fill_rect(GFX_State* state, Rectangle shape, GFX_Colour colour, GFX_SpriteOrigin origin, u32 layer, u32 depth, i32 material){
-
     
     return true;
-
-    // bool has_first_contact_point;
-    // bool has_second_contact_point;
-    // bool overlaps = line_segment_overlaps_polygon(
-    //     line_vert_x[0], line_vert_y[0],
-    //     line_vert_x[1], line_vert_y[1],
-    //     poly_vert_x, poly_vert_y, poly_vert_length,
-    //     F32_EPSILON,
-    //     &contact_point_1_x, &contact_point_1_y,
-    //     &contact_point_2_x, &contact_point_2_y,
-    //     &has_first_contact_point, &has_second_contact_point,
-    //     &normal_x, &normal_y,
-    //     &depth
-    // );
-
-    // if(overlaps){
-
-    //     if(!has_first_contact_point){
-    //         if(!has_second_contact_point){
-    //             // the line is submerged fully into the polygon's area, this is treated
-    //             // as "no collision", as the system only cares whether the shape is colliding
-    //             // with another shapes edges.
-    //             return false;            
-    //         }    
-    //         else{
-    //             *out_idx_pair = collision_manifold_set_data_two_way(
-    //                 manifold,
-    //                 line_idx,       poly_idx,
-    //                 line_user_data, poly_user_data,
-    //                 normal_x, normal_y,
-    //                 contact_point_2_x, contact_point_2_y,
-    //                 0.0f, 0.0f,
-    //                 depth,
-    //                 false
-    //             );
-    //         }
-    //     }
-    //     else{
-    //         if(!has_second_contact_point){
-    //             *out_idx_pair = collision_manifold_set_data_two_way(
-    //                 manifold,
-    //                 line_idx,       poly_idx,
-    //                 line_user_data, poly_user_data,
-    //                 normal_x, normal_y,
-    //                 contact_point_1_x, contact_point_1_y,
-    //                 0.0f, 0.0f,
-    //                 depth,
-    //                 false
-    //             );
-    //         }
-    //         else{
-    //             *out_idx_pair = collision_manifold_set_data_two_way(
-    //                 manifold,
-    //                 line_idx,       poly_idx,
-    //                 line_user_data, poly_user_data,
-    //                 normal_x, normal_y,
-    //                 contact_point_1_x, contact_point_1_y,
-    //                 contact_point_2_x, contact_point_2_y,
-    //                 depth,
-    //                 true
-    //             );
-    //         }
-    //     }
-    //     return true;
-    // }
-    // return false;
-    
 }
 
 
@@ -3505,9 +3435,7 @@ bool fizx_collision_detection_circle_to_line(
     FIZX_IndexPair* out_idx_pair
 ){
 
-    return false;
-
-#if 0
+    // return false;
 
     // get 'line' user data.
     size_t line_user_data_idx = line_idx * user_data_element_size;
@@ -3544,79 +3472,51 @@ bool fizx_collision_detection_circle_to_line(
     f32 line_radius = radius[line_idx];
 
     // narrow phase.
-    if(line_radius <= 0.0f){
+    if(line_radius > 0.0f){
+        i32 contact_point_count = 0;
         f32 contact_point_1_x   = 0.0f;
         f32 contact_point_1_y   = 0.0f;
         f32 contact_point_2_x   = 0.0f;
         f32 contact_point_2_y   = 0.0f;
-        f32 depth               = 0.0f;
-        f32 normal_x            = 0.0f;
-        f32 normal_y            = 0.0f;
-        bool has_first_contact_point;
-        bool has_second_contact_point;
-        bool overlaps = line_segment_overlaps_circle(
-            line_start_x, line_start_y,
+        f32 normal_1_x          = 0.0f;
+        f32 normal_1_y          = 0.0f;
+        f32 normal_2_x          = 0.0f;
+        f32 normal_2_y          = 0.0f;
+        f32 depth_1             = 0.0f;
+        f32 depth_2             = 0.0f;
+                
+        bool overlaps = line_overlaps_circle(
+            line_start_x, line_start_y, 
             line_end_x, line_end_y,
             circ_cen_x, circ_cen_y, circ_radius,
-            F32_EPSILON,
             &contact_point_1_x, &contact_point_1_y,
             &contact_point_2_x, &contact_point_2_y,
-            &has_first_contact_point, &has_second_contact_point,
-            &normal_x, &normal_y,
-            &depth
+            &normal_1_x, &normal_1_y,
+            &normal_2_x, &normal_2_y,
+            &depth_1,
+            &depth_2,
+            &contact_point_count
         );
-    
-        if(overlaps){
-    
-            if(!has_first_contact_point){
-                if(!has_second_contact_point){
-                    // the line is submerged fully into the circle's area, this is treated
-                    // as "no collision", as the system only cares whether the shape is colliding
-                    // with another shapes edges.
-                    return false;
-                }
-                else{
-                    *out_idx_pair = collision_manifold_set_data_two_way(
-                        manifold,
-                        line_idx,       circ_idx,
-                        line_user_data, circ_user_data,
-                        normal_x, normal_y,
-                        contact_point_2_x, contact_point_2_y,
-                        0.0f, 0.0f,
-                        depth,
-                        false
-                    );
-                }
-            }
-            else{
-                if(!has_second_contact_point){
-                    *out_idx_pair = collision_manifold_set_data_two_way(
-                        manifold,
-                        line_idx,       circ_idx,
-                        line_user_data, circ_user_data,
-                        normal_x, normal_y,
-                        contact_point_1_x, contact_point_1_y,
-                        0.0f, 0.0f,
-                        depth,
-                        false
-                    );
-                }
-                else{
-                    *out_idx_pair = collision_manifold_set_data_two_way(
-                        manifold,
-                        line_idx,       circ_idx,
-                        line_user_data, circ_user_data,
-                        normal_x, normal_y,
-                        contact_point_1_x, contact_point_1_y,
-                        contact_point_2_x, contact_point_2_y,
-                        depth,
-                        true
-                    );
-                }
-            }
-            return true;
+        
+        if(!overlaps){
+            return false;
         }
-        return false;
+        
+        ASSERT(contact_point_count > 0, "fff");
+        
+        *out_idx_pair = collision_manifold_set_data_two_way(
+            manifold,
+            line_idx,       circ_idx,
+            line_user_data, circ_user_data,
+            contact_point_1_x, contact_point_1_y,
+            contact_point_2_x, contact_point_2_y,
+            normal_1_x, normal_1_y,
+            normal_2_x, normal_2_y,
+            depth_1, 
+            depth_2, 
+            contact_point_count
+        );
+        return true;
     }
     else{
         
@@ -3662,18 +3562,17 @@ bool fizx_collision_detection_circle_to_line(
             manifold,
             line_idx,       circ_idx,
             line_user_data, circ_user_data,
-            normal_x, normal_y,
             contact_point_x, contact_point_y,
             0.0f, 0.0f,
-            depth,
-            false
+            normal_x, normal_y,
+            0.0f, 0.0f,
+            depth, 
+            0.0f, 
+            1
         );
-        
+                
         return true;
     }
-    
-#endif
-
 }
 
 /**
@@ -7466,7 +7365,7 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                         i32 closest_collision_idx = 0;
                         i32 closest_target_entity_idx = 0;
                         i32 closest_source_entity_idx = 0;
-                        
+                        i32 counter = 0;
                         for(i32 j = 0; j < collision_count; j++){
                         
                             i32 current_collision_idx = collision_idx[j];
@@ -7485,6 +7384,7 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                             if((target_mask & source_layer) == 0){
                                 continue;
                             }
+                            counter++;
                         
                             BOUNDS_CHECK(current_collision_idx, state->collision_manifold.contact_point_1.length);
                             f32 dx = state->collision_manifold.contact_point_1.x[current_collision_idx] - shape_x;
@@ -7512,6 +7412,10 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                                     closest_source_entity_idx = current_source_entity_idx; 
                                 }
                             }
+                        }
+                        
+                        if(!counter){
+                            break;
                         }
                         
                         // see `collision_manifold_set_data_one_way` to know why and how this works.
@@ -7684,14 +7588,14 @@ bool fizx_state_query_circle_area(FIZX_State* state, fizx_query_area_funcptr que
                     
             bool overlaps = polygon_overlaps_circle_scalar(
                 poly_vert_x, poly_vert_y, poly_vert_length, poly_cen_x, poly_cen_y,
-                area.x, area.y, area.radius, &info.normal_x, &info.normal_y, &info.depth
+                area.x, area.y, area.radius, &info.normal_1_x, &info.normal_1_y, &info.depth_1
             );
             
             if(overlaps){
                 polygon_find_point_contact_points_scalar(
                     poly_vert_x, poly_vert_y, poly_vert_length,
                     area.x, area.y,
-                    &info.first_contact_point_x, &info.first_contact_point_y
+                    &info.contact_point_1_x, &info.contact_point_1_y
                 );
 
                 query_callback(state, info, user_data);
@@ -7705,9 +7609,17 @@ bool fizx_state_query_circle_area(FIZX_State* state, fizx_query_area_funcptr que
             BOUNDS_CHECK(info.target_entity_idx, state->entities.global_radius_length);
             f32 other_radius = state->entities.global_radius[info.target_entity_idx];
          
-            bool overlaps = circle_overlaps_scalar(other_x, other_y, other_radius, area.x, area.y, area.radius, &info.normal_x, &info.normal_y, &info.depth);
+            bool overlaps = circle_overlaps_scalar(
+                other_x, other_y, other_radius, 
+                area.x, area.y, area.radius, 
+                &info.normal_1_x, &info.normal_1_y, &info.depth_1
+            );
             if(overlaps){
-                circle_calc_contact_points_scalar(other_x, other_y, other_radius, area.x, area.y, &info.first_contact_point_x, &info.first_contact_point_y);
+                circle_calc_contact_points_scalar(
+                    other_x, other_y, other_radius, 
+                    area.x, area.y, 
+                    &info.contact_point_1_x, &info.contact_point_1_y
+                );
                 
                 BOUNDS_CHECK(info.target_entity_idx, state->entities.layer_length);
                 info.target_layer = state->entities.layer[info.target_entity_idx];
@@ -7730,48 +7642,23 @@ bool fizx_state_query_circle_area(FIZX_State* state, fizx_query_area_funcptr que
             bool has_first_contact_point = false;
             bool has_second_contact_point = false;
             
-            bool overlaps = line_segment_overlaps_circle(
+            // this is okay as the field are only written to when an overlap occurs.
+            bool overlaps = line_overlaps_circle(
                 line_vert_x[0], line_vert_y[0],
                 line_vert_x[1], line_vert_y[1],
                 area.x, area.y, area.radius,
-                F32_EPSILON,
-                &info.first_contact_point_x, &info.first_contact_point_y,
-                &info.second_contact_point_x, &info.second_contact_point_y,
-                &has_first_contact_point, &has_second_contact_point,
-                &info.normal_x, &info.normal_y,
-                &info.depth
+                &info.contact_point_1_x, &info.contact_point_1_y,
+                &info.contact_point_2_x, &info.contact_point_2_y,
+                &info.normal_1_x, &info.normal_1_y,
+                &info.normal_2_x, &info.normal_2_y,
+                &info.depth_1,
+                &info.depth_2,
+                &info.contact_point_count
             );
-                    
+            
             if(overlaps){
-                if(!has_first_contact_point){
-                    if(!has_second_contact_point){
-                        // do nothing...
-                        // the line is submerged fully into the circle's area, this is treated
-                        // as "no collision", as the system only cares whether the shape is colliding
-                        // with another shapes edges.
-                    }
-                    else{
-                        f32 temp;
-                        temp = info.first_contact_point_x;
-                        info.first_contact_point_x = info.second_contact_point_x;
-                        info.second_contact_point_x = temp;
-
-                        temp = info.first_contact_point_y;
-                        info.first_contact_point_y = info.second_contact_point_y;
-                        info.second_contact_point_y = temp;
-                    }
-                }
-                else{
-                    if(!has_second_contact_point){
-                        // do nothing...
-                    }
-                    else{
-                        info.two_contact_points = true;
-                    }
-                }
-                
                 query_callback(state, info, user_data);
-            }            
+            }         
         }
         else{
             ASSERT(false, "undefined shape category.");

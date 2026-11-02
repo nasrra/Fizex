@@ -1374,7 +1374,7 @@ void thwamper_smackdown_area_query_callback(FIZX_State* state, FIZX_QueryCollisi
         return;
     }
     
-    Vector2 force = vector2_mul_val((Vector2){.x = info.normal_x, .y = info.normal_y}, THWAMPER_LAUNCH_FORCE);
+    Vector2 force = vector2_mul_val((Vector2){.x = info.normal_1_x, .y = info.normal_1_y}, THWAMPER_LAUNCH_FORCE);
     fizx_body_impulse_linear_force_unsafe(state, body_idx, force);
 }
 
