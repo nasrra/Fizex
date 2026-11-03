@@ -547,8 +547,6 @@ Vector2 vector2_clamp_to_radius(Vector2 v, f32 radius){
 ///
 
 
-
-
 bool vector2i_equals(Vector2I lhs, Vector2I rhs){
     return lhs.x == rhs.x && lhs.y == rhs.y;
 }
@@ -2590,9 +2588,7 @@ bool circle_cast_overlaps_circle(
     // calculate the point at which to perform the circle overlap check.
     f32 cast_circle_x = cast_start_x + cast_dist_x * t_enter;
     f32 cast_circle_y = cast_start_y + cast_dist_y * t_enter;
-    
-    ASSERT(cast_radius>0.0f,"asd");
-    
+        
     bool overlaps = circle_overlaps_scalar(
         cast_circle_x, cast_circle_y, cast_radius,
         circle_x, circle_y, circle_radius,
@@ -2600,7 +2596,6 @@ bool circle_cast_overlaps_circle(
     );
     
     if(!overlaps){
-        os_output_message("asd\n");
         return false;
     }
 
@@ -2645,8 +2640,8 @@ bool circle_cast_overlaps_line(
     f32 shift = MIN(cast_radius, abs_ds);
     f32 shift_x = normal_x * side * shift;
     f32 shift_y = normal_y * side * shift;
-    f32 shifted_start_x = cast_start_x - shift_x;
-    f32 shifted_start_y = cast_start_y - shift_y;
+    f32 shifted_start_x = cast_start_x - shift_x + F32_EPSILON;
+    f32 shifted_start_y = cast_start_y - shift_y + F32_EPSILON;
     cast_dist_x -= shift_x;
     cast_dist_y -= shift_y;
     
@@ -2654,9 +2649,9 @@ bool circle_cast_overlaps_line(
     
         f32 dist_cross = vector2_cross_scalar(cast_dist_x, cast_dist_y, line_dist_x, line_dist_y);
     
-        if(dist_cross > -F32_EPSILON && dist_cross < F32_EPSILON){
-            return false;
-        }
+        // if(dist_cross > -F32_EPSILON && dist_cross < F32_EPSILON){
+        //     return false;
+        // }
     
         f32 shifted_to_line_x = line_start_x - shifted_start_x;
         f32 shifted_to_line_y = line_start_y - shifted_start_y;
@@ -2874,6 +2869,13 @@ bool circle_cast_overlaps_polygon(
     f32 poly_dist_x;
     f32 poly_dist_y;
 
+    f32 temp_contact_point_x;
+    f32 temp_contact_point_y;
+    f32 temp_normal_x;
+    f32 temp_normal_y;
+    f32 temp_depth;
+    f32 temp_dist;
+
     i32 contact_point_count = 0;
 
     for(i32 idx = 0; idx < poly_vert_length; idx++){
@@ -2898,20 +2900,110 @@ bool circle_cast_overlaps_polygon(
             continue;
         }
         
-        if(!contact_point_count){
-            contact_point_count = 1;
-
-            // change to poly.
-            *out_contact_point_1_x = poly_start_x + (poly_dist_x * poly_t);
-            *out_contact_point_1_y = poly_start_y + (poly_dist_y * poly_t);
-            
-            vector2_normalise_scalar(poly_dist_x, poly_dist_y, &poly_dir_x, &poly_dir_y);
+        // change to poly.
+        f32 contact_point_x = poly_start_x + (poly_dist_x * poly_t);
+        f32 contact_point_y = poly_start_y + (poly_dist_y * poly_t);
         
-            *out_normal_1_x = -poly_dir_y;
-            *out_normal_1_y = poly_dir_x;
-        }
-        else{
+        vector2_normalise_scalar(poly_dist_x, poly_dist_y, &poly_dir_x, &poly_dir_y);
+    
+        f32 normal_x = -poly_dir_y;
+        f32 normal_y = poly_dir_x;
+        
+        // set to zero because idk
+        // the circle is always on the edge of the polygon edge
+        // so there shouldnt be a depth.
+        f32 depth = 0.0f;
+        
+        switch(contact_point_count){
             
+            default:{
+                ASSERT(false, "unknown contact point count");
+            }break;
+            case 0:{
+                contact_point_count = 1;
+                *out_contact_point_1_x = contact_point_x;
+                *out_contact_point_1_y = contact_point_y;        
+                *out_normal_1_x = -poly_dir_y;
+                *out_normal_1_y = poly_dir_x;                
+                *out_depth_1 = depth;
+            }break;
+            case 1:{
+                contact_point_count = 2;
+                                
+                f32 dist_n = vector2_dist_sqrd_scalar(contact_point_x, contact_point_y, cast_start_x, cast_start_y);
+                f32 dist_1 = vector2_dist_sqrd_scalar(*out_contact_point_1_x, *out_contact_point_1_y, cast_start_x, cast_start_y);
+                if(dist_n < dist_1){
+                    temp_contact_point_x    = *out_contact_point_1_x;
+                    temp_contact_point_y    = *out_contact_point_1_y;
+                    temp_normal_x           = *out_normal_1_x;
+                    temp_normal_y           = *out_normal_1_y;
+                    temp_depth              = *out_depth_1;
+                    
+                    *out_contact_point_1_x  = contact_point_x;
+                    *out_contact_point_1_y  = contact_point_y;
+                    *out_normal_1_x         = normal_x;
+                    *out_normal_1_y         = normal_y;
+                    *out_depth_1            = depth;
+                    
+                    *out_contact_point_2_x  = temp_contact_point_x;
+                    *out_contact_point_2_y  = temp_contact_point_y;
+                    *out_normal_2_x         = temp_normal_x;
+                    *out_normal_2_y         = temp_normal_y;
+                    *out_depth_2            = temp_depth;
+                }
+                else{
+                    *out_contact_point_2_x  = contact_point_x;
+                    *out_contact_point_2_y  = contact_point_y;
+                    *out_normal_2_x         = normal_x;
+                    *out_normal_2_y         = normal_y;
+                    *out_depth_2            = depth;
+                }
+            }break;
+            case 2:{
+            
+                f32 dist_n = vector2_dist_sqrd_scalar(contact_point_x, contact_point_y, cast_start_x, cast_start_y);
+                f32 dist_1 = vector2_dist_sqrd_scalar(*out_contact_point_1_x, *out_contact_point_1_y, cast_start_x, cast_start_y);
+                f32 dist_2 = vector2_dist_sqrd_scalar(*out_contact_point_2_x, *out_contact_point_2_y, cast_start_x, cast_start_y);
+            
+                if(dist_n < dist_1){
+                    temp_contact_point_x    = *out_contact_point_1_x;
+                    temp_contact_point_y    = *out_contact_point_1_y;
+                    temp_normal_x           = *out_normal_1_x;
+                    temp_normal_y           = *out_normal_1_y;
+                    temp_depth              = *out_depth_1;
+                    temp_dist               = dist_1;
+                        
+                    *out_contact_point_1_x  = contact_point_x;
+                    *out_contact_point_1_y  = contact_point_y;
+                    *out_normal_1_x         = normal_x;
+                    *out_normal_1_y         = normal_y;
+                    *out_depth_1            = depth;
+    
+                    // perform swap.            
+                    contact_point_x         = temp_contact_point_x;
+                    contact_point_y         = temp_contact_point_y;
+                    normal_x                = temp_normal_x;
+                    normal_y                = temp_normal_y;
+                    depth                   = temp_depth;
+                    dist_1                  = dist_n;
+                    dist_n                  = temp_dist;
+                }
+                if(dist_n < dist_2){
+                    *out_contact_point_2_x  = contact_point_x;
+                    *out_contact_point_2_y  = contact_point_y;
+                    *out_normal_2_x         = normal_x;
+                    *out_normal_2_y         = normal_y;
+                    *out_depth_2            = depth;
+                }
+            }break;
+        }
+        
+        #if 0
+        if(!contact_point_count){
+        }
+        else if(){
+            
+            contact_point_count = 2;
             contact_point_count = 2;
             
             // change to poly.
@@ -2945,7 +3037,9 @@ bool circle_cast_overlaps_polygon(
                 *out_normal_2_y          = temp_normal_y;                
             }           
             break;
+            
         }
+        #endif
             
     }
 

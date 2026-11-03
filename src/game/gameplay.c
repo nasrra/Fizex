@@ -116,6 +116,7 @@ typedef struct{
     Vector2 guideline_end_point;
 
     bool hovering_ui_element;
+    bool draw_guideline;
 
 } GameMouseState;
 
@@ -2717,8 +2718,36 @@ GenId level_manager_load_level_file(
 
 void guideline_collider_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    ctx->game_state->mouse_state.guideline_end_point = (Vector2){info.contact_point_1.x, info.contact_point_1.y};
-    Vector2 end = {info.contact_point_1.x + info.normal_1.x, info.contact_point_1.y + info.normal_1.y};
+    
+    GameMouseState* mouse_state = &ctx->game_state->mouse_state;   
+    GFX_State* gfx_state = ctx->game_state->entity_manager.gfx_state;
+    
+    
+    os_output_message("asd\n");
+    
+    if(!mouse_state->draw_guideline){
+        return;
+    }
+    
+    Circle circle = {
+        .x = info.contact_point_1.x + (info.normal_1.x * BALL_FIZX_SHAPE_RADIUS),
+        .y = info.contact_point_1.y + (info.normal_1.y * BALL_FIZX_SHAPE_RADIUS),
+        .radius = BALL_FIZX_SHAPE_RADIUS
+    };
+    
+    Vector2 end = (Vector2){circle.x, circle.y};
+    
+    gfx_draw_wire_circle(gfx_state, circle, GFX_COLOUR_WHITE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+    gfx_draw_line(
+        gfx_state,
+        GFX_COLOUR_WHITE,
+        mouse_state->clicked_entity_initial_position,
+        end, 
+        SPRITE_LAYER_EDITOR_WORLD,
+        0, 
+        SPRITE_MATERIAL_DEBUG, 
+        0.05f
+    );
 }
 
 void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena* transient, GFX_State* gfx_state){
@@ -3204,17 +3233,6 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                 }
     
                 { // draw_guideline();
-                    gfx_draw_line(
-                        entity_manager->gfx_state,
-                        GFX_COLOUR_WHITE,
-                        mouse_state->clicked_entity_initial_position,
-                        mouse_state->guideline_end_point, 
-                        SPRITE_LAYER_EDITOR_WORLD, 
-                        0, 
-                        SPRITE_MATERIAL_DEBUG, 
-                        0.05f
-                    );
-        
                     fizx_body_set_active(
                         &entity_manager->fizx_state,
                         mouse_state->guideline_physics_body_gid,
@@ -3230,7 +3248,9 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                         mouse_state->guideline_physics_shape_gid, 
                         launch_direction, 
                         100.0f
-                    );       
+                    );   
+                
+                    mouse_state->draw_guideline = true;
                 }
                 
                 { // draw_launch_cursour();
@@ -3251,7 +3271,8 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                     &game_state->entity_manager.fizx_state,
                     game_state->mouse_state.guideline_physics_body_gid,
                     false
-                );  
+                );
+                mouse_state->draw_guideline = false;
             }
         
             // deslect_entity();
