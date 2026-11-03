@@ -3363,6 +3363,9 @@ bool fizx_collision_detection_polygon_to_line(
     BOUNDS_CHECK(line_user_data_idx, user_data_length);
     char* line_user_data = &user_data[line_user_data_idx];
 
+    BOUNDS_CHECK(line_idx, radius_length);
+    f32 line_radius = radius[line_idx];
+
     // gather polygon vertices.
     f32* poly_vert_x;
     f32* poly_vert_y;
@@ -3391,18 +3394,36 @@ bool fizx_collision_detection_polygon_to_line(
     f32 normal_2_y          = 0.0f;
     i32 contact_point_count = 0;
 
-    bool overlaps = line_segment_overlaps_polygon_new(
-        line_vert_x[0], line_vert_y[0],
-        line_vert_x[1], line_vert_y[1],
-        poly_vert_x, poly_vert_y, poly_vert_length,
-        &contact_point_1_x, &contact_point_1_y,
-        &contact_point_2_x, &contact_point_2_y,
-        &normal_1_x, &normal_1_y,
-        &normal_2_x, &normal_2_y,
-        &depth_1,
-        &depth_2,
-        &contact_point_count
-    );
+    bool overlaps = false;
+    if(line_radius > 0.0f){
+        overlaps = circle_cast_overlaps_polygon(
+            line_start_x, line_start_y,
+            line_end_x, line_end_y,
+            line_radius,
+            poly_vert_x, poly_vert_y, poly_vert_length,
+            &contact_point_1_x, &contact_point_1_y,
+            &contact_point_2_x, &contact_point_2_y,
+            &normal_1_x, &normal_1_y,
+            &normal_2_x, &normal_2_y,
+            &depth_1,
+            &depth_2,
+            &contact_point_count
+        );
+    }
+    else{
+        overlaps = line_overlaps_polygon(
+            line_start_x, line_start_y,
+            line_end_x, line_start_y,
+            poly_vert_x, poly_vert_y, poly_vert_length,
+            &contact_point_1_x, &contact_point_1_y,
+            &contact_point_2_x, &contact_point_2_y,
+            &normal_1_x, &normal_1_y,
+            &normal_2_x, &normal_2_y,
+            &depth_1,
+            &depth_2,
+            &contact_point_count
+        );
+    }
     
     if(!overlaps){
         return false;

@@ -886,11 +886,11 @@ bool line_overlaps_line(
     */
     
     // a_t = cross(a_to_b, b_dist) / dist_cross.
-    // how far along 'b' that 'a' intersects with it.
+    // how far along 'a' that 'b' intersects with it.
     f32 a_t = vector2_cross_scalar(a_to_b_x, a_to_b_y, b_dist_x, b_dist_y) / dist_cross;
     
     // b_t = cross(a_to_b, a_dist) / dist_cross.
-    // how far along 'a' that 'b' intersects with it.
+    // how far along 'b' that 'a' intersects with it.
     f32 b_t = vector2_cross_scalar(a_to_b_x, a_to_b_y, a_dist_x, a_dist_y) / dist_cross;
     
     /*
@@ -1014,366 +1014,6 @@ bool line_overlaps_circle(
     }
     return true;
 }
-
-/*
-    `remarks`
-    -   it is assumed that line vertex arrays both have a length of two.
-*/
-bool line_segment_overlaps_polygon(
-    f32 line_start_x, f32 line_start_y,
-    f32 line_end_x, f32 line_end_y,
-    f32* poly_vert_x, f32* poly_vert_y, i32 poly_vert_length,
-    f32 epsilon,
-    f32* out_enter_point_x, f32* out_enter_point_y,
-    f32* out_exit_point_x, f32* out_exit_point_y,
-    bool* out_has_enter_point, bool* out_has_exit_point,
-    f32* out_normal_x, f32* out_normal_y,
-    f32* out_depth
-){
-
-    /*
-        `remarks`
-        this was copied from Claude; i have absolutely no idea
-        how any of this works :)))
-    */
-
-    f32 d_x = line_end_x - line_start_x;
-    f32 d_y = line_end_y - line_start_y;
-    f32 d_len = f32_sqrt(vector2_dot_scalar(d_x, d_y, d_x, d_y));
-    *out_has_enter_point = false;
-    *out_has_exit_point = false;
-    *out_normal_x = 0.0f;
-    *out_normal_y = 0.0f;
-    *out_depth = 0.0f;
-
-    f32 enter_normal_x  = 0.0f;
-    f32 enter_normal_y  = 0.0f;
-    f32 enter_distance  = 0.0f;
-    f32 enter_denom     = 0.0f;
-
-    f32 exit_normal_x  = 0.0f;
-    f32 exit_normal_y  = 0.0f;
-    f32 exit_distance  = 0.0f;
-    f32 exit_denom     = 0.0f;
-
-    bool has_flat_edge = false;
-    f32 flat_normal_x = 0.0f;
-    f32 flat_normal_y = 0.0f;
-
-    f32 t_enter = -F32_MAX;
-    f32 t_exit = F32_MAX;
-
-    for(i32 i = 0 ; i < poly_vert_length; i++){
-
-        // get polygon edge.
-        f32 edge_start_x = poly_vert_x[i];
-        f32 edge_start_y = poly_vert_y[i];
-        i32 j = (i + 1) % poly_vert_length;
-        f32 edge_end_x = poly_vert_x[j];
-        f32 edge_end_y = poly_vert_y[j];
-        f32 edge_x = edge_end_x - edge_start_x;
-        f32 edge_y = edge_end_y - edge_start_y;
-
-        // get perpendicular.
-        f32 perp_x = -edge_y;
-        f32 perp_y = edge_x;
-        // in the case of counter-clock wise winding of verts:
-        // use the below code instead:
-        //  f32 perp_x = edge_y;
-        //  f32 perp_y = -edge_x;
-
-        f32 perp_len = vector2_len_scalar(perp_x, perp_y);
-        if(perp_len == 0.0f){ // degenerate edge.
-            continue;
-        }
-        perp_x /= perp_len;
-        perp_y /= perp_len;
-
-        // dist is the signed distance from the line segment start point.
-        // a positive value means this is the line segment's start point is outside
-        f32 dist = vector2_dot_scalar(perp_x, perp_y, line_start_x - edge_start_x, line_start_y - edge_start_y);
-
-        // `denom` is how fast `dist` changes per unit `t`.
-        // negative means the segment is moving against the outward normal,
-        // so it is heading inward. Positive means its heading outward.
-        f32 denom = vector2_dot_scalar(perp_x, perp_y, d_x, d_y);
-
-        // as the perpendicular vector is a unit vector, this means that:
-        //  denom = d_len * cos(angle between perpendicular and `d`)
-        //
-        // we should test whether the cosine is nearly 0, meaning the segment is nearly perpendicular
-        // to the normal; therfore parallel to the edge. Then the segment never crosses
-        // this plane, so there is no 't' to compute. Only on ething matters: which side is it on?
-
-        if(ABS(denom) <= epsilon * d_len){
-            if(dist > epsilon){
-                return false;
-            }
-
-            // when parallel and lying on the polygon's edge (within epsilon): remember this edge's
-            // normal. The neighbouring edges do the clipping, so this edge would
-            // otherwise never contribute a normal.
-            if(dist >= -epsilon){
-                has_flat_edge = true;
-                flat_normal_x = perp_x;
-                flat_normal_y = perp_y;
-            }
-            continue;
-        }
-
-        f32 t = -dist / denom;
-        if(denom < 0.0f){
-            // the line is heading into the polygon.
-            if(t > t_enter){
-                // this edge is now the latest entry, so store its normal and plane values.
-                t_enter = t;
-                enter_normal_x  = perp_x;
-                enter_normal_y  = perp_y;
-                enter_distance  = dist;
-                enter_denom     = denom;
-            }
-        }
-        else{
-            // the line is heading out of the polygon.
-            if(t < t_exit){
-                // this edge is now the earliest exit, so store its normal and plane values.
-                t_exit = t;
-                exit_normal_x   = perp_x;
-                exit_normal_y   = perp_y;
-                exit_distance   = dist;
-                exit_denom      = denom;
-            }
-        }
-
-        // if the last polygon edge we enter through cames after the first edge the line left through
-        // the inside space is empty, mand the line misses the polygon. This lets us bail out early instead
-        // of checking the remaining edges. The added epsilon value keeps corner-grazing hits, hwere the
-        // two polygon eges are nearly equal, from being rejected by rounding errors / floating point inprecisions.
-        if(t_enter > t_exit + epsilon){
-            return false;
-        }
-    }
-
-    if(t_enter > 1.0f || t_exit < 0.0f){
-        return false;
-    }
-
-    // the enter/exit point code was missing, so the has_enter/has_exit flags were never set
-    // to true, and the normal selection below always took the same branch.
-    // t_enter/t_exit must keep their UNCLAMPED values here, since the checks depend on them.
-    if(t_enter >= 0.0f){
-        *out_enter_point_x = line_start_x + d_x * t_enter;
-        *out_enter_point_y = line_start_y + d_y * t_enter;
-        *out_has_enter_point = true;
-    }
-    if(t_exit <= 1.0f){
-        *out_exit_point_x = line_start_x + d_x * t_exit;
-        *out_exit_point_y = line_start_y + d_y * t_exit;
-        *out_has_exit_point = true;
-    }
-
-    // the line segment lies flat on one of the polygon's edges: use that edge's normal, with no penetration.
-    // This must come before the enter/exit normal, which would otherwise give a neighbouring edge's normal.
-    if(has_flat_edge){
-        *out_normal_x = flat_normal_x;
-        *out_normal_y = flat_normal_y;
-        *out_depth = 0.0f;
-        return true;
-    }
-
-    f32 t_start = MAX(t_enter, 0.0f);
-    f32 t_end   = MIN(t_exit,  1.0f);
-
-    // pick the surface to report. Use the entry edge if the line segment entered
-    // through it, or if there is no exit edge either (fully inside). Otherwise the
-    // segment started inside, so use the edge it leaves through.
-    f32 normal_dist;
-    f32 normal_denom;
-    if(*out_has_enter_point || !*out_has_exit_point){
-        *out_normal_x   = enter_normal_x;
-        *out_normal_y   = enter_normal_y;
-        normal_dist     = enter_distance;
-        normal_denom    = enter_denom;
-    }
-    else{
-        *out_normal_x   = exit_normal_x;
-        *out_normal_y   = exit_normal_y;
-        normal_dist     = exit_distance;
-        normal_denom    = exit_denom;
-    }
-
-    // signed distance of both inside points to the chosen edge's plane
-    // (negative = inside). This reuses the plane equation `dist + denom * t`
-    // from the loop, so there are no extra square roots.
-    f32 dist_a = normal_dist + normal_denom * t_start;
-    f32 dist_b = normal_dist + normal_denom * t_end;
-
-    // depth is how far the deepest inside point is past the chosen edge's plane,
-    // which is the distance to push out along the normal.
-    f32 push = -MIN(dist_a, dist_b);
-    *out_depth = MAX(push, 0.0f);
-
-    // ricochet direction of the line's travel off the surface.
-    // f32 dir_x = line_end_x - line_start_x;
-    // f32 dir_y = line_end_y - line_start_y;
-    // f32 dir_len = f32_sqrt(dir_x * dir_x + dir_y * dir_y);
-    // if(dir_len > 0.0f){
-    //     dir_x /= dir_len;
-    //     dir_y /= dir_len;
-    // }
-
-    // f32 d_dot_n   = dir_x * *out_normal_x + dir_y * *out_normal_y;
-    // *out_normal_x = dir_x - 2.0f * d_dot_n * *out_normal_x;
-    // *out_normal_y = dir_y - 2.0f * d_dot_n * *out_normal_y;
-
-    return true;
-}
-
-bool line_segment_overlaps_circle(
-    f32 line_start_x, f32 line_start_y,
-    f32 line_end_x, f32 line_end_y,
-    f32 circle_x, f32 circle_y, f32 circle_radius,
-    f32 epsilon,
-    f32* out_enter_point_x, f32* out_enter_point_y,
-    f32* out_exit_point_x, f32* out_exit_point_y,
-    bool* out_has_enter_point, bool* out_has_exit_point,
-    f32* out_normal_x, f32* out_normal_y,
-    f32* out_depth
-){
-
-    /*
-        `remarks`
-        this was copied from Claude; i have absolutely no idea
-        how any of this works :)))
-    */
-
-    *out_has_enter_point = false;
-    *out_has_exit_point = false;
-    *out_normal_x = 0.0f;
-    *out_normal_y = 0.0f;
-    *out_depth = 0.0f;
-    if(circle_radius < 0.0f){
-        return false;
-    }
-
-    f32 d_x = line_end_x - line_start_x;
-    f32 d_y = line_end_y - line_start_y;
-
-    /*
-    a point on the line segment is on the cirlce when the distance
-    from the center equals the radius: for |start + d*t - center|^2 = r^2
-    Let f = start - center. Expanding gives |f + d*t|^2 = r^2, which becomes:
-    (d*d) t^2 + 2(f*d) t + (f*f - r^2) = 0
-    */
-
-    // quadratic coefficients
-    f32 a = vector2_dot_scalar(d_x, d_y, d_x, d_y);
-    if(a <= 0.0f){ // zero length segment.
-        return false;
-    }
-
-    // vector from circle center to segment start.
-    f32 f_x = line_start_x - circle_x;
-    f32 f_y = line_start_y - circle_y;
-
-    f32 b = vector2_dot_scalar(f_x, f_y, d_x, d_y);                      // "half-b" form
-    f32 c = vector2_dot_scalar(f_x, f_y, f_x, f_y) - circle_radius * circle_radius; // <= 0 means start is inside
-
-    // disc = a * (r^2 - h^2), where h is the distance from the circle center to the infinite line.
-    // dividing by `a` gives a tolerance in distance-squared units, so a grazing line isn't
-    // rejected by floating point error.
-    f32 disc = b * b - a * c;
-    if(disc < -epsilon * a){
-        return false; // the line misses the circle.
-    }
-    if(disc < 0.0f){
-        disc = 0.0f;  // grazing: treat as a single tangent point.
-    }
-
-    f32 root = f32_sqrt(disc);
-    f32 t_enter = (-b - root) / a;
-    f32 t_exit  = (-b + root) / a;
-
-    // the inside interval must overlap the segment's 0..1 range.
-    if(t_enter > 1.0f || t_exit < 0.0f){
-        return false;
-    }
-
-    if(t_enter >= 0.0f){
-        *out_enter_point_x = line_start_x + d_x * t_enter;
-        *out_enter_point_y = line_start_y + d_y * t_enter;
-        *out_has_enter_point = true;
-    }
-    if(t_exit <= 1.0f){
-        *out_exit_point_x = line_start_x + d_x * t_exit;
-        *out_exit_point_y = line_start_y + d_y * t_exit;
-        *out_has_exit_point = true;
-    }
-    // where along the infinite line the circle's center is closest (unclamped).
-    // NOTE: kept unclamped so we can tell whether the center projects onto the
-    // segment's interior or past one of its ends.
-    f32 t_raw = -b / a;
-
-    // length of the segment, needed for the perpendicular.
-    f32 inv_d_len = 1.0f / f32_sqrt(a);
-
-    // unit perpendicular to the segment.
-    f32 perp_x = -(-d_y * inv_d_len);
-    f32 perp_y = -( d_x * inv_d_len);
-
-    if(t_raw > 0.0f && t_raw < 1.0f){
-        // the circle's center projects onto the INTERIOR of the segment, so treat the
-        // segment like a flat wall. The normal is the segment's perpendicular, which is
-        // never along the line, so pushing the circle along it can't slide it along the wall.
-
-        // signed distance from the line to the circle center, along perp.
-        // (center - start) = -f
-        f32 side = vector2_dot_scalar(-f_x, -f_y, perp_x, perp_y);
-
-        // flip the perpendicular so it points toward the side the circle center is on.
-        // (if side is exactly 0 the sign is arbitrary; perp is used as-is)
-        if(side <= 0.0f){
-            perp_x *= -1.0f;
-            perp_y *= -1.0f;
-        }
-
-        *out_normal_x = -perp_x;
-        *out_normal_y = -perp_y;
-        // depth is how far the circle reaches past the line.
-        *out_depth = MAX(circle_radius - ABS(side), 0.0f);
-    }
-    else{
-        // the center projects past an end of the segment, so the closest point is an
-        // endpoint. The segment behaves like a rounded cap here, and the normal points
-        // from that endpoint toward the circle center. This is intentionally not
-        // perpendicular to the line.
-        f32 t_closest = (t_raw <= 0.0f) ? 0.0f : 1.0f;
-
-        // vector from the circle's center to the closest point (the endpoint).
-        f32 offset_x = f_x + d_x * t_closest;
-        f32 offset_y = f_y + d_y * t_closest;
-        f32 offset_len = f32_sqrt(vector2_dot_scalar(offset_x, offset_y, offset_x, offset_y));
-
-        if(offset_len > epsilon){
-            // CHANGED: negated. The normal now points FROM the line TOWARD the circle
-            // center (a push-out direction). Before, it pointed from the center to the line.
-            f32 inv_offset_len = 1.0f / offset_len;
-            *out_normal_x = offset_x * inv_offset_len;
-            *out_normal_y = offset_y * inv_offset_len;
-            // depth is how far the endpoint is inside the circle's surface.
-            *out_depth = MAX(circle_radius - offset_len, 0.0f);
-        }
-        else{
-            // the endpoint is at the circle's center, so there is no unique direction.
-            // Fall back to the segment's perpendicular, and push the full radius.
-            *out_normal_x = perp_x;
-            *out_normal_y = perp_y;
-            *out_depth = circle_radius;
-        }
-    }
-    return true;
-}
-
 
         // // direction of the line's travel.
         // f32 dir_x = d_x * inv_d_len; // reuses d and inv_d_len (a > 0 is guaranteed above, so no zero check needed)
@@ -2973,37 +2613,91 @@ bool circle_cast_overlaps_circle(
     return true;
 }
 
-// bool circle_cast_overlaps_polygon(
-//     f32 cast_start_x, f32 cast_start_y,
-//     f32 cast_end_x, f32 cast_end_y,
-//     f32 cast_radius,
-//     f32* poly_vert_x, f32* poly_vert_y, i32 poly_vert_length,
-//     f32* out_normal_x, f32* out_normal_y, f32* out_depth,
-//     f32* out_line_point_x, f32* out_line_point_y
-// ){
+bool circle_cast_overlaps_line(
+    f32 cast_start_x, f32 cast_start_y, f32 cast_dist_x, f32 cast_dist_y, f32 cast_radius,
+    f32 line_start_x, f32 line_start_y, f32 line_dist_x, f32 line_dist_y,
+    f32* out_line_t
+){
     
-//     for()
+    f32 line_len = f32_sqrt(line_dist_x * line_dist_x + line_dist_y * line_dist_y);    
+    if(line_len <= F32_EPSILON){
+        return false;
+    }
     
-//     line_segment_project_point(
-//         cast_start_x, cast_start_y,
-//         cast_end_x, cast_end_y,
-//         circle_x, circle_y,
-//         &projection_x, &projection_y
-//     );
+    f32 inv_line_len = 1.0f / line_len;
+    f32 normal_x = -line_dist_y * inv_line_len;
+    f32 normal_y = line_dist_x * inv_line_len;
     
-//     // transform from axis-projection space into world space.
-//     // *out_line_point_x = cast_start_x + ((cast_end_x - cast_start_x) * projection_x);
-//     // *out_line_point_y = cast_start_y + ((cast_end_y - cast_start_y) * projection_y);
+    // signed distance of the cast start from the line, and which side it is on (+1 or -1).
+    // i.e, get the sign multplier to move the cast line closer to the line we want to check overlaps against. 
+    f32 ds = vector2_dot_scalar(
+        cast_start_x - line_start_x, 
+        cast_start_y - line_start_y,
+        normal_x,
+        normal_y 
+    );
+    // get which side of the line the circle cast is on.
+    f32 side = ds >= 0.0f ? 1.0f : -1.0f;
+    f32 abs_ds = ds * side;
     
-//     *out_line_point_x = projection_x;
-//     *out_line_point_y = projection_y;
+    // move the cast line towards the line we want to overlap, but never firther than the line itself (otherwise we over shoot it).
+    // if the start is closer than `cast radius`, the shifted start lands on the line.
+    f32 shift = MIN(cast_radius, abs_ds);
+    f32 shift_x = normal_x * side * shift;
+    f32 shift_y = normal_y * side * shift;
+    f32 shifted_start_x = cast_start_x - shift_x;
+    f32 shifted_start_y = cast_start_y - shift_y;
+    cast_dist_x -= shift_x;
+    cast_dist_y -= shift_y;
     
-//     return circle_overlaps_scalar(
-//         *out_line_point_x, *out_line_point_y, cast_radius,
-//         circle_x, circle_y, circle_radius,
-//         out_normal_x, out_normal_y, out_depth
-//     );
-// }
+    { // shifted_line_overlaps_other_line();
+    
+        f32 dist_cross = vector2_cross_scalar(cast_dist_x, cast_dist_y, line_dist_x, line_dist_y);
+    
+        if(dist_cross > -F32_EPSILON && dist_cross < F32_EPSILON){
+            return false;
+        }
+    
+        f32 shifted_to_line_x = line_start_x - shifted_start_x;
+        f32 shifted_to_line_y = line_start_y - shifted_start_y;
+        
+        /*
+            by dividing the following two cross products by dist_cross, we are using dist_cross as a common denominator
+            to normalise the measurement; i.e, bringing the "area" generated by the cross product operations into the 
+            total parallelogram (dist_cross) space.
+            
+            note that dividing by the partial area (a_t or b_t; i.e, numerator) by the total area (dist_cross) the units
+            cancel out, leaving a ratio (or percentage) value.  
+        */
+        
+        // shifted_t = cross(a_to_b, b_dist) / dist_cross.
+        // how far along 'shifted' that 'line' intersects with it.
+        f32 shifted_t = vector2_cross_scalar(shifted_to_line_x, shifted_to_line_y, line_dist_x, line_dist_y) / dist_cross;
+        
+        // line_t = cross(a_to_b, a_dist) / dist_cross.
+        // how far along 'line' that 'shifted' intersects with it.
+        f32 line_t = vector2_cross_scalar(shifted_to_line_x, shifted_to_line_y, cast_dist_x, cast_dist_y) / dist_cross;
+    
+        /*
+            'a_dist' and 'b_dist' are infinite lines (vectors) that intersect somewhere,
+            however, that intersection must be inside both of the line segments bounds
+            for it to count as 'hit'. 
+        */
+        if(
+            shifted_t < 0.0f || 
+            shifted_t > 1.0f ||
+            line_t < 0.0f || 
+            line_t > 1.0f
+        ){
+            return false;
+        }
+        
+        os_output_message("asd\n");
+        *out_line_t = line_t;
+        return true;
+    }
+}
+
 
 
 ///
@@ -3037,7 +2731,7 @@ void project_polygon(
     }
 }
 
-bool line_segment_overlaps_polygon_new(
+bool line_overlaps_polygon(
     f32 line_start_x, f32 line_start_y,
     f32 line_end_x, f32 line_end_y,
     f32* poly_vert_x, f32* poly_vert_y, i32 poly_vert_length,
@@ -3149,6 +2843,127 @@ bool line_segment_overlaps_polygon_new(
             *out_depth_2 = vector2_dist_scalar(
                 *out_contact_point_1_x, *out_contact_point_1_y,
                 line_end_x, line_end_y
+            );
+        }
+
+        return true;
+    }
+    return false;    
+}
+
+bool circle_cast_overlaps_polygon(
+    f32 cast_start_x, f32 cast_start_y, f32 cast_end_x, f32 cast_end_y, f32 cast_radius,
+    f32* poly_vert_x, f32* poly_vert_y, i32 poly_vert_length,
+    f32* out_contact_point_1_x, f32* out_contact_point_1_y,
+    f32* out_contact_point_2_x, f32* out_contact_point_2_y,
+    f32* out_normal_1_x, f32* out_normal_1_y,
+    f32* out_normal_2_x, f32* out_normal_2_y,
+    f32* out_depth_1,
+    f32* out_depth_2,
+    i32* out_contact_point_count
+){    
+
+    f32 poly_t;
+    f32 cast_dist_x     = cast_end_x - cast_start_x;
+    f32 cast_dist_y     = cast_end_y - cast_start_y;
+
+    f32 poly_start_x;
+    f32 poly_start_y; 
+    f32 poly_end_x;
+    f32 poly_end_y;
+    f32 poly_dist_x;
+    f32 poly_dist_y;
+
+    i32 contact_point_count = 0;
+
+    for(i32 idx = 0; idx < poly_vert_length; idx++){
+        i32 next_idx = (idx + 1 == poly_vert_length) ? 0 : idx + 1;
+        
+        poly_start_x    = poly_vert_x[idx];
+        poly_end_x      = poly_vert_x[next_idx];
+        poly_start_y    = poly_vert_y[idx];
+        poly_end_y      = poly_vert_y[next_idx];    
+        poly_dist_x     = poly_end_x - poly_start_x;
+        poly_dist_y     = poly_end_y - poly_start_y;
+        f32 poly_dir_x;
+        f32 poly_dir_y;
+
+        bool overlaps = circle_cast_overlaps_line(
+            cast_start_x, cast_start_y, cast_dist_x, cast_dist_y, cast_radius,
+            poly_start_x, poly_start_y, poly_dist_x, poly_dist_y,
+            &poly_t
+        );
+        
+        if(!overlaps){
+            continue;
+        }
+        
+        if(!contact_point_count){
+            contact_point_count = 1;
+
+            // change to poly.
+            *out_contact_point_1_x = poly_start_x + (poly_dist_x * poly_t);
+            *out_contact_point_1_y = poly_start_y + (poly_dist_y * poly_t);
+            
+            vector2_normalise_scalar(poly_dist_x, poly_dist_y, &poly_dir_x, &poly_dir_y);
+        
+            *out_normal_1_x = -poly_dir_y;
+            *out_normal_1_y = poly_dir_x;
+        }
+        else{
+            
+            contact_point_count = 2;
+            
+            // change to poly.
+            *out_contact_point_2_x = poly_start_x + (poly_dist_x * poly_t);
+            *out_contact_point_2_y = poly_start_y + (poly_dist_y * poly_t);
+
+            vector2_normalise_scalar(poly_dist_x, poly_dist_y, &poly_dir_x, &poly_dir_y);        
+
+            *out_normal_2_x = -poly_dir_y;
+            *out_normal_2_y = poly_dir_x;
+            
+            f32 dist_1 = vector2_dist_sqrd_scalar(*out_contact_point_1_x, *out_contact_point_1_y, cast_start_x, cast_start_y);
+            f32 dist_2 = vector2_dist_sqrd_scalar(*out_contact_point_2_x, *out_contact_point_2_y, cast_start_x, cast_start_y);
+                                                
+            // swap the contact points around if they are 
+            if(dist_2 < dist_1){
+                
+                f32 temp_contact_point_x    = *out_contact_point_1_x;
+                f32 temp_contact_point_y    = *out_contact_point_1_y;
+                f32 temp_normal_x           = *out_normal_1_x; 
+                f32 temp_normal_y           = *out_normal_1_y;
+                
+                *out_contact_point_1_x  = *out_contact_point_2_x;
+                *out_contact_point_1_y  = *out_contact_point_2_y;
+                *out_normal_1_x         = *out_normal_2_x; 
+                *out_normal_1_y         = *out_normal_2_y;
+                
+                *out_contact_point_2_x   = temp_contact_point_x;
+                *out_contact_point_2_y   = temp_contact_point_y;
+                *out_normal_2_x          = temp_normal_x; 
+                *out_normal_2_y          = temp_normal_y;                
+            }           
+            break;
+        }
+            
+    }
+
+    *out_contact_point_count = contact_point_count;
+    if(contact_point_count > 0){
+        
+        // ordering matters for depth calculations.
+        // so we do them here at the end.
+        
+        *out_depth_1 = vector2_dist_scalar(
+            *out_contact_point_1_x, *out_contact_point_1_y,
+            cast_start_x, cast_start_y
+        );
+
+        if(contact_point_count > 1){
+            *out_depth_2 = vector2_dist_scalar(
+                *out_contact_point_1_x, *out_contact_point_1_y,
+                cast_end_x, cast_end_y
             );
         }
 

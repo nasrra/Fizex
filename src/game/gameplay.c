@@ -3182,7 +3182,6 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
             
             if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
                 clicked_entity = (Entity*)area->user_data;
-                os_output_message("farts\n");        
             }
             
             if(
