@@ -19,6 +19,55 @@ struct GameState;
 ///
 
 
+typedef void (*TimerTimeoutCallback)(void* user_data);
+typedef void (*TimerTickCallback)(void* user_data, f32 current_tick, f32 delta_tick);
+
+typedef struct{
+    
+    TimerTickCallback tick_callback;
+    void* tick_data;
+    size_t tick_data_size;
+    
+    TimerTimeoutCallback timeout_callback;
+    void* timeout_data; 
+    size_t timeout_data_size;
+    
+    f32 duration; 
+    f32 time_scale;
+    
+} TimerContext;
+
+typedef GenId TimerHandle;
+
+typedef struct{
+    GenIdAllocator gen_id_allocator;
+    f32* time_scale;
+    f32* previous_time;
+    f32* current_time;
+    // `remarks`
+    // 1.0f = true, 0.0f = false.
+    f32* is_ticking;
+    // `remarks`
+    // 1.0f = true, 0.0f = false.
+    f32* has_started;
+    f32* delta_time_scratch_space;
+
+    TimerTickCallback* tick_callback;
+    char* tick_data;
+    i32 tick_data_length;
+    i32 tick_data_element_size;
+    
+    TimerTimeoutCallback* timeout_callback;
+    char* timeout_data;
+    i32 timeout_data_length;
+    i32 timeout_data_element_size;
+    
+    // the length of all backing arrays.
+    i32 length;
+    
+    bool is_init;
+} TimerManager;
+
 typedef enum{
 
     // the stage where the player can direct the cue ball.
@@ -53,7 +102,10 @@ typedef struct{
     i32 turn_based_entity_count;
     
     BoardTurn turn;
+    BoardTurn previous_turn;
     BoardStage stage;
+    
+    TimerManager* timer_manager;
     
     String turn_text;
     String turn_text_scratch_space;
@@ -61,6 +113,8 @@ typedef struct{
     bool display_turn_text;
     bool show_pause_menu;
     bool cue_ball_is_pocketed;
+    
+    TimerHandle player_turn_timer;
     
     bool is_init;
 } BoardState;
@@ -154,31 +208,6 @@ typedef struct{
     bool boost_depleted;
     bool serialisation_disabled;
 } Entity;
-
-typedef void (*TimerTimeout)(void* user_data);
-
-typedef struct{
-    GenIdAllocator gen_id_allocator;
-    f32* time_scale;
-    f32* previous_time;
-    f32* current_time;
-    // `remarks`
-    // 1.0f = true, 0.0f = false.
-    f32* is_ticking;
-    // `remarks`
-    // 1.0f = true, 0.0f = false.
-    f32* has_started;
-    f32* delta_time_scratch_space;
-    TimerTimeout* timeout_function;
-    char* timeout_data;
-    i32 timeout_data_length;
-    i32 timeout_data_element_size;
-    // the length of all backing arrays.
-    i32 length;
-    bool is_init;
-} TimerManager;
-
-typedef GenId TimerHandle;
 
 typedef struct{
     String name;
@@ -305,12 +334,12 @@ typedef struct{
 typedef struct{
     GenId ball_cue_physics_gid;
     EntityManager* entity_manager;
-} BallCueFragmentationTimerTimeoutContext;
+} BallCueFragmentationTimerTimeoutCallbackContext;
 
 typedef struct{
     GenId boost_pad_entity_gid;
     EntityManager* entity_manager;
-} BoostPadBoostDepletedTimerTimeoutContext;
+} BoostPadBoostDepletedTimerTimeoutCallbackContext;
 
 
 ///
@@ -434,11 +463,15 @@ static f32 fixed_update_accumulator = 0.0f;
 
 
 ///
-/// Timer Manager.
+/// @ Timer Manager.
 ///
 
 
-bool timer_manager_init(TimerManager* manager, MemoryArena* arena, i32 timer_amount, i32 timeout_data_element_size){
+bool timer_manager_init(
+    TimerManager* manager, MemoryArena* arena, 
+    i32 timer_amount, i32 timeout_data_element_size, i32 tick_data_element_size
+){
+
     if(manager->is_init){
         ASSERT(false, "already init.");
         return false;
@@ -451,9 +484,15 @@ bool timer_manager_init(TimerManager* manager, MemoryArena* arena, i32 timer_amo
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->is_ticking, &manager->length, timer_amount);
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->has_started, &manager->length, timer_amount);
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->delta_time_scratch_space, &manager->length, timer_amount);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->timeout_function, &manager->length, timer_amount);
+
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->tick_callback, &manager->length, timer_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->tick_data, &manager->tick_data_length, tick_data_element_size * timer_amount);
+    
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->timeout_callback, &manager->length, timer_amount);
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->timeout_data, &manager->timeout_data_length, timeout_data_element_size * timer_amount);
+    
     manager->timeout_data_element_size = timeout_data_element_size;
+    manager->tick_data_element_size = tick_data_element_size;
     manager->is_init = true;
 
     return true;
@@ -467,30 +506,43 @@ bool timer_manager_init(TimerManager* manager, MemoryArena* arena, i32 timer_amo
     `returns`
     a handle to the newly started timer; otherwise 0 if allocation was unsuccessful.
 */
-TimerHandle timer_manager_timer_start(TimerManager* manager, f32 duration, f32 time_scale, TimerTimeout timer_timeout_function, void* timeout_data, size_t timeout_data_size){
+TimerHandle timer_manager_timer_start(TimerManager* manager, TimerContext timer_ctx){
     TimerHandle handle = gen_id_allocator_alloc(&manager->gen_id_allocator);
     if(handle == 0){
         return handle;
     }
 
-    if(timeout_data_size > manager->timeout_data_element_size){
-        ASSERT(false, "attempted to alloc timer data that has a size greater than the allocated maximum size.");
-        return handle;
-    }
 
     i32 idx = gen_id_get_index(handle);
 
-    // set timer callback data.
-    size_t timeout_data_idx = idx * manager->timeout_data_element_size;
-    BOUNDS_CHECK(timeout_data_idx, manager->timeout_data_length);
-    COPY_MEMORY(manager->timeout_data + timeout_data_idx, timeout_data, timeout_data_size);
+    if(timer_ctx.timeout_data_size > manager->timeout_data_element_size){
+        ASSERT(false, "attempted to alloc timer timeout data that has a size greater than the allocated maximum size.");
+    }
+    else{ 
+        // set_timer_timeout_data();
+        size_t data_idx = idx * manager->timeout_data_element_size;
+        BOUNDS_CHECK(data_idx, manager->timeout_data_length);
+        COPY_MEMORY(manager->timeout_data + data_idx, timer_ctx.timeout_data, timer_ctx.timeout_data_size);
+    }
+    
+    if(timer_ctx.tick_data_size > manager->tick_data_element_size){
+        ASSERT(false, "attempted to alloc timer tick data that has a size greater than the allocated maximum size.");
+    }
+    else{ 
+        // set_timer_tick_data();
+        size_t data_idx = idx * manager->tick_data_element_size;
+        BOUNDS_CHECK(data_idx, manager->tick_data_length);
+        COPY_MEMORY(manager->tick_data + data_idx, timer_ctx.tick_data, timer_ctx.tick_data_size);
+    }
 
     // set the timer state.
-    manager->current_time[idx] = duration;
-    manager->previous_time[idx] = 0.0f;
-    manager->is_ticking[idx] = TIMER_MANAGER_IS_TICKING_TRUE;
-    manager->has_started[idx] = TIMER_MANAGER_HAS_STARTED_TRUE;
-    manager->timeout_function[idx] = timer_timeout_function;
+    manager->current_time[idx]      = timer_ctx.duration;
+    manager->time_scale[idx]        = timer_ctx.time_scale;
+    manager->previous_time[idx]     = 0.0f;
+    manager->is_ticking[idx]        = TIMER_MANAGER_IS_TICKING_TRUE;
+    manager->has_started[idx]       = TIMER_MANAGER_HAS_STARTED_TRUE;
+    manager->timeout_callback[idx]  = timer_ctx.timeout_callback;
+    manager->tick_callback[idx]     = timer_ctx.tick_callback;
 
     return handle;
 }
@@ -508,7 +560,8 @@ bool timer_manager_timer_stop_unsafe(TimerManager* manager, i32 timer_idx){
     manager->is_ticking[timer_idx]          = TIMER_MANAGER_IS_TICKING_FALSE;
     manager->current_time[timer_idx]        = 0.0f;
     manager->previous_time[timer_idx]       = 0.0f;
-    manager->timeout_function[timer_idx]    = NULL;
+    manager->timeout_callback[timer_idx]    = NULL;
+    manager->tick_callback[timer_idx]       = NULL;
     gen_id_allocator_dealloc_unsafe(&manager->gen_id_allocator, timer_idx);
     return true;
 }
@@ -573,16 +626,23 @@ void timer_manager_update(TimerManager* manager, f32 delta_time){
         if(manager->is_ticking[i] == TIMER_MANAGER_IS_TICKING_FALSE){
             continue;
         }
+        
+        TimerTickCallback tick_callback = manager->tick_callback[i];
+        if(tick_callback){
+            i32 data_idx = i * manager->tick_data_element_size;
+            BOUNDS_CHECK(data_idx, manager->tick_data_length);
+            tick_callback(&manager->tick_data[data_idx], manager->current_time[i], manager->delta_time_scratch_space[i]);
+        }
+
         if(manager->current_time[i] != 0.0f){
             continue;
         }
-        if(manager->previous_time[i] <= manager->current_time[i]){
-            continue;
-        }
-        if(manager->timeout_function[i] != NULL){
-            i32 timeout_data_idx = i * manager->timeout_data_element_size;
-            BOUNDS_CHECK(timeout_data_idx, manager->timeout_data_length);
-            manager->timeout_function[i](&manager->timeout_data[timeout_data_idx]);
+                
+        TimerTimeoutCallback timeout_callback = manager->timeout_callback[i]; 
+        if(timeout_callback){
+            i32 data_idx = i * manager->timeout_data_element_size;
+            BOUNDS_CHECK(data_idx, manager->timeout_data_length);
+            timeout_callback(&manager->timeout_data[data_idx]);
         }
         timer_manager_timer_stop_unsafe(manager, i);
     }
@@ -631,13 +691,52 @@ bool timer_manager_timer_set_time_scale(TimerManager* manager, TimerHandle handl
     `returns`
     the delta time between updates that the timer ticked by; otherwise 0 if the timer didn't tick or the handle is invalid.
 */
-f32 timer_manager_timer_get_delta_tick_time(TimerManager manager, TimerHandle handle){
+bool timer_manager_timer_get_delta_tick_time(TimerManager manager, TimerHandle handle, f32* out_delta_tick){
     i32 idx = gen_id_allocator_is_gen_id_valid(&manager.gen_id_allocator, handle);
     if(!idx){
-        return 0.0f;
+        return true;
     }
     BOUNDS_CHECK(idx, manager.length);
-    return ABS(manager.previous_time[idx] - manager.current_time[idx]);
+    *out_delta_tick = manager.delta_time_scratch_space[idx]; // ABS(manager.previous_time[idx] - manager.current_time[idx]);
+    return false;
+}
+
+bool timer_manager_timer_get_current_tick(TimerManager manager, TimerHandle handle, f32* out_current_tick){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&manager.gen_id_allocator, handle);
+    if(!idx){
+        return false;
+    }
+    
+    BOUNDS_CHECK(idx, manager.length);
+    *out_current_tick = manager.current_time[idx];
+    return true;
+}
+
+
+///
+/// @ Tick Callbacks
+///
+
+
+void player_turn_timer_tick_callback(void* user_data, f32 current_tick, f32 delta_tick){
+    
+}
+
+
+///
+/// @ Timeout Callbacks
+///
+
+
+typedef struct{
+    BoardState* board_state;
+} PlayerBoardTurnTimeoutContext; 
+
+void player_board_turn_timeout_callback(void* user_data){
+    PlayerBoardTurnTimeoutContext* ctx = (PlayerBoardTurnTimeoutContext*)user_data;
+    ctx->board_state->previous_turn = ctx->board_state->turn;
+    ctx->board_state->turn = BoardTurn_Ball;
+    os_output_message("timeout!");
 }
 
 
@@ -648,14 +747,14 @@ f32 timer_manager_timer_get_delta_tick_time(TimerManager manager, TimerHandle ha
 
 typedef struct{
     BoardState* board_state;
-} BoardStateDisplayTurnHUDTimerContext;
+} BoardStateDisplayTurnHUDTimerTimeoutContext;
 
-void board_state_display_turn_hud_timeout(void* user_data){
-    BoardStateDisplayTurnHUDTimerContext* ctx = (BoardStateDisplayTurnHUDTimerContext*)user_data;
+void board_state_display_turn_hud_timeout_callback(void* user_data){
+    BoardStateDisplayTurnHUDTimerTimeoutContext* ctx = (BoardStateDisplayTurnHUDTimerTimeoutContext*)user_data;
     ctx->board_state->display_turn_text = false;
 }
 
-void board_state_init(BoardState* state, MemoryArena* arena, i32 max_turn_based_entities){
+void board_state_init(BoardState* state, MemoryArena* arena, i32 max_turn_based_entities, TimerManager* timer_manager){
     if(state->is_init){
         ASSERT(false, "already init.");
         return;
@@ -669,6 +768,8 @@ void board_state_init(BoardState* state, MemoryArena* arena, i32 max_turn_based_
     
     string_init(&state->turn_text, arena, 64);
     string_init(&state->turn_text_scratch_space, arena, 64);
+    
+    state->timer_manager = timer_manager;
     
     state->is_init = true;
 }
@@ -685,6 +786,39 @@ void board_state_reset(BoardState* state){
     state->cue_ball_is_pocketed = false;
 }
 
+void board_state_enter_turn(BoardState* state, BoardTurn turn){
+    switch(turn){
+        default:{
+            ASSERT(false, "unexpected turn value");
+        }break;
+        case BoardTurn_Player:{
+            PlayerBoardTurnTimeoutContext timeout_ctx= {
+                .board_state = state
+            };
+            TimerContext timer_ctx = {
+                .duration = 10.0f,
+                .time_scale = 1.0f,
+                .timeout_callback = player_board_turn_timeout_callback,
+                .timeout_data = &timeout_ctx,
+                .timeout_data_size = sizeof(timeout_ctx),
+                .tick_callback = player_turn_timer_tick_callback
+            };
+            state->player_turn_timer = timer_manager_timer_start(state->timer_manager, timer_ctx);
+            os_output_message("player turn.\n");
+        }break;
+        case BoardTurn_Ball:{
+            timer_manager_timer_stop(state->timer_manager, state->player_turn_timer);
+            os_output_message("ball turn.\n");
+        }break;
+        case BoardTurn_TurnBased:{
+            os_output_message("turn based turn.\n");
+        }break;
+        case BoardTurn_Completed:{
+            os_output_message("completed turn.\n");
+        }
+    }
+    state->turn = turn;
+}
 
 ///
 /// @ EntityManager
@@ -789,7 +923,8 @@ bool entity_manager_is_entity_allocated_unsafe(EntityManager manager, i32 entity
 
 void entity_manager_init(
     EntityManager* manager, MemoryArena* arena, GFX_State* gfx_state,
-    i32 entity_amount, i32 physics_body_amount, i32 timer_timeout_data_size
+    i32 entity_amount, i32 physics_body_amount, 
+    i32 timer_timeout_data_size, i32 timer_tick_data_size
 ){
     ASSERT(!manager->is_init, "already init.");
 
@@ -818,7 +953,7 @@ void entity_manager_init(
     
     fizx_state_init(&manager->fizx_state, arena, entity_amount, 4, sizeof(GenId));
     
-    timer_manager_init(&manager->timer_manager, arena, entity_amount, timer_timeout_data_size);
+    timer_manager_init(&manager->timer_manager, arena, entity_amount, timer_timeout_data_size, timer_tick_data_size);
     
     { // init_clickable_area_hierarchy();
     
@@ -1836,8 +1971,8 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
 #define BALL_FIZX_SHAPE_MATERIAL    \
                                     \
     (FIZX_Material) {               \
-        .static_friction = 0.75f,   \
-        .kinetic_friction = 0.5f,   \
+        .static_friction = 0.5f,    \
+        .kinetic_friction = 0.334f, \
         .density = 1.85f,           \
         .restitution = 0.45f,       \
         .rotational_response = true \
@@ -1936,7 +2071,7 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
 }
 
 void ball_cue_fragment_timer_timeout(void* user_data){
-    BallCueFragmentationTimerTimeoutContext* ctx = (BallCueFragmentationTimerTimeoutContext*)user_data;
+    BallCueFragmentationTimerTimeoutCallbackContext* ctx = (BallCueFragmentationTimerTimeoutCallbackContext*)user_data;
     fizx_body_set_mask(&ctx->entity_manager->fizx_state, ctx->ball_cue_physics_gid, BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK);
 }
 
@@ -1946,12 +2081,21 @@ void ball_cue_update(Entity* entity, GameState* game_state, f32 delta_time){
 
         if(entity->is_physics_body){            
             fizx_body_set_mask(&game_state->entity_manager.fizx_state, entity->physics_body_gid, BALL_CUE_FRAGMENTATION_PHYSICS_LAYER_MASK);
-            BallCueFragmentationTimerTimeoutContext ctx = {
+            
+            BallCueFragmentationTimerTimeoutCallbackContext timeout_ctx = {
                 .ball_cue_physics_gid = entity->physics_body_gid,
                 .entity_manager = &game_state->entity_manager
             };
             
-            timer_manager_timer_start(&game_state->entity_manager.timer_manager, 0.334f, 1.0f, ball_cue_fragment_timer_timeout, &ctx, sizeof(ctx));
+            TimerContext timer_ctx = {
+                .duration = 0.334f,
+                .time_scale = 1.0f,
+                .timeout_callback = ball_cue_fragment_timer_timeout,
+                .timeout_data = &timeout_ctx,
+                .timeout_data_size = sizeof(timeout_ctx)
+            };
+            
+            timer_manager_timer_start(&game_state->entity_manager.timer_manager, timer_ctx);
             
             #if 0
             
@@ -2053,7 +2197,7 @@ GenId entity_spawn_wall(EntityManager* entity_manager, String name, Transform2D 
                 .static_friction = 0.75f, 
                 .kinetic_friction = 0.5f, 
                 .density = 22.6f, 
-                .restitution = 1.0f, 
+                .restitution = 0.5f, 
                 .rotational_response = true
             };
             fizx_rectangle_rigid_alloc(
@@ -2272,8 +2416,8 @@ GenId entity_spawn_ball_zero(EntityManager* entity_manager, String name, Transfo
 ///
 
 
-void boost_pad_boost_depleted_timeout(void* user_data){
-    BoostPadBoostDepletedTimerTimeoutContext* ctx = (BoostPadBoostDepletedTimerTimeoutContext*)user_data;
+void boost_pad_boost_depleted_timeout_callback(void* user_data){
+    BoostPadBoostDepletedTimerTimeoutCallbackContext* ctx = (BoostPadBoostDepletedTimerTimeoutCallbackContext*)user_data;
     Entity* entity;
     if(!entity_manager_get_entity(*ctx->entity_manager, ctx->boost_pad_entity_gid, &entity)){
         return;
@@ -2319,18 +2463,21 @@ void boost_pad_on_sustain_collision_callback(FIZX_CollisionInfo info, void* user
     
     if(ball_entity->is_physics_body){
         fizx_body_impulse_linear_force(&ctx->game_state->entity_manager.fizx_state, ball_entity->physics_body_gid, impulse);
-        BoostPadBoostDepletedTimerTimeoutContext timer_ctx = {
+        
+        BoostPadBoostDepletedTimerTimeoutCallbackContext timeout_ctx = {
             .entity_manager = &ctx->game_state->entity_manager,
             .boost_pad_entity_gid = *boost_pad_entity_gid
         };
-        timer_manager_timer_start(
-            &ctx->game_state->entity_manager.timer_manager, 
-            1.0f, 
-            1.0f, 
-            boost_pad_boost_depleted_timeout,
-            &timer_ctx, 
-            sizeof(timer_ctx)
-        );
+        
+        TimerContext timer_ctx = {
+            .duration = 1.0f,
+            .time_scale = 1.0f,
+            .timeout_callback = boost_pad_boost_depleted_timeout_callback,
+            .timeout_data = &timeout_ctx,
+            .timeout_data_size = sizeof(timeout_ctx)
+        };
+        
+        timer_manager_timer_start(&ctx->game_state->entity_manager.timer_manager, timer_ctx);
     }
 }
 
@@ -2721,10 +2868,7 @@ void guideline_collider_callback(FIZX_CollisionInfo info, void* user_data){
     
     GameMouseState* mouse_state = &ctx->game_state->mouse_state;   
     GFX_State* gfx_state = ctx->game_state->entity_manager.gfx_state;
-    
-    
-    os_output_message("asd\n");
-    
+        
     if(!mouse_state->draw_guideline){
         return;
     }
@@ -2759,6 +2903,7 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
     i32 entity_amount = 2048;
     i32 physics_body_amount = 128;
     i32 timeout_data_element_size = 512;
+    i32 tick_data_element_size = 512;
 
     game_state->entity_manager.fizx_draw_state = (FIZX_DrawInfo){
         .colour_dynamic_shape           = GFX_COLOUR_GREEN,
@@ -2786,7 +2931,10 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
         // .draw_collision_info            = true
     };
 
-    entity_manager_init(&game_state->entity_manager, persistent, gfx_state, entity_amount, physics_body_amount, timeout_data_element_size);
+    entity_manager_init(
+        &game_state->entity_manager, persistent, gfx_state, entity_amount, physics_body_amount, 
+        timeout_data_element_size, tick_data_element_size 
+    );
     
     game_state->mouse_state.guideline_physics_body_gid = fizx_body_alloc(
         &game_state->entity_manager.fizx_state, 
@@ -2823,7 +2971,7 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
     
     level_manager_init(&game_state->level_manager, persistent, &game_state->entity_manager, 256);
         
-    board_state_init(&game_state->board_state, persistent, entity_amount);
+    board_state_init(&game_state->board_state, persistent, entity_amount, &game_state->entity_manager.timer_manager);
     
     game_state->is_init = true;
 }
@@ -2912,20 +3060,20 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
         { // update fizx draw state.
 
             if(input_is_key_just_pressed(Key_1)){
-                fizx_draw_state->draw_bvh_branches = !fizx_draw_state->draw_bvh_branches;
+                // fizx_draw_state->draw_bvh_branches = !fizx_draw_state->draw_bvh_branches;
             }
             if(input_is_key_just_pressed(Key_2)){
                 // fizx_draw_state->draw_bvh_leaves = !fizx_draw_state->draw_bvh_leaves;
             }
             if(input_is_key_just_pressed(Key_3)){
-                fizx_draw_state->draw_body_shapes = !fizx_draw_state->draw_body_shapes;
+                // fizx_draw_state->draw_body_shapes = !fizx_draw_state->draw_body_shapes;
             }
             if(input_is_key_just_pressed(Key_4)){
-                fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
+                // fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
             }
             
             if(input_is_key_just_pressed(Key_Escape)){
-                board_state->show_pause_menu = !board_state->show_pause_menu;
+                // board_state->show_pause_menu = !board_state->show_pause_menu;
             }
         }
 
@@ -3018,50 +3166,53 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                 }
             }
             
-            { // evaluate_board_state();
-    
-                bool balls_are_moving = false;
-                                
-                Entity* cue_ball_entity;
-                if(entity_manager_get_entity(*entity_manager, board_state->cue_ball_entity_gid, &cue_ball_entity)){
+            // evaludate board state.
+            
+            bool balls_are_moving = false;
+                            
+            Entity* cue_ball_entity;
+            if(entity_manager_get_entity(*entity_manager, board_state->cue_ball_entity_gid, &cue_ball_entity)){
+                Vector2 linear_velocity;
+                if(fizx_body_get_linear_velocity(*fizx_state, cue_ball_entity->physics_body_gid, &linear_velocity)){                
+                    if(vector2_len_sqrd(linear_velocity)){
+                        balls_are_moving = true;
+                    }
+                } 
+            }
+            
+            for(i32 i = 0; i < board_state->number_ball_count; i++){
+                
+                Entity* number_ball_entity;
+                BOUNDS_CHECK(i, board_state->number_ball_length);
+                GenId number_ball_entity_gid = board_state->number_ball[i];
+                
+                if(entity_manager_get_entity(*entity_manager, number_ball_entity_gid, &number_ball_entity)){
                     Vector2 linear_velocity;
-                    if(fizx_body_get_linear_velocity(*fizx_state, cue_ball_entity->physics_body_gid, &linear_velocity)){                
+                    if(fizx_body_get_linear_velocity(*fizx_state, number_ball_entity->physics_body_gid, &linear_velocity)){
                         if(vector2_len_sqrd(linear_velocity)){
                             balls_are_moving = true;
+                            break;
                         }
+
                     } 
                 }
-                
-                for(i32 i = 0; i < board_state->number_ball_count; i++){
-                    
-                    Entity* number_ball_entity;
-                    BOUNDS_CHECK(i, board_state->number_ball_length);
-                    GenId number_ball_entity_gid = board_state->number_ball[i];
-                    
-                    if(entity_manager_get_entity(*entity_manager, number_ball_entity_gid, &number_ball_entity)){
-                        Vector2 linear_velocity;
-                        if(fizx_body_get_linear_velocity(*fizx_state, number_ball_entity->physics_body_gid, &linear_velocity)){
-                            if(vector2_len_sqrd(linear_velocity)){
-                                balls_are_moving = true;
-                                break;
-                            }
-
-                        } 
-                    }
-                }
-                
-                if(balls_are_moving){
+            }
+            
+            switch(balls_are_moving){
+                case true:{
                     switch(board_state->turn){
                         case BoardTurn_Player:{
-                            board_state->turn = BoardTurn_Ball;
-                            os_output_message("ball turn\n");
+                            board_state_enter_turn(board_state, BoardTurn_Ball);
                         }break;
                     }
-                }else{
+                }break;
+                case false:{
                     switch(board_state->turn){
-                        case BoardTurn_Ball:{
-                            board_state->turn = BoardTurn_TurnBased;
-            
+                        case BoardTurn_Ball:{    
+                            board_state_enter_turn(board_state, BoardTurn_TurnBased);
+                        }break;
+                        case BoardTurn_TurnBased:{
+        
                             for(i32 i = 0; i < board_state->turn_based_entity_length; i++){
                                 Entity* turn_based_entity;
                                 GenId turn_based_entity_gid = board_state->turn_based_entity[i];
@@ -3075,11 +3226,10 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                                     }
                                 }
                             }
-                            os_output_message("turn based.\n");
-                        }break;
-                        case BoardTurn_TurnBased:{
-                            board_state->turn = BoardTurn_Player;
                             
+                            board_state_enter_turn(board_state, BoardTurn_Completed);
+                        }break;
+                        case BoardTurn_Completed:{
                             { // increment_turn_text();
                             
                                 board_state->turn_number += 1;
@@ -3102,7 +3252,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                                 GenId ball_entity_gid = board_state->number_ball[i];
                                 Entity* entity;
                                 if(entity_manager_get_entity(*entity_manager, ball_entity_gid, &entity)){
-
+        
                                     if(entity->type_id == EntityTypeId_BallEight){
                                         eight_ball_present = true; 
                                     }                                    
@@ -3134,24 +3284,28 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                                     // start_displaying_turn_text();
                             
                                     board_state->display_turn_text = true;
-                                    BoardStateDisplayTurnHUDTimerContext timer_ctx = {
+                                    
+                                    BoardStateDisplayTurnHUDTimerTimeoutContext timeout_ctx = {
                                         .board_state = board_state
                                     };
-                                    timer_manager_timer_start(
-                                        timer_manager, 
-                                        1.0f, 
-                                        1.0f, 
-                                        board_state_display_turn_hud_timeout, 
-                                        &timer_ctx, 
-                                        sizeof(timer_ctx)
-                                    );                        
+                                    
+                                    TimerContext timer_ctx = {
+                                        .duration = 1.0f,
+                                        .time_scale = 1.0f,
+                                        .timeout_callback = board_state_display_turn_hud_timeout_callback,
+                                        .timeout_data = &timeout_ctx,
+                                        .timeout_data_size = sizeof(timeout_ctx)
+                                    };
+                                    
+                                    timer_manager_timer_start(timer_manager, timer_ctx);                        
                                 
-                                    os_output_message("player turn\n");
+                                    board_state_enter_turn(board_state, BoardTurn_Player);
                                 }
                             }
+                        
                         }break;
                     }
-                }        
+                }break;
             }
             
             fixed_update_accumulator -= FIXED_DELTA_TIME;
@@ -3767,9 +3921,22 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                         }                      
                     });
                     GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
-                        if(Clay_Hovered()){
-                            mouse_state->hovering_ui_element = true;
+
+                        CLAY_TEXT(CLAY_STRING("Player Turn Timer:"), GAME_GFX_CLAY_TEXT_CONFIG);
+                        
+                        { // display turn current time.
+                        
+                            f32 current_time = 0.0f;
+                            timer_manager_timer_get_current_tick(entity_manager->timer_manager, board_state->player_turn_timer, &current_time);                            
+                            char char_buffer[F32_STRING_MIN_LENGTH] = {0};
+                            Clay_String time_string = {
+                                .chars = char_buffer, 
+                                .length = F32_STRING_MIN_LENGTH
+                            };
+                            time_string.length = snprintf((char*)time_string.chars, F32_STRING_MIN_LENGTH, "%f", current_time);
+                            CLAY_TEXT(time_string, GAME_GFX_CLAY_TEXT_CONFIG);                                
                         }
+                        
                     
                         switch(board_state->turn){
                             case BoardTurn_Player:{

@@ -1,4 +1,8 @@
 
+// backburner:
+- get an achievement when getting only the eight ball in.
+
+
 
 // implement two stage editor:
 //
@@ -11,7 +15,12 @@
 // do these to get better break on balls.
 // increase cue stick power?
 // increase cue stick action range?
+// turn time decreases after each turn? maybe every 5? 3? 10? turns.
 
+
+// timed turns
+// aim becomes more shakey over time before turn timer ends
+// at the end of turn timer the ball gets shot in a random direction (from a cone, where the player would have shot into).
 
 DONT DO THIS:
 // Ball Power Ups:

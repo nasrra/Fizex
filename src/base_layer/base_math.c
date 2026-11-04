@@ -2687,7 +2687,6 @@ bool circle_cast_overlaps_line(
             return false;
         }
         
-        os_output_message("asd\n");
         *out_line_t = line_t;
         return true;
     }
