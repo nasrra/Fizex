@@ -46,16 +46,10 @@ typedef struct{
 
 typedef struct{
 
-    f32 contact_point_1_x;
-    f32 contact_point_1_y;
-    f32 contact_point_2_x;
-    f32 contact_point_2_y;
-
-    f32 normal_1_x;
-    f32 normal_1_y;
-    f32 normal_2_x;
-    f32 normal_2_y;
-
+    Vector2 contact_point_1;
+    Vector2 contact_point_2;
+    Vector2 normal_1;
+    Vector2 normal_2;
     f32 depth_1;
     f32 depth_2;
 
@@ -64,8 +58,8 @@ typedef struct{
     i32 target_entity_idx;
     void* target_user_data;
 
-    i32 contact_point_count;
-
+    bool two_contact_points;
+    
 } FIZX_QueryCollisionInfo;
 
 typedef void (*FIZX_CollisionCallback)(FIZX_CollisionInfo, void*);
@@ -7533,9 +7527,182 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
 ///
 
 
-typedef void (*fizx_query_area_funcptr)(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data);
+typedef void (*FizxQueryAreaFuncptr)(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data);
 
-bool fizx_state_query_circle_area(FIZX_State* state, fizx_query_area_funcptr query_callback, void* user_data, i32 layer_mask, Circle area){
+void fizx_state_query_circle_cast_area(
+    FIZX_State* state, FizxQueryAreaFuncptr query_callback, void* user_data, 
+    i32 layer_mask, Vector2 start, Vector2 direction, f32 length, f32 radius,
+    FIZX_CollisionCallbackBehaviour callback_behaviour
+){
+
+    Vector2 perp = {.x = -direction.y, .y = direction.x};
+    f32 pxr = perp.x * radius;
+    f32 pyr = perp.y * radius;
+    
+    Vector2 end = vector2_mul_val(direction, length);    
+    
+    f32 v_x[4] = {
+        start.x - pxr,
+        start.x + pxr,
+        end.x - pxr,
+        end.x + pxr
+    };
+    f32 v_y[4] = {
+        start.y - pyr,
+        start.y + pyr,
+        end.y - pyr,
+        end.y + pyr    
+    };
+    
+    Vector2 dist = vector2_sub(end, start);
+    
+    f32 min_x;
+    f32 min_y;
+    f32 max_x;
+    f32 max_y;
+    polygon_get_min_max_vertices(v_x, v_y, 4, &min_x, &min_y, &max_x, &max_y);
+    
+    // reset to defined state.
+    state->query_area_leaf_idx_scratch_space_count = 0;
+    
+    bvh_query_area(
+        &state->bvh,
+        min_x, min_y,
+        max_x, max_y, 
+        state->query_area_leaf_idx_scratch_space, 
+        state->query_area_leaf_idx_scratch_space_length, 
+        &state->query_area_leaf_idx_scratch_space_count 
+    );
+
+    FIZX_QueryCollisionInfo closest_info = {0};
+    f32 closest_info_dist = F32_MAX;
+
+    for(i32 i = 0; i < state->query_area_leaf_idx_scratch_space_count; i++){
+        FIZX_QueryCollisionInfo info = {0};
+        i32 leaf_idx = state->query_area_leaf_idx_scratch_space[i];
+        info.target_entity_idx = state->entities.bvh_leaf_idx[leaf_idx];
+        
+        BOUNDS_CHECK(info.target_entity_idx, state->entities.layer_length);
+        i32 layer = state->entities.layer[info.target_entity_idx];
+
+        if((layer & layer_mask) == 0){
+            continue;
+        }
+
+        BOUNDS_CHECK(info.target_entity_idx, state->entities.category_length);
+        i32 shape_category = state->entities.category[info.target_entity_idx];
+        
+        if(fizx_shape_category_is_polygon(shape_category)){
+            
+            // gather verts.
+            f32* poly_vert_x;
+            f32* poly_vert_y;
+            i32 poly_vert_length;
+            fizx_shape_get_vertices_unsafe(
+                state->entities.global_vertex, info.target_entity_idx, 
+                &poly_vert_x, &poly_vert_y, &poly_vert_length
+            );
+            
+            i32 contact_point_count = 0;
+            bool overlaps = circle_cast_overlaps_polygon(
+                start.x, start.y,
+                end.x, end.y,
+                radius,
+                poly_vert_x, poly_vert_y, poly_vert_length,
+                &info.contact_point_1.x, &info.contact_point_1.y,
+                &info.contact_point_2.x, &info.contact_point_2.y,
+                &info.normal_1.x, &info.normal_1.y,
+                &info.normal_2.x, &info.normal_2.y,
+                &info.depth_1,
+                &info.depth_2,
+                &contact_point_count
+            );
+            
+            if(!overlaps){
+                continue;
+            }
+            
+            info.two_contact_points = contact_point_count == 2;             
+        }
+        else if(fizx_shape_category_is_circle(shape_category)){
+
+            BOUNDS_CHECK(info.target_entity_idx, state->entities.centroid.length);
+            f32 circle_x = state->entities.centroid.x[info.target_entity_idx];
+            f32 circle_y = state->entities.centroid.y[info.target_entity_idx];
+            BOUNDS_CHECK(info.target_entity_idx, state->entities.global_radius_length);
+            f32 circle_radius = state->entities.global_radius[info.target_entity_idx];
+
+            bool overlaps = circle_cast_overlaps_circle(
+                start.x, start.y,
+                end.x, end.y,
+                radius,
+                circle_x, circle_y,
+                circle_radius,
+                &info.contact_point_1.x, &info.contact_point_1.y,
+                &info.normal_1.x, &info.normal_1.y, 
+                &info.depth_1
+            );
+
+            if(!overlaps){
+                continue;
+            }
+        }
+        else if(fizx_shape_category_is_line(shape_category)){
+
+            // gather line vertices.
+            f32* other_vert_x;
+            f32* other_vert_y;
+            i32 other_vert_length;
+            fizx_shape_get_vertices_unsafe(state->entities.global_vertex, info.target_entity_idx, &other_vert_x, &other_vert_y, &other_vert_length);
+            ASSERT(other_vert_length == FIZX_SHAPE_LINE_VERTICES_LENGTH, "line vertex array is not the expected length");
+            
+            f32 other_start_x   = other_vert_x[0];
+            f32 other_end_x     = other_vert_x[1];
+            f32 other_start_y   = other_vert_y[0];
+            f32 other_end_y     = other_vert_y[1]; 
+            f32 other_dist_x    = other_end_x - other_start_x; 
+            f32 other_dist_y    = other_end_y - other_start_y; 
+            f32 other_t         = 0.0f;
+            
+            BOUNDS_CHECK(info.target_entity_idx, state->entities.global_radius_length);
+            f32 other_radius = state->entities.global_radius[info.target_entity_idx];
+            
+            ASSERT(other_radius == 0, "capsule collisions not set up!");
+            
+            
+            // havent set up capsule to capsule collisions yet lol.
+            // do this when you have time.
+            continue;
+        }
+        else{
+            ASSERT(false, "undefined shape category.");
+            continue;
+        }
+        
+        
+        switch(callback_behaviour){
+            case FIZX_CollisionCallbackBehaviour_All:{
+                query_callback(state, info, user_data);
+            }break;
+            case FIZX_CollisionCallbackBehaviour_Closest:{
+                f32 dist = vector2_dist_scalar(start.x, start.y, info.contact_point_1.x, info.contact_point_1.y);
+                if(dist < closest_info_dist){
+                    closest_info_dist = dist;
+                    closest_info = info;
+                }
+            }break;
+        }
+    }
+    
+    if(
+        callback_behaviour == FIZX_CollisionCallbackBehaviour_Closest &&
+        closest_info_dist < F32_MAX // to ensure that it has actually been set.
+    ){
+        query_callback(state, closest_info, user_data);
+    }
+}
+
+void fizx_state_query_circle_area(FIZX_State* state, FizxQueryAreaFuncptr query_callback, void* user_data, i32 layer_mask, Circle area){
     
     f32 min_x;
     f32 min_y;
@@ -7592,14 +7759,14 @@ bool fizx_state_query_circle_area(FIZX_State* state, fizx_query_area_funcptr que
                     
             bool overlaps = polygon_overlaps_circle_scalar(
                 poly_vert_x, poly_vert_y, poly_vert_length, poly_cen_x, poly_cen_y,
-                area.x, area.y, area.radius, &info.normal_1_x, &info.normal_1_y, &info.depth_1
+                area.x, area.y, area.radius, &info.normal_1.x, &info.normal_1.y, &info.depth_1
             );
             
             if(overlaps){
                 polygon_find_point_contact_points_scalar(
                     poly_vert_x, poly_vert_y, poly_vert_length,
                     area.x, area.y,
-                    &info.contact_point_1_x, &info.contact_point_1_y
+                    &info.contact_point_1.x, &info.contact_point_1.y
                 );
 
                 query_callback(state, info, user_data);
@@ -7616,13 +7783,13 @@ bool fizx_state_query_circle_area(FIZX_State* state, fizx_query_area_funcptr que
             bool overlaps = circle_overlaps_scalar(
                 other_x, other_y, other_radius, 
                 area.x, area.y, area.radius, 
-                &info.normal_1_x, &info.normal_1_y, &info.depth_1
+                &info.normal_1.x, &info.normal_1.y, &info.depth_1
             );
             if(overlaps){
                 circle_calc_contact_points_scalar(
                     other_x, other_y, other_radius, 
                     area.x, area.y, 
-                    &info.contact_point_1_x, &info.contact_point_1_y
+                    &info.contact_point_1.x, &info.contact_point_1.y
                 );
                 
                 BOUNDS_CHECK(info.target_entity_idx, state->entities.layer_length);
@@ -7646,21 +7813,24 @@ bool fizx_state_query_circle_area(FIZX_State* state, fizx_query_area_funcptr que
             bool has_first_contact_point = false;
             bool has_second_contact_point = false;
             
+            i32 contact_point_count = 0;
+            
             // this is okay as the field are only written to when an overlap occurs.
             bool overlaps = line_overlaps_circle(
                 line_vert_x[0], line_vert_y[0],
                 line_vert_x[1], line_vert_y[1],
                 area.x, area.y, area.radius,
-                &info.contact_point_1_x, &info.contact_point_1_y,
-                &info.contact_point_2_x, &info.contact_point_2_y,
-                &info.normal_1_x, &info.normal_1_y,
-                &info.normal_2_x, &info.normal_2_y,
+                &info.contact_point_1.x, &info.contact_point_1.y,
+                &info.contact_point_2.x, &info.contact_point_2.y,
+                &info.normal_1.x, &info.normal_1.y,
+                &info.normal_2.x, &info.normal_2.y,
                 &info.depth_1,
                 &info.depth_2,
-                &info.contact_point_count
+                &contact_point_count
             );
             
             if(overlaps){
+                info.two_contact_points = contact_point_count == 2;
                 query_callback(state, info, user_data);
             }         
         }
@@ -7669,6 +7839,4 @@ bool fizx_state_query_circle_area(FIZX_State* state, fizx_query_area_funcptr que
             continue;
         }
     }
-        
-    return true;
 }

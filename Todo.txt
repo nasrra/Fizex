@@ -19,8 +19,8 @@
 - fix pause menu not working?????
 
 - aim becomes more shakey over time before turn timer ends.
-    - timers need to store 'duration'.
-    - timers need to start from 0 and go to 'duration'.
+    + timers need to store 'duration'.
+    + timers need to start from 0 and go to 'duration'.
     - duration / curr_time.
     - plug (result * shakeTimeFactor) into sin().
     - multiply sin() result by shakeDirDiffernce.
@@ -43,10 +43,13 @@
 - TELEPORTER:
 - (MAYBE) C4: ball hits the C4 block, and explodes, pushing away all balls in a radial area.
     
+
 - Desk Fan
     - button operated
     - turns off by pressing it, and turns back on after three turns.
-    
+
+- remove line bodies, have only capsule bodies.
+- have capsule to capsule collisions.
     
 =====================
 ==== BACK BURNER ==== 

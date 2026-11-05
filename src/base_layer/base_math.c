@@ -1620,10 +1620,10 @@ void fssoa_vector2_clear_chunk_count(FsSoa_Vector2* soa, i32 chunk_index){
 
 void fssoa_vector2_clear_chunk(FsSoa_Vector2* soa, i32 chunk_idx){
     i32 element_idx = chunk_idx * soa->chunk_stride;
-    BOUNDS_CHECK(element_idx, soa->x_length);
-    BOUNDS_CHECK(element_idx + soa->chunk_stride, soa->x_length);
-    BOUNDS_CHECK(element_idx, soa->y_length);
-    BOUNDS_CHECK(element_idx + soa->chunk_stride, soa->y_length);
+    // (-1) as we are checking the first byte (inclusive) 
+    // without this, say size is 4 bytes, we would actually be checking 5 bytes instead.  
+    BOUNDS_CHECK(element_idx + soa->chunk_stride - 1, soa->x_length);
+    BOUNDS_CHECK(element_idx + soa->chunk_stride - 1, soa->y_length);
     ZERO_MEMORY(soa->x + element_idx, sizeof(*soa->x) * soa->chunk_stride);
     ZERO_MEMORY(soa->y + element_idx, sizeof(*soa->y) * soa->chunk_stride);
     fssoa_vector2_clear_chunk_count(soa, chunk_idx);
@@ -2596,7 +2596,7 @@ bool circle_cast_overlaps_circle(
     );
     
     if(!overlaps){
-        return false;
+        return false;        
     }
 
     circle_calc_contact_points_scalar(
@@ -2684,6 +2684,46 @@ bool circle_cast_overlaps_line(
             line_t < 0.0f || 
             line_t > 1.0f
         ){
+        
+            f32 radius_sqrd = cast_radius * cast_radius;
+            f32 p_x;
+            f32 p_y;            
+
+            { // check start to start.
+            
+                line_project_point(
+                    cast_start_x, cast_start_y,
+                    cast_dist_x, cast_dist_y,
+                    line_start_x, line_start_y,
+                    &p_x, &p_y
+                );
+            
+                f32 dist_sqrd = vector2_dist_sqrd_scalar(line_start_x, line_start_y, p_x, p_y);
+                if(dist_sqrd <= radius_sqrd){
+                    *out_line_t = 0.0f;
+                    return true;
+                }
+            }
+            
+            { // check end to end.
+                
+                f32 end_x = line_start_x + line_dist_x; 
+                f32 end_y = line_start_y + line_dist_y;
+                
+                line_project_point(
+                    cast_start_x, cast_start_y,
+                    cast_dist_x, cast_dist_y,
+                    end_x, end_y,
+                    &p_x, &p_y
+                );
+            
+                f32 dist_sqrd = vector2_dist_sqrd_scalar(end_x, end_y, p_x, p_y);
+                if(dist_sqrd <= radius_sqrd){
+                    *out_line_t = 1.0f;
+                    return true;
+                }
+            }
+        
             return false;
         }
         
@@ -2995,51 +3035,7 @@ bool circle_cast_overlaps_polygon(
                     *out_depth_2            = depth;
                 }
             }break;
-        }
-        
-        #if 0
-        if(!contact_point_count){
-        }
-        else if(){
-            
-            contact_point_count = 2;
-            contact_point_count = 2;
-            
-            // change to poly.
-            *out_contact_point_2_x = poly_start_x + (poly_dist_x * poly_t);
-            *out_contact_point_2_y = poly_start_y + (poly_dist_y * poly_t);
-
-            vector2_normalise_scalar(poly_dist_x, poly_dist_y, &poly_dir_x, &poly_dir_y);        
-
-            *out_normal_2_x = -poly_dir_y;
-            *out_normal_2_y = poly_dir_x;
-            
-            f32 dist_1 = vector2_dist_sqrd_scalar(*out_contact_point_1_x, *out_contact_point_1_y, cast_start_x, cast_start_y);
-            f32 dist_2 = vector2_dist_sqrd_scalar(*out_contact_point_2_x, *out_contact_point_2_y, cast_start_x, cast_start_y);
-                                                
-            // swap the contact points around if they are 
-            if(dist_2 < dist_1){
-                
-                f32 temp_contact_point_x    = *out_contact_point_1_x;
-                f32 temp_contact_point_y    = *out_contact_point_1_y;
-                f32 temp_normal_x           = *out_normal_1_x; 
-                f32 temp_normal_y           = *out_normal_1_y;
-                
-                *out_contact_point_1_x  = *out_contact_point_2_x;
-                *out_contact_point_1_y  = *out_contact_point_2_y;
-                *out_normal_1_x         = *out_normal_2_x; 
-                *out_normal_1_y         = *out_normal_2_y;
-                
-                *out_contact_point_2_x   = temp_contact_point_x;
-                *out_contact_point_2_y   = temp_contact_point_y;
-                *out_normal_2_x          = temp_normal_x; 
-                *out_normal_2_y          = temp_normal_y;                
-            }           
-            break;
-            
-        }
-        #endif
-            
+        }   
     }
 
     *out_contact_point_count = contact_point_count;

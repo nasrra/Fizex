@@ -166,18 +166,16 @@ typedef enum{
 
 typedef struct{
     ClickableAreaHierarchy clickable_entity_hierarchy;
-
     i32 clicked_entity_idx;
-    Vector2 clicked_entity_initial_position;
-    GenId guideline_physics_body_gid;
-    GenId guideline_physics_shape_gid;
-    // the end point in world space for the guideline to draw.
-    Vector2 guideline_end_point;
-
     bool hovering_ui_element;
-    bool draw_guideline;
-
+    Vector2 clicked_entity_initial_position;
 } GameMouseState;
+
+typedef struct{
+    Vector2 start_point;
+    Vector2 end_point;
+    bool draw;    
+} GuidelineState;
 
 typedef struct GameState GameState;
 typedef void (*TurnBasedEntityOnTurnEndCallback)(GameState* game_state, i32 entity_idx);
@@ -320,6 +318,7 @@ typedef struct GameState{
     f32 time_scale;
     bool is_init;
     GameStage stage;
+    GuidelineState guideline_state;
 } GameState;
 
 typedef struct {
@@ -392,7 +391,17 @@ typedef struct{
 
 
 ///
-/// Physics layers.
+/// @ Player.
+///
+
+
+#define PLAYER_TURN_TIMER_END_TIME 10.0f
+#define PLAYER_SHAKE_TIME_FACTOR 6.0f
+#define PLAYER_SHAKE_MAGNITUDE_FACTOR 2.0f
+
+
+///
+/// @ Physics layers.
 ///
 
 
@@ -411,7 +420,7 @@ typedef struct{
 
 
 ///
-/// Virtual Texture ID.
+/// @ Virtual Texture ID.
 ///
 
 
@@ -724,9 +733,20 @@ bool timer_manager_timer_get_current_tick(TimerManager manager, TimerHandle hand
 /// @ Tick Callbacks
 ///
 
+typedef struct{
+    FIZX_State* fizx_state;
+    GenId guideline_shape_gid;
+} PlayerBoardTurnTimerTickCallbackContext;
 
 void player_turn_timer_tick_callback(void* user_data, f32 current_tick, f32 delta_tick){
     
+    PlayerBoardTurnTimerTickCallbackContext* ctx = (PlayerBoardTurnTimerTickCallbackContext*)user_data;
+    f32 shake_ratio = current_tick / PLAYER_TURN_TIMER_END_TIME;
+    f32 shake_mag = f32_sin(shake_ratio * PLAYER_SHAKE_TIME_FACTOR) * PLAYER_SHAKE_MAGNITUDE_FACTOR;     
+
+    // Vector2 line_direction = ;
+    // bool success = fizx_line_get_direction(*ctx->fizx_state, ctx->guideline_shape_gid);
+    // ASSERT(success, "failed to get guideline");
 }
 
 
@@ -737,10 +757,10 @@ void player_turn_timer_tick_callback(void* user_data, f32 current_tick, f32 delt
 
 typedef struct{
     BoardState* board_state;
-} PlayerBoardTurnTimeoutContext; 
+} PlayerBoardTurnTimerTimeoutCallbackContext;
 
 void player_board_turn_timeout_callback(void* user_data){
-    PlayerBoardTurnTimeoutContext* ctx = (PlayerBoardTurnTimeoutContext*)user_data;
+    PlayerBoardTurnTimerTimeoutCallbackContext* ctx = (PlayerBoardTurnTimerTimeoutCallbackContext*)user_data;
     ctx->board_state->previous_turn = ctx->board_state->turn;
     ctx->board_state->turn = BoardTurn_Ball;
     os_output_message("timeout!");
@@ -799,13 +819,13 @@ void board_state_enter_turn(BoardState* state, BoardTurn turn){
             ASSERT(false, "unexpected turn value");
         }break;
         case BoardTurn_Player:{
-            PlayerBoardTurnTimeoutContext timeout_ctx= {
+            PlayerBoardTurnTimerTimeoutCallbackContext timeout_ctx= {
                 .board_state = state
             };
+            
             TimerContext timer_ctx = {
-                .end_time = 10.0f,
+                .end_time = PLAYER_TURN_TIMER_END_TIME,
                 .time_scale = 1.0f,
-                .start_time = 5.0f,
                 .timeout_callback = player_board_turn_timeout_callback,
                 .timeout_data = &timeout_ctx,
                 .timeout_data_size = sizeof(timeout_ctx),
@@ -1518,7 +1538,7 @@ void thwamper_smackdown_area_query_callback(FIZX_State* state, FIZX_QueryCollisi
         return;
     }
     
-    Vector2 force = vector2_mul_val((Vector2){.x = info.normal_1_x, .y = info.normal_1_y}, THWAMPER_LAUNCH_FORCE);
+    Vector2 force = vector2_mul_val(info.normal_1, THWAMPER_LAUNCH_FORCE);
     fizx_body_impulse_linear_force_unsafe(state, body_idx, force);
 }
 
@@ -1600,6 +1620,7 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, String name, Transfor
     }
     return entity_gid;
 }
+
 
 ///
 /// @ WindMillBlade.
@@ -2871,16 +2892,14 @@ GenId level_manager_load_level_file(
 ///
 
 
-void guideline_collider_callback(FIZX_CollisionInfo info, void* user_data){
-    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    
-    GameMouseState* mouse_state = &ctx->game_state->mouse_state;   
-    GFX_State* gfx_state = ctx->game_state->entity_manager.gfx_state;
+typedef struct{
+    Vector2 start_point;
+    GFX_State* gfx_state;
+} GuidelineCollisionCallbackContext;
+
+void guideline_collision_callback(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data){
+    GuidelineCollisionCallbackContext* ctx = (GuidelineCollisionCallbackContext*)user_data;
         
-    if(!mouse_state->draw_guideline){
-        return;
-    }
-    
     Circle circle = {
         .x = info.contact_point_1.x + (info.normal_1.x * BALL_FIZX_SHAPE_RADIUS),
         .y = info.contact_point_1.y + (info.normal_1.y * BALL_FIZX_SHAPE_RADIUS),
@@ -2889,14 +2908,14 @@ void guideline_collider_callback(FIZX_CollisionInfo info, void* user_data){
     
     Vector2 end = (Vector2){circle.x, circle.y};
     
-    gfx_draw_wire_circle(gfx_state, circle, GFX_COLOUR_WHITE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+    gfx_draw_wire_circle(ctx->gfx_state, circle, GFX_COLOUR_WHITE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
     gfx_draw_line(
-        gfx_state,
+        ctx->gfx_state,
         GFX_COLOUR_WHITE,
-        mouse_state->clicked_entity_initial_position,
-        end, 
+        ctx->start_point,
+        end,
         SPRITE_LAYER_EDITOR_WORLD,
-        0, 
+        0,
         SPRITE_MATERIAL_DEBUG, 
         0.05f
     );
@@ -2944,43 +2963,8 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
         timeout_data_element_size, tick_data_element_size 
     );
     
-    game_state->mouse_state.guideline_physics_body_gid = fizx_body_alloc(
-        &game_state->entity_manager.fizx_state, 
-        TRANSFORM2D_IDENTITY, 
-        0.0f, 
-        0.0f, 
-        PHYSICS_LAYER_GUIDELINE,
-        PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID,
-        false
-    );
-    
-    i32 x = 0;
-    game_state->mouse_state.guideline_physics_shape_gid = fizx_circle_cast_collider_alloc(
-        &game_state->entity_manager.fizx_state, 
-        game_state->mouse_state.guideline_physics_body_gid, 
-        TRANSFORM2D_IDENTITY,
-        FIZX_ShapeBehaviour_Trigger,
-        FIZX_CollisionCallbackBehaviour_Closest,
-        &x,
-        (Vector2){0}, 
-        (Vector2){0}, 
-        0.0f,
-        BALL_FIZX_SHAPE_RADIUS
-    );
-    
-    fizx_shape_set_on_enter_callback(&game_state->entity_manager.fizx_state, game_state->mouse_state.guideline_physics_shape_gid, guideline_collider_callback);
-    fizx_shape_set_on_sustain_callback(&game_state->entity_manager.fizx_state, game_state->mouse_state.guideline_physics_shape_gid, guideline_collider_callback);
-    
-    fizx_body_set_active(
-        &game_state->entity_manager.fizx_state,
-        game_state->mouse_state.guideline_physics_body_gid,
-        false
-    );
-    
     level_manager_init(&game_state->level_manager, persistent, &game_state->entity_manager, 256);
-        
     board_state_init(&game_state->board_state, persistent, entity_amount, &game_state->entity_manager.timer_manager);
-    
     game_state->is_init = true;
 }
 
@@ -3074,7 +3058,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                 // fizx_draw_state->draw_bvh_leaves = !fizx_draw_state->draw_bvh_leaves;
             }
             if(input_is_key_just_pressed(Key_3)){
-                // fizx_draw_state->draw_body_shapes = !fizx_draw_state->draw_body_shapes;
+                fizx_draw_state->draw_body_shapes = !fizx_draw_state->draw_body_shapes;
             }
             if(input_is_key_just_pressed(Key_4)){
                 // fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
@@ -3174,7 +3158,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                 }
             }
             
-            // evaludate board state.
+            // evaluate board state.
             
             bool balls_are_moving = false;
                             
@@ -3379,8 +3363,10 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                 clicked_entity &&
                 board_state->turn == BoardTurn_Player
             ){            
+                Vector2 guidline_start = mouse_state->clicked_entity_initial_position;
+            
                 // get directions.
-                Vector2 position_diff = vector2_sub(mouse_state->clicked_entity_initial_position, mouse_world_position);
+                Vector2 position_diff = vector2_sub(guidline_start, mouse_world_position);
                 position_diff = vector2_clamp_to_radius(position_diff, PLAYER_MOUSE_MAX_DRAW_RADIUS);
                 f32 length = vector2_len(position_diff);
                 Vector2 launch_direction = vector2_normalise(position_diff);
@@ -3394,29 +3380,13 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                     fizx_body_impulse_linear_force(fizx_state, clicked_entity->physics_body_gid, impulse_magnitude);
                 }
     
-                { // draw_guideline();
-                    fizx_body_set_active(
-                        &entity_manager->fizx_state,
-                        mouse_state->guideline_physics_body_gid,
-                        true
-                    );        
-                    fizx_body_set_global_position(
-                        &entity_manager->fizx_state, 
-                        mouse_state->guideline_physics_body_gid, 
-                        mouse_state->clicked_entity_initial_position
-                    );
-                    fizx_line_set_direction(
-                        &entity_manager->fizx_state, 
-                        mouse_state->guideline_physics_shape_gid, 
-                        launch_direction, 
-                        100.0f
-                    );   
-                
-                    mouse_state->draw_guideline = true;
+                { // set_guideline_direction();
+                    Vector2 offset = vector2_mul_val(launch_direction, 100.0f); 
+                    game_state->guideline_state.end_point = vector2_add(guidline_start, offset);                
                 }
-                
+
                 { // draw_launch_cursour();
-                    Vector2 new_position = vector2_sub(mouse_state->clicked_entity_initial_position, position_diff);
+                    Vector2 new_position = vector2_sub(guidline_start, position_diff);
                     Circle launch_cursour_shape = {.x = new_position.x, .y = new_position.y, .radius = 0.1f};
                     gfx_draw_wire_circle(
                         entity_manager->gfx_state, 
@@ -3426,15 +3396,18 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                         0, 
                         SPRITE_MATERIAL_DEBUG
                     );
-                }      
-            }
-            else{    
-                fizx_body_set_active(
-                    &game_state->entity_manager.fizx_state,
-                    game_state->mouse_state.guideline_physics_body_gid,
-                    false
-                );
-                mouse_state->draw_guideline = false;
+                }
+                                
+                GuidelineCollisionCallbackContext guideline_ctx = {
+                    .start_point = guidline_start,
+                    .gfx_state = entity_manager->gfx_state
+                };
+                                
+                fizx_state_query_circle_cast_area(
+                    fizx_state, guideline_collision_callback, &guideline_ctx, 
+                    PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID, guidline_start, launch_direction, 100.0f, BALL_FIZX_SHAPE_RADIUS,
+                    FIZX_CollisionCallbackBehaviour_Closest
+                );            
             }
         
             // deslect_entity();
