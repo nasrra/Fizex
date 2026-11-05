@@ -170,14 +170,6 @@ void app_main(){
     bool in_editor_mode = false;
     Key last_editor_key_pressed = Key_None;
 
-    f64 buffer1[1] = {1.0f};
-    f64 src[4] = {1.0f, 2.2f, -3.3f, -4.4f};
-    f64 buffer2[1] = {2.0f};
-
-    f64 dst[4] = {0};
-    
-    simd_f64_clamp(dst, src, 4, -2.0f, 0.5f, 0);
-
     { // update_loop();
 
         u128 prev_process_tick_in_mili  = 0;

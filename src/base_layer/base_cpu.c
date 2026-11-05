@@ -150,16 +150,27 @@ static void (*simd_u16_store_val_funcptr) (u16* dst, i32 dst_length, u16 value);
 static void (*simd_u32_store_val_funcptr) (u32* dst, i32 dst_length, u32 value);
 static void (*simd_u64_store_val_funcptr) (u64* dst, i32 dst_length, u64 value);
 
-static void (*simd_f32_clamp_funcptr)(f32* dst, f32* src, i32 arr_length, f32 min, f32 max, i32 start_idx);
-static void (*simd_f64_clamp_funcptr)(f64* dst, f64* src, i32 arr_length, f64 min, f64 max, i32 start_idx);
-static void (*simd_i8_clamp_funcptr)(i8* dst, i8* src, i32 arr_length, i8 min, i8 max, i32 start_idx);
-static void (*simd_i16_clamp_funcptr)(i16* dst, i16* src, i32 arr_length, i16 min, i16 max, i32 start_idx);
-static void (*simd_i32_clamp_funcptr)(i32* dst, i32* src, i32 arr_length, i32 min, i32 max, i32 start_idx);
-static void (*simd_i64_clamp_funcptr)(i64* dst, i64* src, i32 arr_length, i64 min, i64 max, i32 start_idx);
-static void (*simd_u8_clamp_funcptr)(u8* dst, u8* src, i32 arr_length, u8 min, u8 max, i32 start_idx);
-static void (*simd_u16_clamp_funcptr)(u16* dst, u16* src, i32 arr_length, u16 min, u16 max, i32 start_idx);
-static void (*simd_u32_clamp_funcptr)(u32* dst, u32* src, i32 arr_length, u32 min, u32 max, i32 start_idx);
-static void (*simd_u64_clamp_funcptr)(u64* dst, u64* src, i32 arr_length, u64 min, u64 max, i32 start_idx);
+static void (*simd_f32_clamp_val_funcptr)(f32* dst, f32* src, i32 arr_length, f32 min, f32 max, i32 start_idx);
+static void (*simd_f64_clamp_val_funcptr)(f64* dst, f64* src, i32 arr_length, f64 min, f64 max, i32 start_idx);
+static void (*simd_i8_clamp_val_funcptr)(i8* dst, i8* src, i32 arr_length, i8 min, i8 max, i32 start_idx);
+static void (*simd_i16_clamp_val_funcptr)(i16* dst, i16* src, i32 arr_length, i16 min, i16 max, i32 start_idx);
+static void (*simd_i32_clamp_val_funcptr)(i32* dst, i32* src, i32 arr_length, i32 min, i32 max, i32 start_idx);
+static void (*simd_i64_clamp_val_funcptr)(i64* dst, i64* src, i32 arr_length, i64 min, i64 max, i32 start_idx);
+static void (*simd_u8_clamp_val_funcptr)(u8* dst, u8* src, i32 arr_length, u8 min, u8 max, i32 start_idx);
+static void (*simd_u16_clamp_val_funcptr)(u16* dst, u16* src, i32 arr_length, u16 min, u16 max, i32 start_idx);
+static void (*simd_u32_clamp_val_funcptr)(u32* dst, u32* src, i32 arr_length, u32 min, u32 max, i32 start_idx);
+static void (*simd_u64_clamp_val_funcptr)(u64* dst, u64* src, i32 arr_length, u64 min, u64 max, i32 start_idx);
+
+static void (*simd_f32_clamp_funcptr)(f32* dst, f32* src, f32* min, f32* max, i32 length, i32 start_idx);
+static void (*simd_f64_clamp_funcptr)(f64* dst, f64* src, f64* min, f64* max, i32 length, i32 start_idx);
+static void (*simd_i8_clamp_funcptr)(i8* dst, i8* src, i8* min, i8* max, i32 length, i32 start_idx);
+static void (*simd_i16_clamp_funcptr)(i16* dst, i16* src, i16* min, i16* max, i32 length, i32 start_idx);
+static void (*simd_i32_clamp_funcptr)(i32* dst, i32* src, i32* min, i32* max, i32 length, i32 start_idx);
+static void (*simd_i64_clamp_funcptr)(i64* dst, i64* src, i64* min, i64* max, i32 length, i32 start_idx);
+static void (*simd_u8_clamp_funcptr)(u8* dst, u8* src, u8* min, u8* max, i32 length, i32 start_idx);
+static void (*simd_u16_clamp_funcptr)(u16* dst, u16* src, u16* min, u16* max, i32 length, i32 start_idx);
+static void (*simd_u32_clamp_funcptr)(u32* dst, u32* src, u32* min, u32* max, i32 length, i32 start_idx);
+static void (*simd_u64_clamp_funcptr)(u64* dst, u64* src, u64* min, u64* max, i32 length, i32 start_idx);
 
 
 /*========================================
@@ -443,8 +454,8 @@ void simd_##type##_store_val(type* dst, i32 dst_length, type value){            
     simd_##type##_store_val_funcptr(dst, dst_length, value);                    \
 }
 
-#define SIMD_DEFINE_CLAMP_SCALAR(type)                                      \
-void simd_##type##_clamp_scalar(                                            \
+#define SIMD_DEFINE_CLAMP_VAL_SCALAR(type)                                  \
+void simd_##type##_clamp_val_scalar(                                        \
     type* dst, type* src, i32 src_length,                                   \
     type min, type max, i32 start_idx                                       \
 ){                                                                          \
@@ -454,56 +465,169 @@ void simd_##type##_clamp_scalar(                                            \
     }                                                                       \
 }
 
+#define SIMD_DEFINE_CLAMP_VAL_SSE(type, mem_op_suffix, precision, cast_type, vector_type_suffix, set1_suffix)   \
+void simd_##type##_clamp_val_sse(                                                                               \
+    type* dst, type* src, i32 src_length,                                                                       \
+    type min, type max, i32 start_idx                                                                           \
+){                                                                                                              \
+    BOUNDS_CHECK(start_idx, src_length);                                                                        \
+    i32 i = start_idx;                                                                                          \
+    i32 lanes = SIMD_SSE_LANE_SIZE / sizeof(type);                                                              \
+    i32 length_relative = src_length - lanes;                                                                   \
+    __m128##vector_type_suffix v_min = _mm_set1_##precision##set1_suffix(min);                                  \
+    __m128##vector_type_suffix v_max = _mm_set1_##precision##set1_suffix(max);                                  \
+    for(; i <= length_relative; i += lanes){                                                                    \
+        __m128##vector_type_suffix v_src = _mm_loadu_##mem_op_suffix((const cast_type *)&src[i]);               \
+        __m128##vector_type_suffix v_result1 = _mm_min_##precision(v_src, v_max);                               \
+        __m128##vector_type_suffix v_result2 = _mm_max_##precision(v_result1, v_min);                           \
+        _mm_storeu_##mem_op_suffix((cast_type *)&dst[i], v_result2);                                            \
+    }                                                                                                           \
+                                                                                                                \
+    for(; i < src_length; i++){                                                                                 \
+        type val = src[i];                                                                                      \
+        dst[i] =  ((val) < min ? (min) : ((val) > max ? (max) : (val)));                                        \
+    }                                                                                                           \
+}
+
+#define SIMD_DEFINE_CLAMP_VAL_AVX(type, mem_op_suffix, precision, cast_type, vector_type_suffix, set1_suffix)   \
+void simd_##type##_clamp_val_avx(                                                                               \
+    type* dst, type* src, i32 src_length,                                                                       \
+    type min, type max, i32 start_idx                                                                           \
+){                                                                                                              \
+    BOUNDS_CHECK(start_idx, src_length);                                                                        \
+    i32 i = start_idx;                                                                                          \
+    i32 lanes = SIMD_AVX_LANE_SIZE / sizeof(type);                                                              \
+    i32 length_relative = src_length - lanes;                                                                   \
+    __m256##vector_type_suffix v_min = _mm256_set1_##precision##set1_suffix(min);                               \
+    __m256##vector_type_suffix v_max = _mm256_set1_##precision##set1_suffix(max);                               \
+    for(; i <= length_relative; i += lanes){                                                                    \
+        __m256##vector_type_suffix v_src = _mm256_loadu_##mem_op_suffix((const cast_type *)&src[i]);            \
+        __m256##vector_type_suffix v_result1 = _mm256_min_##precision(v_src, v_max);                            \
+        __m256##vector_type_suffix v_result2 = _mm256_max_##precision(v_result1, v_min);                        \
+        _mm256_storeu_##mem_op_suffix((cast_type *)&dst[i], v_result2);                                         \
+    }                                                                                                           \
+                                                                                                                \
+    for(; i < src_length; i++){                                                                                 \
+        type val = src[i];                                                                                      \
+        dst[i] =  ((val) < min ? (min) : ((val) > max ? (max) : (val)));                                        \
+    }                                                                                                           \
+}
+
+#define SIMD_DEFINE_CLAMP_VAL_DISPATCH(type)                                                            \
+void simd_##type##_clamp_val(type* dst, type* src, i32 src_length, type min, type max, i32 start_idx){  \
+    if(!simd_##type##_clamp_val_funcptr){                                                               \
+        if(simd_is_avx_supported()){                                                                    \
+            simd_##type##_clamp_val_funcptr = simd_##type##_clamp_val_avx;                              \
+        }                                                                                               \
+        else if(simd_is_sse_supported()){                                                               \
+            simd_##type##_clamp_val_funcptr = simd_##type##_clamp_val_sse;                              \
+        }                                                                                               \
+        else{                                                                                           \
+            simd_##type##_clamp_val_funcptr = simd_##type##_clamp_val_scalar;                           \
+        }                                                                                               \
+    }                                                                                                   \
+    simd_##type##_clamp_val_funcptr(dst, src, src_length, min, max, start_idx);                         \
+}
+
+
+///
+/// @ SIMD Clamp
+///
+
+
+#define SIMD_DEFINE_CLAMP_SCALAR(type)  \
+void simd_##type##_clamp_scalar(        \
+    type* dst, type* src,               \
+    type* min, type* max,               \
+    i32 length, i32 start_idx           \
+){                                      \
+    for(i32 i = 0; i < length; i++){    \
+        type val = src[i];              \
+        type min_val = min[i];          \
+        type max_val = max[i];          \
+        dst[i] = (                      \
+            (val) < min_val             \
+            ? (min_val)                 \
+            : (                         \
+                (val) > max_val         \
+                ? (max_val)             \
+                : (val)                 \
+            )                           \
+        );                              \
+    }                                   \
+}
+
 #define SIMD_DEFINE_CLAMP_SSE(type, mem_op_suffix, precision, cast_type, vector_type_suffix, set1_suffix)   \
 void simd_##type##_clamp_sse(                                                                               \
-    type* dst, type* src, i32 src_length,                                                                   \
-    type min, type max, i32 start_idx                                                                       \
+    type* dst, type* src, type* min, type* max,                                                             \
+    i32 length, i32 start_idx                                                                               \
 ){                                                                                                          \
-    BOUNDS_CHECK(start_idx, src_length);                                                                    \
+    BOUNDS_CHECK(start_idx, length);                                                                        \
     i32 i = start_idx;                                                                                      \
     i32 lanes = SIMD_SSE_LANE_SIZE / sizeof(type);                                                          \
-    i32 length_relative = src_length - lanes;                                                               \
-    __m128##vector_type_suffix v_min = _mm_set1_##precision##set1_suffix(min);                              \
-    __m128##vector_type_suffix v_max = _mm_set1_##precision##set1_suffix(max);                              \
+    i32 length_relative = length - lanes;                                                                   \
     for(; i <= length_relative; i += lanes){                                                                \
+                                                                                                            \
+        __m128##vector_type_suffix v_min = _mm_loadu_##mem_op_suffix((const cast_type *)&min[i]);           \
+        __m128##vector_type_suffix v_max = _mm_loadu_##mem_op_suffix((const cast_type *)&max[i]);           \
         __m128##vector_type_suffix v_src = _mm_loadu_##mem_op_suffix((const cast_type *)&src[i]);           \
         __m128##vector_type_suffix v_result1 = _mm_min_##precision(v_src, v_max);                           \
         __m128##vector_type_suffix v_result2 = _mm_max_##precision(v_result1, v_min);                       \
         _mm_storeu_##mem_op_suffix((cast_type *)&dst[i], v_result2);                                        \
     }                                                                                                       \
                                                                                                             \
-    for(; i < src_length; i++){                                                                             \
+    for(i32 i = 0; i < length; i++){                                                                        \
         type val = src[i];                                                                                  \
-        dst[i] =  ((val) < min ? (min) : ((val) > max ? (max) : (val)));                                    \
+        type min_val = min[i];                                                                              \
+        type max_val = max[i];                                                                              \
+        dst[i] = (                                                                                          \
+            (val) < min_val                                                                                 \
+            ? (min_val)                                                                                     \
+            : (                                                                                             \
+                (val) > max_val                                                                             \
+                ? (max_val)                                                                                 \
+                : (val)                                                                                     \
+            )                                                                                               \
+        );                                                                                                  \
     }                                                                                                       \
 }
 
-#define SIMD_DEFINE_CLAMP_AVX(type, mem_op_suffix, precision, cast_type, vector_type_suffix, set1_suffix)   \
-void simd_##type##_clamp_avx(                                                                               \
-    type* dst, type* src, i32 src_length,                                                                   \
-    type min, type max, i32 start_idx                                                                       \
-){                                                                                                          \
-    BOUNDS_CHECK(start_idx, src_length);                                                                    \
-    i32 i = start_idx;                                                                                      \
-    i32 lanes = SIMD_AVX_LANE_SIZE / sizeof(type);                                                          \
-    i32 length_relative = src_length - lanes;                                                               \
-    __m256##vector_type_suffix v_min = _mm256_set1_##precision##set1_suffix(min);                           \
-    __m256##vector_type_suffix v_max = _mm256_set1_##precision##set1_suffix(max);                           \
-    for(; i <= length_relative; i += lanes){                                                                \
-        __m256##vector_type_suffix v_src = _mm256_loadu_##mem_op_suffix((const cast_type *)&src[i]);        \
-        __m256##vector_type_suffix v_result1 = _mm256_min_##precision(v_src, v_max);                        \
-        __m256##vector_type_suffix v_result2 = _mm256_max_##precision(v_result1, v_min);                    \
-        _mm256_storeu_##mem_op_suffix((cast_type *)&dst[i], v_result2);                                     \
-    }                                                                                                       \
-                                                                                                            \
-    for(; i < src_length; i++){                                                                             \
-        type val = src[i];                                                                                  \
-        dst[i] =  ((val) < min ? (min) : ((val) > max ? (max) : (val)));                                    \
-    }                                                                                                       \
+#define SIMD_DEFINE_CLAMP_AVX(type, mem_op_suffix, precision, cast_type, vector_type_suffix, set1_suffix)       \
+void simd_##type##_clamp_avx(                                                                                   \
+    type* dst, type* src, type* min, type* max,                                                                 \
+    i32 length, i32 start_idx                                                                                   \
+){                                                                                                              \
+    BOUNDS_CHECK(start_idx, length);                                                                            \
+    i32 i = start_idx;                                                                                          \
+    i32 lanes = SIMD_AVX_LANE_SIZE / sizeof(type);                                                              \
+    i32 length_relative = length - lanes;                                                                       \
+    for(; i <= length_relative; i += lanes){                                                                    \
+        __m256##vector_type_suffix v_min = _mm256_loadu_##mem_op_suffix((const cast_type *)&min[i]);            \
+        __m256##vector_type_suffix v_max = _mm256_loadu_##mem_op_suffix((const cast_type *)&max[i]);            \
+        __m256##vector_type_suffix v_src = _mm256_loadu_##mem_op_suffix((const cast_type *)&src[i]);            \
+        __m256##vector_type_suffix v_result1 = _mm256_min_##precision(v_src, v_max);                            \
+        __m256##vector_type_suffix v_result2 = _mm256_max_##precision(v_result1, v_min);                        \
+        _mm256_storeu_##mem_op_suffix((cast_type *)&dst[i], v_result2);                                         \
+    }                                                                                                           \
+                                                                                                                \
+    for(i32 i = 0; i < length; i++){                                                                            \
+        type val = src[i];                                                                                      \
+        type min_val = min[i];                                                                                  \
+        type max_val = max[i];                                                                                  \
+        dst[i] = (                                                                                              \
+            (val) < min_val                                                                                     \
+            ? (min_val)                                                                                         \
+            : (                                                                                                 \
+                (val) > max_val                                                                                 \
+                ? (max_val)                                                                                     \
+                : (val)                                                                                         \
+            )                                                                                                   \
+        );                                                                                                      \
+    }                                                                                                           \
 }
 
 #define SIMD_DEFINE_CLAMP_DISPATCH(type)                                                            \
-void simd_##type##_clamp(type* dst, type* src, i32 src_length, type min, type max, i32 start_idx){  \
+void simd_##type##_clamp(type* dst, type* src, type* min, type* max, i32 length, i32 start_idx){    \
     if(!simd_##type##_clamp_funcptr){                                                               \
         if(simd_is_avx_supported()){                                                                \
             simd_##type##_clamp_funcptr = simd_##type##_clamp_avx;                                  \
@@ -515,8 +639,10 @@ void simd_##type##_clamp(type* dst, type* src, i32 src_length, type min, type ma
             simd_##type##_clamp_funcptr = simd_##type##_clamp_scalar;                               \
         }                                                                                           \
     }                                                                                               \
-    simd_##type##_clamp_funcptr(dst, src, src_length, min, max, start_idx);                         \
+    simd_##type##_clamp_funcptr(dst, src, min, max, length, start_idx);                             \
 }
+
+
 
 
 /*========================================
@@ -622,6 +748,11 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (f32, div, div, ps, ps, f32, , );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (f32, div, div, ps, ps, f32, , );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (f32, div);
 
+SIMD_DEFINE_CLAMP_VAL_SCALAR(f32);
+SIMD_DEFINE_CLAMP_VAL_SSE(f32, ps, ps, f32, , );
+SIMD_DEFINE_CLAMP_VAL_AVX(f32, ps, ps, f32, , );
+SIMD_DEFINE_CLAMP_VAL_DISPATCH(f32);
+
 SIMD_DEFINE_CLAMP_SCALAR(f32);
 SIMD_DEFINE_CLAMP_SSE(f32, ps, ps, f32, , );
 SIMD_DEFINE_CLAMP_AVX(f32, ps, ps, f32, , );
@@ -678,6 +809,11 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (f64, div, div, pd, pd, f64, d, );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (f64, div, div, pd, pd, f64, d, );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (f64, div);
 
+SIMD_DEFINE_CLAMP_VAL_SCALAR(f64);
+SIMD_DEFINE_CLAMP_VAL_SSE(f64, pd, pd, f64, d, );
+SIMD_DEFINE_CLAMP_VAL_AVX(f64, pd, pd, f64, d, );
+SIMD_DEFINE_CLAMP_VAL_DISPATCH(f64);
+
 SIMD_DEFINE_CLAMP_SCALAR(f64);
 SIMD_DEFINE_CLAMP_SSE(f64, pd, pd, f64, d, );
 SIMD_DEFINE_CLAMP_AVX(f64, pd, pd, f64, d, );
@@ -717,6 +853,11 @@ SIMD_DEFINE_LOG_OP_VAL_SCALAR   (i8, sub, -);
 SIMD_DEFINE_LOG_OP_VAL_SSE      (i8, sub, sub, si128, epi8, __m128i, i, );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (i8, sub, sub, si256, epi8, __m256i, i, );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (i8, sub);
+
+SIMD_DEFINE_CLAMP_VAL_SCALAR(i8);
+SIMD_DEFINE_CLAMP_VAL_SSE(i8, si128, epi8, __m128i, i, );
+SIMD_DEFINE_CLAMP_VAL_AVX(i8, si256, epi8, __m256i, i, );
+SIMD_DEFINE_CLAMP_VAL_DISPATCH(i8);
 
 SIMD_DEFINE_CLAMP_SCALAR(i8);
 SIMD_DEFINE_CLAMP_SSE(i8, si128, epi8, __m128i, i, );
@@ -764,6 +905,11 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (i16, mul, mullo, si128, epi16, __m128i, i, );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (i16, mul, mullo, si256, epi16, __m256i, i, );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (i16, mul);
 
+SIMD_DEFINE_CLAMP_VAL_SCALAR(i16);
+SIMD_DEFINE_CLAMP_VAL_SSE(i16, si128, epi16, __m128i, i, );
+SIMD_DEFINE_CLAMP_VAL_AVX(i16, si256, epi16, __m256i, i, );
+SIMD_DEFINE_CLAMP_VAL_DISPATCH(i16);
+
 SIMD_DEFINE_CLAMP_SCALAR(i16);
 SIMD_DEFINE_CLAMP_SSE(i16, si128, epi16, __m128i, i, );
 SIMD_DEFINE_CLAMP_AVX(i16, si256, epi16, __m256i, i, );
@@ -810,6 +956,11 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (i32, mul, mullo, si128, epi32, __m128i, i, );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (i32, mul, mullo, si256, epi32, __m256i, i, );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (i32, mul);
 
+SIMD_DEFINE_CLAMP_VAL_SCALAR(i32);
+SIMD_DEFINE_CLAMP_VAL_SSE(i32, si128, epi32, __m128i, i, );
+SIMD_DEFINE_CLAMP_VAL_AVX(i32, si256, epi32, __m256i, i, );
+SIMD_DEFINE_CLAMP_VAL_DISPATCH(i32);
+
 SIMD_DEFINE_CLAMP_SCALAR(i32);
 SIMD_DEFINE_CLAMP_SSE(i32, si128, epi32, __m128i, i, );
 SIMD_DEFINE_CLAMP_AVX(i32, si256, epi32, __m256i, i, );
@@ -846,6 +997,11 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (i64, sub, sub, si128, epi64, __m128i, i, x);
 SIMD_DEFINE_LOG_OP_VAL_AVX      (i64, sub, sub, si256, epi64, __m256i, i, x);
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (i64, sub);
 
+SIMD_DEFINE_CLAMP_VAL_SCALAR(i64);
+SIMD_DEFINE_CLAMP_VAL_SSE(i64, si128, epi64, __m128i, i, x);
+SIMD_DEFINE_CLAMP_VAL_AVX(i64, si256, epi64, __m256i, i, x);
+SIMD_DEFINE_CLAMP_VAL_DISPATCH(i64);
+
 SIMD_DEFINE_CLAMP_SCALAR(i64);
 SIMD_DEFINE_CLAMP_SSE(i64, si128, epi64, __m128i, i, x);
 SIMD_DEFINE_CLAMP_AVX(i64, si256, epi64, __m256i, i, x);
@@ -877,6 +1033,11 @@ SIMD_DEFINE_LOG_OP_VAL_SCALAR   (u8, sub, -);
 SIMD_DEFINE_LOG_OP_VAL_SSE      (u8, sub, sub, si128, epi8, __m128i, i, );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (u8, sub, sub, si256, epi8, __m256i, i, );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (u8, sub);
+
+SIMD_DEFINE_CLAMP_VAL_SCALAR(u8);
+SIMD_DEFINE_CLAMP_VAL_SSE(u8, si128, epi8, __m128i, i, );
+SIMD_DEFINE_CLAMP_VAL_AVX(u8, si256, epi8, __m256i, i, );
+SIMD_DEFINE_CLAMP_VAL_DISPATCH(u8);
 
 SIMD_DEFINE_CLAMP_SCALAR(u8);
 SIMD_DEFINE_CLAMP_SSE(u8, si128, epi8, __m128i, i, );
@@ -919,6 +1080,11 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (u16, mul, mullo, si128, epi16, __m128i, i, );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (u16, mul, mullo, si256, epi16, __m256i, i, );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (u16, mul);
 
+SIMD_DEFINE_CLAMP_VAL_SCALAR(u16);
+SIMD_DEFINE_CLAMP_VAL_SSE(u16, si128, epi16, __m128i, i, );
+SIMD_DEFINE_CLAMP_VAL_AVX(u16, si256, epi16, __m256i, i, );
+SIMD_DEFINE_CLAMP_VAL_DISPATCH(u16);
+
 SIMD_DEFINE_CLAMP_SCALAR(u16);
 SIMD_DEFINE_CLAMP_SSE(u16, si128, epi16, __m128i, i, );
 SIMD_DEFINE_CLAMP_AVX(u16, si256, epi16, __m256i, i, );
@@ -960,6 +1126,11 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (u32, mul, mullo, si128, epi32, __m128i, i, );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (u32, mul, mullo, si256, epi32, __m256i, i, );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (u32, mul);
 
+SIMD_DEFINE_CLAMP_VAL_SCALAR(u32);
+SIMD_DEFINE_CLAMP_VAL_SSE(u32, si128, epi32, __m128i, i, );
+SIMD_DEFINE_CLAMP_VAL_AVX(u32, si256, epi32, __m256i, i, );
+SIMD_DEFINE_CLAMP_VAL_DISPATCH(u32);
+
 SIMD_DEFINE_CLAMP_SCALAR(u32);
 SIMD_DEFINE_CLAMP_SSE(u32, si128, epi32, __m128i, i, );
 SIMD_DEFINE_CLAMP_AVX(u32, si256, epi32, __m256i, i, );
@@ -991,29 +1162,12 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (u64, sub, sub, si128, epi64, __m128i, i, x);
 SIMD_DEFINE_LOG_OP_VAL_AVX      (u64, sub, sub, si256, epi64, __m256i, i, x);
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (u64, sub);
 
+SIMD_DEFINE_CLAMP_VAL_SCALAR(u64);
+SIMD_DEFINE_CLAMP_VAL_SSE(u64, si128, epi64, __m128i, i, x);
+SIMD_DEFINE_CLAMP_VAL_AVX(u64, si256, epi64, __m256i, i, x);
+SIMD_DEFINE_CLAMP_VAL_DISPATCH(u64);
+
 SIMD_DEFINE_CLAMP_SCALAR(u64);
 SIMD_DEFINE_CLAMP_SSE(u64, si128, epi64, __m128i, i, x);
 SIMD_DEFINE_CLAMP_AVX(u64, si256, epi64, __m256i, i, x);
 SIMD_DEFINE_CLAMP_DISPATCH(u64);
-
-
-// graveyard.
-
-void simd_f32_sub_val_clamped_sse(f32* lhs, f32 rhs, f32* dst, f32 clamp_value, i32 length){
-    i32 i = 0;
-    __m128 clamp = _mm_set1_ps(clamp_value);
-    __m128 v_rhs = _mm_set1_ps(rhs);
-    i32 increment = SIMD_SSE_LANE_SIZE / (sizeof(f32));
-    for(; i + increment <= length; i+= increment){
-        __m128 v_lhs = _mm_loadu_ps(&lhs[i]);
-        __m128 diff = _mm_sub_ps(v_lhs, v_rhs);
-        __m128 clamped = _mm_max_ps(diff, clamp);
-        _mm_storeu_ps(&dst[i], clamped);
-    }
-
-    // scalar tail.
-    for(; i < length; i++){
-        f32 d = lhs[i] - rhs;
-        dst[i] = d < clamp_value ? clamp_value : d;
-    }
-}
