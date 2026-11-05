@@ -44,6 +44,7 @@ typedef struct{
     f32* time_scale;
     f32* previous_time;
     f32* current_time;
+    f32* duration;
     // `remarks`
     // 1.0f = true, 0.0f = false.
     f32* is_ticking;
@@ -484,6 +485,7 @@ bool timer_manager_init(
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->is_ticking, &manager->length, timer_amount);
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->has_started, &manager->length, timer_amount);
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->delta_time_scratch_space, &manager->length, timer_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->duration, &manager->length, timer_amount);
 
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->tick_callback, &manager->length, timer_amount);
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->tick_data, &manager->tick_data_length, tick_data_element_size * timer_amount);
@@ -507,11 +509,11 @@ bool timer_manager_init(
     a handle to the newly started timer; otherwise 0 if allocation was unsuccessful.
 */
 TimerHandle timer_manager_timer_start(TimerManager* manager, TimerContext timer_ctx){
+    
     TimerHandle handle = gen_id_allocator_alloc(&manager->gen_id_allocator);
     if(handle == 0){
         return handle;
     }
-
 
     i32 idx = gen_id_get_index(handle);
 
@@ -618,7 +620,9 @@ void timer_manager_update(TimerManager* manager, f32 delta_time){
     simd_f32_mul(manager->delta_time_scratch_space, manager->delta_time_scratch_space, manager->time_scale, manager->length, 0);
     simd_f32_mul(manager->delta_time_scratch_space, manager->delta_time_scratch_space, manager->is_ticking, manager->length, 0);
     simd_f32_mul(manager->delta_time_scratch_space, manager->delta_time_scratch_space, manager->has_started, manager->length, 0);
-    simd_f32_sub_val_clamped_sse(manager->current_time, delta_time, manager->current_time, 0.0f, manager->length);
+    simd_f32_sub(manager->current_time, manager->current_time, manager->delta_time_scratch_space, manager->length, 0);
+    simd_f32_clamp(manager->current_time, manager->current_time, manager->length, 0.0f, F32_MAX, 0);
+    
     for(i32 i = 0; i < manager->length; i++){
         if(manager->has_started[i] == TIMER_MANAGER_HAS_STARTED_FALSE){
             continue;

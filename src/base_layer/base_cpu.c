@@ -62,21 +62,22 @@ typedef void (*simd_u64_log_op_val_funcptr)(u64* dst, const u64* lhs, const u64 
     globals.
 ========================================*//**/
 
+
 /*
     All funcptrs are lazy loaded when `simd_##type##_##op()` is first called.
 *//**/
 
-// floating point log ops.
-static simd_f32_log_op_funcptr simd_f32_add_funcptr = NULL;
-static simd_f32_log_op_funcptr simd_f32_sub_funcptr = NULL;
-static simd_f32_log_op_funcptr simd_f32_div_funcptr = NULL;
-static simd_f32_log_op_funcptr simd_f32_mul_funcptr = NULL;
-static simd_f64_log_op_funcptr simd_f64_add_funcptr = NULL;
-static simd_f64_log_op_funcptr simd_f64_sub_funcptr = NULL;
-static simd_f64_log_op_funcptr simd_f64_div_funcptr = NULL;
-static simd_f64_log_op_funcptr simd_f64_mul_funcptr = NULL;
 
-// floating point val log ops. 
+static simd_f32_log_op_funcptr simd_f32_add_funcptr     = NULL;
+static simd_f32_log_op_funcptr simd_f32_sub_funcptr     = NULL;
+static simd_f32_log_op_funcptr simd_f32_div_funcptr     = NULL;
+static simd_f32_log_op_funcptr simd_f32_mul_funcptr     = NULL;
+
+static simd_f64_log_op_funcptr simd_f64_add_funcptr     = NULL;
+static simd_f64_log_op_funcptr simd_f64_sub_funcptr     = NULL;
+static simd_f64_log_op_funcptr simd_f64_div_funcptr     = NULL;
+static simd_f64_log_op_funcptr simd_f64_mul_funcptr     = NULL;
+
 static simd_f32_val_log_op_funcptr simd_f32_add_val_funcptr = NULL;
 static simd_f32_val_log_op_funcptr simd_f32_sub_val_funcptr = NULL;
 static simd_f32_val_log_op_funcptr simd_f32_div_val_funcptr = NULL;
@@ -86,7 +87,6 @@ static simd_f64_val_log_op_funcptr simd_f64_sub_val_funcptr = NULL;
 static simd_f64_val_log_op_funcptr simd_f64_div_val_funcptr = NULL;
 static simd_f64_val_log_op_funcptr simd_f64_mul_val_funcptr = NULL;
 
-// 
 static simd_i8_log_op_funcptr  simd_i8_add_funcptr  = NULL;
 static simd_i8_log_op_funcptr  simd_i8_sub_funcptr  = NULL;
 static simd_i8_log_op_funcptr  simd_i8_mul_funcptr  = NULL;
@@ -149,6 +149,17 @@ static void (*simd_u8_store_val_funcptr)  (u8* dst,  i32 dst_length, u8 value);
 static void (*simd_u16_store_val_funcptr) (u16* dst, i32 dst_length, u16 value);
 static void (*simd_u32_store_val_funcptr) (u32* dst, i32 dst_length, u32 value);
 static void (*simd_u64_store_val_funcptr) (u64* dst, i32 dst_length, u64 value);
+
+static void (*simd_f32_clamp_funcptr)(f32* dst, f32* src, i32 arr_length, f32 min, f32 max, i32 start_idx);
+static void (*simd_f64_clamp_funcptr)(f64* dst, f64* src, i32 arr_length, f64 min, f64 max, i32 start_idx);
+static void (*simd_i8_clamp_funcptr)(i8* dst, i8* src, i32 arr_length, i8 min, i8 max, i32 start_idx);
+static void (*simd_i16_clamp_funcptr)(i16* dst, i16* src, i32 arr_length, i16 min, i16 max, i32 start_idx);
+static void (*simd_i32_clamp_funcptr)(i32* dst, i32* src, i32 arr_length, i32 min, i32 max, i32 start_idx);
+static void (*simd_i64_clamp_funcptr)(i64* dst, i64* src, i32 arr_length, i64 min, i64 max, i32 start_idx);
+static void (*simd_u8_clamp_funcptr)(u8* dst, u8* src, i32 arr_length, u8 min, u8 max, i32 start_idx);
+static void (*simd_u16_clamp_funcptr)(u16* dst, u16* src, i32 arr_length, u16 min, u16 max, i32 start_idx);
+static void (*simd_u32_clamp_funcptr)(u32* dst, u32* src, i32 arr_length, u32 min, u32 max, i32 start_idx);
+static void (*simd_u64_clamp_funcptr)(u64* dst, u64* src, i32 arr_length, u64 min, u64 max, i32 start_idx);
 
 
 /*========================================
@@ -432,9 +443,86 @@ void simd_##type##_store_val(type* dst, i32 dst_length, type value){            
     simd_##type##_store_val_funcptr(dst, dst_length, value);                    \
 }
 
+#define SIMD_DEFINE_CLAMP_SCALAR(type)                                      \
+void simd_##type##_clamp_scalar(                                            \
+    type* dst, type* src, i32 src_length,                                   \
+    type min, type max, i32 start_idx                                       \
+){                                                                          \
+    for(i32 i = 0; i < src_length; i++){                                    \
+        type val = src[i];                                                  \
+        dst[i] =  ((val) < min ? (min) : ((val) > max ? (max) : (val)));    \
+    }                                                                       \
+}
+
+#define SIMD_DEFINE_CLAMP_SSE(type, mem_op_suffix, precision, cast_type, vector_type_suffix, set1_suffix)   \
+void simd_##type##_clamp_sse(                                                                               \
+    type* dst, type* src, i32 src_length,                                                                   \
+    type min, type max, i32 start_idx                                                                       \
+){                                                                                                          \
+    BOUNDS_CHECK(start_idx, src_length);                                                                    \
+    i32 i = start_idx;                                                                                      \
+    i32 lanes = SIMD_SSE_LANE_SIZE / sizeof(type);                                                          \
+    i32 length_relative = src_length - lanes;                                                               \
+    __m128##vector_type_suffix v_min = _mm_set1_##precision##set1_suffix(min);                              \
+    __m128##vector_type_suffix v_max = _mm_set1_##precision##set1_suffix(max);                              \
+    for(; i <= length_relative; i += lanes){                                                                \
+        __m128##vector_type_suffix v_src = _mm_loadu_##mem_op_suffix((const cast_type *)&src[i]);           \
+        __m128##vector_type_suffix v_result1 = _mm_min_##precision(v_src, v_max);                           \
+        __m128##vector_type_suffix v_result2 = _mm_max_##precision(v_result1, v_min);                       \
+        _mm_storeu_##mem_op_suffix((cast_type *)&dst[i], v_result2);                                        \
+    }                                                                                                       \
+                                                                                                            \
+    for(; i < src_length; i++){                                                                             \
+        type val = src[i];                                                                                  \
+        dst[i] =  ((val) < min ? (min) : ((val) > max ? (max) : (val)));                                    \
+    }                                                                                                       \
+}
+
+#define SIMD_DEFINE_CLAMP_AVX(type, mem_op_suffix, precision, cast_type, vector_type_suffix, set1_suffix)   \
+void simd_##type##_clamp_avx(                                                                               \
+    type* dst, type* src, i32 src_length,                                                                   \
+    type min, type max, i32 start_idx                                                                       \
+){                                                                                                          \
+    BOUNDS_CHECK(start_idx, src_length);                                                                    \
+    i32 i = start_idx;                                                                                      \
+    i32 lanes = SIMD_AVX_LANE_SIZE / sizeof(type);                                                          \
+    i32 length_relative = src_length - lanes;                                                               \
+    __m256##vector_type_suffix v_min = _mm256_set1_##precision##set1_suffix(min);                           \
+    __m256##vector_type_suffix v_max = _mm256_set1_##precision##set1_suffix(max);                           \
+    for(; i <= length_relative; i += lanes){                                                                \
+        __m256##vector_type_suffix v_src = _mm256_loadu_##mem_op_suffix((const cast_type *)&src[i]);        \
+        __m256##vector_type_suffix v_result1 = _mm256_min_##precision(v_src, v_max);                        \
+        __m256##vector_type_suffix v_result2 = _mm256_max_##precision(v_result1, v_min);                    \
+        _mm256_storeu_##mem_op_suffix((cast_type *)&dst[i], v_result2);                                     \
+    }                                                                                                       \
+                                                                                                            \
+    for(; i < src_length; i++){                                                                             \
+        type val = src[i];                                                                                  \
+        dst[i] =  ((val) < min ? (min) : ((val) > max ? (max) : (val)));                                    \
+    }                                                                                                       \
+}
+
+#define SIMD_DEFINE_CLAMP_DISPATCH(type)                                                            \
+void simd_##type##_clamp(type* dst, type* src, i32 src_length, type min, type max, i32 start_idx){  \
+    if(!simd_##type##_clamp_funcptr){                                                               \
+        if(simd_is_avx_supported()){                                                                \
+            simd_##type##_clamp_funcptr = simd_##type##_clamp_avx;                                  \
+        }                                                                                           \
+        else if(simd_is_sse_supported()){                                                           \
+            simd_##type##_clamp_funcptr = simd_##type##_clamp_sse;                                  \
+        }                                                                                           \
+        else{                                                                                       \
+            simd_##type##_clamp_funcptr = simd_##type##_clamp_scalar;                               \
+        }                                                                                           \
+    }                                                                                               \
+    simd_##type##_clamp_funcptr(dst, src, src_length, min, max, start_idx);                         \
+}
+
+
 /*========================================
     procedures.
 ========================================*//**/
+
 
 bool simd_is_avx_supported(){
 #if ARCH_X64 || ARCH_X86
@@ -483,9 +571,11 @@ bool cpu_is_bmi2_supported(){
     return (cpu_info[1] & (1<<8)) != 0;
 }
 
+
 ///
-/// f32
+/// @ f32
 ///
+
 
 SIMD_DEFINE_STORE_VAL_SCALAR(f32);
 SIMD_DEFINE_STORE_VAL_SSE(f32, f32, ps, ps, );
@@ -532,14 +622,15 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (f32, div, div, ps, ps, f32, , );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (f32, div, div, ps, ps, f32, , );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (f32, div);
 
-
+SIMD_DEFINE_CLAMP_SCALAR(f32);
+SIMD_DEFINE_CLAMP_SSE(f32, ps, ps, f32, , );
+SIMD_DEFINE_CLAMP_AVX(f32, ps, ps, f32, , );
+SIMD_DEFINE_CLAMP_DISPATCH(f32);
 
 
 ///
-/// f64
+/// @ f64
 ///
-
-
 
 
 SIMD_DEFINE_STORE_VAL_SCALAR(f64);
@@ -587,18 +678,19 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (f64, div, div, pd, pd, f64, d, );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (f64, div, div, pd, pd, f64, d, );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (f64, div);
 
-
-
+SIMD_DEFINE_CLAMP_SCALAR(f64);
+SIMD_DEFINE_CLAMP_SSE(f64, pd, pd, f64, d, );
+SIMD_DEFINE_CLAMP_AVX(f64, pd, pd, f64, d, );
+SIMD_DEFINE_CLAMP_DISPATCH(f64);
 
 
 ///
-/// i8
+/// @  i8
 ///
 /*
     NOTE:
     simd doesnt have multiplication for 8bit integers.
 */
-
 
 
 SIMD_DEFINE_STORE_VAL_SCALAR(i8);
@@ -626,14 +718,15 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (i8, sub, sub, si128, epi8, __m128i, i, );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (i8, sub, sub, si256, epi8, __m256i, i, );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (i8, sub);
 
-
+SIMD_DEFINE_CLAMP_SCALAR(i8);
+SIMD_DEFINE_CLAMP_SSE(i8, si128, epi8, __m128i, i, );
+SIMD_DEFINE_CLAMP_AVX(i8, si256, epi8, __m256i, i, );
+SIMD_DEFINE_CLAMP_DISPATCH(i8);
 
 
 ///
-/// i16
+/// @ i16
 ///
-
-
 
 
 SIMD_DEFINE_STORE_VAL_SCALAR(i16);
@@ -671,11 +764,14 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (i16, mul, mullo, si128, epi16, __m128i, i, );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (i16, mul, mullo, si256, epi16, __m256i, i, );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (i16, mul);
 
-
+SIMD_DEFINE_CLAMP_SCALAR(i16);
+SIMD_DEFINE_CLAMP_SSE(i16, si128, epi16, __m128i, i, );
+SIMD_DEFINE_CLAMP_AVX(i16, si256, epi16, __m256i, i, );
+SIMD_DEFINE_CLAMP_DISPATCH(i16);
 
 
 ///
-/// i32
+/// @ i32
 ///
 
 
@@ -714,14 +810,15 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (i32, mul, mullo, si128, epi32, __m128i, i, );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (i32, mul, mullo, si256, epi32, __m256i, i, );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (i32, mul);
 
-
+SIMD_DEFINE_CLAMP_SCALAR(i32);
+SIMD_DEFINE_CLAMP_SSE(i32, si128, epi32, __m128i, i, );
+SIMD_DEFINE_CLAMP_AVX(i32, si256, epi32, __m256i, i, );
+SIMD_DEFINE_CLAMP_DISPATCH(i32);
 
 
 ///
-/// i64
+/// @ i64
 ///
-
-
 
 
 SIMD_DEFINE_STORE_VAL_SCALAR(i64);
@@ -749,7 +846,10 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (i64, sub, sub, si128, epi64, __m128i, i, x);
 SIMD_DEFINE_LOG_OP_VAL_AVX      (i64, sub, sub, si256, epi64, __m256i, i, x);
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (i64, sub);
 
-
+SIMD_DEFINE_CLAMP_SCALAR(i64);
+SIMD_DEFINE_CLAMP_SSE(i64, si128, epi64, __m128i, i, x);
+SIMD_DEFINE_CLAMP_AVX(i64, si256, epi64, __m256i, i, x);
+SIMD_DEFINE_CLAMP_DISPATCH(i64);
 
 
 ///
@@ -778,14 +878,15 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (u8, sub, sub, si128, epi8, __m128i, i, );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (u8, sub, sub, si256, epi8, __m256i, i, );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (u8, sub);
 
-
+SIMD_DEFINE_CLAMP_SCALAR(u8);
+SIMD_DEFINE_CLAMP_SSE(u8, si128, epi8, __m128i, i, );
+SIMD_DEFINE_CLAMP_AVX(u8, si256, epi8, __m256i, i, );
+SIMD_DEFINE_CLAMP_DISPATCH(u8);
 
 
 ///
-/// u16
+/// @ u16
 ///
-
-
 
 
 SIMD_DEFINE_LOG_OP_SCALAR       (u16, add, +);
@@ -818,14 +919,15 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (u16, mul, mullo, si128, epi16, __m128i, i, );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (u16, mul, mullo, si256, epi16, __m256i, i, );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (u16, mul);
 
-
+SIMD_DEFINE_CLAMP_SCALAR(u16);
+SIMD_DEFINE_CLAMP_SSE(u16, si128, epi16, __m128i, i, );
+SIMD_DEFINE_CLAMP_AVX(u16, si256, epi16, __m256i, i, );
+SIMD_DEFINE_CLAMP_DISPATCH(u16);
 
 
 ///
-/// u32
+/// @ u32
 ///
-
-
 
 
 SIMD_DEFINE_LOG_OP_SCALAR       (u32, add, +);
@@ -858,14 +960,15 @@ SIMD_DEFINE_LOG_OP_VAL_SSE      (u32, mul, mullo, si128, epi32, __m128i, i, );
 SIMD_DEFINE_LOG_OP_VAL_AVX      (u32, mul, mullo, si256, epi32, __m256i, i, );
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (u32, mul);
 
-
+SIMD_DEFINE_CLAMP_SCALAR(u32);
+SIMD_DEFINE_CLAMP_SSE(u32, si128, epi32, __m128i, i, );
+SIMD_DEFINE_CLAMP_AVX(u32, si256, epi32, __m256i, i, );
+SIMD_DEFINE_CLAMP_DISPATCH(u32);
 
 
 ///
-/// u64
+/// @ u64
 ///
-
-
 
 
 SIMD_DEFINE_LOG_OP_SCALAR       (u64, add, +);
@@ -887,6 +990,14 @@ SIMD_DEFINE_LOG_OP_VAL_SCALAR   (u64, sub, -);
 SIMD_DEFINE_LOG_OP_VAL_SSE      (u64, sub, sub, si128, epi64, __m128i, i, x);
 SIMD_DEFINE_LOG_OP_VAL_AVX      (u64, sub, sub, si256, epi64, __m256i, i, x);
 SIMD_DEFINE_LOG_OP_VAL_DISPATCH (u64, sub);
+
+SIMD_DEFINE_CLAMP_SCALAR(u64);
+SIMD_DEFINE_CLAMP_SSE(u64, si128, epi64, __m128i, i, x);
+SIMD_DEFINE_CLAMP_AVX(u64, si256, epi64, __m256i, i, x);
+SIMD_DEFINE_CLAMP_DISPATCH(u64);
+
+
+// graveyard.
 
 void simd_f32_sub_val_clamped_sse(f32* lhs, f32 rhs, f32* dst, f32 clamp_value, i32 length){
     i32 i = 0;
