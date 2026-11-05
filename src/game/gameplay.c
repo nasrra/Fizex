@@ -25,15 +25,18 @@ typedef void (*TimerTickCallback)(void* user_data, f32 current_tick, f32 delta_t
 typedef struct{
     
     TimerTickCallback tick_callback;
+    // this is deep copied into the internal data storage.
     void* tick_data;
     size_t tick_data_size;
     
     TimerTimeoutCallback timeout_callback;
+    // this is deep copied into the internal data storage.
     void* timeout_data; 
     size_t timeout_data_size;
     
-    f32 duration; 
     f32 time_scale;
+    f32 start_time;
+    f32 end_time; 
     
 } TimerContext;
 
@@ -44,7 +47,8 @@ typedef struct{
     f32* time_scale;
     f32* previous_time;
     f32* current_time;
-    f32* duration;
+    f32* start_time;
+    f32* end_time;
     // `remarks`
     // 1.0f = true, 0.0f = false.
     f32* is_ticking;
@@ -485,7 +489,8 @@ bool timer_manager_init(
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->is_ticking, &manager->length, timer_amount);
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->has_started, &manager->length, timer_amount);
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->delta_time_scratch_space, &manager->length, timer_amount);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->duration, &manager->length, timer_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->end_time, &manager->length, timer_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, manager->start_time, &manager->length, timer_amount);
 
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->tick_callback, &manager->length, timer_amount);
     MEMORY_ARENA_ALLOC_ARRAY(arena, manager->tick_data, &manager->tick_data_length, tick_data_element_size * timer_amount);
@@ -501,10 +506,6 @@ bool timer_manager_init(
 }
 
 /*
-    `remarks`
-    `timeout_data` is deep copied into the internal data storage.
-    `duration`: the duration - in seconds - of the timer before timing out.
-
     `returns`
     a handle to the newly started timer; otherwise 0 if allocation was unsuccessful.
 */
@@ -538,13 +539,15 @@ TimerHandle timer_manager_timer_start(TimerManager* manager, TimerContext timer_
     }
 
     // set the timer state.
-    manager->current_time[idx]      = timer_ctx.duration;
+    manager->current_time[idx]      = timer_ctx.start_time;
+    manager->previous_time[idx]     = timer_ctx.start_time;
     manager->time_scale[idx]        = timer_ctx.time_scale;
-    manager->previous_time[idx]     = 0.0f;
     manager->is_ticking[idx]        = TIMER_MANAGER_IS_TICKING_TRUE;
     manager->has_started[idx]       = TIMER_MANAGER_HAS_STARTED_TRUE;
     manager->timeout_callback[idx]  = timer_ctx.timeout_callback;
     manager->tick_callback[idx]     = timer_ctx.tick_callback;
+    manager->end_time[idx]          = timer_ctx.end_time;
+    manager->start_time[idx]        = timer_ctx.start_time;
 
     return handle;
 }
@@ -620,8 +623,8 @@ void timer_manager_update(TimerManager* manager, f32 delta_time){
     simd_f32_mul(manager->delta_time_scratch_space, manager->delta_time_scratch_space, manager->time_scale, manager->length, 0);
     simd_f32_mul(manager->delta_time_scratch_space, manager->delta_time_scratch_space, manager->is_ticking, manager->length, 0);
     simd_f32_mul(manager->delta_time_scratch_space, manager->delta_time_scratch_space, manager->has_started, manager->length, 0);
-    simd_f32_sub(manager->current_time, manager->current_time, manager->delta_time_scratch_space, manager->length, 0);
-    simd_f32_clamp_val(manager->current_time, 0.0f, F32_MAX, manager->current_time, manager->length, 0);
+    simd_f32_add(manager->current_time, manager->current_time, manager->delta_time_scratch_space, manager->length, 0);
+    simd_f32_clamp(manager->current_time, manager->start_time, manager->end_time, manager->current_time, manager->length, 0);
     
     for(i32 i = 0; i < manager->length; i++){
         if(manager->has_started[i] == TIMER_MANAGER_HAS_STARTED_FALSE){
@@ -638,7 +641,7 @@ void timer_manager_update(TimerManager* manager, f32 delta_time){
             tick_callback(&manager->tick_data[data_idx], manager->current_time[i], manager->delta_time_scratch_space[i]);
         }
 
-        if(manager->current_time[i] != 0.0f){
+        if(manager->current_time[i] != manager->end_time[i]){
             continue;
         }
                 
@@ -800,8 +803,9 @@ void board_state_enter_turn(BoardState* state, BoardTurn turn){
                 .board_state = state
             };
             TimerContext timer_ctx = {
-                .duration = 10.0f,
+                .end_time = 10.0f,
                 .time_scale = 1.0f,
+                .start_time = 5.0f,
                 .timeout_callback = player_board_turn_timeout_callback,
                 .timeout_data = &timeout_ctx,
                 .timeout_data_size = sizeof(timeout_ctx),
@@ -2092,7 +2096,7 @@ void ball_cue_update(Entity* entity, GameState* game_state, f32 delta_time){
             };
             
             TimerContext timer_ctx = {
-                .duration = 0.334f,
+                .end_time = 0.334f,
                 .time_scale = 1.0f,
                 .timeout_callback = ball_cue_fragment_timer_timeout,
                 .timeout_data = &timeout_ctx,
@@ -2474,7 +2478,7 @@ void boost_pad_on_sustain_collision_callback(FIZX_CollisionInfo info, void* user
         };
         
         TimerContext timer_ctx = {
-            .duration = 1.0f,
+            .end_time = 1.0f,
             .time_scale = 1.0f,
             .timeout_callback = boost_pad_boost_depleted_timeout_callback,
             .timeout_data = &timeout_ctx,
@@ -3294,7 +3298,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                                     };
                                     
                                     TimerContext timer_ctx = {
-                                        .duration = 1.0f,
+                                        .end_time = 1.0f,
                                         .time_scale = 1.0f,
                                         .timeout_callback = board_state_display_turn_hud_timeout_callback,
                                         .timeout_data = &timeout_ctx,
