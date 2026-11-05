@@ -621,7 +621,7 @@ void timer_manager_update(TimerManager* manager, f32 delta_time){
     simd_f32_mul(manager->delta_time_scratch_space, manager->delta_time_scratch_space, manager->is_ticking, manager->length, 0);
     simd_f32_mul(manager->delta_time_scratch_space, manager->delta_time_scratch_space, manager->has_started, manager->length, 0);
     simd_f32_sub(manager->current_time, manager->current_time, manager->delta_time_scratch_space, manager->length, 0);
-    simd_f32_clamp_val(manager->current_time, manager->current_time, manager->length, 0.0f, F32_MAX, 0);
+    simd_f32_clamp_val(manager->current_time, 0.0f, F32_MAX, manager->current_time, manager->length, 0);
     
     for(i32 i = 0; i < manager->length; i++){
         if(manager->has_started[i] == TIMER_MANAGER_HAS_STARTED_FALSE){

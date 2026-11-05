@@ -150,27 +150,27 @@ static void (*simd_u16_store_val_funcptr) (u16* dst, i32 dst_length, u16 value);
 static void (*simd_u32_store_val_funcptr) (u32* dst, i32 dst_length, u32 value);
 static void (*simd_u64_store_val_funcptr) (u64* dst, i32 dst_length, u64 value);
 
-static void (*simd_f32_clamp_val_funcptr)(f32* dst, f32* src, i32 arr_length, f32 min, f32 max, i32 start_idx);
-static void (*simd_f64_clamp_val_funcptr)(f64* dst, f64* src, i32 arr_length, f64 min, f64 max, i32 start_idx);
-static void (*simd_i8_clamp_val_funcptr)(i8* dst, i8* src, i32 arr_length, i8 min, i8 max, i32 start_idx);
-static void (*simd_i16_clamp_val_funcptr)(i16* dst, i16* src, i32 arr_length, i16 min, i16 max, i32 start_idx);
-static void (*simd_i32_clamp_val_funcptr)(i32* dst, i32* src, i32 arr_length, i32 min, i32 max, i32 start_idx);
-static void (*simd_i64_clamp_val_funcptr)(i64* dst, i64* src, i32 arr_length, i64 min, i64 max, i32 start_idx);
-static void (*simd_u8_clamp_val_funcptr)(u8* dst, u8* src, i32 arr_length, u8 min, u8 max, i32 start_idx);
-static void (*simd_u16_clamp_val_funcptr)(u16* dst, u16* src, i32 arr_length, u16 min, u16 max, i32 start_idx);
-static void (*simd_u32_clamp_val_funcptr)(u32* dst, u32* src, i32 arr_length, u32 min, u32 max, i32 start_idx);
-static void (*simd_u64_clamp_val_funcptr)(u64* dst, u64* src, i32 arr_length, u64 min, u64 max, i32 start_idx);
+static void (*simd_f32_clamp_val_funcptr)(f32* dst, f32 min, f32 max, f32* src, i32 src_length, i32 start_idx);
+static void (*simd_f64_clamp_val_funcptr)(f64* dst, f64 min, f64 max, f64* src, i32 src_length, i32 start_idx);
+static void (*simd_i8_clamp_val_funcptr)(i8* dst, i8 min, i8 max, i8* src, i32 src_length, i32 start_idx);
+static void (*simd_i16_clamp_val_funcptr)(i16* dst, i16 min, i16 max, i16* src, i32 src_length, i32 start_idx);
+static void (*simd_i32_clamp_val_funcptr)(i32* dst, i32 min, i32 max, i32* src, i32 src_length, i32 start_idx);
+static void (*simd_i64_clamp_val_funcptr)(i64* dst, i64 min, i64 max, i64* src, i32 src_length, i32 start_idx);
+static void (*simd_u8_clamp_val_funcptr)(u8* dst, u8 min, u8 max, u8* src, i32 src_length, i32 start_idx);
+static void (*simd_u16_clamp_val_funcptr)(u16* dst, u16 min, u16 max, u16* src, i32 src_length, i32 start_idx);
+static void (*simd_u32_clamp_val_funcptr)(u32* dst, u32 min, u32 max, u32* src, i32 src_length, i32 start_idx);
+static void (*simd_u64_clamp_val_funcptr)(u64* dst, u64 min, u64 max, u64* src, i32 src_length, i32 start_idx);
 
-static void (*simd_f32_clamp_funcptr)(f32* dst, f32* src, f32* min, f32* max, i32 length, i32 start_idx);
-static void (*simd_f64_clamp_funcptr)(f64* dst, f64* src, f64* min, f64* max, i32 length, i32 start_idx);
-static void (*simd_i8_clamp_funcptr)(i8* dst, i8* src, i8* min, i8* max, i32 length, i32 start_idx);
-static void (*simd_i16_clamp_funcptr)(i16* dst, i16* src, i16* min, i16* max, i32 length, i32 start_idx);
-static void (*simd_i32_clamp_funcptr)(i32* dst, i32* src, i32* min, i32* max, i32 length, i32 start_idx);
-static void (*simd_i64_clamp_funcptr)(i64* dst, i64* src, i64* min, i64* max, i32 length, i32 start_idx);
-static void (*simd_u8_clamp_funcptr)(u8* dst, u8* src, u8* min, u8* max, i32 length, i32 start_idx);
-static void (*simd_u16_clamp_funcptr)(u16* dst, u16* src, u16* min, u16* max, i32 length, i32 start_idx);
-static void (*simd_u32_clamp_funcptr)(u32* dst, u32* src, u32* min, u32* max, i32 length, i32 start_idx);
-static void (*simd_u64_clamp_funcptr)(u64* dst, u64* src, u64* min, u64* max, i32 length, i32 start_idx);
+static void (*simd_f32_clamp_funcptr)(f32* dst, f32* min, f32* max, f32* src, i32 length, i32 start_idx);
+static void (*simd_f64_clamp_funcptr)(f64* dst, f64* min, f64* max, f64* src, i32 length, i32 start_idx);
+static void (*simd_i8_clamp_funcptr)(i8* dst, i8* min, i8* max, i8*src, i32 length, i32 start_idx);
+static void (*simd_i16_clamp_funcptr)(i16* dst, i16* min, i16* max, i16* src, i32 length, i32 start_idx);
+static void (*simd_i32_clamp_funcptr)(i32* dst, i32* min, i32* max, i32* src, i32 length, i32 start_idx);
+static void (*simd_i64_clamp_funcptr)(i64* dst, i64* min, i64* max, i64* src, i32 length, i32 start_idx);
+static void (*simd_u8_clamp_funcptr)(u8* dst, u8* min, u8* max, u8* src, i32 length, i32 start_idx);
+static void (*simd_u16_clamp_funcptr)(u16* dst, u16* min, u16* max, u16* src, i32 length, i32 start_idx);
+static void (*simd_u32_clamp_funcptr)(u32* dst, u32* min, u32* max, u32* src, i32 length, i32 start_idx);
+static void (*simd_u64_clamp_funcptr)(u64* dst, u64* min, u64* max, u64* src, i32 length, i32 start_idx);
 
 
 /*========================================
@@ -454,10 +454,16 @@ void simd_##type##_store_val(type* dst, i32 dst_length, type value){            
     simd_##type##_store_val_funcptr(dst, dst_length, value);                    \
 }
 
+
+///
+/// @ SIMD Clamp Value.
+///
+
+
 #define SIMD_DEFINE_CLAMP_VAL_SCALAR(type)                                  \
 void simd_##type##_clamp_val_scalar(                                        \
-    type* dst, type* src, i32 src_length,                                   \
-    type min, type max, i32 start_idx                                       \
+    type* dst, type min, type max, type* src,                               \
+    i32 src_length, i32 start_idx                                           \
 ){                                                                          \
     for(i32 i = 0; i < src_length; i++){                                    \
         type val = src[i];                                                  \
@@ -467,8 +473,8 @@ void simd_##type##_clamp_val_scalar(                                        \
 
 #define SIMD_DEFINE_CLAMP_VAL_SSE(type, mem_op_suffix, precision, cast_type, vector_type_suffix, set1_suffix)   \
 void simd_##type##_clamp_val_sse(                                                                               \
-    type* dst, type* src, i32 src_length,                                                                       \
-    type min, type max, i32 start_idx                                                                           \
+    type* dst, type min, type max, type* src,                                                                   \
+    i32 src_length, i32 start_idx                                                                               \
 ){                                                                                                              \
     BOUNDS_CHECK(start_idx, src_length);                                                                        \
     i32 i = start_idx;                                                                                          \
@@ -491,8 +497,8 @@ void simd_##type##_clamp_val_sse(                                               
 
 #define SIMD_DEFINE_CLAMP_VAL_AVX(type, mem_op_suffix, precision, cast_type, vector_type_suffix, set1_suffix)   \
 void simd_##type##_clamp_val_avx(                                                                               \
-    type* dst, type* src, i32 src_length,                                                                       \
-    type min, type max, i32 start_idx                                                                           \
+    type* dst, type min, type max, type* src,                                                                   \
+    i32 src_length, i32 start_idx                                                                               \
 ){                                                                                                              \
     BOUNDS_CHECK(start_idx, src_length);                                                                        \
     i32 i = start_idx;                                                                                          \
@@ -514,7 +520,7 @@ void simd_##type##_clamp_val_avx(                                               
 }
 
 #define SIMD_DEFINE_CLAMP_VAL_DISPATCH(type)                                                            \
-void simd_##type##_clamp_val(type* dst, type* src, i32 src_length, type min, type max, i32 start_idx){  \
+void simd_##type##_clamp_val(type* dst, type min, type max, type* src, i32 src_length, i32 start_idx){  \
     if(!simd_##type##_clamp_val_funcptr){                                                               \
         if(simd_is_avx_supported()){                                                                    \
             simd_##type##_clamp_val_funcptr = simd_##type##_clamp_val_avx;                              \
@@ -526,7 +532,7 @@ void simd_##type##_clamp_val(type* dst, type* src, i32 src_length, type min, typ
             simd_##type##_clamp_val_funcptr = simd_##type##_clamp_val_scalar;                           \
         }                                                                                               \
     }                                                                                                   \
-    simd_##type##_clamp_val_funcptr(dst, src, src_length, min, max, start_idx);                         \
+    simd_##type##_clamp_val_funcptr(dst, min, max, src, src_length, start_idx);                         \
 }
 
 
@@ -535,31 +541,30 @@ void simd_##type##_clamp_val(type* dst, type* src, i32 src_length, type min, typ
 ///
 
 
-#define SIMD_DEFINE_CLAMP_SCALAR(type)  \
-void simd_##type##_clamp_scalar(        \
-    type* dst, type* src,               \
-    type* min, type* max,               \
-    i32 length, i32 start_idx           \
-){                                      \
-    for(i32 i = 0; i < length; i++){    \
-        type val = src[i];              \
-        type min_val = min[i];          \
-        type max_val = max[i];          \
-        dst[i] = (                      \
-            (val) < min_val             \
-            ? (min_val)                 \
-            : (                         \
-                (val) > max_val         \
-                ? (max_val)             \
-                : (val)                 \
-            )                           \
-        );                              \
-    }                                   \
+#define SIMD_DEFINE_CLAMP_SCALAR(type)          \
+void simd_##type##_clamp_scalar(                \
+    type* dst, type* min, type* max, type* src, \
+    i32 length, i32 start_idx                   \
+){                                              \
+    for(i32 i = 0; i < length; i++){            \
+        type val = src[i];                      \
+        type min_val = min[i];                  \
+        type max_val = max[i];                  \
+        dst[i] = (                              \
+            (val) < min_val                     \
+            ? (min_val)                         \
+            : (                                 \
+                (val) > max_val                 \
+                ? (max_val)                     \
+                : (val)                         \
+            )                                   \
+        );                                      \
+    }                                           \
 }
 
 #define SIMD_DEFINE_CLAMP_SSE(type, mem_op_suffix, precision, cast_type, vector_type_suffix, set1_suffix)   \
 void simd_##type##_clamp_sse(                                                                               \
-    type* dst, type* src, type* min, type* max,                                                             \
+    type* dst, type* min, type* max, type* src,                                                             \
     i32 length, i32 start_idx                                                                               \
 ){                                                                                                          \
     BOUNDS_CHECK(start_idx, length);                                                                        \
@@ -594,7 +599,7 @@ void simd_##type##_clamp_sse(                                                   
 
 #define SIMD_DEFINE_CLAMP_AVX(type, mem_op_suffix, precision, cast_type, vector_type_suffix, set1_suffix)       \
 void simd_##type##_clamp_avx(                                                                                   \
-    type* dst, type* src, type* min, type* max,                                                                 \
+    type* dst, type* min, type* max, type* src,                                                                 \
     i32 length, i32 start_idx                                                                                   \
 ){                                                                                                              \
     BOUNDS_CHECK(start_idx, length);                                                                            \
@@ -627,7 +632,7 @@ void simd_##type##_clamp_avx(                                                   
 }
 
 #define SIMD_DEFINE_CLAMP_DISPATCH(type)                                                            \
-void simd_##type##_clamp(type* dst, type* src, type* min, type* max, i32 length, i32 start_idx){    \
+void simd_##type##_clamp(type* dst, type* min, type* max, type* src, i32 length, i32 start_idx){    \
     if(!simd_##type##_clamp_funcptr){                                                               \
         if(simd_is_avx_supported()){                                                                \
             simd_##type##_clamp_funcptr = simd_##type##_clamp_avx;                                  \
@@ -639,7 +644,7 @@ void simd_##type##_clamp(type* dst, type* src, type* min, type* max, i32 length,
             simd_##type##_clamp_funcptr = simd_##type##_clamp_scalar;                               \
         }                                                                                           \
     }                                                                                               \
-    simd_##type##_clamp_funcptr(dst, src, min, max, length, start_idx);                             \
+    simd_##type##_clamp_funcptr(dst, min, max, src, length, start_idx);                             \
 }
 
 
