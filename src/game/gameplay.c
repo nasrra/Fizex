@@ -11,7 +11,42 @@
 ///
 
 
-struct GameState;
+typedef struct GameState GameState;
+typedef struct BoardState BoardState;
+typedef enum BoardTurn BoardTurn;
+
+void board_state_enter_turn(BoardState* state, BoardTurn turn);
+
+
+///
+/// @ Ball
+///
+
+
+#define CUE_BALL_FIZX_BODY_LINEAR_DRAG 1.15f
+#define CUE_BALL_FIZX_BODY_ANGULAR_DRAG 1.55f
+#define CUE_BALL_FIZX_SHAPE_MATERIAL    \
+                                        \
+    (FIZX_Material) {                   \
+        .static_friction = 0.5f,        \
+        .kinetic_friction = 0.334f,     \
+        .density = 1.85f,               \
+        .restitution = 0.45f,           \
+        .rotational_response = true     \
+    }
+#define NUMBER_BALL_FIZX_BODY_LINEAR_DRAG 1.25f
+#define NUMBER_BALL_FIZX_BODY_ANGULAR_DRAG 1.55f
+#define NUMBER_BALL_FIZX_SHAPE_MATERIAL     \
+                                            \
+    (FIZX_Material) {                       \
+        .static_friction = 0.5f,            \
+        .kinetic_friction = 0.334f,         \
+        .density = 1.65f,                   \
+        .restitution = 0.55f,               \
+        .rotational_response = true         \
+    }
+
+#define BALL_FIZX_SHAPE_RADIUS 0.55f
 
 
 ///
@@ -73,7 +108,7 @@ typedef struct{
     bool is_init;
 } TimerManager;
 
-typedef enum{
+typedef enum BoardTurn{
 
     // the stage where the player can direct the cue ball.
     BoardTurn_Player,
@@ -96,10 +131,16 @@ typedef enum{
 } BoardStage;
 
 typedef struct{
-    f32 shake_mag;
+    Vector2 start_position;
+    // the distance to the start position from the mouse world position.
+    Vector2 mouse_to_start_dist;    
+    // the amount of shake to apply to the direction.
+    f32 shake_magnitude;
+    // the amount of force to apply to the ball when launching in the desired direction.
+    f32 impulse_magnitude;
 } GuidelineState;
 
-typedef struct{
+struct BoardState{
     GenId cue_ball_entity_gid;
     GenId* number_ball;
     // the amount of numbered balls still alive on the board.
@@ -128,7 +169,7 @@ typedef struct{
     GuidelineState guideline_state;
     
     bool is_init;
-} BoardState;
+};
 
 typedef struct{
     Matrix4x4 world_camera_matrix;
@@ -177,7 +218,6 @@ typedef struct{
     Vector2 clicked_entity_initial_position;
 } GameMouseState;
 
-typedef struct GameState GameState;
 typedef void (*TurnBasedEntityOnTurnEndCallback)(GameState* game_state, i32 entity_idx);
 
 typedef struct{
@@ -309,7 +349,7 @@ typedef struct{
     MenuStage stage;
 } MenuState;
 
-typedef struct GameState{
+struct GameState{
     GameMouseState mouse_state;
     EntityManager entity_manager;
     LevelManager level_manager;
@@ -318,7 +358,7 @@ typedef struct GameState{
     f32 time_scale;
     bool is_init;
     GameStage stage;
-} GameState;
+};
 
 typedef struct {
     LevelManager* level_manager;
@@ -396,7 +436,7 @@ typedef struct{
 
 #define PLAYER_TURN_TIMER_END_TIME 20.0f
 #define PLAYER_SHAKE_TIME_FACTOR 100.0f
-#define PLAYER_SHAKE_MAGNITUDE_FACTOR 8.5f
+#define PLAYER_SHAKE_MAGNITUDE_FACTOR 0.085f
 
 
 ///
@@ -744,31 +784,91 @@ void player_turn_timer_tick_callback(void* user_data, f32 current_tick, f32 delt
     f32 pow_ratio = shake_ratio * shake_ratio * shake_ratio * shake_ratio;
     
     
-    ctx->guideline_state->shake_mag = f32_sin(pow_ratio * PLAYER_SHAKE_TIME_FACTOR) * (PLAYER_SHAKE_MAGNITUDE_FACTOR * pow_ratio);    
+    ctx->guideline_state->shake_magnitude = f32_sin(pow_ratio * PLAYER_SHAKE_TIME_FACTOR) * (PLAYER_SHAKE_MAGNITUDE_FACTOR * pow_ratio);    
 }
 
 
 ///
-/// @ Timeout Callbacks
+/// @ GuidelineState
 ///
 
 
 typedef struct{
-    BoardState* board_state;
-} PlayerBoardTurnTimerTimeoutCallbackContext;
+    Circle* circle;
+} GuidelineCircleCollisionCallbackContext;
 
-void player_board_turn_timeout_callback(void* user_data){
-    PlayerBoardTurnTimerTimeoutCallbackContext* ctx = (PlayerBoardTurnTimerTimeoutCallbackContext*)user_data;
-    ctx->board_state->previous_turn = ctx->board_state->turn;
-    ctx->board_state->turn = BoardTurn_Ball;
-    os_output_message("timeout!");
+typedef struct{
+    Vector2 start_point;
+    GFX_State* gfx_state;
+} GuidelineCollisionCallbackContext;
+
+void guideline_circle_collision_callback(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data){
+    GuidelineCircleCollisionCallbackContext* ctx = (GuidelineCircleCollisionCallbackContext*)user_data;
+    ctx->circle->x = ctx->circle->x - info.normal_1.x * info.depth_1;
+    ctx->circle->y = ctx->circle->y - info.normal_1.y * info.depth_1;
 }
 
+void guideline_collision_callback(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data){
+    GuidelineCollisionCallbackContext* ctx = (GuidelineCollisionCallbackContext*)user_data;
+        
+    Vector2 end = (Vector2){
+        .x = info.contact_point_1.x + (info.normal_1.x * (BALL_FIZX_SHAPE_RADIUS - F32_EPSILON * 100.0f)),
+        .y = info.contact_point_1.y + (info.normal_1.y * (BALL_FIZX_SHAPE_RADIUS - F32_EPSILON * 100.0f))
+    };
+    
+    Circle query_circle = {
+        .x = end.x,
+        .y = end.y,
+        .radius = BALL_FIZX_SHAPE_RADIUS
+    };
+    
+    GuidelineCircleCollisionCallbackContext query_ctx = {
+        .circle = &query_circle
+    };
+    fizx_state_query_circle_area(state, guideline_circle_collision_callback, &query_ctx, PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID, query_circle);
+            
+    gfx_draw_wire_circle(ctx->gfx_state, query_circle, GFX_COLOUR_WHITE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+
+    gfx_draw_line(
+        ctx->gfx_state,
+        GFX_COLOUR_WHITE,
+        ctx->start_point,
+        (Vector2){.x = query_circle.x, .y = query_circle.y},
+        SPRITE_LAYER_EDITOR_WORLD,
+        0,
+        SPRITE_MATERIAL_DEBUG, 
+        0.05f
+    );
+}
+
+Vector2 guideline_calculate_launch_direction(GuidelineState state){
+    
+    Vector2 desired_direction = vector2_normalise(state.mouse_to_start_dist);
+    Vector2 perp_launch_direction = {.x = -desired_direction.y, .y = desired_direction.x};
+    Vector2 shake_amount = vector2_mul_val(perp_launch_direction, state.shake_magnitude);
+    Vector2 end_point = 
+        vector2_add(
+            vector2_add(state.start_position, shake_amount),
+            desired_direction
+        );
+    
+    return vector2_normalise(vector2_sub(end_point, state.start_position));
+}
 
 ///
 /// @ BoardState
 ///
 
+
+typedef struct{
+    BoardState* board_state;
+    EntityManager* entity_manager;
+} PlayerBoardTurnTimerTimeoutCallbackContext;
+
+void player_turn_timer_timeout_callback(void* user_data){
+    PlayerBoardTurnTimerTimeoutCallbackContext* ctx = (PlayerBoardTurnTimerTimeoutCallbackContext*)user_data;
+    board_state_enter_turn(ctx->board_state, BoardTurn_Ball);
+}
 
 typedef struct{
     BoardState* board_state;
@@ -828,7 +928,7 @@ void board_state_enter_turn(BoardState* state, BoardTurn turn){
             TimerContext timer_ctx = {
                 .end_time = PLAYER_TURN_TIMER_END_TIME,
                 .time_scale = 1.0f,
-                .timeout_callback = player_board_turn_timeout_callback,
+                .timeout_callback = player_turn_timer_timeout_callback,
                 .timeout_data = &timeout_ctx,
                 .timeout_data_size = sizeof(timeout_ctx),
                 .tick_callback = player_turn_timer_tick_callback,
@@ -1993,38 +2093,6 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
 }
 
 
-
-///
-/// @ Ball
-///
-
-
-#define CUE_BALL_FIZX_BODY_LINEAR_DRAG 1.15f
-#define CUE_BALL_FIZX_BODY_ANGULAR_DRAG 1.55f
-#define CUE_BALL_FIZX_SHAPE_MATERIAL    \
-                                        \
-    (FIZX_Material) {                   \
-        .static_friction = 0.5f,        \
-        .kinetic_friction = 0.334f,     \
-        .density = 1.85f,               \
-        .restitution = 0.45f,           \
-        .rotational_response = true     \
-    }
-#define NUMBER_BALL_FIZX_BODY_LINEAR_DRAG 1.25f
-#define NUMBER_BALL_FIZX_BODY_ANGULAR_DRAG 1.55f
-#define NUMBER_BALL_FIZX_SHAPE_MATERIAL     \
-                                            \
-    (FIZX_Material) {                       \
-        .static_friction = 0.5f,            \
-        .kinetic_friction = 0.334f,         \
-        .density = 1.65f,                   \
-        .restitution = 0.55f,               \
-        .rotational_response = true         \
-    }
-
-#define BALL_FIZX_SHAPE_RADIUS 0.55f
-
-
 ///
 /// @ BallCue.
 ///
@@ -2907,54 +2975,6 @@ GenId level_manager_load_level_file(
 ///
 
 
-typedef struct{
-    Circle* circle;
-} GuidelineCircleCollisionCallbackContext;
-
-void guideline_circle_collision_callback(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data){
-    GuidelineCircleCollisionCallbackContext* ctx = (GuidelineCircleCollisionCallbackContext*)user_data;
-    ctx->circle->x = ctx->circle->x - info.normal_1.x * info.depth_1;
-    ctx->circle->y = ctx->circle->y - info.normal_1.y * info.depth_1;
-}
-
-typedef struct{
-    Vector2 start_point;
-    GFX_State* gfx_state;
-} GuidelineCollisionCallbackContext;
-
-void guideline_collision_callback(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data){
-    GuidelineCollisionCallbackContext* ctx = (GuidelineCollisionCallbackContext*)user_data;
-        
-    Vector2 end = (Vector2){
-        .x = info.contact_point_1.x + (info.normal_1.x * (BALL_FIZX_SHAPE_RADIUS - F32_EPSILON * 100.0f)),
-        .y = info.contact_point_1.y + (info.normal_1.y * (BALL_FIZX_SHAPE_RADIUS - F32_EPSILON * 100.0f))
-    };
-    
-    Circle query_circle = {
-        .x = end.x,
-        .y = end.y,
-        .radius = BALL_FIZX_SHAPE_RADIUS
-    };
-    
-    GuidelineCircleCollisionCallbackContext query_ctx = {
-        .circle = &query_circle
-    };
-    fizx_state_query_circle_area(state, guideline_circle_collision_callback, &query_ctx, PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID, query_circle);
-            
-    gfx_draw_wire_circle(ctx->gfx_state, query_circle, GFX_COLOUR_WHITE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
-
-    gfx_draw_line(
-        ctx->gfx_state,
-        GFX_COLOUR_WHITE,
-        ctx->start_point,
-        (Vector2){.x = query_circle.x, .y = query_circle.y},
-        SPRITE_LAYER_EDITOR_WORLD,
-        0,
-        SPRITE_MATERIAL_DEBUG, 
-        0.05f
-    );
-}
-
 void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena* transient, GFX_State* gfx_state){
 
     ASSERT(!game_state->is_init, "already init.");
@@ -3369,6 +3389,7 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
     GameMouseState* mouse_state = &game_state->mouse_state;
     FIZX_State* fizx_state = &entity_manager->fizx_state;
     BoardState* board_state = &game_state->board_state;
+    GuidelineState* guideline_state = &board_state->guideline_state;
     
     if(!in_editor_mode){
 
@@ -3390,7 +3411,7 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                 
                 // zero out the shake magnitude from the last time we clicked on the cue ball.
                 // so that an offset isnt applied from the previous time we clicked on it.
-                board_state->guideline_state.shake_mag = 0.0f;
+                guideline_state->shake_magnitude = 0.0f;
             }
             
             if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
@@ -3401,19 +3422,17 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                 clicked_entity &&
                 board_state->turn == BoardTurn_Player
             ){            
-                Vector2 guideline_start = mouse_state->clicked_entity_initial_position;
+                guideline_state->start_position = mouse_state->clicked_entity_initial_position;
             
                 // get directions.
-                Vector2 position_diff = vector2_clamp_to_radius(
-                    vector2_sub(guideline_start, mouse_world_position), 
+                guideline_state->mouse_to_start_dist = vector2_clamp_to_radius(
+                    vector2_sub(guideline_state->start_position, mouse_world_position), 
                     PLAYER_MOUSE_MAX_DRAW_RADIUS
                 );
-                f32 length = vector2_len(position_diff);
-                Vector2 launch_direction = vector2_normalise(position_diff);
                 
                 { // draw_launch_cursour();
-                    Vector2 new_position = vector2_sub(guideline_start, position_diff);
-                    Circle launch_cursour_shape = {.x = new_position.x, .y = new_position.y, .radius = 0.1f};
+                    Vector2 cursour_position = vector2_sub(guideline_state->start_position, guideline_state->mouse_to_start_dist);
+                    Circle launch_cursour_shape = {.x = cursour_position.x, .y = cursour_position.y, .radius = 0.1f};
                     gfx_draw_wire_circle(
                         entity_manager->gfx_state, 
                         launch_cursour_shape, 
@@ -3425,39 +3444,34 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                 }
                                 
                 GuidelineCollisionCallbackContext guideline_ctx = {
-                    .start_point = guideline_start,
+                    .start_point = guideline_state->start_position,
                     .gfx_state = entity_manager->gfx_state
                 };
                 
-                f32 launch_dist = 100.0f;
-                Vector2 perp_launch_direction = {.x = -launch_direction.y, .y = launch_direction.x};
-                Vector2 shake_amount = vector2_mul_val(perp_launch_direction, board_state->guideline_state.shake_mag);
-                Vector2 end_point = 
-                    vector2_add(
-                        vector2_add(guideline_start, shake_amount),
-                        vector2_mul_val(launch_direction, launch_dist)
-                    );
-                launch_direction = vector2_normalise(vector2_sub(end_point, mouse_world_position));
-                                
+                Vector2 launch_direction = guideline_calculate_launch_direction(*guideline_state);
+                                             
                 fizx_state_query_circle_cast_area(
                     fizx_state, guideline_collision_callback, &guideline_ctx, 
                     PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID, 
-                    vector2_add(guideline_start, vector2_mul_val(launch_direction, BALL_FIZX_SHAPE_RADIUS * 1.75f)),
+                    vector2_add(guideline_state->start_position, vector2_mul_val(launch_direction, BALL_FIZX_SHAPE_RADIUS * 1.75f)),
                     launch_direction, 
-                    launch_dist, 
+                    100.0f, 
                     BALL_FIZX_SHAPE_RADIUS,
                     FIZX_CollisionCallbackBehaviour_Closest
                 );            
-            
+                
                 // calculate impulse to apply to clicked entity.
-                Vector2 impulse_magnitude = vector2_mul_val(position_diff, PLAYER_MOUSE_LAUNCH_FORCE);
-    
+                Vector2 impulse = vector2_mul_val(launch_direction, PLAYER_MOUSE_LAUNCH_FORCE * vector2_len(guideline_state->mouse_to_start_dist));
+            
                 // apply impulse when button is released.            
                 if(input_is_mouse_button_just_released(MouseButton_Left)){
                     fizx_body_clear_forces_and_velocities(fizx_state, clicked_entity->physics_body_gid);
-                    fizx_body_impulse_linear_force(fizx_state, clicked_entity->physics_body_gid, impulse_magnitude);
+                    fizx_body_impulse_linear_force(
+                        fizx_state, 
+                        clicked_entity->physics_body_gid, 
+                        impulse
+                    );
                 }
-
             }
         
             // deslect_entity();
