@@ -3429,7 +3429,7 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                     .gfx_state = entity_manager->gfx_state
                 };
                 
-                f32 launch_dist = 10.0f;
+                f32 launch_dist = 100.0f;
                 Vector2 perp_launch_direction = {.x = -launch_direction.y, .y = launch_direction.x};
                 Vector2 shake_amount = vector2_mul_val(perp_launch_direction, board_state->guideline_state.shake_mag);
                 Vector2 end_point = 
@@ -3438,21 +3438,14 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                         vector2_mul_val(launch_direction, launch_dist)
                     );
                 launch_direction = vector2_normalise(vector2_sub(end_point, mouse_world_position));
-                
-                gfx_draw_line(
-                    entity_manager->gfx_state, 
-                    GFX_COLOUR_RED, 
-                    guideline_start, 
-                    end_point, 
-                    SPRITE_LAYER_EDITOR_WORLD, 
-                    0, 
-                    SPRITE_MATERIAL_DEBUG, 
-                    0.05f
-                );
-                
+                                
                 fizx_state_query_circle_cast_area(
                     fizx_state, guideline_collision_callback, &guideline_ctx, 
-                    PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID, guideline_start, launch_direction, launch_dist, BALL_FIZX_SHAPE_RADIUS,
+                    PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID, 
+                    vector2_add(guideline_start, vector2_mul_val(launch_direction, BALL_FIZX_SHAPE_RADIUS * 1.75f)),
+                    launch_direction, 
+                    launch_dist, 
+                    BALL_FIZX_SHAPE_RADIUS,
                     FIZX_CollisionCallbackBehaviour_Closest
                 );            
             

@@ -7624,15 +7624,13 @@ void fizx_state_query_circle_cast_area(
                 continue;
             }
             info.two_contact_points = contact_point_count == 2;             
-            
-            Circle c1 = {.x = info.contact_point_1.x, .y = info.contact_point_1.y, .radius = 0.2f};
-            
-            gfx_draw_wire_circle(global_gfx_state, c1, GFX_COLOUR_GREEN, 2, 0, 1);
-            
-            if(info.two_contact_points){
-                Circle c2 = {.x = info.contact_point_2.x, .y = info.contact_point_2.y, .radius = 0.4f};
-                gfx_draw_wire_circle(global_gfx_state, c2, GFX_COLOUR_LIGHT_BLUE, 2, 0, 1);
-            }
+    
+            // Circle c1 = {.x = info.contact_point_1.x, .y = info.contact_point_1.y, .radius = 0.2f};        
+            // gfx_draw_wire_circle(global_gfx_state, c1, GFX_COLOUR_GREEN, 2, 0, 1);
+            // if(info.two_contact_points){
+            //     Circle c2 = {.x = info.contact_point_2.x, .y = info.contact_point_2.y, .radius = 0.4f};
+            //     gfx_draw_wire_circle(global_gfx_state, c2, GFX_COLOUR_LIGHT_BLUE, 2, 0, 1);
+            // }
             
         }
         else if(fizx_shape_category_is_circle(shape_category)){
