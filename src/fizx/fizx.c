@@ -1,4 +1,3 @@
-GFX_State* global_gfx_state;
 
 /*
     TODO: (nich s)
@@ -3407,7 +3406,7 @@ bool fizx_collision_detection_polygon_to_line(
     else{
         overlaps = line_overlaps_polygon(
             line_start_x, line_start_y,
-            line_end_x, line_start_y,
+            line_end_x, line_end_y,
             poly_vert_x, poly_vert_y, poly_vert_length,
             &contact_point_1_x, &contact_point_1_y,
             &contact_point_2_x, &contact_point_2_y,
@@ -7621,8 +7620,17 @@ void fizx_state_query_circle_cast_area(
             if(!overlaps){
                 continue;
             }
-            
             info.two_contact_points = contact_point_count == 2;             
+            
+            Circle c1 = {.x = info.contact_point_1.x, .y = info.contact_point_1.y, .radius = 0.2f};
+            
+            gfx_draw_wire_circle(global_gfx_state, c1, GFX_COLOUR_GREEN, 2, 0, 1);
+            
+            if(info.two_contact_points){
+                Circle c2 = {.x = info.contact_point_2.x, .y = info.contact_point_2.y, .radius = 0.4f};
+                gfx_draw_wire_circle(global_gfx_state, c2, GFX_COLOUR_LIGHT_BLUE, 2, 0, 1);
+            }
+            
         }
         else if(fizx_shape_category_is_circle(shape_category)){
 
@@ -7702,7 +7710,10 @@ void fizx_state_query_circle_cast_area(
     }
 }
 
-void fizx_state_query_circle_area(FIZX_State* state, FizxQueryAreaFuncptr query_callback, void* user_data, i32 layer_mask, Circle area){
+void fizx_state_query_circle_area(
+    FIZX_State* state, FizxQueryAreaFuncptr query_callback, 
+    void* user_data, i32 layer_mask, Circle area
+){
     
     f32 min_x;
     f32 min_y;
@@ -7782,7 +7793,7 @@ void fizx_state_query_circle_area(FIZX_State* state, FizxQueryAreaFuncptr query_
          
             bool overlaps = circle_overlaps_scalar(
                 other_x, other_y, other_radius, 
-                area.x, area.y, area.radius, 
+                area.x, area.y, area.radius,
                 &info.normal_1.x, &info.normal_1.y, &info.depth_1
             );
             if(overlaps){

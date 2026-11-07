@@ -29,6 +29,10 @@
 
 - at the end of turn timer the ball gets shot in a random direction (from a cone, where the player would have shot into).
 
+- life system.
+    - three lives, you can pocket the cue ball three times
+    - choose where to place the ball upon losing a life.
+
 - do these to get better break on balls.
     + increase cue stick power?
     + increase cue stick action range?

@@ -2939,15 +2939,83 @@ bool circle_cast_overlaps_polygon(
             continue;
         }
         
-        // change to poly.
-        f32 contact_point_x = poly_start_x + (poly_dist_x * poly_t);
-        f32 contact_point_y = poly_start_y + (poly_dist_y * poly_t);
+        f32 contact_point_x; 
+        f32 contact_point_y; 
+        f32 normal_x;
+        f32 normal_y;
+                
+        if(poly_t <= 0.0f || poly_t >= 1.0f){
         
-        vector2_normalise_scalar(poly_dist_x, poly_dist_y, &poly_dir_x, &poly_dir_y);
-    
-        f32 normal_x = -poly_dir_y;
-        f32 normal_y = poly_dir_x;
+            /*
+                claude did this,
+                have no idea how it works, have fun if it breaks :)))) 
+            */
         
+            // vertex hit: the edge normal is wrong here. the correct normal is the
+            // direction from the vertex to the circle's centre at the moment of contact.
+        
+            // snap to the exact vertex so both edges sharing a corner report identical points.
+            // (`start + dist * 1.0f` isn't guaranteed to land exactly on `end` in float maths.)
+            bool hit_start  = poly_t <= 0.0f;
+            contact_point_x = hit_start ? poly_start_x : poly_end_x;
+            contact_point_y = hit_start ? poly_start_y : poly_end_y;
+        
+            // vector from the vertex to the cast start.
+            f32 vertex_to_start_x = cast_start_x - contact_point_x;
+            f32 vertex_to_start_y = cast_start_y - contact_point_y;
+        
+            // where along the cast (0 = start, 1 = end) the circle first touches the vertex.
+            // stays 0 if the cast has no length, since the circle just sits at its start.
+            f32 vertex_t = 0.0f;
+        
+            f32 cast_len_sqrd = cast_dist_x * cast_dist_x + cast_dist_y * cast_dist_y;
+            
+            if(cast_len_sqrd > F32_EPSILON){
+                // solve |vertex_to_start + cast_dist * t|^2 = radius^2 for t (a quadratic).
+                //   half_b: is the circle of the cast heading towards the vertex (negative) or away (positive)?
+                //   c:      gap between the circle's edge and the vertex at the start (negative = overlapping).
+                //   disc:   does the path get within `radius` of the vertex at all? (negative = no)
+                f32 half_b = vector2_dot_scalar(vertex_to_start_x, vertex_to_start_y, cast_dist_x, cast_dist_y);
+                f32 c      = vector2_dot_scalar(vertex_to_start_x, vertex_to_start_y, vertex_to_start_x, vertex_to_start_y)
+                           - cast_radius * cast_radius;
+                f32 disc   = half_b * half_b - cast_len_sqrd * c;
+        
+                // smaller root = first touch. if disc < 0 the path never reaches the vertex,
+                // so clamping it to 0 makes this collapse to -half_b / cast_len_sqrd,
+                // which is the closest approach, our fallback instead of rejecting the hit.
+                vertex_t = (-half_b - f32_sqrt(MAX(disc, 0.0f))) / cast_len_sqrd;
+        
+                // keep inside the cast: t < 0 means already overlapping at the start,
+                // t > 1 means the contact is past the end of the cast.
+                vertex_t = MAX(0.0f, MIN(1.0f, vertex_t));
+            }
+        
+            // centre at the moment of contact, relative to the vertex.
+            // it points from the vertex out to the centre, so it is the (unnormalised) normal.
+            normal_x = vertex_to_start_x + cast_dist_x * vertex_t;
+            normal_y = vertex_to_start_y + cast_dist_y * vertex_t;
+        
+            // normalise. a ~0 length means the centre is on top of the vertex: no direction exists.
+            f32 normal_len = f32_sqrt(normal_x * normal_x + normal_y * normal_y);
+            if(normal_len <= F32_EPSILON){
+                continue;
+            }
+            normal_x /= normal_len;
+            normal_y /= normal_len;
+        }
+        else{
+            // edge body hit: outward edge normal.
+            vector2_normalise_scalar(poly_dist_x, poly_dist_y, &poly_dir_x, &poly_dir_y);
+            contact_point_x = poly_start_x + poly_dist_x * poly_t;
+            contact_point_y = poly_start_y + poly_dist_y * poly_t;
+            normal_x = -poly_dir_y;   // see winding note below
+            normal_y = poly_dir_x;
+        }
+        
+        if(cast_dist_x * normal_x + cast_dist_y * normal_y >= 0.0f){
+            continue;
+        }
+                
         // set to zero because idk
         // the circle is always on the edge of the polygon edge
         // so there shouldnt be a depth.
@@ -2962,8 +3030,8 @@ bool circle_cast_overlaps_polygon(
                 contact_point_count = 1;
                 *out_contact_point_1_x = contact_point_x;
                 *out_contact_point_1_y = contact_point_y;        
-                *out_normal_1_x = -poly_dir_y;
-                *out_normal_1_y = poly_dir_x;                
+                *out_normal_1_x = normal_x;
+                *out_normal_1_y = normal_y;                
                 *out_depth_1 = depth;
             }break;
             case 1:{
@@ -3035,7 +3103,7 @@ bool circle_cast_overlaps_polygon(
                     *out_depth_2            = depth;
                 }
             }break;
-        }   
+        }           
     }
 
     *out_contact_point_count = contact_point_count;

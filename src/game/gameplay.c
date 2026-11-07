@@ -96,6 +96,10 @@ typedef enum{
 } BoardStage;
 
 typedef struct{
+    f32 shake_mag;
+} GuidelineState;
+
+typedef struct{
     GenId cue_ball_entity_gid;
     GenId* number_ball;
     // the amount of numbered balls still alive on the board.
@@ -120,6 +124,8 @@ typedef struct{
     bool cue_ball_is_pocketed;
     
     TimerHandle player_turn_timer;
+  
+    GuidelineState guideline_state;
     
     bool is_init;
 } BoardState;
@@ -170,12 +176,6 @@ typedef struct{
     bool hovering_ui_element;
     Vector2 clicked_entity_initial_position;
 } GameMouseState;
-
-typedef struct{
-    Vector2 start_point;
-    Vector2 end_point;
-    bool draw;    
-} GuidelineState;
 
 typedef struct GameState GameState;
 typedef void (*TurnBasedEntityOnTurnEndCallback)(GameState* game_state, i32 entity_idx);
@@ -318,7 +318,6 @@ typedef struct GameState{
     f32 time_scale;
     bool is_init;
     GameStage stage;
-    GuidelineState guideline_state;
 } GameState;
 
 typedef struct {
@@ -395,9 +394,9 @@ typedef struct{
 ///
 
 
-#define PLAYER_TURN_TIMER_END_TIME 10.0f
-#define PLAYER_SHAKE_TIME_FACTOR 6.0f
-#define PLAYER_SHAKE_MAGNITUDE_FACTOR 2.0f
+#define PLAYER_TURN_TIMER_END_TIME 20.0f
+#define PLAYER_SHAKE_TIME_FACTOR 100.0f
+#define PLAYER_SHAKE_MAGNITUDE_FACTOR 8.5f
 
 
 ///
@@ -734,19 +733,18 @@ bool timer_manager_timer_get_current_tick(TimerManager manager, TimerHandle hand
 ///
 
 typedef struct{
-    FIZX_State* fizx_state;
-    GenId guideline_shape_gid;
+    GuidelineState* guideline_state;
 } PlayerBoardTurnTimerTickCallbackContext;
 
 void player_turn_timer_tick_callback(void* user_data, f32 current_tick, f32 delta_tick){
-    
     PlayerBoardTurnTimerTickCallbackContext* ctx = (PlayerBoardTurnTimerTickCallbackContext*)user_data;
     f32 shake_ratio = current_tick / PLAYER_TURN_TIMER_END_TIME;
-    f32 shake_mag = f32_sin(shake_ratio * PLAYER_SHAKE_TIME_FACTOR) * PLAYER_SHAKE_MAGNITUDE_FACTOR;     
-
-    // Vector2 line_direction = ;
-    // bool success = fizx_line_get_direction(*ctx->fizx_state, ctx->guideline_shape_gid);
-    // ASSERT(success, "failed to get guideline");
+    
+    
+    f32 pow_ratio = shake_ratio * shake_ratio * shake_ratio * shake_ratio;
+    
+    
+    ctx->guideline_state->shake_mag = f32_sin(pow_ratio * PLAYER_SHAKE_TIME_FACTOR) * (PLAYER_SHAKE_MAGNITUDE_FACTOR * pow_ratio);    
 }
 
 
@@ -823,13 +821,19 @@ void board_state_enter_turn(BoardState* state, BoardTurn turn){
                 .board_state = state
             };
             
+            PlayerBoardTurnTimerTickCallbackContext tick_ctx = {
+                .guideline_state = &state->guideline_state
+            };
+            
             TimerContext timer_ctx = {
                 .end_time = PLAYER_TURN_TIMER_END_TIME,
                 .time_scale = 1.0f,
                 .timeout_callback = player_board_turn_timeout_callback,
                 .timeout_data = &timeout_ctx,
                 .timeout_data_size = sizeof(timeout_ctx),
-                .tick_callback = player_turn_timer_tick_callback
+                .tick_callback = player_turn_timer_tick_callback,
+                .tick_data = &tick_ctx,
+                .tick_data_size = sizeof(tick_ctx)
             };
             state->player_turn_timer = timer_manager_timer_start(state->timer_manager, timer_ctx);
             os_output_message("player turn.\n");
@@ -1995,16 +1999,27 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, String name, Transform2
 ///
 
 
-#define BALL_FIZX_BODY_LINEAR_DRAG 1.1f
-#define BALL_FIZX_BODY_ANGULAR_DRAG 1.35f
-#define BALL_FIZX_SHAPE_MATERIAL    \
-                                    \
-    (FIZX_Material) {               \
-        .static_friction = 0.5f,    \
-        .kinetic_friction = 0.334f, \
-        .density = 1.85f,           \
-        .restitution = 0.45f,       \
-        .rotational_response = true \
+#define CUE_BALL_FIZX_BODY_LINEAR_DRAG 1.15f
+#define CUE_BALL_FIZX_BODY_ANGULAR_DRAG 1.55f
+#define CUE_BALL_FIZX_SHAPE_MATERIAL    \
+                                        \
+    (FIZX_Material) {                   \
+        .static_friction = 0.5f,        \
+        .kinetic_friction = 0.334f,     \
+        .density = 1.85f,               \
+        .restitution = 0.45f,           \
+        .rotational_response = true     \
+    }
+#define NUMBER_BALL_FIZX_BODY_LINEAR_DRAG 1.25f
+#define NUMBER_BALL_FIZX_BODY_ANGULAR_DRAG 1.55f
+#define NUMBER_BALL_FIZX_SHAPE_MATERIAL     \
+                                            \
+    (FIZX_Material) {                       \
+        .static_friction = 0.5f,            \
+        .kinetic_friction = 0.334f,         \
+        .density = 1.65f,                   \
+        .restitution = 0.55f,               \
+        .rotational_response = true         \
     }
 
 #define BALL_FIZX_SHAPE_RADIUS 0.55f
@@ -2031,8 +2046,8 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state,
                 TRANSFORM2D_IDENTITY,
-                BALL_FIZX_BODY_LINEAR_DRAG,
-                BALL_FIZX_BODY_ANGULAR_DRAG,
+                CUE_BALL_FIZX_BODY_LINEAR_DRAG,
+                CUE_BALL_FIZX_BODY_ANGULAR_DRAG,
                 PHYSICS_LAYER_BALL_CUE,
                 BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK,
                 false
@@ -2048,7 +2063,7 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, String name, Transfor
                 FIZX_CollisionCallbackBehaviour_All,
                 &entity_gid,
                 circle,
-                BALL_FIZX_SHAPE_MATERIAL
+                CUE_BALL_FIZX_SHAPE_MATERIAL
             );
             
             fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
@@ -2226,7 +2241,7 @@ GenId entity_spawn_wall(EntityManager* entity_manager, String name, Transform2D 
                 .static_friction = 0.75f, 
                 .kinetic_friction = 0.5f, 
                 .density = 22.6f, 
-                .restitution = 0.5f, 
+                .restitution = 0.224f, 
                 .rotational_response = true
             };
             fizx_rectangle_rigid_alloc(
@@ -2355,8 +2370,8 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, String name, Transfo
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state,
                 TRANSFORM2D_IDENTITY,
-                BALL_FIZX_BODY_LINEAR_DRAG,
-                BALL_FIZX_BODY_ANGULAR_DRAG,
+                NUMBER_BALL_FIZX_BODY_LINEAR_DRAG,
+                NUMBER_BALL_FIZX_BODY_ANGULAR_DRAG,
                 PHYSICS_LAYER_BALL_NUMBER,
                 PHYSICS_LAYER_ALL,
                 false
@@ -2372,7 +2387,7 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, String name, Transfo
                 FIZX_CollisionCallbackBehaviour_All,
                 &entity_gid,
                 circle,
-                BALL_FIZX_SHAPE_MATERIAL
+                NUMBER_BALL_FIZX_SHAPE_MATERIAL
             );
             
             fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
@@ -2487,7 +2502,7 @@ void boost_pad_on_sustain_collision_callback(FIZX_CollisionInfo info, void* user
     }
     
     Vector2 forward_direction = transform2d_get_forward_angle_vector(boost_pad_entity->global_transform);    
-    f32 impulse_force = 5.5f;
+    f32 impulse_force = 5.0f;
     Vector2 impulse = vector2_mul_val(forward_direction, impulse_force);
     
     if(ball_entity->is_physics_body){
@@ -2893,6 +2908,16 @@ GenId level_manager_load_level_file(
 
 
 typedef struct{
+    Circle* circle;
+} GuidelineCircleCollisionCallbackContext;
+
+void guideline_circle_collision_callback(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data){
+    GuidelineCircleCollisionCallbackContext* ctx = (GuidelineCircleCollisionCallbackContext*)user_data;
+    ctx->circle->x = ctx->circle->x - info.normal_1.x * info.depth_1;
+    ctx->circle->y = ctx->circle->y - info.normal_1.y * info.depth_1;
+}
+
+typedef struct{
     Vector2 start_point;
     GFX_State* gfx_state;
 } GuidelineCollisionCallbackContext;
@@ -2900,20 +2925,29 @@ typedef struct{
 void guideline_collision_callback(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data){
     GuidelineCollisionCallbackContext* ctx = (GuidelineCollisionCallbackContext*)user_data;
         
-    Circle circle = {
-        .x = info.contact_point_1.x + (info.normal_1.x * BALL_FIZX_SHAPE_RADIUS),
-        .y = info.contact_point_1.y + (info.normal_1.y * BALL_FIZX_SHAPE_RADIUS),
+    Vector2 end = (Vector2){
+        .x = info.contact_point_1.x + (info.normal_1.x * (BALL_FIZX_SHAPE_RADIUS - F32_EPSILON * 100.0f)),
+        .y = info.contact_point_1.y + (info.normal_1.y * (BALL_FIZX_SHAPE_RADIUS - F32_EPSILON * 100.0f))
+    };
+    
+    Circle query_circle = {
+        .x = end.x,
+        .y = end.y,
         .radius = BALL_FIZX_SHAPE_RADIUS
     };
     
-    Vector2 end = (Vector2){circle.x, circle.y};
-    
-    gfx_draw_wire_circle(ctx->gfx_state, circle, GFX_COLOUR_WHITE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+    GuidelineCircleCollisionCallbackContext query_ctx = {
+        .circle = &query_circle
+    };
+    fizx_state_query_circle_area(state, guideline_circle_collision_callback, &query_ctx, PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID, query_circle);
+            
+    gfx_draw_wire_circle(ctx->gfx_state, query_circle, GFX_COLOUR_WHITE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+
     gfx_draw_line(
         ctx->gfx_state,
         GFX_COLOUR_WHITE,
         ctx->start_point,
-        end,
+        (Vector2){.x = query_circle.x, .y = query_circle.y},
         SPRITE_LAYER_EDITOR_WORLD,
         0,
         SPRITE_MATERIAL_DEBUG, 
@@ -3065,7 +3099,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             }
             
             if(input_is_key_just_pressed(Key_Escape)){
-                // board_state->show_pause_menu = !board_state->show_pause_menu;
+                board_state->show_pause_menu = !board_state->show_pause_menu;
             }
         }
 
@@ -3353,6 +3387,10 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                 if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
                     mouse_state->clicked_entity_initial_position = ((Entity*)area->user_data)->global_transform.position;
                 }
+                
+                // zero out the shake magnitude from the last time we clicked on the cue ball.
+                // so that an offset isnt applied from the previous time we clicked on it.
+                board_state->guideline_state.shake_mag = 0.0f;
             }
             
             if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
@@ -3363,10 +3401,10 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                 clicked_entity &&
                 board_state->turn == BoardTurn_Player
             ){            
-                Vector2 guidline_start = mouse_state->clicked_entity_initial_position;
+                Vector2 guideline_start = mouse_state->clicked_entity_initial_position;
             
                 // get directions.
-                Vector2 position_diff = vector2_sub(guidline_start, mouse_world_position);
+                Vector2 position_diff = vector2_sub(guideline_start, mouse_world_position);
                 position_diff = vector2_clamp_to_radius(position_diff, PLAYER_MOUSE_MAX_DRAW_RADIUS);
                 f32 length = vector2_len(position_diff);
                 Vector2 launch_direction = vector2_normalise(position_diff);
@@ -3380,13 +3418,8 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                     fizx_body_impulse_linear_force(fizx_state, clicked_entity->physics_body_gid, impulse_magnitude);
                 }
     
-                { // set_guideline_direction();
-                    Vector2 offset = vector2_mul_val(launch_direction, 100.0f); 
-                    game_state->guideline_state.end_point = vector2_add(guidline_start, offset);                
-                }
-
                 { // draw_launch_cursour();
-                    Vector2 new_position = vector2_sub(guidline_start, position_diff);
+                    Vector2 new_position = vector2_sub(guideline_start, position_diff);
                     Circle launch_cursour_shape = {.x = new_position.x, .y = new_position.y, .radius = 0.1f};
                     gfx_draw_wire_circle(
                         entity_manager->gfx_state, 
@@ -3399,13 +3432,30 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                 }
                                 
                 GuidelineCollisionCallbackContext guideline_ctx = {
-                    .start_point = guidline_start,
+                    .start_point = guideline_start,
                     .gfx_state = entity_manager->gfx_state
                 };
-                                
+                
+                f32 launch_dist = 100.0f;
+                Vector2 perp_launch_direction = {.x = -launch_direction.y, .y = launch_direction.x};
+                Vector2 shake_amount = vector2_mul_val(perp_launch_direction, board_state->guideline_state.shake_mag);
+                Vector2 end_point = vector2_add(vector2_mul_val(launch_direction, launch_dist), shake_amount);
+                launch_direction = vector2_normalise(vector2_sub(end_point, guideline_start));
+                
+                gfx_draw_line(
+                    entity_manager->gfx_state, 
+                    GFX_COLOUR_RED, 
+                    guideline_start, 
+                    end_point, 
+                    SPRITE_LAYER_EDITOR_WORLD, 
+                    0, 
+                    SPRITE_MATERIAL_DEBUG, 
+                    0.05f
+                );
+                
                 fizx_state_query_circle_cast_area(
                     fizx_state, guideline_collision_callback, &guideline_ctx, 
-                    PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID, guidline_start, launch_direction, 100.0f, BALL_FIZX_SHAPE_RADIUS,
+                    PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID, guideline_start, launch_direction, launch_dist, BALL_FIZX_SHAPE_RADIUS,
                     FIZX_CollisionCallbackBehaviour_Closest
                 );            
             }

@@ -6,6 +6,9 @@
 #include "base_layer/base_structures.c"
 #include "input/input.h"
 #include "renderer/gfx.c"
+
+GFX_State* global_gfx_state;
+
 #include "fizx/fizx.c"
 #include "fizx/fizx_draw.c"
 #include "game/gameplay.c"
