@@ -869,7 +869,6 @@ void editor_new_level_button_on_hover_callback(Clay_ElementId element_id, Clay_P
         entity_manager_dealloc_entity(entity_manager, level_manager->world_root_entity_gid);
         level_manager->world_root_entity_gid = entity_spawn_level_root(
             entity_manager, 
-            STRING_FROM_LITERAL("new level", ctx->transient),
             TRANSFORM2D_IDENTITY, 
             0
         );
@@ -1459,6 +1458,7 @@ void gfx_clay_native_entity_spawner_layout(Editor_State* editor_state, GameState
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Thwamper"), button_width, button_height, transient, editor_state, EntityTypeId_Thwamper);
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("World Camera"), button_width, button_height, transient, editor_state, EntityTypeId_WorldCamera);
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Wall"), button_width, button_height, transient, editor_state, EntityTypeId_Wall);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Empty"), button_width, button_height, transient, editor_state, EntityTypeId_Empty);
         }
         
         CLAY_TEXT(CLAY_STRING("Entity To Spawn:"), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);  
@@ -2382,7 +2382,6 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                         entity_spawn(
                             entity_manager, 
                             editor_mouse_state->native_entity_to_spawn,
-                            (String){.chars = "entity", .length = 6, .count = 6}, 
                             spawn_transform, 
                             world_root_gid
                         );
