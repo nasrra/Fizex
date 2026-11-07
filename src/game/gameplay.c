@@ -438,7 +438,7 @@ typedef struct{
 ///
 
 
-#define PLAYER_TURN_TIMER_END_TIME 15.0f
+#define PLAYER_TURN_TIMER_END_TIME 5.0f
 #define PLAYER_SHAKE_TIME_FACTOR 100.0f
 #define PLAYER_SHAKE_MAGNITUDE_FACTOR 0.085f
 #define PLAYER_SHAKE_PENALTY_FACTOR 4.0f
@@ -878,7 +878,9 @@ void player_turn_timer_timeout_callback(void* user_data){
     // calculate impulse to apply to clicked entity.
     Vector2 impulse = vector2_mul_val(
         launch_direction, 
-        PLAYER_MOUSE_LAUNCH_FORCE * vector2_len(ctx->board_state->guideline_state.mouse_to_start_dist)
+        PLAYER_MOUSE_LAUNCH_FORCE * 
+        PLAYER_MOUSE_MAX_DRAW_RADIUS * 
+        vector2_len(vector2_normalise(ctx->board_state->guideline_state.mouse_to_start_dist))
     );
 
     // apply impulse when button is released.
