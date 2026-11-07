@@ -944,7 +944,7 @@ void board_state_init(BoardState* state, MemoryArena* arena, i32 max_turn_based_
     state->is_init = true;
 }
 
-void board_state_reset(BoardState* state){
+void board_state_reset(BoardState* state, TimerManager* timer_manager){
     state->cue_ball_entity_gid = 0;
     state->turn = BoardTurn_Player;
     state->stage = BoardStage_Playing;
@@ -956,6 +956,7 @@ void board_state_reset(BoardState* state){
     state->cue_ball_is_pocketed = false;
     state->cue_ball_count = BOARD_STATE_MAX_CUE_BALL_COUNT;
     state->previous_turn_cue_ball_count = BOARD_STATE_MAX_CUE_BALL_COUNT;
+    timer_manager_timer_stop(timer_manager, state->player_turn_timer);
 }
 
 void board_state_enter_player_turn(BoardState* board_state, EntityManager* entity_manager){
@@ -1422,7 +1423,7 @@ void load_level_callback(GameState* game_state, void* user_data){
 
     clickable_area_hierarchy_reset(&game_state->entity_manager.clickable_area_hierarchy);
     game_state->mouse_state.clicked_entity_idx = 0;
-    board_state_reset(board_state);
+    board_state_reset(board_state, &entity_manager->timer_manager);
     
     // reset_entity_manager();
     entity_manager->world_camera_entity_gid = 0;
@@ -3230,6 +3231,12 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             
             if(input_is_key_just_pressed(Key_Escape)){
                 board_state->show_pause_menu = !board_state->show_pause_menu;
+                if(board_state->show_pause_menu){
+                    timer_manager_timer_pause(&game_state->entity_manager.timer_manager, board_state->player_turn_timer);
+                }
+                else{
+                    timer_manager_timer_resume(&game_state->entity_manager.timer_manager, board_state->player_turn_timer);
+                }
             }
         }
 
