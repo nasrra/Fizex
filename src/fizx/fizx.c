@@ -7537,20 +7537,21 @@ void fizx_state_query_circle_cast_area(
     Vector2 perp = {.x = -direction.y, .y = direction.x};
     f32 pxr = perp.x * radius;
     f32 pyr = perp.y * radius;
-    
-    Vector2 end = vector2_mul_val(direction, length);    
+        
+    Vector2 end = vector2_add(start, vector2_mul_val(direction, length + radius));    
+    start = vector2_sub(start, vector2_mul_val(direction, radius));
     
     f32 v_x[4] = {
         start.x - pxr,
-        start.x + pxr,
         end.x - pxr,
-        end.x + pxr
+        end.x + pxr,
+        start.x + pxr
     };
     f32 v_y[4] = {
         start.y - pyr,
-        start.y + pyr,
         end.y - pyr,
-        end.y + pyr    
+        end.y + pyr,    
+        start.y + pyr
     };
     
     Vector2 dist = vector2_sub(end, start);
@@ -7560,6 +7561,8 @@ void fizx_state_query_circle_cast_area(
     f32 max_x;
     f32 max_y;
     polygon_get_min_max_vertices(v_x, v_y, 4, &min_x, &min_y, &max_x, &max_y);
+    
+    gfx_draw_wire_poly(global_gfx_state, v_x, v_y, 4, GFX_COLOUR_BLUE, 2, 0, 1);
     
     // reset to defined state.
     state->query_area_leaf_idx_scratch_space_count = 0;

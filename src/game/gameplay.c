@@ -3404,20 +3404,13 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                 Vector2 guideline_start = mouse_state->clicked_entity_initial_position;
             
                 // get directions.
-                Vector2 position_diff = vector2_sub(guideline_start, mouse_world_position);
-                position_diff = vector2_clamp_to_radius(position_diff, PLAYER_MOUSE_MAX_DRAW_RADIUS);
+                Vector2 position_diff = vector2_clamp_to_radius(
+                    vector2_sub(guideline_start, mouse_world_position), 
+                    PLAYER_MOUSE_MAX_DRAW_RADIUS
+                );
                 f32 length = vector2_len(position_diff);
                 Vector2 launch_direction = vector2_normalise(position_diff);
                 
-                // calculate impulse to apply to clicked entity.
-                Vector2 impulse_magnitude = vector2_mul_val(position_diff, PLAYER_MOUSE_LAUNCH_FORCE);
-    
-                // apply impulse when button is released.            
-                if(input_is_mouse_button_just_released(MouseButton_Left)){
-                    fizx_body_clear_forces_and_velocities(fizx_state, clicked_entity->physics_body_gid);
-                    fizx_body_impulse_linear_force(fizx_state, clicked_entity->physics_body_gid, impulse_magnitude);
-                }
-    
                 { // draw_launch_cursour();
                     Vector2 new_position = vector2_sub(guideline_start, position_diff);
                     Circle launch_cursour_shape = {.x = new_position.x, .y = new_position.y, .radius = 0.1f};
@@ -3436,11 +3429,15 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                     .gfx_state = entity_manager->gfx_state
                 };
                 
-                f32 launch_dist = 100.0f;
+                f32 launch_dist = 10.0f;
                 Vector2 perp_launch_direction = {.x = -launch_direction.y, .y = launch_direction.x};
                 Vector2 shake_amount = vector2_mul_val(perp_launch_direction, board_state->guideline_state.shake_mag);
-                Vector2 end_point = vector2_add(vector2_mul_val(launch_direction, launch_dist), shake_amount);
-                launch_direction = vector2_normalise(vector2_sub(end_point, guideline_start));
+                Vector2 end_point = 
+                    vector2_add(
+                        vector2_add(guideline_start, shake_amount),
+                        vector2_mul_val(launch_direction, launch_dist)
+                    );
+                launch_direction = vector2_normalise(vector2_sub(end_point, mouse_world_position));
                 
                 gfx_draw_line(
                     entity_manager->gfx_state, 
@@ -3458,6 +3455,16 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                     PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID, guideline_start, launch_direction, launch_dist, BALL_FIZX_SHAPE_RADIUS,
                     FIZX_CollisionCallbackBehaviour_Closest
                 );            
+            
+                // calculate impulse to apply to clicked entity.
+                Vector2 impulse_magnitude = vector2_mul_val(position_diff, PLAYER_MOUSE_LAUNCH_FORCE);
+    
+                // apply impulse when button is released.            
+                if(input_is_mouse_button_just_released(MouseButton_Left)){
+                    fizx_body_clear_forces_and_velocities(fizx_state, clicked_entity->physics_body_gid);
+                    fizx_body_impulse_linear_force(fizx_state, clicked_entity->physics_body_gid, impulse_magnitude);
+                }
+
             }
         
             // deslect_entity();

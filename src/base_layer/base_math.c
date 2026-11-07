@@ -864,12 +864,10 @@ bool line_overlaps_line(
         dist_cross is also the total area and the rotational direction (or orientation) of the cross product's parallelogram.
     */
     f32 dist_cross = vector2_cross_scalar(a_dist_x, a_dist_y, b_dist_x, b_dist_y);
-    if(
-        dist_cross > -F32_EPSILON && 
-        dist_cross < F32_EPSILON
-    ){
-        return false;
-    }
+f32 len_sq = (a_dist_x*a_dist_x + a_dist_y*a_dist_y) *
+             (b_dist_x*b_dist_x + b_dist_y*b_dist_y);
+// |cross|^2 < eps^2 * |a|^2 * |b|^2  <=> sin(angle) < eps
+if (dist_cross * dist_cross < F32_EPSILON * F32_EPSILON * len_sq) return false;
 
     f32 a_to_b_x = b_start_x - a_start_x;
     f32 a_to_b_y = b_start_y - a_start_y;
@@ -3004,10 +3002,10 @@ bool circle_cast_overlaps_polygon(
             normal_y /= normal_len;
         }
         else{
-            // edge body hit: outward edge normal.
             vector2_normalise_scalar(poly_dist_x, poly_dist_y, &poly_dir_x, &poly_dir_y);
             contact_point_x = poly_start_x + poly_dist_x * poly_t;
             contact_point_y = poly_start_y + poly_dist_y * poly_t;
+            // edge body hit: outward edge normal.
             normal_x = -poly_dir_y;   // see winding note below
             normal_y = poly_dir_x;
         }
