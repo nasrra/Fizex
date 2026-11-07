@@ -18,9 +18,10 @@ typedef struct Entity Entity;
 typedef enum BoardTurn BoardTurn;
 typedef enum EntityTypeId EntityTypeId;
 
-void board_state_enter_player_turn(BoardState* state, EntityManager* entity_manager, GenId cue_ball_physics_body_gid);
+void board_state_enter_player_turn(BoardState* state, EntityManager* entity_manager);
 void board_state_enter_ball_turn(BoardState* state);
 void board_state_enter_turn_based_turn(BoardState* state);
+void board_state_enter_placement_turn(BoardState* state);
 void board_state_complete_turn(BoardState* state, EntityManager* entity_manager);
 bool entity_manager_get_entity(EntityManager manager, GenId entity_gid, Entity** out_entity);
 GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transform2D transform, GenId parent_gid);
@@ -60,7 +61,6 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
 ///
 /// types.
 ///
-
 
 typedef void (*TimerTimeoutCallback)(void* user_data);
 typedef void (*TimerTickCallback)(void* user_data, f32 current_tick, f32 delta_tick);
@@ -117,6 +117,9 @@ typedef struct{
 } TimerManager;
 
 typedef enum BoardTurn{
+
+    // the stage where the player can place the cue ball.
+    BoardTurn_Placement,
 
     // the stage where the player can direct the cue ball.
     BoardTurn_Player,
@@ -231,7 +234,6 @@ typedef enum{
 } GameStage;
 
 typedef struct{
-    ClickableAreaHierarchy clickable_entity_hierarchy;
     i32 clicked_entity_idx;
     bool hovering_ui_element;
     Vector2 clicked_entity_initial_position;
@@ -458,7 +460,7 @@ typedef struct{
 ///
 
 
-#define PLAYER_TURN_TIMER_END_TIME 5.0f
+#define PLAYER_TURN_TIMER_END_TIME 15.0f
 #define PLAYER_SHAKE_TIME_FACTOR 100.0f
 #define PLAYER_SHAKE_MAGNITUDE_FACTOR 0.085f
 #define PLAYER_SHAKE_PENALTY_FACTOR 4.0f
@@ -956,17 +958,27 @@ void board_state_reset(BoardState* state){
     state->previous_turn_cue_ball_count = BOARD_STATE_MAX_CUE_BALL_COUNT;
 }
 
-void board_state_enter_player_turn(BoardState* state, EntityManager* entity_manager, GenId cue_ball_physics_body_gid){
-    state->turn = BoardTurn_Player;
+void board_state_enter_player_turn(BoardState* board_state, EntityManager* entity_manager){
+        
+    Entity* new_cue_ball;
+    if(entity_manager_get_entity(*entity_manager, board_state->cue_ball_entity_gid, &new_cue_ball)){
+        fizx_body_set_active(&entity_manager->fizx_state, new_cue_ball->physics_body_gid, true);
+    }
+    else{
+        os_output_message("[Warning]: no cue ball set, unable to complete player turn logic.");
+        return;
+    }
+
+    board_state->turn = BoardTurn_Player;
     os_output_message("player turn.\n");
     PlayerBoardTurnTimerTimeoutCallbackContext timeout_ctx= {
-        .board_state = state,
+        .board_state = board_state,
         .entity_manager = entity_manager,
-        .cue_ball_physics_body_gid = cue_ball_physics_body_gid
+        .cue_ball_physics_body_gid = new_cue_ball->physics_body_gid
     };
     
     PlayerBoardTurnTimerTickCallbackContext tick_ctx = {
-        .guideline_state = &state->guideline_state
+        .guideline_state = &board_state->guideline_state
     };
     
     TimerContext timer_ctx = {
@@ -979,7 +991,8 @@ void board_state_enter_player_turn(BoardState* state, EntityManager* entity_mana
         .tick_data = &tick_ctx,
         .tick_data_size = sizeof(tick_ctx)
     };
-    state->player_turn_timer = timer_manager_timer_start(state->timer_manager, timer_ctx);
+    
+    board_state->player_turn_timer = timer_manager_timer_start(board_state->timer_manager, timer_ctx);
 }
 
 void board_state_enter_ball_turn(BoardState* state){
@@ -993,13 +1006,27 @@ void board_state_enter_turn_based_turn(BoardState* state){
     os_output_message("turn based turn.\n");
 }
 
+void board_state_enter_placement_turn(BoardState* state){
+    state->turn = BoardTurn_Placement;
+    os_output_message("placement turn.\n");
+}
+
 void board_state_complete_turn(BoardState* board_state, EntityManager* entity_manager){
     board_state->turn = BoardTurn_Completed;
         
-    if(board_state->previous_turn_cue_ball_count > board_state->cue_ball_count){
+    if(
+        board_state->cue_ball_count > 0 &&
+        board_state->previous_turn_cue_ball_count > board_state->cue_ball_count
+    ){
         Entity* spawn_point_entity;
         if(entity_manager_get_entity(*entity_manager, board_state->cue_ball_spawn_point, &spawn_point_entity)){
+            
             board_state->cue_ball_entity_gid = entity_spawn(entity_manager, EntityTypeId_BallCue, TRANSFORM2D_IDENTITY, board_state->cue_ball_spawn_point);
+            Entity* new_cue_ball;
+            if(entity_manager_get_entity(*entity_manager, board_state->cue_ball_entity_gid, &new_cue_ball)){
+                fizx_body_set_active(&entity_manager->fizx_state, new_cue_ball->physics_body_gid, false);
+                board_state_enter_placement_turn(board_state);
+            }            
         }
     }
     
@@ -2226,7 +2253,7 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform
             clickable_area_hierarchy_set_clickable_area_user_data(
                 &entity_manager->clickable_area_hierarchy, 
                 entity->game_clickable_area_gid, 
-                entity
+                user_data
             );
         }
         
@@ -3414,7 +3441,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                                     
                                     timer_manager_timer_start(timer_manager, timer_ctx);                        
                                 
-                                    board_state_enter_player_turn(board_state, entity_manager, cue_ball_entity->physics_body_gid);
+                                    board_state_enter_player_turn(board_state, entity_manager);
                                 }
                             }
                         
@@ -3466,6 +3493,7 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
             !mouse_state->hovering_ui_element &&
             board_state->stage == BoardStage_Playing
         ){
+            GenId clicked_entity_gid;
             Entity* clicked_entity = NULL;
             ClickableArea* area;
             // select_entity();  
@@ -3475,7 +3503,9 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                     mouse_world_position
                 );
                 if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
-                    mouse_state->clicked_entity_initial_position = ((Entity*)area->user_data)->global_transform.position;
+                    if(entity_manager_get_entity(*entity_manager, *(GenId*)area->user_data, &clicked_entity)){
+                        mouse_state->clicked_entity_initial_position = clicked_entity->global_transform.position;
+                    }
                 }
                 
                 // zero out the shake magnitude from the last time we clicked on the cue ball.
@@ -3484,62 +3514,74 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
             }
             
             if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
-                clicked_entity = (Entity*)area->user_data;
+                clicked_entity_gid = *(GenId*)area->user_data;
+                entity_manager_get_entity(*entity_manager, clicked_entity_gid, &clicked_entity);
             }
             
-            if(
-                clicked_entity &&
-                board_state->turn == BoardTurn_Player
-            ){            
-                guideline_state->start_position = mouse_state->clicked_entity_initial_position;
+            if(clicked_entity){            
             
-                // get directions.
-                guideline_state->mouse_to_start_dist = vector2_clamp_to_radius(
-                    vector2_sub(guideline_state->start_position, mouse_world_position), 
-                    PLAYER_MOUSE_MAX_DRAW_RADIUS
-                );
-                
-                { // draw_launch_cursour();
-                    Vector2 cursour_position = vector2_sub(guideline_state->start_position, guideline_state->mouse_to_start_dist);
-                    Circle launch_cursour_shape = {.x = cursour_position.x, .y = cursour_position.y, .radius = 0.1f};
-                    gfx_draw_wire_circle(
-                        entity_manager->gfx_state, 
-                        launch_cursour_shape, 
-                        GFX_COLOUR_YELLOW, 
-                        SPRITE_LAYER_EDITOR_WORLD, 
-                        0, 
-                        SPRITE_MATERIAL_DEBUG
-                    );
-                }
-                                
-                GuidelineCollisionCallbackContext guideline_ctx = {
-                    .start_point = guideline_state->start_position,
-                    .gfx_state = entity_manager->gfx_state
-                };
-                
-                Vector2 launch_direction = guideline_calculate_launch_direction(*guideline_state);
-                                             
-                fizx_state_query_circle_cast_area(
-                    fizx_state, guideline_collision_callback, &guideline_ctx, 
-                    PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID, 
-                    vector2_add(guideline_state->start_position, vector2_mul_val(launch_direction, BALL_FIZX_SHAPE_RADIUS * 1.75f)),
-                    launch_direction, 
-                    100.0f, 
-                    BALL_FIZX_SHAPE_RADIUS,
-                    FIZX_CollisionCallbackBehaviour_Closest
-                );            
-                
-                // calculate impulse to apply to clicked entity.
-                Vector2 impulse = vector2_mul_val(launch_direction, PLAYER_MOUSE_LAUNCH_FORCE * vector2_len(guideline_state->mouse_to_start_dist));
+                switch(board_state->turn){
+                    case BoardTurn_Placement:{
+                        Vector2 new_position = vector2_add(
+                            mouse_state->clicked_entity_initial_position, 
+                            vector2_sub(mouse_world_position, mouse_state->clicked_entity_initial_position)
+                        );
+                        Transform2D transform = clicked_entity->global_transform;
+                        transform.position = new_position;
+                        entity_set_global_transform(entity_manager, clicked_entity_gid, transform);
+                    }break;
+                    case BoardTurn_Player:{
+                        guideline_state->start_position = mouse_state->clicked_entity_initial_position;
             
-                // apply impulse when button is released.            
-                if(input_is_mouse_button_just_released(MouseButton_Left)){
-                    fizx_body_clear_forces_and_velocities(fizx_state, clicked_entity->physics_body_gid);
-                    fizx_body_impulse_linear_force(
-                        fizx_state, 
-                        clicked_entity->physics_body_gid, 
-                        impulse
-                    );
+                        // get directions.
+                        guideline_state->mouse_to_start_dist = vector2_clamp_to_radius(
+                            vector2_sub(guideline_state->start_position, mouse_world_position), 
+                            PLAYER_MOUSE_MAX_DRAW_RADIUS
+                        );
+                        
+                        { // draw_launch_cursour();
+                            Vector2 cursour_position = vector2_sub(guideline_state->start_position, guideline_state->mouse_to_start_dist);
+                            Circle launch_cursour_shape = {.x = cursour_position.x, .y = cursour_position.y, .radius = 0.1f};
+                            gfx_draw_wire_circle(
+                                entity_manager->gfx_state, 
+                                launch_cursour_shape, 
+                                GFX_COLOUR_YELLOW, 
+                                SPRITE_LAYER_EDITOR_WORLD, 
+                                0, 
+                                SPRITE_MATERIAL_DEBUG
+                            );
+                        }
+                                        
+                        GuidelineCollisionCallbackContext guideline_ctx = {
+                            .start_point = guideline_state->start_position,
+                            .gfx_state = entity_manager->gfx_state
+                        };
+                        
+                        Vector2 launch_direction = guideline_calculate_launch_direction(*guideline_state);
+                                                     
+                        fizx_state_query_circle_cast_area(
+                            fizx_state, guideline_collision_callback, &guideline_ctx, 
+                            PHYSICS_LAYER_BALL_NUMBER | PHYSICS_LAYER_ENVIRONMENT_MID, 
+                            vector2_add(guideline_state->start_position, vector2_mul_val(launch_direction, BALL_FIZX_SHAPE_RADIUS * 1.75f)),
+                            launch_direction, 
+                            100.0f, 
+                            BALL_FIZX_SHAPE_RADIUS,
+                            FIZX_CollisionCallbackBehaviour_Closest
+                        );            
+                        
+                        // calculate impulse to apply to clicked entity.
+                        Vector2 impulse = vector2_mul_val(launch_direction, PLAYER_MOUSE_LAUNCH_FORCE * vector2_len(guideline_state->mouse_to_start_dist));
+                    
+                        // apply impulse when button is released.            
+                        if(input_is_mouse_button_just_released(MouseButton_Left)){
+                            fizx_body_clear_forces_and_velocities(fizx_state, clicked_entity->physics_body_gid);
+                            fizx_body_impulse_linear_force(
+                                fizx_state, 
+                                clicked_entity->physics_body_gid, 
+                                impulse
+                            );
+                        }
+                    }break;
                 }
             }
         
@@ -3547,10 +3589,9 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
             // note: this is done after the clcked entity code so that a clicked entity
             // can execute 'input_on_mouse_button_released' code paths. 
             if(input_is_mouse_button_just_released(MouseButton_Left)){
-                // clickable_area_hierarchy_update(
-                //     clickable_area_hierarchy,
-                //     mouse_world_position
-                // );
+                if(board_state->turn == BoardTurn_Placement){
+                    board_state_enter_player_turn(board_state, entity_manager);
+                }
                 clickable_area_hierarchy_reset(clickable_area_hierarchy); 
             }
         }
@@ -4053,32 +4094,24 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                         
                     
                         switch(board_state->turn){
+                            case BoardTurn_Placement:{
+                                CLAY_TEXT(CLAY_STRING("Turn: Placement"), GAME_GFX_CLAY_TEXT_CONFIG);
+                            }break;
                             case BoardTurn_Player:{
-                                CLAY_TEXT(CLAY_STRING("Player Turn"), GAME_GFX_CLAY_TEXT_CONFIG);
+                                CLAY_TEXT(CLAY_STRING("Turn: Player"), GAME_GFX_CLAY_TEXT_CONFIG);
                             }break;
                             case BoardTurn_Ball:{
-                                CLAY_TEXT(CLAY_STRING("Ball Turn"), GAME_GFX_CLAY_TEXT_CONFIG);
+                                CLAY_TEXT(CLAY_STRING("Turn: Ball"), GAME_GFX_CLAY_TEXT_CONFIG);
                             }break;
                             case BoardTurn_TurnBased:{
-                                CLAY_TEXT(CLAY_STRING("Turn Based Turn"), GAME_GFX_CLAY_TEXT_CONFIG);
+                                CLAY_TEXT(CLAY_STRING("Turn: Turn Based"), GAME_GFX_CLAY_TEXT_CONFIG);
+                            }break;
+                            case BoardTurn_Completed:{
+                                CLAY_TEXT(CLAY_STRING("Turn: Completed"), GAME_GFX_CLAY_TEXT_CONFIG);
                             }break;
                         }
                     }
                 }
-            
-#if 0
-                switch(board_state->turn){
-                    case BoardTurn_Player:{
-                        CLAY_TEXT(CLAY_STRING("PLAYER TURN"), GAME_GFX_CLAY_TEXT_CONFIG);
-                    }break;
-                    case BoardTurn_Ball:{
-                        CLAY_TEXT(CLAY_STRING("BALL TURN"), GAME_GFX_CLAY_TEXT_CONFIG);
-                    }break;
-                    case BoardTurn_TurnBased:{
-                        CLAY_TEXT(CLAY_STRING("TURN BASED TURN"), GAME_GFX_CLAY_TEXT_CONFIG);
-                    }break;
-                }
-#endif
             }break;        
         }
 
