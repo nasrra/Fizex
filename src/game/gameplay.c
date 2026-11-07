@@ -172,6 +172,8 @@ struct BoardState{
   
     GuidelineState guideline_state;
     
+    i32 cue_ball_count;
+    
     bool is_init;
 };
 
@@ -238,7 +240,10 @@ typedef struct{
     GenId sprite_gid;
     GenId physics_body_gid;
     GenId game_clickable_area_gid;
+    // the behvaioural state of the entity; implementation depends on entity type.
     i32 state;
+    // the tag of the entity, for additional specification needs.
+    i32 tag;
     i32 max_turns_until_turn_end_callback;
     i32 turns_until_turn_end_callback; 
     f32 health;
@@ -272,6 +277,8 @@ typedef struct{
     i32 entity_type_id;
     // the index of the entity's parent in the deserialised entity list.
     i32 parent_deserialised_entity_idx;
+    i32 state;
+    i32 tag;
 } DeserialisedEntity;
 
 struct EntityManager{
@@ -302,7 +309,6 @@ struct EntityManager{
     GenId ui_camera_entity_gid;
     
     bool is_init;
-
 };
 
 typedef enum{
@@ -394,6 +400,7 @@ typedef struct{
 ///
 
 
+#define BOARD_STATE_MAX_CUE_BALL_COUNT 3
 #define BOARD_STATE_MAX_BALLS 10
 
 #define ASSET_DIRECTORY_PATH "../assets/"
@@ -917,6 +924,7 @@ void board_state_init(BoardState* state, MemoryArena* arena, i32 max_turn_based_
     string_init(&state->turn_text_scratch_space, arena, 64);
     
     state->timer_manager = timer_manager;
+    state->cue_ball_count = BOARD_STATE_MAX_CUE_BALL_COUNT;
     
     state->is_init = true;
 }
@@ -931,6 +939,7 @@ void board_state_reset(BoardState* state){
     state->display_turn_text = false;
     state->show_pause_menu = false;
     state->cue_ball_is_pocketed = false;
+    state->cue_ball_count = BOARD_STATE_MAX_CUE_BALL_COUNT;
 }
 
 void board_state_enter_player_turn(BoardState* state, EntityManager* entity_manager, GenId cue_ball_physics_body_gid){
@@ -2028,7 +2037,7 @@ void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_d
         
         switch(entity->type_id){
             case EntityTypeId_BallCue:{
-                ctx->game_state->board_state.cue_ball_is_pocketed = true;
+                ctx->game_state->board_state.cue_ball_count -= 1; 
             }
             case EntityTypeId_BallEight:
             case EntityTypeId_BallOne:
@@ -2892,11 +2901,13 @@ GenId level_manager_load_level_file_recurssive(
                 deserialised_entity->spawn_transform = TRANSFORM2D_IDENTITY;
                 lines_read = sscanf(
                     file_data,
-                    "%[^;]%n;%i;%i;%f;%f;%f;%f;%f;%f;%n",
+                    "%[^;]%n;%i;%i;%i;%i;%f;%f;%f;%f;%f;%f;%n",
                     deserialised_entity->name.chars,
                     &deserialised_entity->name.count,
                     &deserialised_entity->entity_type_id,
+                    &deserialised_entity->tag,
                     &deserialised_entity->parent_deserialised_entity_idx,
+                    &deserialised_entity->state,
                     &deserialised_entity->spawn_transform.position.x,
                     &deserialised_entity->spawn_transform.position.y,
                     &deserialised_entity->spawn_transform.scale.x,
@@ -2906,7 +2917,7 @@ GenId level_manager_load_level_file_recurssive(
                     &bytes_consumed
                 );
         
-                if(lines_read == 9){
+                if(lines_read == 11){
             
                     // NOTE:
                     // deserialsied entities should be in the order (from 0 to length) parent->child.
@@ -2951,18 +2962,21 @@ GenId level_manager_load_level_file_recurssive(
                         deserialised_entity->spawn_transform, 
                         parent_gid
                     );
-           
-                    // root entity from file.
-                    if(parent_idx == 0){
-                        Entity* root_entity;
-                        if(entity_manager_get_entity(*entity_manager, deserialised_entity->entity_gid, &root_entity)){
+                    
+                    Entity* entity;
+                    if(entity_manager_get_entity(*entity_manager, deserialised_entity->entity_gid, &entity)){
+                        if(parent_idx == 0){
                             // set the root entity's serialisation file path to the file path we just loaded it from.
-                            string_push(&root_entity->serialisation_file_path, file_path);
+                            string_push(&entity->serialisation_file_path, file_path);
                         }
                         else{
-                            ASSERT(false, "failed to retrieve root entity.");
-                            break;
+                            entity->state = deserialised_entity->state;
+                            entity->tag = deserialised_entity->tag;
                         }
+                    }
+                    else{
+                        ASSERT(false, "failed to retrieve spawned entity from file.");
+                        break;                            
                     }
                     
                     entity_manager->deserialised_entity_count += 1;
@@ -3335,7 +3349,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                                 }
                             }
                             
-                            if(board_state->cue_ball_is_pocketed){
+                            if(board_state->cue_ball_count <= 0){
                                 board_state->stage = BoardStage_Lose;
                             }
                             else if(eight_ball_pocketed && eight_ball_present){

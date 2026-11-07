@@ -86,8 +86,11 @@ typedef struct{
 
 typedef struct{
     Editor_MouseState mouse_state;
+
+    String i32_input_text_box_scratch_space;
     String f32_input_text_box_scratch_space;
     String string_input_text_box_scratch_space;
+
     GFX_State* gfx_state;
     
     Vector2 world_camera_position;
@@ -444,11 +447,17 @@ typedef struct{
                                                                                                                             \
             String* __editor003_scratch_space_string;                                                                       \
             switch(_editor_state->mouse_state.selected_editor_ui_entity.data_storage_type){                                 \
+                default:{                                                                                                   \
+                    ASSERT(false, "unknown data storage type.");                                                            \
+                }break;                                                                                                     \
                 case Editor_ButtonDataStorageType_F32:{                                                                     \
                     __editor003_scratch_space_string = &_editor_state->f32_input_text_box_scratch_space;                    \
                 }break;                                                                                                     \
                 case Editor_ButtonDataStorageType_String:{                                                                  \
                     __editor003_scratch_space_string = &_editor_state->string_input_text_box_scratch_space;                 \
+                }break;                                                                                                     \
+                case Editor_ButtonDataStorageType_I32:{                                                                     \
+                    __editor003_scratch_space_string = &_editor_state->i32_input_text_box_scratch_space;                    \
                 }break;                                                                                                     \
             }                                                                                                               \
                                                                                                                             \
@@ -620,6 +629,7 @@ void editor_state_init(Editor_State* state, MemoryArena* arena, GFX_State* gfx_s
     editor_mouse_state_init(&state->mouse_state, arena);
     
     string_init(&state->f32_input_text_box_scratch_space, arena, F32_STRING_MIN_LENGTH);
+    string_init(&state->i32_input_text_box_scratch_space, arena, I32_STRING_MIN_LENGTH);
     string_init(&state->string_input_text_box_scratch_space, arena, EDITOR_STRING_INPUT_BUTTON_MAX_STRING_LENGTH);
     
     state->gfx_state = gfx_state;
@@ -704,10 +714,20 @@ void editor_save_level_entity_recurssive(
             string_push_chars(entity_char_buffer, sprtinf_scratch_space, written);
             string_push_chars(entity_char_buffer, ";", 1);
 
+            // tag
+            written = snprintf(sprtinf_scratch_space, sprtinf_scratch_space_length, "%i", entity->tag);
+            string_push_chars(entity_char_buffer, sprtinf_scratch_space, written);
+            string_push_chars(entity_char_buffer, ";", 1);
+
             // parent idx.
             written = snprintf(sprtinf_scratch_space, sprtinf_scratch_space_length, "%i", parent_line_idx);
             string_push_chars(entity_char_buffer, sprtinf_scratch_space, written);
             string_push_chars(entity_char_buffer, ";", 1);
+                
+            // state
+            written = snprintf(sprtinf_scratch_space, sprtinf_scratch_space_length, "%i", entity->state);
+            string_push_chars(entity_char_buffer, sprtinf_scratch_space, written);
+            string_push_chars(entity_char_buffer, ";", 1);    
         }
 
         // transform position x.
@@ -1004,8 +1024,15 @@ void editor_input_field_on_hover_callback(Clay_ElementId element_id, Clay_Pointe
         
         switch(ctx->src.data_storage_type){
             default: {ASSERT(false, "unknown data storage type.");}break;
-            case Editor_ButtonDataStorageType_F32:{typing_scratch_space = &ctx->editor_state->f32_input_text_box_scratch_space;} break;
-            case Editor_ButtonDataStorageType_String:{typing_scratch_space = &ctx->editor_state->string_input_text_box_scratch_space;} break;
+            case Editor_ButtonDataStorageType_I32:{
+                typing_scratch_space = &ctx->editor_state->i32_input_text_box_scratch_space;
+            }break;
+            case Editor_ButtonDataStorageType_F32:{
+                typing_scratch_space = &ctx->editor_state->f32_input_text_box_scratch_space;
+            }break;
+            case Editor_ButtonDataStorageType_String:{
+                typing_scratch_space = &ctx->editor_state->string_input_text_box_scratch_space;
+            }break;
         }
 
         string_clear(typing_scratch_space);
@@ -1052,7 +1079,7 @@ void editor_save_level_button_on_hover_callback(Clay_ElementId element_id, Clay_
             &file_path_scratch_space,
             &entity_char_buffer,
             sprintf_scratch_space,
-            64,
+            os_get_max_file_path_length(),
             level_idx,
             0,
             0
@@ -1568,15 +1595,21 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                 
             char* chars;
             
-            // allocator_entity_name_strings();
+            // allocate_char_strings();
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_STRING_INPUT_BUTTON_MAX_STRING_LENGTH);
-            Clay_String entity_name_val_string = {.chars = (const char*) chars};
+            Clay_String name_val_string = {.chars = (const char*) chars};
                         
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, EDITOR_STRING_INPUT_BUTTON_MAX_STRING_LENGTH);
             Clay_String serialisation_file_path_val_string = {.chars = (const char*) chars};
 
-            // allocate_floating_point_strings();            
-            
+            // allocate_integer_strings();
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, I32_STRING_MIN_LENGTH);
+            Clay_String state_val_string = {.chars = (const char*)chars};
+
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, I32_STRING_MIN_LENGTH);
+            Clay_String tag_val_string = {.chars = (const char*)chars};
+
+            // allocate_floating_point_strings();                        
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
             Clay_String position_x_val_string = {.chars = (const char*)chars};
                         
@@ -1594,7 +1627,7 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                         
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
             Clay_String cosine_val_string = {.chars = (const char*)chars};
-            
+                        
             f32 horizontal_percent_size = 0.75f;
             f32 vertical_percent_size = 0.05f;
             
@@ -1608,20 +1641,20 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                 { // draw_label();
 
                     CLAY_TEXT(
-                        gfx_string_to_clay_string(STRING_FROM_LITERAL("Entity Name", transient)), 
+                        gfx_string_to_clay_string(STRING_FROM_LITERAL("Name", transient)), 
                         EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
                     );                
                 }
                 
                 { // draw_value();
                 
-                    entity_name_val_string.length = entity->name.count;
-                    char* label_chars = (char*)entity_name_val_string.chars;
-                    COPY_MEMORY(label_chars, entity->name.chars, entity_name_val_string.length);
+                    name_val_string.length = entity->name.count;
+                    char* label_chars = (char*)name_val_string.chars;
+                    COPY_MEMORY(label_chars, entity->name.chars, name_val_string.length);
                 
                     GFX_CLAY_INPUT_TEXT_BOX(
-                        CLAY_STRING("Entity Name"),
-                        entity_name_val_string,
+                        CLAY_STRING("Name"),
+                        name_val_string,
                         horizontal_percent_size,
                         vertical_percent_size,
                         editor_state, 
@@ -1633,6 +1666,82 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                 }            
             }
 
+            { // draw_state();
+            
+                { // draw_label();
+                    CLAY_TEXT(
+                        gfx_string_to_clay_string(STRING_FROM_LITERAL("State", transient)), 
+                        EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
+                    );
+                }
+                
+                { // draw_value();
+                    state_val_string.length = 
+                    snprintf((char*)state_val_string.chars, I32_STRING_MIN_LENGTH, "%i", entity->state);
+                    ASSERT(state_val_string.length > 0, "failed to encode.");
+                    
+                    if(is_world_root){
+                        GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(
+                            CLAY_STRING("Entity State"),
+                            state_val_string,
+                            horizontal_percent_size,
+                            vertical_percent_size
+                        );
+                    }
+                    else{
+                        GFX_CLAY_INPUT_TEXT_BOX(
+                            CLAY_STRING("Entity State"), 
+                            state_val_string, 
+                            horizontal_percent_size, 
+                            vertical_percent_size, 
+                            editor_state, 
+                            (void*)(&entity->state), 
+                            Editor_ButtonDataStorageType_I32, 
+                            transient, 
+                            entity_idx
+                        );
+                    }
+                }
+            }
+
+            { // draw_tag();
+            
+                { // draw_label();
+                    CLAY_TEXT(
+                        gfx_string_to_clay_string(STRING_FROM_LITERAL("Tag", transient)), 
+                        EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
+                    );
+                }
+                
+                { // draw_value();
+                    tag_val_string.length = 
+                    snprintf((char*)tag_val_string.chars, I32_STRING_MIN_LENGTH, "%i", entity->tag);
+                    ASSERT(tag_val_string.length > 0, "failed to encode.");
+                    
+                    if(is_world_root){
+                        GFX_CLAY_INPUT_TEXT_BOX_IMMUTABLE(
+                            CLAY_STRING("Entity Tag"),
+                            tag_val_string,
+                            horizontal_percent_size,
+                            vertical_percent_size
+                        );
+                    }
+                    else{
+                        GFX_CLAY_INPUT_TEXT_BOX(
+                            CLAY_STRING("Entity Tag"), 
+                            tag_val_string, 
+                            horizontal_percent_size, 
+                            vertical_percent_size, 
+                            editor_state, 
+                            (void*)(&entity->tag), 
+                            Editor_ButtonDataStorageType_I32, 
+                            transient, 
+                            entity_idx
+                        );
+                    }
+                }
+            }
+            
             { // draw_position_x();
             
                 { // draw_label();
@@ -1669,7 +1778,6 @@ void gfx_clay_entity_inspector_layout(Editor_State* editor_state, GameState* gam
                         );
                     }
                 }
-            
             }
              
             { // draw_position_y();
@@ -2127,11 +2235,17 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
 
             String* scratch_space;
             switch(editor_mouse_state->selected_editor_ui_entity.data_storage_type){
+                default:{
+                    ASSERT(false, "unknown data storage type.");
+                }break;
                 case Editor_ButtonDataStorageType_String:{
                     scratch_space = &editor_state->string_input_text_box_scratch_space;
                 }break;
                 case Editor_ButtonDataStorageType_F32:{
                     scratch_space = &editor_state->f32_input_text_box_scratch_space;
+                }break;
+                case Editor_ButtonDataStorageType_I32:{
+                    scratch_space = &editor_state->i32_input_text_box_scratch_space;
                 }break;
             }
             
@@ -2149,7 +2263,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 }
                 count-=1;
             }
-                    
+            
             if(
                 input_is_mouse_button_just_pressed(MouseButton_Left) ||
                 input_is_mouse_button_just_pressed(MouseButton_Right)
@@ -2160,11 +2274,17 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
         
                     switch(editor_mouse_state->selected_editor_ui_entity.data_storage_type){
                         default: {ASSERT(false, "unknown data storage type.");}break;
+                        case Editor_ButtonDataStorageType_I32:{
+                            char* null_terminated_scratch_space = (char[I32_STRING_MIN_LENGTH]){0};
+                            COPY_MEMORY(null_terminated_scratch_space, scratch_space->chars, scratch_space->count);
+                            sscanf(
+                                null_terminated_scratch_space, "%d", 
+                                (i32*)editor_mouse_state->selected_editor_ui_entity.data_storage
+                            );                        
+                        }break;
                         case Editor_ButtonDataStorageType_F32:{
-                            
                             char* null_terminated_scratch_space = (char[F32_STRING_MIN_LENGTH]){0};
                             COPY_MEMORY(null_terminated_scratch_space, scratch_space->chars, scratch_space->count);
-                            
                             sscanf(
                                 null_terminated_scratch_space, "%f", 
                                 (f32*)editor_mouse_state->selected_editor_ui_entity.data_storage
