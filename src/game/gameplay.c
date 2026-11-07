@@ -2957,12 +2957,26 @@ GenId level_manager_load_level_file_recurssive(
                 BOUNDS_CHECK(entity_manager->deserialised_entity_count, entity_manager->deserialised_entity_length);
                 deserialised_entity = &entity_manager->deserialised_entity[entity_manager->deserialised_entity_count];
 
+                // first scscanf for the name.
+                // we do this as pattern matchin a blank name tag can yield no lines being read
+                // as the first character in the line would be the delimitter ';'.
+                lines_read = sscanf(
+                    file_data,
+                    "%[^;]%n;%n",
+                    deserialised_entity->name.chars,
+                    &deserialised_entity->name.count,
+                    &bytes_consumed
+                );
+                                
+                file_data = lines_read == 0
+                ? file_data + 1 // increment past the ';' as the name of the entity is blank.
+                : file_data + bytes_consumed
+                ;
+
                 deserialised_entity->spawn_transform = TRANSFORM2D_IDENTITY;
                 lines_read = sscanf(
                     file_data,
-                    "%[^;]%n;%i;%i;%i;%i;%f;%f;%f;%f;%f;%f;%n",
-                    deserialised_entity->name.chars,
-                    &deserialised_entity->name.count,
+                    "%d;%d;%d;%d;%f;%f;%f;%f;%f;%f;%n",
                     &deserialised_entity->entity_type_id,
                     &deserialised_entity->tag,
                     &deserialised_entity->parent_deserialised_entity_idx,
@@ -2976,7 +2990,7 @@ GenId level_manager_load_level_file_recurssive(
                     &bytes_consumed
                 );
         
-                if(lines_read == 11){
+                if(lines_read == 10){
             
                     // NOTE:
                     // deserialsied entities should be in the order (from 0 to length) parent->child.
