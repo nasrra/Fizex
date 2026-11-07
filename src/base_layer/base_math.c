@@ -3652,3 +3652,100 @@ void polygon_get_min_max_vertices(f32* vert_x, f32* vert_y, i32 vert_length, f32
         }
     }
 }
+
+
+///
+/// @ rand globals.
+///
+
+
+u32 base_rand_state;
+bool base_rand_initial_state_set;
+void * (*base_panic_pre_abort_funcptr) (char* msg);
+
+
+///
+/// @ rand
+///
+
+
+/*
+    sets the global random seed to a new seed.
+
+    returns:
+    the newl set seed.
+*/
+i32 rand_next_seed(){
+    // get the current calender time.
+    time_t raw_time;
+    time(&raw_time);
+    struct tm *t = localtime(&raw_time);
+
+    i32 second  = t->tm_sec;
+    i32 minute  = t->tm_min;
+    i32 hour    = t->tm_hour;
+    i32 day     = t->tm_mday;
+    i32 month   = t->tm_mon+1; // +1 for 1-12; not 0-11
+    i32 year    = t->tm_year+1980; // years since 1980.
+
+    // Use the stack address of a local variable as entropy noise
+    i32 stack_noise;
+    i32 result = (i32)(uintptr_t)&stack_noise;
+
+    result += second;
+    result += minute;
+    result += hour;
+    result += day;
+    result += month;
+    result += year;
+
+    base_rand_state = result;
+    return result;
+}
+
+u32 u32_rand(){
+    // lazy init the first seed.
+    if(base_rand_initial_state_set == false){
+        rand_next_seed();
+        base_rand_initial_state_set = true;
+    }
+
+    u32 result = base_rand_state;
+	result ^= result << 13u;
+	result ^= result >> 17u;
+	result ^= result << 5u;
+    base_rand_state = result;
+	return result;
+}
+
+i32 i32_rand(){
+	return (i32)u32_rand();
+}
+
+/*
+    `remarks`
+    generated values are never fractional or negative; user f32_rand_range for more granual control of numbers.
+*/
+f32 f32_rand(){
+    return (f32)(u32_rand() >> 8);
+}
+
+f32 f32_rand_range(f32 min, f32 max){
+    ASSERT(min <= max, "min is greater than max.");
+    // shift down 8 bits to push the sign and exponent bits into the mantissa.
+    // ranging the generated value in [0 to 1].
+    f32 nv = f32_rand() * (1.0f / 16777216.0f);
+    return min + nv * (max - min);
+}
+
+i32 i32_srand(i32 seed){
+    base_rand_state = seed;
+    base_rand_initial_state_set = true;
+    return i32_rand();
+}
+
+f32 f32_srand(i32 seed){
+    base_rand_state = seed;
+    base_rand_initial_state_set = true;
+    return f32_rand();
+}

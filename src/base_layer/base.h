@@ -232,7 +232,7 @@ typedef struct{
 #define F64_EPSILON 2.2204460492503131e-16
 #define ZERO_MEMORY(ptr, size) memset(ptr, 0, size)
 #define ZERO_STRUCT(ptr) memset(ptr, 0, sizeof(*(ptr)))
-#define COPY_MEMORY(DST, SRC, SIZE_IN_BYTES) memcpy(DST, SRC, SIZE_IN_BYTES)
+#define COPY_MEMORY(DST, SRC, SIZE_IN_BYTES) memcpy((DST), (SRC), (SIZE_IN_BYTES))
 /*
     zeroes out an array.
 */
@@ -598,25 +598,8 @@ static void FUNCTION_NAME##_dsc(TYPE* array_ptr, i32 array_length){             
 
 
 /*========================================
-    globals.
-========================================*//**/
-
-
-/*
-    base_rand_seed is lazy init.
-*/
-i32 base_rand_state;
-bool base_rand_initial_state_set;
-void * (*base_panic_pre_abort_funcptr) (char* msg);
-
-
-
-
-/*========================================
     functions
 ========================================*//**/
-
-
 
 
 DEFINE_QUICKSORT(i8,  quicksort_i8)
@@ -629,18 +612,6 @@ DEFINE_QUICKSORT(i32, quicksort_u32)
 DEFINE_QUICKSORT(i64, quicksort_u64)
 DEFINE_QUICKSORT(f32, quicksort_f32)
 DEFINE_QUICKSORT(f64, quicksort_f64)
-
-/*
-    sets the global random seed to a new seed.
-
-    returns:
-    the newl set seed.
-*/
-i32 rand_next_seed();
-i32 rand_i32();
-f32 rand_f32();
-i32 srand_i32(i32 seed);
-f32 srand_f32(i32 seed);
 
 bool memory_arena_partition(MemoryArena* parent, MemoryArena* out_child, u64 size);
 void clear_memory_arena(MemoryArena* arena);

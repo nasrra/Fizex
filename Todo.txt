@@ -9,25 +9,23 @@
     + After three turns, hits the ground, dispersing the balls around it.
 
 + timed turns
++ fix pause menu not working?????
 
++ aim becomes more shakey over time before turn timer ends.
+    + timers need to store 'duration'.
+    + timers need to start from 0 and go to 'duration'.
+    + duration / curr_time.
+    + plug (result * shakeTimeFactor) into sin().
+    + multiply sin() result by shakeDirDiffernce.
+    + get perpendicular normal to the line.
+    + multiply normal by shake value and add to guideline final vertex.
+    
++ at the end of turn timer the ball gets shot in a random direction (from a cone, where the player would have shot into).
 
 ===============
 ==== TO DO ====
 ===============
 
-
-- fix pause menu not working?????
-
-- aim becomes more shakey over time before turn timer ends.
-    + timers need to store 'duration'.
-    + timers need to start from 0 and go to 'duration'.
-    - duration / curr_time.
-    - plug (result * shakeTimeFactor) into sin().
-    - multiply sin() result by shakeDirDiffernce.
-    - get perpendicular normal to the line.
-    - multiply normal by shake value and add to guideline final vertex.
-
-- at the end of turn timer the ball gets shot in a random direction (from a cone, where the player would have shot into).
 
 - life system.
     - three lives, you can pocket the cue ball three times

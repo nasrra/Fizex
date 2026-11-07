@@ -13,9 +13,13 @@
 
 typedef struct GameState GameState;
 typedef struct BoardState BoardState;
+typedef struct EntityManager EntityManager;
 typedef enum BoardTurn BoardTurn;
 
-void board_state_enter_turn(BoardState* state, BoardTurn turn);
+void board_state_enter_player_turn(BoardState* state, EntityManager* entity_manager, GenId cue_ball_physics_body_gid);
+void board_state_enter_ball_turn(BoardState* state);
+void board_state_enter_turn_based_turn(BoardState* state);
+void board_state_complete_turn(BoardState* state);
 
 
 ///
@@ -270,7 +274,7 @@ typedef struct{
     i32 parent_deserialised_entity_idx;
 } DeserialisedEntity;
 
-typedef struct{
+struct EntityManager{
     
     GenIdAllocator gen_id_allocator;
     
@@ -299,7 +303,7 @@ typedef struct{
     
     bool is_init;
 
-} EntityManager;
+};
 
 typedef enum{
     // loads the level file as the world root entity.
@@ -434,9 +438,10 @@ typedef struct{
 ///
 
 
-#define PLAYER_TURN_TIMER_END_TIME 20.0f
+#define PLAYER_TURN_TIMER_END_TIME 15.0f
 #define PLAYER_SHAKE_TIME_FACTOR 100.0f
 #define PLAYER_SHAKE_MAGNITUDE_FACTOR 0.085f
+#define PLAYER_SHAKE_PENALTY_FACTOR 4.0f
 
 
 ///
@@ -779,11 +784,7 @@ typedef struct{
 void player_turn_timer_tick_callback(void* user_data, f32 current_tick, f32 delta_tick){
     PlayerBoardTurnTimerTickCallbackContext* ctx = (PlayerBoardTurnTimerTickCallbackContext*)user_data;
     f32 shake_ratio = current_tick / PLAYER_TURN_TIMER_END_TIME;
-    
-    
-    f32 pow_ratio = shake_ratio * shake_ratio * shake_ratio * shake_ratio;
-    
-    
+    f32 pow_ratio = shake_ratio * shake_ratio * shake_ratio * shake_ratio;    
     ctx->guideline_state->shake_magnitude = f32_sin(pow_ratio * PLAYER_SHAKE_TIME_FACTOR) * (PLAYER_SHAKE_MAGNITUDE_FACTOR * pow_ratio);    
 }
 
@@ -861,13 +862,32 @@ Vector2 guideline_calculate_launch_direction(GuidelineState state){
 
 
 typedef struct{
+    GenId cue_ball_physics_body_gid;
     BoardState* board_state;
     EntityManager* entity_manager;
 } PlayerBoardTurnTimerTimeoutCallbackContext;
 
 void player_turn_timer_timeout_callback(void* user_data){
     PlayerBoardTurnTimerTimeoutCallbackContext* ctx = (PlayerBoardTurnTimerTimeoutCallbackContext*)user_data;
-    board_state_enter_turn(ctx->board_state, BoardTurn_Ball);
+    board_state_enter_ball_turn(ctx->board_state);
+
+    f32 mag_factor = PLAYER_SHAKE_PENALTY_FACTOR * PLAYER_SHAKE_MAGNITUDE_FACTOR;
+    ctx->board_state->guideline_state.shake_magnitude = f32_rand_range(-mag_factor, mag_factor);
+    
+    Vector2 launch_direction = guideline_calculate_launch_direction(ctx->board_state->guideline_state);
+    // calculate impulse to apply to clicked entity.
+    Vector2 impulse = vector2_mul_val(
+        launch_direction, 
+        PLAYER_MOUSE_LAUNCH_FORCE * vector2_len(ctx->board_state->guideline_state.mouse_to_start_dist)
+    );
+
+    // apply impulse when button is released.
+    fizx_body_clear_forces_and_velocities(&ctx->entity_manager->fizx_state, ctx->cue_ball_physics_body_gid);
+    fizx_body_impulse_linear_force(
+        &ctx->entity_manager->fizx_state, 
+        ctx->cue_ball_physics_body_gid,
+        impulse
+    );
 }
 
 typedef struct{
@@ -911,45 +931,46 @@ void board_state_reset(BoardState* state){
     state->cue_ball_is_pocketed = false;
 }
 
-void board_state_enter_turn(BoardState* state, BoardTurn turn){
-    switch(turn){
-        default:{
-            ASSERT(false, "unexpected turn value");
-        }break;
-        case BoardTurn_Player:{
-            PlayerBoardTurnTimerTimeoutCallbackContext timeout_ctx= {
-                .board_state = state
-            };
-            
-            PlayerBoardTurnTimerTickCallbackContext tick_ctx = {
-                .guideline_state = &state->guideline_state
-            };
-            
-            TimerContext timer_ctx = {
-                .end_time = PLAYER_TURN_TIMER_END_TIME,
-                .time_scale = 1.0f,
-                .timeout_callback = player_turn_timer_timeout_callback,
-                .timeout_data = &timeout_ctx,
-                .timeout_data_size = sizeof(timeout_ctx),
-                .tick_callback = player_turn_timer_tick_callback,
-                .tick_data = &tick_ctx,
-                .tick_data_size = sizeof(tick_ctx)
-            };
-            state->player_turn_timer = timer_manager_timer_start(state->timer_manager, timer_ctx);
-            os_output_message("player turn.\n");
-        }break;
-        case BoardTurn_Ball:{
-            timer_manager_timer_stop(state->timer_manager, state->player_turn_timer);
-            os_output_message("ball turn.\n");
-        }break;
-        case BoardTurn_TurnBased:{
-            os_output_message("turn based turn.\n");
-        }break;
-        case BoardTurn_Completed:{
-            os_output_message("completed turn.\n");
-        }
-    }
-    state->turn = turn;
+void board_state_enter_player_turn(BoardState* state, EntityManager* entity_manager, GenId cue_ball_physics_body_gid){
+    state->turn = BoardTurn_Player;
+    os_output_message("player turn.\n");
+    PlayerBoardTurnTimerTimeoutCallbackContext timeout_ctx= {
+        .board_state = state,
+        .entity_manager = entity_manager,
+        .cue_ball_physics_body_gid = cue_ball_physics_body_gid
+    };
+    
+    PlayerBoardTurnTimerTickCallbackContext tick_ctx = {
+        .guideline_state = &state->guideline_state
+    };
+    
+    TimerContext timer_ctx = {
+        .end_time = PLAYER_TURN_TIMER_END_TIME,
+        .time_scale = 1.0f,
+        .timeout_callback = player_turn_timer_timeout_callback,
+        .timeout_data = &timeout_ctx,
+        .timeout_data_size = sizeof(timeout_ctx),
+        .tick_callback = player_turn_timer_tick_callback,
+        .tick_data = &tick_ctx,
+        .tick_data_size = sizeof(tick_ctx)
+    };
+    state->player_turn_timer = timer_manager_timer_start(state->timer_manager, timer_ctx);
+}
+
+void board_state_enter_ball_turn(BoardState* state){
+    state->turn = BoardTurn_Ball;
+    os_output_message("ball turn.\n");
+    timer_manager_timer_stop(state->timer_manager, state->player_turn_timer);
+}
+
+void board_state_enter_turn_based_turn(BoardState* state){
+    state->turn = BoardTurn_TurnBased;
+    os_output_message("turn based turn.\n");
+}
+
+void board_state_complete_turn(BoardState* state){
+    state->turn = BoardTurn_Completed;
+    os_output_message("completed turn.\n");
 }
 
 ///
@@ -3248,14 +3269,14 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                 case true:{
                     switch(board_state->turn){
                         case BoardTurn_Player:{
-                            board_state_enter_turn(board_state, BoardTurn_Ball);
+                            board_state_enter_ball_turn(board_state);
                         }break;
                     }
                 }break;
                 case false:{
                     switch(board_state->turn){
                         case BoardTurn_Ball:{    
-                            board_state_enter_turn(board_state, BoardTurn_TurnBased);
+                            board_state_enter_turn_based_turn(board_state);
                         }break;
                         case BoardTurn_TurnBased:{
         
@@ -3273,7 +3294,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                                 }
                             }
                             
-                            board_state_enter_turn(board_state, BoardTurn_Completed);
+                            board_state_complete_turn(board_state);
                         }break;
                         case BoardTurn_Completed:{
                             { // increment_turn_text();
@@ -3345,7 +3366,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                                     
                                     timer_manager_timer_start(timer_manager, timer_ctx);                        
                                 
-                                    board_state_enter_turn(board_state, BoardTurn_Player);
+                                    board_state_enter_player_turn(board_state, entity_manager, cue_ball_entity->physics_body_gid);
                                 }
                             }
                         
