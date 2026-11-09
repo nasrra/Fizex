@@ -7562,7 +7562,7 @@ void fizx_state_query_circle_cast_area(
     f32 max_y;
     polygon_get_min_max_vertices(v_x, v_y, 4, &min_x, &min_y, &max_x, &max_y);
     
-    gfx_draw_wire_poly(global_gfx_state, v_x, v_y, 4, GFX_COLOUR_BLUE, 2, 0, 1);
+    // gfx_draw_wire_poly(global_gfx_state, v_x, v_y, 4, GFX_COLOUR_BLUE, 2, 0, 1);
     
     // reset to defined state.
     state->query_area_leaf_idx_scratch_space_count = 0;
@@ -7623,15 +7623,7 @@ void fizx_state_query_circle_cast_area(
             if(!overlaps){
                 continue;
             }
-            info.two_contact_points = contact_point_count == 2;             
-    
-            // Circle c1 = {.x = info.contact_point_1.x, .y = info.contact_point_1.y, .radius = 0.2f};        
-            // gfx_draw_wire_circle(global_gfx_state, c1, GFX_COLOUR_GREEN, 2, 0, 1);
-            // if(info.two_contact_points){
-            //     Circle c2 = {.x = info.contact_point_2.x, .y = info.contact_point_2.y, .radius = 0.4f};
-            //     gfx_draw_wire_circle(global_gfx_state, c2, GFX_COLOUR_LIGHT_BLUE, 2, 0, 1);
-            // }
-            
+            info.two_contact_points = contact_point_count == 2;
         }
         else if(fizx_shape_category_is_circle(shape_category)){
 
@@ -7655,6 +7647,14 @@ void fizx_state_query_circle_cast_area(
             if(!overlaps){
                 continue;
             }
+            
+            // Circle c1 = {.x = info.contact_point_1.x, .y = info.contact_point_1.y, .radius = 0.2f};        
+            // Circle c1 = {.x = start.x, .y = start.y, .radius = 0.2f};
+            // gfx_draw_wire_circle(global_gfx_state, c1, GFX_COLOUR_GREEN, 2, 0, 1);
+            // if(info.two_contact_points){
+            //     Circle c2 = {.x = info.contact_point_2.x, .y = info.contact_point_2.y, .radius = 0.4f};
+            //     gfx_draw_wire_circle(global_gfx_state, c2, GFX_COLOUR_LIGHT_BLUE, 2, 0, 1);
+            // }
         }
         else if(fizx_shape_category_is_line(shape_category)){
 

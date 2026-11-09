@@ -22,41 +22,45 @@
     
 + at the end of turn timer the ball gets shot in a random direction (from a cone, where the player would have shot into).
 
++ life system.
+    + three lives, you can pocket the cue ball three times
+    + choose where to place the ball upon losing a life.
+
++ do these to get better break on balls.
+    + increase cue stick power?
+    + increase cue stick action range?
+    + decrease the number ball density and increase restitution (by a small amount).
+
 ===============
 ==== TO DO ====
 ===============
 
-
-- life system.
-    - three lives, you can pocket the cue ball three times
-    - choose where to place the ball upon losing a life.
-
-- do these to get better break on balls.
-    + increase cue stick power?
-    + increase cue stick action range?
-    - decrease the number ball density and increase restitution (by a small amount).
-
-- implement two stage editor:
-    - level editor mode: only move and edit native entities.
-    - edit play mode: move around and edit any entity.
-    - add step clamp to rotating entities with mouse.
-
-- WALL: Two sided wall (springy side & absorbant side).
-- TELEPORTER:
-- (MAYBE) C4: ball hits the C4 block, and explodes, pushing away all balls in a radial area.
-    
+- 
 
 - Desk Fan
     - button operated
     - turns off by pressing it, and turns back on after three turns.
 
-- remove line bodies, have only capsule bodies.
-- have capsule to capsule collisions.
+- WALL: Two sided wall (springy side & absorbant side).
+
+- TELEPORTER:
+
+- (MAYBE) C4: ball hits the C4 block, and explodes, pushing away all balls in a radial area.
+    
     
 =====================
 ==== BACK BURNER ==== 
 =====================
 
+
+- implement two stage editor:
+    - level editor mode: only move and edit native entities.
+    - edit play mode: move around and edit any entity.
+    - add step clamp to rotating entities with mouse.
+    
+- remove line bodies, have only capsule bodies.
+
+- have capsule to capsule collisions.
 
 - get an achievement when getting only the eight ball in.
 

@@ -24,6 +24,8 @@ void board_state_enter_turn_based_turn(BoardState* state);
 void board_state_enter_placement_turn(BoardState* state);
 void board_state_complete_turn(BoardState* state, EntityManager* entity_manager);
 bool entity_manager_get_entity(EntityManager manager, GenId entity_gid, Entity** out_entity);
+bool entity_is_active_unsafe(EntityManager entity_manager, i32 entity_idx);
+bool entity_is_active(EntityManager entity_manager, GenId entity_gid);
 GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transform2D transform, GenId parent_gid);
 
 
@@ -176,7 +178,6 @@ struct BoardState{
     i32 turn_number;
     bool display_turn_text;
     bool show_pause_menu;
-    bool cue_ball_is_pocketed;
     
     TimerHandle player_turn_timer;
   
@@ -883,6 +884,10 @@ Vector2 guideline_calculate_launch_direction(GuidelineState state){
 ///
 
 
+bool board_state_cue_ball_has_been_pocketed(BoardState board_state){
+    return board_state.cue_ball_count < board_state.previous_turn_cue_ball_count;
+}
+
 typedef struct{
     GenId cue_ball_physics_body_gid;
     BoardState* board_state;
@@ -953,7 +958,6 @@ void board_state_reset(BoardState* state, TimerManager* timer_manager){
     state->turn_number = 0;
     state->display_turn_text = false;
     state->show_pause_menu = false;
-    state->cue_ball_is_pocketed = false;
     state->cue_ball_count = BOARD_STATE_MAX_CUE_BALL_COUNT;
     state->previous_turn_cue_ball_count = BOARD_STATE_MAX_CUE_BALL_COUNT;
     timer_manager_timer_stop(timer_manager, state->player_turn_timer);
@@ -972,28 +976,53 @@ void board_state_enter_player_turn(BoardState* board_state, EntityManager* entit
 
     board_state->turn = BoardTurn_Player;
     os_output_message("player turn.\n");
-    PlayerBoardTurnTimerTimeoutCallbackContext timeout_ctx= {
-        .board_state = board_state,
-        .entity_manager = entity_manager,
-        .cue_ball_physics_body_gid = new_cue_ball->physics_body_gid
-    };
     
-    PlayerBoardTurnTimerTickCallbackContext tick_ctx = {
-        .guideline_state = &board_state->guideline_state
-    };
+    { // player turn timer.
     
-    TimerContext timer_ctx = {
-        .end_time = PLAYER_TURN_TIMER_END_TIME,
-        .time_scale = 1.0f,
-        .timeout_callback = player_turn_timer_timeout_callback,
-        .timeout_data = &timeout_ctx,
-        .timeout_data_size = sizeof(timeout_ctx),
-        .tick_callback = player_turn_timer_tick_callback,
-        .tick_data = &tick_ctx,
-        .tick_data_size = sizeof(tick_ctx)
-    };
+        PlayerBoardTurnTimerTimeoutCallbackContext timeout_ctx= {
+            .board_state = board_state,
+            .entity_manager = entity_manager,
+            .cue_ball_physics_body_gid = new_cue_ball->physics_body_gid
+        };
+        
+        PlayerBoardTurnTimerTickCallbackContext tick_ctx = {
+            .guideline_state = &board_state->guideline_state
+        };
+        
+        TimerContext timer_ctx = {
+            .end_time = PLAYER_TURN_TIMER_END_TIME,
+            .time_scale = 1.0f,
+            .timeout_callback = player_turn_timer_timeout_callback,
+            .timeout_data = &timeout_ctx,
+            .timeout_data_size = sizeof(timer_ctx),
+            .tick_callback = player_turn_timer_tick_callback,
+            .tick_data = &tick_ctx,
+            .tick_data_size = sizeof(tick_ctx)
+        };
+        
+        board_state->player_turn_timer = timer_manager_timer_start(board_state->timer_manager, timer_ctx);
     
-    board_state->player_turn_timer = timer_manager_timer_start(board_state->timer_manager, timer_ctx);
+    }
+    
+    { // turn text.
+        
+        
+        board_state->display_turn_text = true;
+        
+        BoardStateDisplayTurnHUDTimerTimeoutContext timeout_ctx = {
+            .board_state = board_state
+        };
+        
+        TimerContext timer_ctx = {
+            .end_time = 1.0f,
+            .time_scale = 1.0f,
+            .timeout_callback = board_state_display_turn_hud_timeout_callback,
+            .timeout_data = &timeout_ctx,
+            .timeout_data_size = sizeof(timer_ctx)
+        };
+        
+        timer_manager_timer_start(board_state->timer_manager, timer_ctx);    
+    }     
 }
 
 void board_state_enter_ball_turn(BoardState* state){
@@ -1014,20 +1043,76 @@ void board_state_enter_placement_turn(BoardState* state){
 
 void board_state_complete_turn(BoardState* board_state, EntityManager* entity_manager){
     board_state->turn = BoardTurn_Completed;
-        
-    if(
-        board_state->cue_ball_count > 0 &&
-        board_state->previous_turn_cue_ball_count > board_state->cue_ball_count
-    ){
-        Entity* spawn_point_entity;
-        if(entity_manager_get_entity(*entity_manager, board_state->cue_ball_spawn_point, &spawn_point_entity)){
-            
-            board_state->cue_ball_entity_gid = entity_spawn(entity_manager, EntityTypeId_BallCue, TRANSFORM2D_IDENTITY, board_state->cue_ball_spawn_point);
-            Entity* new_cue_ball;
-            if(entity_manager_get_entity(*entity_manager, board_state->cue_ball_entity_gid, &new_cue_ball)){
-                fizx_body_set_active(&entity_manager->fizx_state, new_cue_ball->physics_body_gid, false);
-                board_state_enter_placement_turn(board_state);
-            }            
+
+    { // increment_turn_text();
+    
+        board_state->turn_number += 1;
+        string_clear(&board_state->turn_text_scratch_space);
+        board_state->turn_text_scratch_space.count = snprintf(
+            board_state->turn_text_scratch_space.chars, 
+            board_state->turn_text_scratch_space.length, 
+            "%i", 
+            board_state->turn_number
+        );
+        string_clear(&board_state->turn_text);
+        string_push_chars(&board_state->turn_text, "Turn: ", 6);
+        string_push(&board_state->turn_text, board_state->turn_text_scratch_space);
+    }
+    
+    bool eight_ball_present = false;
+    bool eight_ball_pocketed = false;
+    i32 active_balls = 0;
+    for(i32 i = 0; i < board_state->number_ball_count; i++){
+        GenId ball_entity_gid = board_state->number_ball[i];
+        Entity* entity;
+        if(entity_manager_get_entity(*entity_manager, ball_entity_gid, &entity)){
+
+            if(entity->type_id == EntityTypeId_BallEight){
+                eight_ball_present = true; 
+            }                                    
+            if(!entity_is_active(*entity_manager, ball_entity_gid)){
+                if(entity->type_id == EntityTypeId_BallEight){
+                    eight_ball_pocketed = true;
+                }
+                continue;
+            }
+            active_balls+=1;              
+        }
+    }
+
+    if(!board_state_cue_ball_has_been_pocketed(*board_state)){
+        if(eight_ball_pocketed && eight_ball_present){
+            board_state->stage = active_balls > 1
+            ? BoardStage_Lose
+            : BoardStage_Win
+            ;
+        }
+        else if(active_balls <= 0){
+            board_state->stage = BoardStage_Win;
+        }
+        else{
+            board_state_enter_player_turn(board_state, entity_manager);
+        }
+    }
+    else{
+        if(board_state->cue_ball_count > 0){
+            if(active_balls > 0){
+                Entity* spawn_point_entity;
+                if(entity_manager_get_entity(*entity_manager, board_state->cue_ball_spawn_point, &spawn_point_entity)){
+                    board_state->cue_ball_entity_gid = entity_spawn(entity_manager, EntityTypeId_BallCue, TRANSFORM2D_IDENTITY, board_state->cue_ball_spawn_point);
+                    Entity* new_cue_ball;
+                    if(entity_manager_get_entity(*entity_manager, board_state->cue_ball_entity_gid, &new_cue_ball)){
+                        fizx_body_set_active(&entity_manager->fizx_state, new_cue_ball->physics_body_gid, false);
+                        board_state_enter_placement_turn(board_state);
+                    }
+                }        
+            }
+            else{
+                board_state->stage = BoardStage_Lose;            
+            }
+        }
+        else{
+            board_state->stage = BoardStage_Lose;
         }
     }
     
@@ -3216,17 +3301,17 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
     
         { // update fizx draw state.
 
-            if(input_is_key_just_pressed(Key_1)){
-                // fizx_draw_state->draw_bvh_branches = !fizx_draw_state->draw_bvh_branches;
+            if(input_is_key_just_pressed(Key_PageUp)){
+                fizx_draw_state->draw_bvh_branches = !fizx_draw_state->draw_bvh_branches;
             }
-            if(input_is_key_just_pressed(Key_2)){
-                // fizx_draw_state->draw_bvh_leaves = !fizx_draw_state->draw_bvh_leaves;
+            if(input_is_key_just_pressed(Key_PageDown)){
+                fizx_draw_state->draw_bvh_leaves = !fizx_draw_state->draw_bvh_leaves;
             }
-            if(input_is_key_just_pressed(Key_3)){
+            if(input_is_key_just_pressed(Key_Home)){
                 fizx_draw_state->draw_body_shapes = !fizx_draw_state->draw_body_shapes;
             }
-            if(input_is_key_just_pressed(Key_4)){
-                // fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
+            if(input_is_key_just_pressed(Key_End)){
+                fizx_draw_state->draw_collision_info = !fizx_draw_state->draw_collision_info;
             }
             
             if(input_is_key_just_pressed(Key_Escape)){
@@ -3393,79 +3478,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                             board_state_complete_turn(board_state, entity_manager);
                         }break;
                         case BoardTurn_Completed:{
-                            { // increment_turn_text();
-                            
-                                board_state->turn_number += 1;
-                                string_clear(&board_state->turn_text_scratch_space);
-                                board_state->turn_text_scratch_space.count = snprintf(
-                                    board_state->turn_text_scratch_space.chars, 
-                                    board_state->turn_text_scratch_space.length, 
-                                    "%i", 
-                                    board_state->turn_number
-                                );
-                                string_clear(&board_state->turn_text);
-                                string_push_chars(&board_state->turn_text, "Turn: ", 6);
-                                string_push(&board_state->turn_text, board_state->turn_text_scratch_space);
-                            }
-                            
-                            bool eight_ball_present = false;
-                            bool eight_ball_pocketed = false;
-                            bool active_balls = 0;
-                            for(i32 i = 0; i < board_state->number_ball_count; i++){
-                                GenId ball_entity_gid = board_state->number_ball[i];
-                                Entity* entity;
-                                if(entity_manager_get_entity(*entity_manager, ball_entity_gid, &entity)){
-        
-                                    if(entity->type_id == EntityTypeId_BallEight){
-                                        eight_ball_present = true; 
-                                    }                                    
-                                    if(!entity_is_active(*entity_manager, ball_entity_gid)){
-                                        if(entity->type_id == EntityTypeId_BallEight){
-                                            eight_ball_pocketed = true;
-                                        }
-                                        continue;
-                                    }
-                                    active_balls++;              
-                                }
-                            }
-                            
-                            if(board_state->cue_ball_count <= 0){
-                                board_state->stage = BoardStage_Lose;
-                            }
-                            else if(eight_ball_pocketed && eight_ball_present){
-                                board_state->stage = active_balls > 1
-                                ? BoardStage_Lose
-                                : BoardStage_Win
-                                ;
-                            }
-                            else{
-                                if(active_balls == 0){
-                                    board_state->stage = BoardStage_Win; 
-                                }
-                                else{
-                        
-                                    // start_displaying_turn_text();
-                            
-                                    board_state->display_turn_text = true;
-                                    
-                                    BoardStateDisplayTurnHUDTimerTimeoutContext timeout_ctx = {
-                                        .board_state = board_state
-                                    };
-                                    
-                                    TimerContext timer_ctx = {
-                                        .end_time = 1.0f,
-                                        .time_scale = 1.0f,
-                                        .timeout_callback = board_state_display_turn_hud_timeout_callback,
-                                        .timeout_data = &timeout_ctx,
-                                        .timeout_data_size = sizeof(timeout_ctx)
-                                    };
-                                    
-                                    timer_manager_timer_start(timer_manager, timer_ctx);                        
-                                
-                                    board_state_enter_player_turn(board_state, entity_manager);
-                                }
-                            }
-                        
+
                         }break;
                     }
                 }break;

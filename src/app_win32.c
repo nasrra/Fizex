@@ -161,6 +161,11 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
                 
                 case VK_SHIFT:      {input_set_key_down(Key_LeftShift); input_set_key_down(Key_RightShift);}break; // note: VK_LSHIFT and VK_RSHIFT dont work on my keyboard; only VK_SHIFT does.
                 case VK_ESCAPE:     {input_set_key_down(Key_Escape);} break;
+                
+                case VK_PRIOR:      {input_set_key_down(Key_PageUp);}break;
+                case VK_NEXT:       {input_set_key_down(Key_PageDown);}break;
+                case VK_HOME:       {input_set_key_down(Key_Home);}break;
+                case VK_END:        {input_set_key_down(Key_End);}break;
             }
         }break;
         case WM_SYSKEYUP:
@@ -235,6 +240,11 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
                 
                 case VK_ESCAPE:     {input_set_key_up(Key_Escape);} break;
                 case VK_SHIFT:      {input_set_key_up(Key_LeftShift); input_set_key_up(Key_RightShift);}break; // note: VK_LSHIFT and VK_RSHIFT dont work on my keyboard; only VK_SHIFT does.
+            
+                case VK_PRIOR:      {input_set_key_up(Key_PageUp);}break;
+                case VK_NEXT:       {input_set_key_up(Key_PageDown);}break;
+                case VK_HOME:       {input_set_key_up(Key_Home);}break;
+                case VK_END:        {input_set_key_up(Key_End);}break;
             }
         }break;
         case WM_LBUTTONDOWN:{input_set_mouse_button_down(MouseButton_Left);}break;
