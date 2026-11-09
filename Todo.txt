@@ -35,7 +35,9 @@
 ==== TO DO ====
 ===============
 
-- 
+- Placement Turn Validaiton
+    - collision checks.
+    - specified areas.
 
 - Desk Fan
     - button operated

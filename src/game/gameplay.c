@@ -471,7 +471,6 @@ typedef struct{
 /// @ Physics layers.
 ///
 
-
 #define PHYSICS_LAYER_ALL I32_MAX
 #define PHYSICS_LAYER_BALL_NUMBER       (1 << 1)
 #define PHYSICS_LAYER_ENVIRONMENT_TOP   (1 << 2)
@@ -1105,10 +1104,10 @@ void board_state_complete_turn(BoardState* board_state, EntityManager* entity_ma
                         fizx_body_set_active(&entity_manager->fizx_state, new_cue_ball->physics_body_gid, false);
                         board_state_enter_placement_turn(board_state);
                     }
-                }        
+                }
             }
             else{
-                board_state->stage = BoardStage_Lose;            
+                board_state->stage = BoardStage_Lose;
             }
         }
         else{
@@ -3510,6 +3509,11 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
     }
 }
 
+void board_state_placement_turn_query_circle_area_callback(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data){
+    bool* success_flag = (bool*)user_data;
+    *success_flag = false;
+}
+
 void game_state_late_update(GameState* game_state, f32 delta_time, bool in_editor_mode){    
     
     // hoist invariance.
@@ -3530,6 +3534,8 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
             GenId clicked_entity_gid;
             Entity* clicked_entity = NULL;
             ClickableArea* area;
+            bool placement_stage_successful = false;
+            
             // select_entity();  
             if(input_is_mouse_button_just_pressed(MouseButton_Left)){
                 clickable_area_hierarchy_update(
@@ -3624,7 +3630,26 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
             // can execute 'input_on_mouse_button_released' code paths. 
             if(input_is_mouse_button_just_released(MouseButton_Left)){
                 if(board_state->turn == BoardTurn_Placement){
-                    board_state_enter_player_turn(board_state, entity_manager);
+                    bool success = true; 
+                    
+                    Circle query_area = {
+                        .x = clicked_entity->global_transform.position.x,
+                        .y = clicked_entity->global_transform.position.y,
+                        .radius = BALL_FIZX_SHAPE_RADIUS
+                    };
+                    
+                    fizx_state_query_circle_area(
+                        &entity_manager->fizx_state, board_state_placement_turn_query_circle_area_callback, 
+                        &success, ~PHYSICS_LAYER_BALL_CUE, query_area
+                    );
+
+                    if(success){
+                        board_state_enter_player_turn(board_state, entity_manager);
+                        os_output_message("success!\n");
+                    }
+                    else{
+                        os_output_message("failed!\n");
+                    }
                 }
                 clickable_area_hierarchy_reset(clickable_area_hierarchy); 
             }

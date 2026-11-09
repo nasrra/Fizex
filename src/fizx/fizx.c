@@ -74,7 +74,7 @@ typedef enum{
     ordering matters here, value 0 is highest precedence in
 
     TODO: write this in C from C#.
-    <see cref="PhysicsSystem.FormatCategorisedOverlaps(Howl.CategorisedLeafOverlaps, System.Span{int}, System.Span{int})"/>.
+    <see cref="hysicsSystem.FormatCategorisedOverlaps(Howl.CategorisedLeafOverlaps, System.Span{int}, System.Span{int})"/>.
 **/
 typedef enum{
     FIZX_ShapeCategory_None,
