@@ -257,7 +257,7 @@ void app_main(){
                     }
                     editor_save_config(&editor_state, transient);
                 }
-                else if(input_is_key_just_pressed(Key_F5)){
+                else if(input_is_key_just_pressed(Key_F4)){
                     if(editor_state.menu == Editor_Menu_EntityInspector){
                         editor_state.menu = Editor_Menu_None;
                     }
@@ -266,7 +266,7 @@ void app_main(){
                     }
                     editor_save_config(&editor_state, transient);
                 }
-                else if(input_is_key_just_pressed(Key_F6)){
+                else if(input_is_key_just_pressed(Key_F5)){
                     if(editor_state.menu == Editor_Menu_EntityTreeView){
                         editor_state.menu = Editor_Menu_None;
                     }

@@ -1268,7 +1268,7 @@ void gfx_clay_level_management(Editor_State* editor_state, GameState* game_state
         { // draw_editor_layer_settings();
         
             CLAY_TEXT(
-                gfx_string_to_clay_string(STRING_FROM_LITERAL("Editor Layer Settings", transient)), 
+                gfx_string_to_clay_string(STRING_FROM_LITERAL("Visibility Layer Settings", transient)), 
                 EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
             );  
 
@@ -1276,14 +1276,14 @@ void gfx_clay_level_management(Editor_State* editor_state, GameState* game_state
             f32 vertical_percent_size = 0.05f;
             
             EDITOR_GFX_CLAY_TOGGLE_BUTTON(
-                gfx_string_to_clay_string(STRING_FROM_LITERAL("Enable World Layer", transient)),
+                gfx_string_to_clay_string(STRING_FROM_LITERAL("World Visibility Layer", transient)),
                 horizontal_percent_size,
                 vertical_percent_size,
                 &editor_state->entity_world_layer_enabled
             );
 
             EDITOR_GFX_CLAY_TOGGLE_BUTTON(
-                gfx_string_to_clay_string(STRING_FROM_LITERAL("Enable Editor Layer", transient)),
+                gfx_string_to_clay_string(STRING_FROM_LITERAL("Editor Visibility Layer", transient)),
                 horizontal_percent_size,
                 vertical_percent_size,
                 &editor_state->entity_editor_layer_enabled
