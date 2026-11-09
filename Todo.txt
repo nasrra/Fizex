@@ -31,15 +31,35 @@
     + increase cue stick action range?
     + decrease the number ball density and increase restitution (by a small amount).
 
++ Placement Turn Validaiton
+    + collision checks.
+    + specified areas.
+
+
 ===============
 ==== TO DO ====
 ===============
 
-- Placement Turn Validaiton
-    + collision checks.
-    - specified areas.
-        - 
-        - add new entity.
+- levels
+    / intro 1
+    / intro 2
+    / speed boost tutorial
+    + speed boost 1
+    + speed boost 2
+    - windmill tutorial
+    - windmill 1
+    - windmill 2
+    - thwamper tutorial
+    - thwamper 1
+    - thwamper 2
+    - fan tutorial
+    - fan 1
+    - fan 2
+- stretch goals
+    - extra 1
+    - extra 2
+    
+
 
 - Desk Fan
     - button operated

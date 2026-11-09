@@ -32,6 +32,7 @@ bool entity_is_active_unsafe(EntityManager entity_manager, i32 entity_idx);
 bool entity_is_active(EntityManager entity_manager, GenId entity_gid);
 GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transform2D transform, GenId parent_gid, Entity** out_entity);
 
+
 ///
 /// @ Ball
 ///
