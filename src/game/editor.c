@@ -12,6 +12,13 @@
 ///
 
 
+typedef struct {
+    i32 world_visibility_layer_enabled;
+    i32 editor_visibility_layer_enabled;
+    i32 grid_enabled;
+    f32 grid_step;
+} DeserialisedEditorConfig;
+
 typedef enum{
     Editor_MouseStateBehaviour_Navigate, // general purpose: used for navigation, selection and spawning entities.
     Editor_MouseStateBehaviour_Move,
@@ -26,6 +33,7 @@ typedef enum{
 } Editor_ButtonDataStorageType;
 
 typedef enum{
+    Editor_Menu_None,
     Editor_Menu_NativeEntitySpawner,  
     Editor_Menu_EntityInspector,
     Editor_Menu_AssetEntitySpawner,
@@ -106,10 +114,15 @@ typedef struct{
     bool is_init;
         
     Editor_EntityTreeViewState entity_tree_view_state;
+
+    bool previous_entity_world_layer_enabled;
+    bool entity_world_layer_enabled;
     
+    bool previous_entity_editor_layer_enabled;
+    bool entity_editor_layer_enabled;
+
     f32 grid_step;
     bool grid_enabled;
-    
 } Editor_State;
 
 typedef struct {
@@ -801,6 +814,66 @@ void editor_save_level_entity_recurssive(
 }
 
 
+/*
+    `remarks`
+    `file_path`: is a scratch space string, for writing to.
+*/
+void editor_save_config(Editor_State* editor_state, MemoryArena* transient){
+
+    String char_buffer = {0};
+    string_init(&char_buffer, transient, os_get_max_file_path_length());
+            
+    i32 sprintf_scratch_space_length;
+    char* sprintf_scratch_space;
+    // note: ensure that the scratch space holds the maximum amount of characters for any given attribute (';' separated value) within a level file row.  
+    MEMORY_ARENA_ALLOC_ARRAY(transient, sprintf_scratch_space, &sprintf_scratch_space_length, os_get_max_file_path_length());
+            
+    String file_path = STRING_FROM_LITERAL("../editor/editor.txt", transient);        
+
+    os_delete_file(file_path);
+
+    i32 written = 0;
+
+    // world visibility layer.
+    written = snprintf(sprintf_scratch_space, sprintf_scratch_space_length, "%d", editor_state->previous_entity_world_layer_enabled);
+    string_push_chars(&char_buffer, sprintf_scratch_space, written);
+    string_push_chars(&char_buffer, "\n", 1);
+
+    // editor visibility layer.
+    written = snprintf(sprintf_scratch_space, sprintf_scratch_space_length, "%d", editor_state->previous_entity_editor_layer_enabled);
+    string_push_chars(&char_buffer, sprintf_scratch_space, written);
+    string_push_chars(&char_buffer, "\n", 1);
+
+    // grid enabled.
+    written = snprintf(sprintf_scratch_space, sprintf_scratch_space_length, "%d", editor_state->grid_enabled);
+    string_push_chars(&char_buffer, sprintf_scratch_space, written);
+    string_push_chars(&char_buffer, "\n", 1);
+                
+    // grid enabled.
+    written = snprintf(sprintf_scratch_space, sprintf_scratch_space_length, "%f", editor_state->grid_step);
+    string_push_chars(&char_buffer, sprintf_scratch_space, written);
+    string_push_chars(&char_buffer, "\n", 1);
+                
+    os_write_file(
+        file_path,
+        char_buffer.chars,
+        char_buffer.count,
+        FileWriteType_Append
+    );
+
+    // TODO: in release, dont do this!
+
+    { // save to dev folder.
+        char* chars = (char*)os_alloc_memory(os_get_max_file_path_length());
+        String dst_file_path = {.chars = chars, .length = os_get_max_file_path_length()};
+        string_push_chars(&dst_file_path, "../", 3);
+        string_push(&dst_file_path, file_path);
+        os_copy_file(dst_file_path, file_path, false);
+        os_free_memory(chars);
+    }        
+}
+
+
 ///
 /// @ Editor_EntityTreeViewState
 ///
@@ -867,13 +940,14 @@ void editor_new_level_button_on_hover_callback(Clay_ElementId element_id, Clay_P
         LevelManager* level_manager = &ctx->game_state->level_manager;
         
         entity_manager_dealloc_entity(entity_manager, level_manager->world_root_entity_gid);
+        Entity* world_entity;
         level_manager->world_root_entity_gid = entity_spawn_level_root(
             entity_manager, 
             TRANSFORM2D_IDENTITY, 
-            0
+            0,
+            &world_entity
         );
-        Entity* world_entity;
-        if(entity_manager_get_entity(*entity_manager, level_manager->world_root_entity_gid, &world_entity)){
+        if(world_entity){
             level_manager->world_root_entity_file_path = &world_entity->serialisation_file_path;
         }
         else{
@@ -1190,6 +1264,31 @@ void gfx_clay_level_management(Editor_State* editor_state, GameState* game_state
             editor_new_level_button_on_hover_callback, 
             new_ctx_ptr
         );
+        
+        { // draw_editor_layer_settings();
+        
+            CLAY_TEXT(
+                gfx_string_to_clay_string(STRING_FROM_LITERAL("Editor Layer Settings", transient)), 
+                EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
+            );  
+
+            f32 horizontal_percent_size = 0.75f;
+            f32 vertical_percent_size = 0.05f;
+            
+            EDITOR_GFX_CLAY_TOGGLE_BUTTON(
+                gfx_string_to_clay_string(STRING_FROM_LITERAL("Enable World Layer", transient)),
+                horizontal_percent_size,
+                vertical_percent_size,
+                &editor_state->entity_world_layer_enabled
+            );
+
+            EDITOR_GFX_CLAY_TOGGLE_BUTTON(
+                gfx_string_to_clay_string(STRING_FROM_LITERAL("Enable Editor Layer", transient)),
+                horizontal_percent_size,
+                vertical_percent_size,
+                &editor_state->entity_editor_layer_enabled
+            );        
+        }        
         
         { // draw_grid_settings();
 
@@ -2170,37 +2269,42 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 Transform2D preferred_transform = {0};
                 
                 Entity* entity = &entity_manager->entity[idx];
-                user_data = entity;
+                
+                if((entity->visibility_layer & entity_manager->visibility_layer) != 0){
 
-                // note that we infer this is a sprite; no need to check 'is_sprite' flag or 'sprite_gid'.
-                if(gfx_sprite_get_transform(*game_gfx_state, entity->sprite_gid, &preferred_transform)){
+                    user_data = entity;
 
-                    GFX_SpriteOrigin sprite_origin;
-
-                    // falback to entity transform if we failed to get the sprite origin.
-                    if(!gfx_sprite_get_sprite_origin(*game_gfx_state, entity->sprite_gid, &sprite_origin)){
+                    // note that we infer this is a sprite; no need to check 'is_sprite' flag or 'sprite_gid'.
+                    if(gfx_sprite_get_transform(*game_gfx_state, entity->sprite_gid, &preferred_transform)){
+    
+                        GFX_SpriteOrigin sprite_origin;
+    
+                        // falback to entity transform if we failed to get the sprite origin.
+                        if(!gfx_sprite_get_sprite_origin(*game_gfx_state, entity->sprite_gid, &sprite_origin)){
+                            preferred_transform = entity->global_transform;
+                            rectangle = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+                        }
+    
+                        switch(sprite_origin){
+                            default:
+                                ASSERT(false, "unknown sprite origin");
+                            case GFX_SpriteOrigin_Center:{
+                                rectangle = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
+                            }break;
+                            case GFX_SpriteOrigin_TopLeft:{
+                                rectangle = transform2d_to_polygon_rectangle_top_left_origin(preferred_transform);
+                            }break;
+                        }
+                        gfx_sprite_get_depth_layer(game_gfx_state, entity->sprite_gid, &depth_layer);
+                    }
+    
+                    // is not a sprite.
+                    else{
                         preferred_transform = entity->global_transform;
                         rectangle = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
-                    }
-
-                    switch(sprite_origin){
-                        default:
-                            ASSERT(false, "unknown sprite origin");
-                        case GFX_SpriteOrigin_Center:{
-                            rectangle = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
-                        }break;
-                        case GFX_SpriteOrigin_TopLeft:{
-                            rectangle = transform2d_to_polygon_rectangle_top_left_origin(preferred_transform);
-                        }break;
-                    }
-                    gfx_sprite_get_depth_layer(game_gfx_state, entity->sprite_gid, &depth_layer);
+                    }            
                 }
 
-                // is not a sprite.
-                else{
-                    preferred_transform = entity->global_transform;
-                    rectangle = transform2d_to_polygon_rectangle_centered_origin(preferred_transform);
-                }
             }
         
             { // set_clickable_area();
@@ -2379,11 +2483,13 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                     spawn_transform.position = mouse_world_position; // we use the game state's gfx_state; just in case.
                     
                     if(editor_state->menu == Editor_Menu_NativeEntitySpawner){
+                        Entity* new_entity;
                         entity_spawn(
                             entity_manager, 
                             editor_mouse_state->native_entity_to_spawn,
                             spawn_transform, 
-                            world_root_gid
+                            world_root_gid,
+                            &new_entity
                         );
                     }
                     else if(editor_state->menu == Editor_Menu_AssetEntitySpawner){
@@ -2510,7 +2616,21 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
 
         }
     }
-        
+
+    { // handle_editor_layer_change();
+    
+        if(
+            editor_state->previous_entity_world_layer_enabled != editor_state->entity_world_layer_enabled ||
+            editor_state->previous_entity_editor_layer_enabled != editor_state->entity_editor_layer_enabled
+        ){
+            i32 visibility_code = create_entity_visibility_layer_code(
+                editor_state->entity_world_layer_enabled,
+                editor_state->entity_editor_layer_enabled
+            );            
+            entity_manager_set_visibility_layer(entity_manager, visibility_code);
+        }
+    }
+
     // debug_gizmos();
     {
         i32 selected_game_entity_idx = gen_id_allocator_is_gen_id_valid(&game_state->entity_manager.gen_id_allocator, editor_state->selected_game_entity_gid);
@@ -2568,6 +2688,8 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
     { // prepare_for_next_frame();
     
         editor_mouse_state->previous_behaviour = editor_mouse_state->current_behaviour;
-    
+        
+        editor_state->previous_entity_world_layer_enabled = editor_state->entity_world_layer_enabled;
+        editor_state->previous_entity_editor_layer_enabled = editor_state->entity_editor_layer_enabled;
     }
 }

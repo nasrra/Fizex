@@ -15,9 +15,13 @@ typedef struct GameState GameState;
 typedef struct BoardState BoardState;
 typedef struct EntityManager EntityManager;
 typedef struct Entity Entity;
+typedef struct LevelManager LevelManager;
+typedef struct DeferredLevelLoadContext DeferredLevelLoadContext;
 typedef enum BoardTurn BoardTurn;
 typedef enum EntityTypeId EntityTypeId;
 
+GenId level_manager_load_level_file(LevelManager* level_manager, String file_path, MemoryArena* transient, Transform2D transform);
+void level_manager_defer_load_level(LevelManager* level_manager, DeferredLevelLoadContext ctx);
 void board_state_enter_player_turn(BoardState* state, EntityManager* entity_manager);
 void board_state_enter_ball_turn(BoardState* state);
 void board_state_enter_turn_based_turn(BoardState* state);
@@ -26,8 +30,7 @@ void board_state_complete_turn(BoardState* state, EntityManager* entity_manager)
 bool entity_manager_get_entity(EntityManager manager, GenId entity_gid, Entity** out_entity);
 bool entity_is_active_unsafe(EntityManager entity_manager, i32 entity_idx);
 bool entity_is_active(EntityManager entity_manager, GenId entity_gid);
-GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transform2D transform, GenId parent_gid);
-
+GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transform2D transform, GenId parent_gid, Entity** out_entity);
 
 ///
 /// @ Ball
@@ -119,6 +122,8 @@ typedef struct{
 } TimerManager;
 
 typedef enum BoardTurn{
+
+    BoardTurn_None,
 
     // the stage where the player can place the cue ball.
     BoardTurn_Placement,
@@ -242,7 +247,12 @@ typedef struct{
 
 typedef void (*TurnBasedEntityOnTurnEndCallback)(GameState* game_state, i32 entity_idx);
 
+#define ENTITY_VISIBILITY_LAYER_NONE 0
+#define ENTITY_VISIBILITY_LAYER_WORLD (1 << 1)
+#define ENTITY_VISIBILITY_LAYER_EDITOR (1 << 2)
+
 struct Entity{
+
     Transform2D global_transform;
     Transform2D local_transform;
     Transform2D sprite_local_transform;
@@ -250,8 +260,10 @@ struct Entity{
     // this is only applicable to the root entity that was loaded from a file.
     String serialisation_file_path;
     
+    // specifically for the editor (for now...)
+    i32 visibility_layer;
+    
     String name;
-    Aabb clickable_aabb;
     EntityTypeId type_id;
     GenId sprite_gid;
     GenId physics_body_gid;
@@ -324,6 +336,8 @@ struct EntityManager{
     GenId world_camera_entity_gid;
     GenId ui_camera_entity_gid;
     
+    i32 visibility_layer;
+    
     bool is_init;
 };
 
@@ -340,15 +354,15 @@ typedef enum{
 
 typedef void (*DeferredLevelLoadCallback)(GameState* game_state, void* user_data);
 
-typedef struct{
+struct DeferredLevelLoadContext{
     Transform2D transform;
     String file_path;
     LevelLoadType load_type;
     DeferredLevelLoadCallback callback;
     void* callback_user_data;
-} DeferredLevelLoadContext;
+};
 
-typedef struct{
+struct LevelManager{
     EntityManager* entity_manager;
 
     String* world_root_entity_file_path;
@@ -364,7 +378,7 @@ typedef struct{
     i32 deferred_level_load_length;
     i32 deferred_level_load_count;    
     bool is_init;
-} LevelManager;
+};
 
 typedef enum{
     // MenuStage_MainMenu,
@@ -525,21 +539,33 @@ typedef struct{
 #define SPRITE_MATERIAL_IMAGE 2
 #define SPRITE_MATERIAL_TEXT 3
 
-
-///
-/// forward declarations.
-///
-
-
-GenId level_manager_load_level_file(LevelManager* level_manager, String file_path, MemoryArena* transient, Transform2D transform);
-void level_manager_defer_load_level(LevelManager* level_manager, DeferredLevelLoadContext ctx);
-
-
 ///
 /// globals.
 ///
 
 static f32 fixed_update_accumulator = 0.0f;
+
+
+///
+/// @ Visibility Codes
+///
+
+i32 create_entity_visibility_layer_code(
+    bool world_layer_enabled,
+    bool editor_layer_enabled
+){
+    i32 code = 0;
+
+    if(world_layer_enabled){
+        code |= ENTITY_VISIBILITY_LAYER_WORLD;
+    }
+
+    if(editor_layer_enabled){
+        code |= ENTITY_VISIBILITY_LAYER_EDITOR;
+    }
+    
+    return code;
+}
 
 
 ///
@@ -1098,9 +1124,16 @@ void board_state_complete_turn(BoardState* board_state, EntityManager* entity_ma
             if(active_balls > 0){
                 Entity* spawn_point_entity;
                 if(entity_manager_get_entity(*entity_manager, board_state->cue_ball_spawn_point, &spawn_point_entity)){
-                    board_state->cue_ball_entity_gid = entity_spawn(entity_manager, EntityTypeId_BallCue, TRANSFORM2D_IDENTITY, board_state->cue_ball_spawn_point);
-                    Entity* new_cue_ball;
-                    if(entity_manager_get_entity(*entity_manager, board_state->cue_ball_entity_gid, &new_cue_ball)){
+                    Entity* new_cue_ball = NULL;
+                    board_state->cue_ball_entity_gid = entity_spawn(
+                        entity_manager, 
+                        EntityTypeId_BallCue, 
+                        TRANSFORM2D_IDENTITY, 
+                        board_state->cue_ball_spawn_point,
+                        &new_cue_ball
+                    );
+                    
+                    if(new_cue_ball){
                         fizx_body_set_active(&entity_manager->fizx_state, new_cue_ball->physics_body_gid, false);
                         board_state_enter_placement_turn(board_state);
                     }
@@ -1118,6 +1151,7 @@ void board_state_complete_turn(BoardState* board_state, EntityManager* entity_ma
     board_state->previous_turn_cue_ball_count = board_state->cue_ball_count;
     os_output_message("completed turn.\n");
 }
+
 
 ///
 /// @ EntityManager
@@ -1274,6 +1308,28 @@ bool entity_manager_get_world_camera(EntityManager entity_manager, Entity** out_
 
 bool entity_manager_get_ui_camera(EntityManager entity_manager, Entity** out_entity){
     return entity_manager_get_entity(entity_manager, entity_manager.ui_camera_entity_gid, out_entity);    
+}
+
+void entity_manager_set_visibility_layer(EntityManager* entity_manager, i32 layer_code){        
+    for(i32 i = 0; i < entity_manager->entity_length; i++){
+        if(!entity_is_active_unsafe(*entity_manager, i)){
+            continue;
+        }
+        
+        Entity* entity = &entity_manager->entity[i];   
+        if((entity->visibility_layer & layer_code) != 0){
+            if(entity->is_sprite){
+                gfx_sprite_set_active(entity_manager->gfx_state, entity->sprite_gid);
+            }
+        }
+        else{        
+            if(entity->is_sprite){
+                gfx_sprite_set_inactive(entity_manager->gfx_state, entity->sprite_gid);
+            }
+        }    
+    }
+    
+    entity_manager->visibility_layer = layer_code;
 }
 
 
@@ -1765,11 +1821,13 @@ GenId entity_spawn_board_turn_text(EntityManager* entity_manager, String name, T
 #define UI_CAMERA_DEFAULT_NEAR_Z 0.01f
 #define UI_CAMERA_DEFAULT_FAR_Z 100.0f
 
-GenId entity_spawn_world_camera(EntityManager* entity_manager, Transform2D transform, GenId parent_entity_gid){
+GenId entity_spawn_world_camera(EntityManager* entity_manager, Transform2D transform, GenId parent_entity_gid, Entity** out_entity){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent_entity_gid);
     Entity* entity;
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
+        
         entity->type_id = EntityTypeId_WorldCamera;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
         
         { // set_camera_settings();
         
@@ -1779,6 +1837,8 @@ GenId entity_spawn_world_camera(EntityManager* entity_manager, Transform2D trans
         }
         
         entity_set_local_transform(entity_manager, entity_gid, transform);
+        
+        *out_entity = entity;
     }
     return entity_gid;
 }
@@ -1829,11 +1889,15 @@ void thwamper_on_turn_end_callback(GameState* game_state, i32 entity_idx){
     gfx_draw_wire_circle(game_state->entity_manager.gfx_state, area, GFX_COLOUR_WHITE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);    
 }
 
-GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform, GenId parent){
+GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
+    
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
+        
         entity->type_id = EntityTypeId_Thwamper;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
+
         
         { // physics_body_alloc();
 
@@ -1893,6 +1957,8 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform
         }
         
         entity_set_local_transform(entity_manager, entity_gid, transform);
+    
+        *out_entity = entity;
     }
     return entity_gid;
 }
@@ -1906,11 +1972,15 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform
 #define WINDMILL_BLADE_TEXTURE_VIEW      (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
 #define WINDMILL_BLADE_PHYSICS_MATERIAL (FIZX_Material){.static_friction = 0.75f, .kinetic_friction = 0.65f, .density = 10.0f, .restitution = 0.084f}
 
-GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D transform, GenId parent){
+GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+    
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
+    
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
+        
         entity->type_id = EntityTypeId_WindMillBlade;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
         
         entity->serialisation_disabled = true;
 
@@ -1964,6 +2034,8 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D tra
         }
         
         entity_set_local_transform(entity_manager, entity_gid, transform);
+        
+        *out_entity = entity;
     }
     
     return entity_gid;
@@ -1983,13 +2055,14 @@ void windmill_hinge_update(Entity* entity, i32 entity_idx, GameState* game_state
     // entity_set_global_transform_unsafe(&game_state->entity_manager, entity_idx, rotated_transform);
 }
 
-GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D transform, GenId parent){
+GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
         
     Entity* entity;
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
 
         entity->type_id = EntityTypeId_WindMillHinge;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
         
         entity->serialisation_disabled = true;
         
@@ -2018,18 +2091,28 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
         
         { // forward_blade();
 
-            GenId blade_gid = entity_spawn_windmill_blade(entity_manager, transform2d_rotate(TRANSFORM2D_IDENTITY, degrees_to_radians(0)), entity_gid);
-            if(!entity_manager_get_entity(*entity_manager, blade_gid, &blade_entity)){
+            GenId blade_gid = entity_spawn_windmill_blade(
+                entity_manager, 
+                transform2d_rotate(TRANSFORM2D_IDENTITY, degrees_to_radians(0)), 
+                entity_gid, 
+                &blade_entity
+            );
+            if(!blade_gid){
                 entity_manager_dealloc_entity(entity_manager, entity_gid);
-                return 0;
+                return 0;            
             }
             blade_entity = NULL;
         }
         
         { // down_blade();
 
-            GenId blade_gid = entity_spawn_windmill_blade(entity_manager, transform2d_rotate(TRANSFORM2D_IDENTITY, degrees_to_radians(90)), entity_gid);
-            if(!entity_manager_get_entity(*entity_manager, blade_gid, &blade_entity)){
+            GenId blade_gid = entity_spawn_windmill_blade(
+                entity_manager, 
+                transform2d_rotate(TRANSFORM2D_IDENTITY, degrees_to_radians(90)), 
+                entity_gid,
+                &blade_entity
+            );
+            if(!blade_gid){
                 entity_manager_dealloc_entity(entity_manager, entity_gid);
                 return 0;
             }
@@ -2038,8 +2121,13 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
         
         { // backward_blade();
 
-            GenId blade_gid = entity_spawn_windmill_blade(entity_manager, transform2d_rotate(TRANSFORM2D_IDENTITY, degrees_to_radians(180)), entity_gid);
-            if(!entity_manager_get_entity(*entity_manager, blade_gid, &blade_entity)){
+            GenId blade_gid = entity_spawn_windmill_blade(
+                entity_manager, 
+                transform2d_rotate(TRANSFORM2D_IDENTITY, degrees_to_radians(180)), 
+                entity_gid,
+                &blade_entity
+            );
+            if(!blade_gid){
                 entity_manager_dealloc_entity(entity_manager, entity_gid);
                 return 0;
             }
@@ -2048,8 +2136,13 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
 
         { // up_blade();
         
-            GenId blade_gid = entity_spawn_windmill_blade(entity_manager, transform2d_rotate(TRANSFORM2D_IDENTITY, degrees_to_radians(270)), entity_gid);
-            if(!entity_manager_get_entity(*entity_manager, blade_gid, &blade_entity)){
+            GenId blade_gid = entity_spawn_windmill_blade(
+                entity_manager, 
+                transform2d_rotate(TRANSFORM2D_IDENTITY, degrees_to_radians(270)), 
+                entity_gid,
+                &blade_entity
+            );
+            if(!blade_gid){
                 entity_manager_dealloc_entity(entity_manager, entity_gid);
                 return 0;
             }
@@ -2060,6 +2153,8 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
         fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
     
         entity_set_local_transform(entity_manager, entity_gid, transform);
+        
+        *out_entity = entity;
     }
     return entity_gid;
 }
@@ -2075,11 +2170,12 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
 #define WINDMILL_DEFAULT_PHYSICS_MASK   PHYSICS_LAYER_ALL 
 #define WINDMILL_PHYSICS_MATERIAL (FIZX_Material){.static_friction = 0.75f, .kinetic_friction = 0.65f, .density = 10.0f, .restitution = 0.167f}
 
-GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform, GenId parent){
+GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
         entity->type_id = EntityTypeId_WindMill;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
                 
         { // physics_body_alloc();
 
@@ -2132,11 +2228,15 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
         }
 
-        if(!entity_spawn_windmill_hinge(entity_manager, TRANSFORM2D_IDENTITY, entity_gid)){
+        Entity* hinge_entity;
+        if(!entity_spawn_windmill_hinge(entity_manager, TRANSFORM2D_IDENTITY, entity_gid, &hinge_entity)){
             entity_manager_dealloc_entity(entity_manager, entity_gid);
+            return 0;
         }
         
         entity_set_local_transform(entity_manager, entity_gid, transform);
+        
+        *out_entity = entity;
     }
     return entity_gid;
 }
@@ -2191,12 +2291,13 @@ void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_d
     }
 }
 
-GenId entity_spawn_pocket(EntityManager* entity_manager, Transform2D transform, GenId parent){
+GenId entity_spawn_pocket(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
 
         entity->type_id = EntityTypeId_Pocket;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
 
         { // physics_body_alloc();
 
@@ -2254,6 +2355,8 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, Transform2D transform, 
         }
         
         entity_set_local_transform(entity_manager, entity_gid, transform);
+        
+        *out_entity = entity;
     }
     return entity_gid;
 }
@@ -2264,14 +2367,15 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, Transform2D transform, 
 ///
 
 
-GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform, GenId parent){
+GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     // clickable entity (angry bird).
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     i32 entity_idx = gen_id_get_index(entity_gid);
     Entity* entity;
-    entity_manager_get_entity(*entity_manager, entity_gid, &entity);
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity))
     {
         entity->type_id = EntityTypeId_BallCue;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
 
         { // physics_body_alloc();
 
@@ -2300,12 +2404,6 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform
             );
             
             fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
-        }
-
-        { // set_is_clickable_in_game();
-
-            entity->is_clickable_in_game = true;
-            entity->clickable_aabb = (Aabb) {.min_x = -0.75f, .min_y = -0.75f, .max_x = 0.75f, .max_y = 0.75f};
         }
 
         { // sprite_alloc();
@@ -2343,6 +2441,8 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform
         }
         
         entity_set_local_transform(entity_manager, entity_gid, transform);
+        
+        *out_entity = entity;
     }
     return entity_gid;
 }
@@ -2442,12 +2542,13 @@ void ball_cue_update(Entity* entity, GameState* game_state, f32 delta_time){
 ///
 
 
-GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, GenId parent){
+GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
-    entity_manager_get_entity(*entity_manager, entity_gid, &entity);
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity))
     {
         entity->type_id = EntityTypeId_Wall;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
         
         { // alloc_physics_body();
             entity->is_physics_body = true;
@@ -2505,6 +2606,8 @@ GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, Ge
         }
     
         entity_set_local_transform(entity_manager, entity_gid, transform);
+        
+        *out_entity = entity;
     }
     return entity_gid;
 }
@@ -2515,13 +2618,16 @@ GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, Ge
 ///
 
 
-GenId entity_spawn_level_root(EntityManager* entity_manager, Transform2D transform, GenId parent){
+GenId entity_spawn_level_root(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
-    entity_manager_get_entity(*entity_manager, entity_gid, &entity);
-    {
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity))
+    {        
         entity->type_id = EntityTypeId_LevelRoot;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
         entity_set_local_transform(entity_manager, entity_gid, transform);
+    
+        *out_entity = entity;
     }
     return entity_gid;
 }
@@ -2532,13 +2638,18 @@ GenId entity_spawn_level_root(EntityManager* entity_manager, Transform2D transfo
 ///
 
 
-GenId entity_spawn_empty(EntityManager* entity_manager, Transform2D transform, GenId parent){
+GenId entity_spawn_empty(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
-    entity_manager_get_entity(*entity_manager, entity_gid, &entity);
+    
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity))
     {
         entity->type_id = EntityTypeId_Empty;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
+        
         entity_set_local_transform(entity_manager, entity_gid, transform);
+        
+        *out_entity = entity;
     }
     return entity_gid;
 }
@@ -2549,7 +2660,7 @@ GenId entity_spawn_empty(EntityManager* entity_manager, Transform2D transform, G
 ///
 
 
-GenId entity_spawn_game_ball(EntityManager* entity_manager, Transform2D transform, GenId parent, i32 ball_number){
+GenId entity_spawn_game_ball(EntityManager* entity_manager, Transform2D transform, GenId parent, i32 ball_number, Entity** out_entity){
 
     GFX_TextureView texture_view;
     EntityTypeId type_id;
@@ -2603,9 +2714,10 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, Transform2D transfor
 
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
-    entity_manager_get_entity(*entity_manager, entity_gid, &entity);
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity))
     {
         entity->type_id = type_id;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
 
         { // alloc_physics_body();
             entity->is_physics_body = true;
@@ -2653,48 +2765,50 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, Transform2D transfor
         }
         
         entity_set_local_transform(entity_manager, entity_gid, transform);
+        
+        *out_entity = entity;
     }
     return entity_gid;
 }
 
-GenId entity_spawn_ball_one(EntityManager* entity_manager, Transform2D transform, GenId parent){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 1);
+GenId entity_spawn_ball_one(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+    return entity_spawn_game_ball(entity_manager, transform, parent, 1, out_entity);
 }
 
-GenId entity_spawn_ball_two(EntityManager* entity_manager, Transform2D transform, GenId parent){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 2);
+GenId entity_spawn_ball_two(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+    return entity_spawn_game_ball(entity_manager, transform, parent, 2, out_entity);
 }
 
-GenId entity_spawn_ball_three(EntityManager* entity_manager, Transform2D transform, GenId parent){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 3);
+GenId entity_spawn_ball_three(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+    return entity_spawn_game_ball(entity_manager, transform, parent, 3, out_entity);
 }
 
-GenId entity_spawn_ball_four(EntityManager* entity_manager, Transform2D transform, GenId parent){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 4);
+GenId entity_spawn_ball_four(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+    return entity_spawn_game_ball(entity_manager, transform, parent, 4, out_entity);
 }
 
-GenId entity_spawn_ball_five(EntityManager* entity_manager, Transform2D transform, GenId parent){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 5);
+GenId entity_spawn_ball_five(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+    return entity_spawn_game_ball(entity_manager, transform, parent, 5, out_entity);
 }
 
-GenId entity_spawn_ball_six(EntityManager* entity_manager, Transform2D transform, GenId parent){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 6);
+GenId entity_spawn_ball_six(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+    return entity_spawn_game_ball(entity_manager, transform, parent, 6, out_entity);
 }
 
-GenId entity_spawn_ball_seven(EntityManager* entity_manager, Transform2D transform, GenId parent){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 7);
+GenId entity_spawn_ball_seven(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+    return entity_spawn_game_ball(entity_manager, transform, parent, 7, out_entity);
 }
 
-GenId entity_spawn_ball_eight(EntityManager* entity_manager, Transform2D transform, GenId parent){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 8);
+GenId entity_spawn_ball_eight(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+    return entity_spawn_game_ball(entity_manager, transform, parent, 8, out_entity);
 }
 
-GenId entity_spawn_ball_nine(EntityManager* entity_manager, Transform2D transform, GenId parent){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 9);
+GenId entity_spawn_ball_nine(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+    return entity_spawn_game_ball(entity_manager, transform, parent, 9, out_entity);
 }
 
-GenId entity_spawn_ball_zero(EntityManager* entity_manager, Transform2D transform, GenId parent){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 0);
+GenId entity_spawn_ball_zero(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+    return entity_spawn_game_ball(entity_manager, transform, parent, 0, out_entity);
 }
 
 
@@ -2768,11 +2882,12 @@ void boost_pad_on_sustain_collision_callback(FIZX_CollisionInfo info, void* user
     }
 }
 
-GenId entity_spawn_boost_pad(EntityManager* entity_manager, Transform2D transform, GenId parent){
+GenId entity_spawn_boost_pad(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
         entity->type_id = EntityTypeId_BoostPad;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
         
         f32 angular_drag = 0.0f;
         f32 linear_drag = 0.0f;
@@ -2823,12 +2938,17 @@ GenId entity_spawn_boost_pad(EntityManager* entity_manager, Transform2D transfor
         }
         
         entity_set_local_transform(entity_manager, entity_gid, transform);
+        
+        *out_entity = entity;
     }
         
     return entity_gid;
 }
 
-GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transform2D transform, GenId parent_gid){
+GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transform2D transform, GenId parent_gid, Entity** out_entity){
+    Entity* entity = NULL;
+    GenId entity_gid = {0};
+    
     switch(type_id){
         default:{
             ASSERT(false, "unknown entity type id.");
@@ -2839,63 +2959,79 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
             return 0;
         }break;
         case EntityTypeId_LevelRoot:{
-            return entity_spawn_level_root(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_level_root(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_Wall:{
-            return entity_spawn_wall(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_wall(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_BallCue:{
-            return entity_spawn_ball_cue(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_ball_cue(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_BallOne:{
-            return entity_spawn_ball_one(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_ball_one(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_BallTwo:{
-            return entity_spawn_ball_two(entity_manager, transform, parent_gid);
+             entity_gid = entity_spawn_ball_two(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_BallThree:{
-            return entity_spawn_ball_three(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_ball_three(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_BallFour:{
-            return entity_spawn_ball_four(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_ball_four(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_BallFive:{
-            return entity_spawn_ball_five(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_ball_five(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_BallSix:{
-            return entity_spawn_ball_six(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_ball_six(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_BallSeven:{
-            return entity_spawn_ball_seven(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_ball_seven(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_BallEight:{
-            return entity_spawn_ball_eight(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_ball_eight(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_BallNine:{
-            return entity_spawn_ball_nine(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_ball_nine(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_BallZero:{
-            return entity_spawn_ball_zero(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_ball_zero(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_Pocket:{
-            return entity_spawn_pocket(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_pocket(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_BoostPad:{
-            return entity_spawn_boost_pad(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_boost_pad(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_WindMill:{
-            return entity_spawn_windmill(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_windmill(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_Thwamper:{
-            return entity_spawn_thwamper(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_thwamper(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_WorldCamera:{
-            return entity_spawn_world_camera(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_world_camera(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_Empty:{
-            return entity_spawn_empty(entity_manager, transform, parent_gid);
+            entity_gid = entity_spawn_empty(entity_manager, transform, parent_gid, &entity);
         }break;
     }
+    
+    if(entity){
+        
+        if(entity->is_sprite){
+            if((entity->visibility_layer & entity_manager->visibility_layer) != 0){
+                gfx_sprite_set_active(entity_manager->gfx_state, entity->sprite_gid);
+            }
+            else{
+                gfx_sprite_set_inactive(entity_manager->gfx_state, entity->sprite_gid);        
+            }    
+        }
+        
+        *out_entity = entity;
+    }
+    
+    return entity_gid;    
 }
 
 
@@ -3112,16 +3248,17 @@ GenId level_manager_load_level_file_recurssive(
                         parent_gid = entity_manager->deserialised_entity[parent_idx + parent_idx_offset].entity_gid;
                     }
                                         
+                    Entity* entity;
                     // create the new deserialised entity.
                     deserialised_entity->entity_gid = entity_spawn(
                         entity_manager, 
                         deserialised_entity->entity_type_id, 
                         deserialised_entity->spawn_transform, 
-                        parent_gid
+                        parent_gid,
+                        &entity
                     );
                     
-                    Entity* entity;
-                    if(entity_manager_get_entity(*entity_manager, deserialised_entity->entity_gid, &entity)){
+                    if(entity){
                         if(parent_idx == 0){
                             // set the root entity's serialisation file path to the file path we just loaded it from.
                             string_push(&entity->serialisation_file_path, file_path);
@@ -3629,7 +3766,10 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
             // note: this is done after the clcked entity code so that a clicked entity
             // can execute 'input_on_mouse_button_released' code paths. 
             if(input_is_mouse_button_just_released(MouseButton_Left)){
-                if(board_state->turn == BoardTurn_Placement){
+                if(
+                    clicked_entity &&
+                    board_state->turn == BoardTurn_Placement
+                ){
                     bool success = true; 
                     
                     Circle query_area = {

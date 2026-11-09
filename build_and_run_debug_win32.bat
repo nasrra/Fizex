@@ -33,7 +33,8 @@ cl /Zi /W3 /WX ^
 /Fo:..\build\app\ /Fd:..\build\app\ /Fe:..\build\app\app.exe ^
 app_win32.c app.c base_layer\base.c input/input.c ^
 Kernel32.lib user32.lib Gdi32.lib ws2_32.lib ntdll.lib userenv.lib vendors\webgpu\wgpu_native.lib vendors\freetype\freetype-x64.lib & ^
-xcopy /E /I /Y "..\assets" "..\build\assets"
+xcopy /E /I /Y "..\assets" "..\build\assets" & ^
+xcopy /E /I /Y "..\editor" "..\build\editor"
 
 @rem  mkdir build & cd src & cl /O2 /Oi /GL /DNDEBUG /MD /W3 /WX /I vendors\freetype /Fo:..\build\ /Fd:..\build\ /Fe:..\build\app.exe app_win32.c app.c base_layer\base.c input/input.c user32.lib Gdi32.lib ws2_32.lib ntdll.lib userenv.lib vendors\webgpu\wgpu_native.lib vendors\freetype\freetype-x64.lib & xcopy /E /I /Y "..\assets" "..\build\assets"
 

@@ -36,8 +36,10 @@
 ===============
 
 - Placement Turn Validaiton
-    - collision checks.
+    + collision checks.
     - specified areas.
+        - 
+        - add new entity.
 
 - Desk Fan
     - button operated
@@ -49,6 +51,9 @@
 
 - (MAYBE) C4: ball hits the C4 block, and explodes, pushing away all balls in a radial area.
     
+- refactor gen id alloctor 'allocated' bool to be two arrays: 'allocated_idx' and 'allocated_idx_idx'
+    - 'allocated_idx_idx': the index  into 'allocated_idx', is zero when the entity isnt allocated.
+    -  'allocated_idx': is a swapbackarray.
     
 =====================
 ==== BACK BURNER ==== 
@@ -65,6 +70,8 @@
 - have capsule to capsule collisions.
 
 - get an achievement when getting only the eight ball in.
+
+- change the semicolon (';') separated values to tab ('\t') separated values for level and entity asset files.
 
 
 ===========================

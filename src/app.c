@@ -128,10 +128,49 @@ void app_main(){
     // create game state.
     GameState game_state = {0};
     game_state_init(&game_state, persistent, transient, &gfx_state);
+    entity_manager_set_visibility_layer(&game_state.entity_manager, ENTITY_VISIBILITY_LAYER_WORLD);
 
     // create editor state.
     Editor_State editor_state = {0};
     editor_state_init(&editor_state, persistent, &gfx_state, game_state.entity_manager.entity_length);
+
+
+#ifndef NDEBUG
+    { // load editor config.
+        
+        size_t buffer_size;
+        void* file_data = os_load_file(STRING_FROM_LITERAL("../editor/editor.txt", transient), &buffer_size);
+        
+        DeserialisedEditorConfig config = {0};
+                
+        i32 lines_read = sscanf(
+            file_data,
+            "%d\n%d\n%d\n%f",
+            &config.world_visibility_layer_enabled,
+            &config.editor_visibility_layer_enabled,
+            &config.grid_enabled,
+            &config.grid_step
+        );        
+        
+        if(lines_read == 4){
+            
+            editor_state.entity_world_layer_enabled = (bool)config.world_visibility_layer_enabled;
+            editor_state.entity_editor_layer_enabled = (bool)config.editor_visibility_layer_enabled;
+            
+            i32 visibility_code = create_entity_visibility_layer_code(
+                editor_state.entity_world_layer_enabled,
+                editor_state.entity_editor_layer_enabled
+            );
+            entity_manager_set_visibility_layer(&game_state.entity_manager, visibility_code);
+        
+            editor_state.grid_enabled = (bool)config.grid_enabled;
+            editor_state.grid_step = config.grid_step;
+        }
+        else{
+            ASSERT(false, "mangled editor config");
+        }
+    }
+#endif 
 
     { // load assets.
 
@@ -172,7 +211,6 @@ void app_main(){
 
     bool was_in_editor_mode = false;
     bool in_editor_mode = false;
-    Key last_editor_key_pressed = Key_None;
 
     { // update_loop();
 
@@ -191,61 +229,55 @@ void app_main(){
             { // app begin update.
                 os_window_update(window_ctx);
                 input_update(delta_time);
+                                                
                 if(input_is_key_just_pressed(Key_F1)){
-                    if(last_editor_key_pressed == Key_F1){
-                        in_editor_mode = false;
-                        last_editor_key_pressed = Key_None;
+                    if(editor_state.menu == Editor_Menu_LevelManagement){
+                        editor_state.menu = Editor_Menu_None;
                     }
                     else{
-                        in_editor_mode = true;
                         editor_state.menu = Editor_Menu_LevelManagement;
-                        last_editor_key_pressed = Key_F1;
                     }
+                    editor_save_config(&editor_state, transient);
                 }
                 else if(input_is_key_just_pressed(Key_F2)){
-                    if(last_editor_key_pressed == Key_F2){
-                        in_editor_mode = false;
-                        last_editor_key_pressed = Key_None;
+                    if(editor_state.menu == Editor_Menu_NativeEntitySpawner){
+                        editor_state.menu = Editor_Menu_None;                    
                     }
                     else{
-                        in_editor_mode = true;
                         editor_state.menu = Editor_Menu_NativeEntitySpawner;
-                        last_editor_key_pressed = Key_F2;
                     }
+                    editor_save_config(&editor_state, transient);
                 }
                 else if(input_is_key_just_pressed(Key_F3)){
-                    if(last_editor_key_pressed == Key_F3){
-                        in_editor_mode = false;
-                        last_editor_key_pressed = Key_None;
+                    if(editor_state.menu == Editor_Menu_AssetEntitySpawner){
+                        editor_state.menu = Editor_Menu_None;                    
                     }
                     else{
-                        in_editor_mode = true;
                         editor_state.menu = Editor_Menu_AssetEntitySpawner;
-                        last_editor_key_pressed = Key_F3;
                     }
-                }
-                else if(input_is_key_just_pressed(Key_F4)){
-                    if(last_editor_key_pressed == Key_F4){
-                        in_editor_mode = false;
-                        last_editor_key_pressed = Key_None;
-                    }
-                    else{
-                        in_editor_mode = true;
-                        editor_state.menu = Editor_Menu_EntityInspector;
-                        last_editor_key_pressed = Key_F4;
-                    }
+                    editor_save_config(&editor_state, transient);
                 }
                 else if(input_is_key_just_pressed(Key_F5)){
-                    if(last_editor_key_pressed == Key_F5){
-                        in_editor_mode = false;
-                        last_editor_key_pressed = Key_None;
+                    if(editor_state.menu == Editor_Menu_EntityInspector){
+                        editor_state.menu = Editor_Menu_None;
                     }
                     else{
-                        in_editor_mode = true;
-                        editor_state.menu = Editor_Menu_EntityTreeView;
-                        last_editor_key_pressed = Key_F5;
+                        editor_state.menu = Editor_Menu_EntityInspector;
                     }
+                    editor_save_config(&editor_state, transient);
                 }
+                else if(input_is_key_just_pressed(Key_F6)){
+                    if(editor_state.menu == Editor_Menu_EntityTreeView){
+                        editor_state.menu = Editor_Menu_None;
+                    }
+                    else{
+                        editor_state.menu = Editor_Menu_EntityTreeView;
+                    }
+                    editor_save_config(&editor_state, transient);
+                } 
+                
+                
+                in_editor_mode = editor_state.menu != Editor_Menu_None;                
             }
 
             { // game update.

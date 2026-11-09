@@ -483,6 +483,10 @@ bool os_load_file_into_memory_arena(String file_path, MemoryArena* arena){
     return true;
 }
 
+// TODO:
+// change this so that the user passes in a memory chunk.
+// if the memory chunk is NULL, still return the file size.
+// if the memory chunk is valid, write into it.
 void* os_load_file(String file_path, size_t* out_buffer_size){
 
     /**
