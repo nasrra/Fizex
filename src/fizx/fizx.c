@@ -7744,11 +7744,15 @@ void fizx_state_query_circle_area(
         info.target_entity_idx = state->entities.bvh_leaf_idx[leaf_idx];
         
         BOUNDS_CHECK(info.target_entity_idx, state->entities.layer_length);
-        i32 layer = state->entities.layer[info.target_entity_idx];
+        info.target_layer = state->entities.layer[info.target_entity_idx];
 
-        if((layer & layer_mask) == 0){
+        if((info.target_layer & layer_mask) == 0){
             continue;
         }
+        
+        i32 user_data_idx = info.target_entity_idx * state->entities.user_data_element_size;
+        BOUNDS_CHECK(user_data_idx, state->entities.user_data_length);
+        info.target_user_data = &state->entities.user_data[user_data_idx];
 
         BOUNDS_CHECK(info.target_entity_idx, state->entities.category_length);
         i32 shape_category = state->entities.category[info.target_entity_idx];
@@ -7803,13 +7807,7 @@ void fizx_state_query_circle_area(
                     area.x, area.y, 
                     &info.contact_point_1.x, &info.contact_point_1.y
                 );
-                
-                BOUNDS_CHECK(info.target_entity_idx, state->entities.layer_length);
-                info.target_layer = state->entities.layer[info.target_entity_idx];
-            
-                BOUNDS_CHECK(info.target_entity_idx, state->entities.user_data_length);
-                info.target_user_data = (void*)state->entities.user_data[info.target_entity_idx];
-            
+
                 query_callback(state, info, user_data);
             }
         }

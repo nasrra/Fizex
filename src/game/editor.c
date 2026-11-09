@@ -1558,6 +1558,11 @@ void gfx_clay_native_entity_spawner_layout(Editor_State* editor_state, GameState
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("World Camera"), button_width, button_height, transient, editor_state, EntityTypeId_WorldCamera);
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Wall"), button_width, button_height, transient, editor_state, EntityTypeId_Wall);
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Empty"), button_width, button_height, transient, editor_state, EntityTypeId_Empty);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Valid Placement Area"), button_width, button_height, transient, editor_state, EntityTypeId_ValidPlacementArea);
+        }
+        
+        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Invalid Placement Area"), button_width, button_height, transient, editor_state, EntityTypeId_InvalidPlacementArea);
         }
         
         CLAY_TEXT(CLAY_STRING("Entity To Spawn:"), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);  
