@@ -943,7 +943,7 @@ void editor_new_level_button_on_hover_callback(Clay_ElementId element_id, Clay_P
         Entity* world_entity;
         level_manager->world_root_entity_gid = entity_spawn_level_root(
             entity_manager, 
-            TRANSFORM2D_IDENTITY, 
+            TRANSFORM2D_IDENTITY,
             0,
             &world_entity
         );

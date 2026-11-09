@@ -1840,7 +1840,8 @@ GenId entity_spawn_world_camera(EntityManager* entity_manager, Transform2D trans
             entity->camera_near_z = WORLD_CAMERA_DEFAULT_NEAR_Z;
             entity->camera_far_z = WORLD_CAMERA_DEFAULT_FAR_Z;
         }
-                
+        
+        entity_set_local_transform(entity_manager, entity_gid, transform);        
         *out_entity = entity;
     }
     return entity_gid;
@@ -1959,6 +1960,7 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform
             entity->on_turn_end_callback = thwamper_on_turn_end_callback;
         }
         
+        entity_set_local_transform(entity_manager, entity_gid, transform);
         *out_entity = entity;
     }
     return entity_gid;
@@ -1971,7 +1973,14 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform
 
 
 #define WINDMILL_BLADE_TEXTURE_VIEW      (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
-#define WINDMILL_BLADE_PHYSICS_MATERIAL (FIZX_Material){.static_friction = 0.75f, .kinetic_friction = 0.65f, .density = 10.0f, .restitution = 0.084f}
+#define WINDMILL_BLADE_PHYSICS_MATERIAL \
+    (FIZX_Material){                    \
+        .static_friction = 0.75f,       \
+        .kinetic_friction = 0.65f,      \
+        .density = 5.0f,                \
+        .restitution = 0.0f,            \
+        .rotational_response = true     \
+}
 
 GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     
@@ -1982,6 +1991,7 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D tra
         
         entity->type_id = EntityTypeId_WindMillBlade;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
+        entity->local_transform = transform;
         
         entity->serialisation_disabled = true;
 
@@ -2034,6 +2044,7 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D tra
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
         }
                 
+        entity_set_local_transform(entity_manager, entity_gid, transform);
         *out_entity = entity;
     }
     
@@ -2047,7 +2058,7 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D tra
 
 
 #define WINDMILL_HINGE_DEFAULT_PHYSICS_LAYER  PHYSICS_LAYER_ENVIRONMENT_MID
-#define WINDMILL_HINGE_DEFAULT_PHYSICS_MASK   PHYSICS_LAYER_ALL 
+#define WINDMILL_HINGE_DEFAULT_PHYSICS_MASK  ~(PHYSICS_LAYER_ENVIRONMENT) 
 
 void windmill_hinge_update(Entity* entity, i32 entity_idx, GameState* game_state, f32 delta_time){    
     // Transform2D rotated_transform = transform2d_rotate(entity->global_transform, to_radians(66.67f) * delta_time);
@@ -2062,6 +2073,8 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
 
         entity->type_id = EntityTypeId_WindMillHinge;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
+        
+        entity->local_transform = transform;
         
         entity->serialisation_disabled = true;
         
@@ -2085,9 +2098,8 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
             // start spinning
             fizx_body_impulse_angular_force(&entity_manager->fizx_state, entity->physics_body_gid, to_radians(66.64f));
         }
-
-        Entity* blade_entity;
         
+        Entity* blade_entity;
         { // forward_blade();
 
             GenId blade_gid = entity_spawn_windmill_blade(
@@ -2147,10 +2159,11 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
             }
             blade_entity = NULL;
         }
-        
+                
         // set the fizx body active here as the blades allocate their shapes into the hinge's body.
         fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
-            
+        
+        entity_set_local_transform(entity_manager, entity_gid, transform);    
         *out_entity = entity;
     }
     return entity_gid;
@@ -2230,7 +2243,8 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
             entity_manager_dealloc_entity(entity_manager, entity_gid);
             return 0;
         }
-                
+        
+        entity_set_local_transform(entity_manager, entity_gid, transform);        
         *out_entity = entity;
     }
     return entity_gid;
@@ -2348,7 +2362,8 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, Transform2D transform, 
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
         }
-                
+        
+        entity_set_local_transform(entity_manager, entity_gid, transform);        
         *out_entity = entity;
     }
     return entity_gid;
@@ -2434,7 +2449,8 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform
             
             entity->is_clickable_in_game = true;
         }
-                
+        
+        entity_set_local_transform(entity_manager, entity_gid, transform);        
         *out_entity = entity;
     }
     return entity_gid;
@@ -2598,6 +2614,7 @@ GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, Ge
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 2);    
         }
         
+        entity_set_local_transform(entity_manager, entity_gid, transform);
         *out_entity = entity;
     }
     return entity_gid;
@@ -2613,9 +2630,11 @@ GenId entity_spawn_level_root(EntityManager* entity_manager, Transform2D transfo
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity))
-    {        
+    {
         entity->type_id = EntityTypeId_LevelRoot;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;    
+        
+        entity_set_local_transform(entity_manager, entity_gid, transform);
         *out_entity = entity;
     }
     return entity_gid;
@@ -2635,6 +2654,7 @@ GenId entity_spawn_empty(EntityManager* entity_manager, Transform2D transform, G
     {
         entity->type_id = EntityTypeId_Empty;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;        
+        entity_set_local_transform(entity_manager, entity_gid, transform);
         *out_entity = entity;
     }
     return entity_gid;
@@ -2750,6 +2770,7 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, Transform2D transfor
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0); 
         }
         
+        entity_set_local_transform(entity_manager, entity_gid, transform);
         *out_entity = entity;
     }
     return entity_gid;
@@ -2921,6 +2942,7 @@ GenId entity_spawn_boost_pad(EntityManager* entity_manager, Transform2D transfor
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 3);
         }
         
+        entity_set_local_transform(entity_manager, entity_gid, transform);
         *out_entity = entity;
     }
         
@@ -2985,6 +3007,7 @@ GenId entity_spawn_valid_placement_area(EntityManager* entity_manager, Transform
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1024);
         }
         
+        entity_set_local_transform(entity_manager, entity_gid, transform);
         *out_entity = entity;
     }
     
@@ -3049,6 +3072,7 @@ GenId entity_spawn_invalid_placement_area(EntityManager* entity_manager, Transfo
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1023);
         }
         
+        entity_set_local_transform(entity_manager, entity_gid, transform);
         *out_entity = entity;
     }
     
@@ -3133,10 +3157,7 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
         }break;
     }
     
-    if(entity){
-        
-        entity_set_local_transform(entity_manager, entity_gid, transform);
-        
+    if(entity){        
         if(entity->is_sprite){
             if((entity->visibility_layer & entity_manager->visibility_layer) != 0){
                 gfx_sprite_set_active(entity_manager->gfx_state, entity->sprite_gid);
