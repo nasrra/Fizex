@@ -4530,10 +4530,21 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
 
                     f32 drag = linear_drag * delta_time;
 
-                    if(*lin_vel_x != 0.0f){
+                    if(drag > 0.0f){
+
                         f32 pre_velocity_x = *lin_vel_x;
                         f32 direction_x_factor = pre_velocity_x < 0.0f ? 1.0f : -1.0f;
-                        f32 new_velocity_x = pre_velocity_x + (direction_x_factor * drag);
+
+                        f32 pre_velocity_y = *lin_vel_y;                        
+                        f32 direction_y_factor = pre_velocity_y < 0 ? 1.0f : -1.0f;
+                        
+                        f32 lin_vel_dir_x;
+                        f32 lin_vel_dir_y;
+                        vector2_normalise_scalar(*lin_vel_x, *lin_vel_y, &lin_vel_dir_x, &lin_vel_dir_y);
+
+                        f32 new_velocity_x = pre_velocity_x + (drag * -lin_vel_dir_x);
+                        f32 new_velocity_y = pre_velocity_y + (drag * -lin_vel_dir_y);
+
                         // the to the right.
                         if(direction_x_factor > 0.0f){
                             // clamp the velocity if it has over shot or reached its end.
@@ -4545,23 +4556,53 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                             // clamp the velocity if it has over shot or reached its end.
                             *lin_vel_x = new_velocity_x <= 0.0f ? 0.0f : new_velocity_x;
                         }
-                    }
 
-                    if(*lin_vel_y != 0.0f){
-                        f32 pre_velocity_y = *lin_vel_y;
-                        f32 direction_y_factor = pre_velocity_y < 0 ? 1.0f : -1.0f;
-                        f32 new_velocity_y = pre_velocity_y + (direction_y_factor * drag);
                         // the drag pushes to the up.
                         if(direction_y_factor > 0.0f){
                             // clamp the velocity if it has over shot or reached its end.
                             *lin_vel_y = new_velocity_y >= 0.0f ? 0.0f : new_velocity_y;
                         }
+                        
                         // the drag pushes to the down.
                         else{
                             // clamp the velocity if it has over shot or reached its end.
                             *lin_vel_y = new_velocity_y <= 0.0f ? 0.0f : new_velocity_y;
                         }
                     }
+
+                    // if(*lin_vel_x != 0.0f){
+                    //     f32 pre_velocity_x = *lin_vel_x;
+                    //     f32 direction_x_factor = pre_velocity_x < 0.0f ? 1.0f : -1.0f;
+                    //     f32 new_velocity_x = pre_velocity_x + (direction_x_factor * drag);
+                    
+                    //     // the to the right.
+                    //     if(direction_x_factor > 0.0f){
+                    //         // clamp the velocity if it has over shot or reached its end.
+                    //         *lin_vel_x = new_velocity_x >= 0.0f ? 0.0f : new_velocity_x;
+                    //     }
+                        
+                    //     // the drag pushes to the left.
+                    //     else{
+                    //         // clamp the velocity if it has over shot or reached its end.
+                    //         *lin_vel_x = new_velocity_x <= 0.0f ? 0.0f : new_velocity_x;
+                    //     }
+                    // }
+
+                    // if(*lin_vel_y != 0.0f){
+                    //     f32 pre_velocity_y = *lin_vel_y;
+                    //     f32 direction_y_factor = pre_velocity_y < 0 ? 1.0f : -1.0f;
+                    //     f32 new_velocity_y = pre_velocity_y + (direction_y_factor * drag);
+                    //     // the drag pushes to the up.
+                    //     if(direction_y_factor > 0.0f){
+                    //         // clamp the velocity if it has over shot or reached its end.
+                    //         *lin_vel_y = new_velocity_y >= 0.0f ? 0.0f : new_velocity_y;
+                    //     }
+                    //     // the drag pushes to the down.
+                    //     else{
+                    //         // clamp the velocity if it has over shot or reached its end.
+                    //         *lin_vel_y = new_velocity_y <= 0.0f ? 0.0f : new_velocity_y;
+                    //     }
+                    // }
                 }
 
                 { // apply_linear_velocity_translation();
@@ -7756,6 +7797,10 @@ void fizx_state_query_circle_cast_area(
 
         BOUNDS_CHECK(info.target_entity_idx, state->entities.category_length);
         i32 shape_category = state->entities.category[info.target_entity_idx];
+        
+        i32 user_data_idx = info.target_entity_idx * state->entities.user_data_element_size;
+        BOUNDS_CHECK(user_data_idx, state->entities.user_data_length);
+        info.target_user_data = &state->entities.user_data[user_data_idx];
         
         if(fizx_shape_category_is_polygon(shape_category)){
             

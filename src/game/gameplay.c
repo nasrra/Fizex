@@ -38,8 +38,8 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
 ///
 
 
-#define CUE_BALL_FIZX_BODY_LINEAR_DRAG 1.35f
-#define CUE_BALL_FIZX_BODY_ANGULAR_DRAG 1.85f
+#define CUE_BALL_FIZX_BODY_LINEAR_DRAG 1.4f
+#define CUE_BALL_FIZX_BODY_ANGULAR_DRAG 1.9f
 #define CUE_BALL_FIZX_SHAPE_MATERIAL    \
                                         \
     (FIZX_Material) {                   \
@@ -49,8 +49,8 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
         .restitution = 0.45f,           \
         .rotational_response = true     \
     }
-#define NUMBER_BALL_FIZX_BODY_LINEAR_DRAG 1.45f
-#define NUMBER_BALL_FIZX_BODY_ANGULAR_DRAG 1.85f
+#define NUMBER_BALL_FIZX_BODY_LINEAR_DRAG 1.5f
+#define NUMBER_BALL_FIZX_BODY_ANGULAR_DRAG 1.9f
 #define NUMBER_BALL_FIZX_SHAPE_MATERIAL     \
                                             \
     (FIZX_Material) {                       \
@@ -857,16 +857,16 @@ typedef struct{
     Circle* circle;
 } GuidelineCircleCollisionCallbackContext;
 
-typedef struct{
-    Vector2 start_point;
-    GFX_State* gfx_state;
-} GuidelineCollisionCallbackContext;
-
 void guideline_circle_collision_callback(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data){
     GuidelineCircleCollisionCallbackContext* ctx = (GuidelineCircleCollisionCallbackContext*)user_data;
     ctx->circle->x = ctx->circle->x - info.normal_1.x * info.depth_1;
     ctx->circle->y = ctx->circle->y - info.normal_1.y * info.depth_1;
 }
+
+typedef struct{
+    Vector2 start_point;
+    EntityManager* entity_manager;
+} GuidelineCollisionCallbackContext;
 
 void guideline_collision_callback(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data){
     GuidelineCollisionCallbackContext* ctx = (GuidelineCollisionCallbackContext*)user_data;
@@ -885,12 +885,48 @@ void guideline_collision_callback(FIZX_State* state, FIZX_QueryCollisionInfo inf
     GuidelineCircleCollisionCallbackContext query_ctx = {
         .circle = &query_circle
     };
-    fizx_state_query_circle_area(state, guideline_circle_collision_callback, &query_ctx, PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID, query_circle);
-            
-    gfx_draw_wire_circle(ctx->gfx_state, query_circle, GFX_COLOUR_WHITE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+    
+    // draw a line from the hit number ball in the direction it will move int.
+    if(info.target_user_data){
+        GenId target_entity_gid = *(GenId*)info.target_user_data;
+        Entity* hit_entity;
+        if(entity_manager_get_entity(*ctx->entity_manager, target_entity_gid, &hit_entity)){
+            switch(hit_entity->type_id){
+                case EntityTypeId_BallOne: 
+                case EntityTypeId_BallTwo: 
+                case EntityTypeId_BallThree: 
+                case EntityTypeId_BallFour: 
+                case EntityTypeId_BallFive: 
+                case EntityTypeId_BallSix: 
+                case EntityTypeId_BallSeven: 
+                case EntityTypeId_BallEight: 
+                case EntityTypeId_BallNine: 
+                case EntityTypeId_BallZero: {
+                    gfx_draw_line(
+                        ctx->entity_manager->gfx_state,
+                        GFX_COLOUR_WHITE,
+                        hit_entity->global_transform.position,
+                        vector2_add(
+                            hit_entity->global_transform.position,
+                            (Vector2){.x = -info.normal_1.x, .y = -info.normal_1.y}
+                        ),
+                        SPRITE_LAYER_EDITOR_WORLD,
+                        0,
+                        SPRITE_MATERIAL_DEBUG, 
+                        0.05f
+                    );    
+                }break;
+            }
+        }
+
+    }
+    
+    fizx_state_query_circle_area(state, guideline_circle_collision_callback, &query_ctx, PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID, query_circle);    
+    
+    gfx_draw_wire_circle(ctx->entity_manager->gfx_state, query_circle, GFX_COLOUR_WHITE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
 
     gfx_draw_line(
-        ctx->gfx_state,
+        ctx->entity_manager->gfx_state,
         GFX_COLOUR_WHITE,
         ctx->start_point,
         (Vector2){.x = query_circle.x, .y = query_circle.y},
@@ -3980,7 +4016,7 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                                         
                         GuidelineCollisionCallbackContext guideline_ctx = {
                             .start_point = guideline_state->start_position,
-                            .gfx_state = entity_manager->gfx_state
+                            .entity_manager = entity_manager
                         };
                         
                         Vector2 launch_direction = guideline_calculate_launch_direction(*guideline_state);
