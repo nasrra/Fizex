@@ -4,7 +4,6 @@
 
 
 + BOOST PAD: applies a velocity to the body in the direction it is pointing.
-+ WINDMILL: SPIN THE BALLS AROUND.
 + Thwamper:
     + After three turns, hits the ground, dispersing the balls around it.
 
@@ -105,3 +104,5 @@
     - Explosion Ball: explodes around the cue ball, spreading out the number balls.
 
 - turn timer decay of turns.
+
++ WINDMILL: SPIN THE BALLS AROUND.

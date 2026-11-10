@@ -1209,8 +1209,8 @@ void entity_manager_dealloc_entity_data_unsafe(EntityManager* manager, i32 idx){
         clickable_area_hierarchy_dealloc_clickable_area(&manager->clickable_area_hierarchy, entity->game_clickable_area_gid);
     }
     
+    string_clear(&entity->name);
     String name = entity->name;
-    string_clear(&name);
     String serialisation_file_path = entity->serialisation_file_path;
     string_clear(&serialisation_file_path);
     
@@ -1906,18 +1906,16 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform
         { // physics_body_alloc();
 
             entity->is_physics_body = true;
-            f32 linear_drag = 0.0f;
-            f32 angular_drag = 0.0f;
-            bool is_gravity_affected = false;
+            
+            FIZX_BodyConfig body_config = {
+                .layer = THWAMPER_DEFAULT_PHYSICS_LAYER,
+                .mask = THWAMPER_DEFAULT_PHYSICS_MASK
+            };
             
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state,
                 TRANSFORM2D_IDENTITY,
-                linear_drag,
-                angular_drag,
-                THWAMPER_DEFAULT_PHYSICS_LAYER,
-                THWAMPER_DEFAULT_PHYSICS_MASK,
-                is_gravity_affected
+                body_config
             );
 
             Circle physics_shape = {.radius = 0.5f};
@@ -1975,9 +1973,9 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform
 #define WINDMILL_BLADE_TEXTURE_VIEW      (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
 #define WINDMILL_BLADE_PHYSICS_MATERIAL \
     (FIZX_Material){                    \
-        .static_friction = 0.75f,       \
-        .kinetic_friction = 0.65f,      \
-        .density = 5.0f,                \
+        .static_friction = 0.01f,       \
+        .kinetic_friction = 0.0f,       \
+        .density = 1.20f,               \
         .restitution = 0.0f,            \
         .rotational_response = true     \
 }
@@ -2014,7 +2012,7 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D tra
                     &entity_manager->fizx_state,
                     parent_entity->physics_body_gid,
                     physics_shape_transform,
-                    FIZX_ShapeBehaviour_Kinematic,
+                    FIZX_ShapeBehaviour_Dynamic,
                     FIZX_CollisionCallbackBehaviour_All,
                     shape_user_data,
                     physics_shape,
@@ -2081,22 +2079,24 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
         { // physics_body();
         
             entity->is_physics_body = true;
-            f32 linear_drag = 0.0f;
-            f32 angular_drag = 0.0f;
-            bool is_gravity_affected = false;
-            void* shape_user_data = &entity_gid;
+            
+            FIZX_BodyConfig config = {
+                .constrain_angular_clockwise = true,
+                .constrain_axis_x = true,
+                .constrain_axis_y = true,
+                .layer = WINDMILL_HINGE_DEFAULT_PHYSICS_LAYER,
+                .mask = WINDMILL_HINGE_DEFAULT_PHYSICS_MASK,
+                .angular_drag = 0.70f
+            };
+
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state,
                 TRANSFORM2D_IDENTITY,
-                linear_drag,
-                angular_drag,
-                WINDMILL_HINGE_DEFAULT_PHYSICS_LAYER,
-                WINDMILL_HINGE_DEFAULT_PHYSICS_MASK,
-                is_gravity_affected
+                config
             );
                 
             // start spinning
-            fizx_body_impulse_angular_force(&entity_manager->fizx_state, entity->physics_body_gid, to_radians(66.64f));
+            // fizx_body_impulse_angular_force(&entity_manager->fizx_state, entity->physics_body_gid, to_radians(66.64f));
         }
         
         Entity* blade_entity;
@@ -2189,19 +2189,16 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
                 
         { // physics_body_alloc();
 
-            entity->is_physics_body = true;
-            f32 linear_drag = 0.0f;
-            f32 angular_drag = 0.0f;
-            bool is_gravity_affected = false;
+            entity->is_physics_body = true;            
+            FIZX_BodyConfig body_config = {
+                .layer = WINDMILL_DEFAULT_PHYSICS_LAYER,
+                .mask = WINDMILL_DEFAULT_PHYSICS_MASK                
+            };
 
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state,
                 TRANSFORM2D_IDENTITY,
-                linear_drag,
-                angular_drag,
-                WINDMILL_DEFAULT_PHYSICS_LAYER,
-                WINDMILL_DEFAULT_PHYSICS_MASK,
-                is_gravity_affected
+                body_config
             );
             
             Circle physics_shape = {.radius = 0.5f};
@@ -2311,17 +2308,16 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, Transform2D transform, 
         { // physics_body_alloc();
 
             entity->is_physics_body = true;
-            f32 linear_drag = 0.0f;
-            f32 angular_drag = 0.0f;
-            bool is_gravity_affected = false;
+            
+            FIZX_BodyConfig body_config = {
+                .layer = PHYSICS_LAYER_ENVIRONMENT_MID,
+                .mask = PHYSICS_LAYER_ALL
+            };
+            
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state,
                 TRANSFORM2D_IDENTITY,
-                linear_drag,
-                angular_drag,
-                PHYSICS_LAYER_ENVIRONMENT_MID,
-                PHYSICS_LAYER_ALL,
-                is_gravity_affected
+                body_config
             );
 
             Circle physics_shape = {.radius = 0.55f};
@@ -2388,14 +2384,18 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform
         { // physics_body_alloc();
 
             entity->is_physics_body = true;
+
+            FIZX_BodyConfig body_config = {
+                .linear_drag = CUE_BALL_FIZX_BODY_LINEAR_DRAG,
+                .angular_drag = CUE_BALL_FIZX_BODY_ANGULAR_DRAG,
+                .layer = PHYSICS_LAYER_BALL_CUE,
+                .mask = BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK
+            };
+            
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state,
                 TRANSFORM2D_IDENTITY,
-                CUE_BALL_FIZX_BODY_LINEAR_DRAG,
-                CUE_BALL_FIZX_BODY_ANGULAR_DRAG,
-                PHYSICS_LAYER_BALL_CUE,
-                BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK,
-                false
+                body_config
             );
 
             Circle circle = {.radius = BALL_FIZX_SHAPE_RADIUS};
@@ -2561,18 +2561,16 @@ GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, Ge
         
         { // alloc_physics_body();
             entity->is_physics_body = true;
+                        
+            FIZX_BodyConfig body_config = {
+                .layer = PHYSICS_LAYER_ENVIRONMENT_MID,
+                .mask = PHYSICS_LAYER_ALL
+            };
             
-            f32 linear_drag = 0.0f;
-            f32 angular_drag = 0.0f;
-            bool gravity_effected = false;
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state, 
                 TRANSFORM2D_IDENTITY, 
-                linear_drag, 
-                angular_drag, 
-                PHYSICS_LAYER_ENVIRONMENT_MID,
-                PHYSICS_LAYER_ALL,
-                false
+                body_config
             );
             
             Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
@@ -2728,14 +2726,20 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, Transform2D transfor
         { // alloc_physics_body();
             entity->is_physics_body = true;
     
+            bool constrain_angular_counter_clockwise = false;
+            bool constrain_angular_clockwise = false;
+
+            FIZX_BodyConfig body_config = {
+                .linear_drag = NUMBER_BALL_FIZX_BODY_LINEAR_DRAG,
+                .angular_drag = NUMBER_BALL_FIZX_BODY_ANGULAR_DRAG,
+                .layer = PHYSICS_LAYER_NUMBER_BALL,
+                .mask = PHYSICS_LAYER_ALL,
+            };
+    
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state,
                 TRANSFORM2D_IDENTITY,
-                NUMBER_BALL_FIZX_BODY_LINEAR_DRAG,
-                NUMBER_BALL_FIZX_BODY_ANGULAR_DRAG,
-                PHYSICS_LAYER_NUMBER_BALL,
-                PHYSICS_LAYER_ALL,
-                false
+                body_config
             );
             
             Circle circle = {.radius = BALL_FIZX_SHAPE_RADIUS};    
@@ -2900,15 +2904,16 @@ GenId entity_spawn_boost_pad(EntityManager* entity_manager, Transform2D transfor
         { // alloc_physics_body();
         
             entity->is_physics_body = true;
+                        
+            FIZX_BodyConfig body_config = {
+                .layer = PHYSICS_LAYER_ENVIRONMENT_BOT,
+                .mask = PHYSICS_LAYER_ALL 
+            };
             
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state,
                 TRANSFORM2D_IDENTITY,
-                linear_drag,
-                angular_drag,
-                PHYSICS_LAYER_ENVIRONMENT_BOT,
-                PHYSICS_LAYER_ALL,
-                false
+                body_config
             );
             
             Rectangle rect = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
@@ -2965,17 +2970,15 @@ GenId entity_spawn_valid_placement_area(EntityManager* entity_manager, Transform
         { // alloc_physics_body();
             entity->is_physics_body = true;
             
-            f32 linear_drag = 0.0f;
-            f32 angular_drag = 0.0f;
-            bool gravity_effected = false;
+            FIZX_BodyConfig body_config = {
+                .layer = PHYSICS_LAYER_PLACEMENT_AREA,
+                .mask = PHYSICS_LAYER_NONE
+            };
+            
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state, 
                 TRANSFORM2D_IDENTITY, 
-                linear_drag, 
-                angular_drag, 
-                PHYSICS_LAYER_PLACEMENT_AREA,
-                PHYSICS_LAYER_NONE,
-                false
+                body_config
             );
             
             Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
@@ -3033,14 +3036,19 @@ GenId entity_spawn_invalid_placement_area(EntityManager* entity_manager, Transfo
             f32 linear_drag = 0.0f;
             f32 angular_drag = 0.0f;
             bool gravity_effected = false;
+            
+            bool constrain_angular_counter_clockwise = false;
+            bool constrain_angular_clockwise = false;
+            
+            FIZX_BodyConfig body_config = {
+                .layer = PHYSICS_LAYER_PLACEMENT_AREA,
+                .mask = PHYSICS_LAYER_NONE
+            }; 
+            
             entity->physics_body_gid = fizx_body_alloc(
                 &entity_manager->fizx_state, 
                 TRANSFORM2D_IDENTITY, 
-                linear_drag, 
-                angular_drag, 
-                PHYSICS_LAYER_PLACEMENT_AREA,
-                PHYSICS_LAYER_NONE,
-                false
+                body_config
             );
             
             Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};

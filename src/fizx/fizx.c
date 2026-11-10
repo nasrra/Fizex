@@ -14,6 +14,18 @@
     types.
 ====================**//**/
 
+typedef struct{
+    i32 layer;
+    i32 mask;
+    f32 linear_drag;
+    f32 angular_drag;
+    bool constrain_angular_clockwise;
+    bool constrain_angular_counter_clockwise;
+    bool constrain_axis_x;
+    bool constrain_axis_y;
+    bool gravity_affected;
+} FIZX_BodyConfig;
+
 typedef enum{
     // triggers the shape's collision callback for all colliders it collides with.
     FIZX_CollisionCallbackBehaviour_All,
@@ -154,7 +166,6 @@ typedef struct{
     i32 length;
     bool is_init;
 } FIZX_Soa_Material;
-
 
 typedef enum {
 
@@ -463,6 +474,38 @@ typedef struct{
     */
     i32* mask;
     i32 mask_length;
+    
+    /**
+        `remarks`
+        - exclusively for bodies.
+        - accessed via `entity_idx`
+    **/
+    bool* constrain_axis_x;
+    i32 constrain_axis_x_length;
+    
+    /**
+        `remarks`
+        - exclusively for bodies.
+        - accessed via `entity_idx`
+    **/
+    bool* constrain_axis_y;
+    i32 constrain_axis_y_length;
+    
+    /**
+        `remarks`
+        - exclusively for bodies.
+        - accessed via `entity_idx`
+    **/
+    bool* constrain_angular_clockwise;
+    i32 constrain_angular_clockwise_length;
+    
+    /**
+        `remarks`
+        - exclusively for bodies.
+        - accessed via `entity_idx`
+    **/
+    bool* constrain_angular_counter_clockwise;
+    i32 constrain_angular_counter_clockwise_length;
 
     FIZX_CollisionCallback* shape_on_enter_callback;
     i32 shape_on_enter_callback_length;
@@ -471,6 +514,7 @@ typedef struct{
     FIZX_CollisionCallback* shape_on_exit_callback;
     i32 shape_on_exit_callback_length;
     bool is_init;
+    
 } FIZX_Soa_Entity;
 
 typedef struct{
@@ -1814,6 +1858,12 @@ void fizx_soa_entity_init(FIZX_Soa_Entity* soa, MemoryArena* arena, i32 length, 
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->linear_drag, &soa->linear_drag_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->angular_drag, &soa->angular_drag_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->collision_callback_behaviour, &soa->collision_callback_behaviour_length, length);
+    
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->constrain_axis_x, &soa->constrain_axis_x_length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->constrain_axis_y, &soa->constrain_axis_y_length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->constrain_angular_clockwise, &soa->constrain_angular_clockwise_length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->constrain_angular_counter_clockwise, &soa->constrain_angular_counter_clockwise_length, length);
+    
     soa->user_data_element_size = user_data_size;
 }
 
@@ -2624,11 +2674,24 @@ void fizx_entity_clear_unsafe(FIZX_State* state, i32 entity_idx){
     }
 
     { // clear bools.
+
         BOUNDS_CHECK(entity_idx, state->entities.gravity_affected_length);
         state->entities.gravity_affected[entity_idx] = false;
+
         BOUNDS_CHECK(entity_idx, state->entities.material.length);
         state->entities.material.rotational_response[entity_idx] = false;
 
+        BOUNDS_CHECK(entity_idx, state->entities.constrain_axis_x_length);
+        state->entities.constrain_axis_x[entity_idx] = false;
+        
+        BOUNDS_CHECK(entity_idx, state->entities.constrain_axis_y_length);
+        state->entities.constrain_axis_y[entity_idx] = false;
+    
+        BOUNDS_CHECK(entity_idx, state->entities.constrain_angular_clockwise_length);
+        state->entities.constrain_angular_clockwise[entity_idx] = false;
+    
+        BOUNDS_CHECK(entity_idx, state->entities.constrain_angular_counter_clockwise_length);
+        state->entities.constrain_angular_counter_clockwise[entity_idx] = false;
     }
 
     { // decrement_the_category_counter_in_the_state();
@@ -2726,10 +2789,7 @@ bool fizx_shape_dealloc(FIZX_State* state, GenId gid, bool recalculate_body_cent
     A gen-id handle to the allocated body; note that it returns zero when failing to allocate a body.
 **/
 GenId fizx_body_alloc(
-    FIZX_State* state, Transform2D global_transform, 
-    f32 linear_drag, f32 angular_drag, 
-    i32 layer, i32 mask,
-    bool gravity_affected
+    FIZX_State* state, Transform2D global_transform, FIZX_BodyConfig config
 ){
     GenId gid = gen_id_allocator_alloc(&state->gen_id_allocator);
     ASSERT(gid != (GenId){0}, "memory limit hit");
@@ -2761,17 +2821,29 @@ GenId fizx_body_alloc(
     state->entities.entity_type[body_idx] = FIZX_EntityType_Body;
 
     BOUNDS_CHECK(body_idx, state->entities.gravity_affected_length);
-    state->entities.gravity_affected[body_idx] = gravity_affected;
+    state->entities.gravity_affected[body_idx] = config.gravity_affected;
 
     BOUNDS_CHECK(body_idx, state->entities.linear_drag_length);
-    state->entities.linear_drag[body_idx] = linear_drag;
+    state->entities.linear_drag[body_idx] = config.linear_drag;
 
     BOUNDS_CHECK(body_idx, state->entities.angular_drag_length);
-    state->entities.angular_drag[body_idx] = angular_drag;
+    state->entities.angular_drag[body_idx] = config.angular_drag;
     
     BOUNDS_CHECK(body_idx, state->entities.layer_length);
-    state->entities.layer[body_idx] = layer;
-    state->entities.mask[body_idx] = mask;
+    state->entities.layer[body_idx] = config.layer;
+    state->entities.mask[body_idx] = config.mask;
+    
+    BOUNDS_CHECK(body_idx, state->entities.constrain_angular_clockwise_length);
+    state->entities.constrain_angular_clockwise[body_idx] = config.constrain_angular_clockwise;
+    
+    BOUNDS_CHECK(body_idx, state->entities.constrain_angular_counter_clockwise_length);
+    state->entities.constrain_angular_counter_clockwise[body_idx] = config.constrain_angular_counter_clockwise;
+
+    BOUNDS_CHECK(body_idx, state->entities.constrain_axis_x_length);
+    state->entities.constrain_axis_x[body_idx] = config.constrain_axis_x;
+    
+    BOUNDS_CHECK(body_idx, state->entities.constrain_axis_y_length);
+    state->entities.constrain_axis_y[body_idx] = config.constrain_axis_y;
 
     fizx_body_clear_forces_and_velocities_unsafe(state, body_idx);
 
@@ -3753,7 +3825,7 @@ void fizx_state_init(FIZX_State* state, MemoryArena* arena, i32 entity_amount, i
     
     MEMORY_ARENA_ALLOC_ARRAY(arena, state->query_area_leaf_idx_scratch_space, &state->query_area_leaf_idx_scratch_space_length, entity_amount);
     state->query_area_leaf_idx_scratch_space_count = 0;
-    
+
     state->gravity_direction = VECTOR2_DOWN;
     state->gravity_force = 9.81f;
     
@@ -4322,6 +4394,21 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                 BOUNDS_CHECK(body_idx, state->entities.angular_drag_length);
                 f32 angular_drag        = state->entities.angular_drag[body_idx];
                 
+                BOUNDS_CHECK(body_idx, state->entities.constrain_angular_counter_clockwise_length);
+                bool constrain_angular_counter_clockwise  = state->entities.constrain_angular_counter_clockwise[body_idx];
+                BOUNDS_CHECK(body_idx, state->entities.constrain_angular_clockwise_length);
+                bool constrain_angular_clockwise          = state->entities.constrain_angular_clockwise[body_idx];
+                
+                BOUNDS_CHECK(body_idx, state->entities.constrain_axis_x_length);
+                bool constrain_axis_x  = state->entities.constrain_axis_x[body_idx];
+                BOUNDS_CHECK(body_idx, state->entities.constrain_axis_y_length);
+                bool constrain_axis_y  = state->entities.constrain_axis_y[body_idx];
+                
+                BOUNDS_CHECK(body_idx, state->entities.shape_collision_displacement.length);
+                f32* displacement_x = &state->entities.shape_collision_displacement.x[body_idx];
+                f32* displacement_y = &state->entities.shape_collision_displacement.y[body_idx];
+
+                
                 if(gravity_affected){
                     *lin_vel_x += gravity.x;
                     *lin_vel_y += gravity.y;
@@ -4347,6 +4434,7 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                         if(direction_factor_x > 0.0f){
                             *ang_vel = new_ang_vel >= 0.0f ? 0.0f : new_ang_vel;
                         }
+                        
                         // anti-clockwise rotation.
                         else{
                             *ang_vel = new_ang_vel <= 0.0f ? 0.0f : new_ang_vel;
@@ -4356,6 +4444,20 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
 
                 // rotate_body_around_center_of_mass();
                 if(*ang_vel != 0.0f){
+                    if(
+                        (
+                            constrain_angular_counter_clockwise &&  
+                            *ang_vel > 0.0f
+                        )
+                        ||
+                        (
+                            constrain_angular_clockwise &&
+                            *ang_vel < 0.0f                    
+                        )
+                    ){
+                        *ang_vel = 0.0f;
+                    }
+                
                     // apply rotation.
                     f32 rot_amt = *ang_vel * delta_time;
                     rotor_multiply(*body_sine, *body_cosine, rot_amt, body_sine, body_cosine);
@@ -4389,6 +4491,7 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                             // clamp the velocity if it has over shot or reached its end.
                             *lin_vel_x = new_velocity_x >= 0.0f ? 0.0f : new_velocity_x;
                         }
+                        
                         // the drag pushes to the left.
                         else{
                             // clamp the velocity if it has over shot or reached its end.
@@ -4414,22 +4517,34 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                 }
 
                 { // apply_linear_velocity_translation();
+                    
+                    if(constrain_axis_x){
+                        *lin_vel_x = 0.0f;
+                        *displacement_x = 0.0f;
+                    }
+                    else{
+                        
+                        // apply moovement.
+                        *body_pos_x += *lin_vel_x * delta_time;
 
-                    *body_pos_x += *lin_vel_x * delta_time;
-                    *body_pos_y += *lin_vel_y * delta_time;
-                }
-
-                { // apply_displacements();
-
-                    BOUNDS_CHECK(body_idx, state->entities.shape_collision_displacement.length);
-
-                    f32* displacement_x = &state->entities.shape_collision_displacement.x[body_idx];
-                    *body_pos_x += *displacement_x;
-                    *displacement_x = 0;
-
-                    f32* displacement_y = &state->entities.shape_collision_displacement.y[body_idx];
-                    *body_pos_y += *displacement_y;
-                    *displacement_y = 0;
+                        // apply displacement.
+                        *body_pos_x += *displacement_x;
+                        *displacement_x = 0;
+                    }
+                    
+                    if(constrain_axis_y){
+                        *lin_vel_y = 0.0f;
+                        *displacement_y = 0.0f;
+                    }
+                    else{
+                        
+                        // apply movement.
+                        *body_pos_y += *lin_vel_y * delta_time;
+                        
+                        // apply displacement.
+                        *body_pos_y += *displacement_y;
+                        *displacement_y = 0;
+                    }
                 }
 
                 { // move_and_roate_body_shapes();
