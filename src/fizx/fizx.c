@@ -15,14 +15,18 @@
 ====================**//**/
 
 typedef struct{
+    bool angular_clockwise;
+    bool angular_counter_clockwise;
+    bool axis_x;
+    bool axis_y;
+} FIZX_ConstrainConfig;
+
+typedef struct{
     i32 layer;
     i32 mask;
     f32 linear_drag;
     f32 angular_drag;
-    bool constrain_angular_clockwise;
-    bool constrain_angular_counter_clockwise;
-    bool constrain_axis_x;
-    bool constrain_axis_y;
+    FIZX_ConstrainConfig constrain_config;
     bool gravity_affected;
 } FIZX_BodyConfig;
 
@@ -1703,16 +1707,60 @@ inline bool collision_manifold_shape_has_collisions(FIZX_CollisionManifold manif
 /// functions: FIZX_Soa_Entity.
 ///
 
+i32 fizx_is_valid_body_gen_id(const FIZX_State* state, GenId body_gid){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, body_gid);
+    if(!idx){
+        return 0;
+    }
+    BOUNDS_CHECK(idx, state->entities.entity_type_length);
+    if(state->entities.entity_type[idx] != FIZX_EntityType_Body){
+        return 0;
+    }
+    return idx;
+}
 
-bool fizx_body_get_layer(FIZX_State state, GenId body_gid, i32* out_layer){
-    i32 idx = gen_id_allocator_is_gen_id_valid(&state.gen_id_allocator, body_gid);
+bool fizx_body_get_constraints(const FIZX_State* state, GenId body_gid, FIZX_ConstrainConfig* out_config){
+    i32 idx = fizx_is_valid_body_gen_id(state, body_gid);
     if(!idx){
         return false;
     }
-    BOUNDS_CHECK(idx, state.entities.entity_type_length);
-    if(state.entities.entity_type[idx] != FIZX_EntityType_Body){
+    
+    BOUNDS_CHECK(idx, state->entities.constrain_angular_clockwise_length);
+    out_config->angular_clockwise = state->entities.constrain_angular_clockwise[idx];
+
+    BOUNDS_CHECK(idx, state->entities.constrain_angular_counter_clockwise_length);
+    out_config->angular_counter_clockwise = state->entities.constrain_angular_counter_clockwise[idx];
+
+    BOUNDS_CHECK(idx, state->entities.constrain_axis_x_length);
+    out_config->axis_x = state->entities.constrain_axis_x[idx];
+
+    BOUNDS_CHECK(idx, state->entities.constrain_axis_y_length);
+    out_config->axis_y = state->entities.constrain_axis_y[idx];
+    
+    return true;
+}
+
+bool fizx_body_set_constraints(const FIZX_State* state, GenId body_gid, FIZX_ConstrainConfig config){
+    i32 idx = fizx_is_valid_body_gen_id(state, body_gid);
+    if(!idx){
         return false;
     }
+    BOUNDS_CHECK(idx, state->entities.constrain_angular_clockwise_length);
+    state->entities.constrain_angular_clockwise[idx] = config.angular_clockwise;
+
+    BOUNDS_CHECK(idx, state->entities.constrain_angular_counter_clockwise_length);
+    state->entities.constrain_angular_counter_clockwise[idx] = config.angular_counter_clockwise;
+
+    BOUNDS_CHECK(idx, state->entities.constrain_axis_x_length);
+    state->entities.constrain_axis_x[idx] = config.axis_x; 
+
+    BOUNDS_CHECK(idx, state->entities.constrain_axis_y_length);
+    state->entities.constrain_axis_y[idx] = config.axis_y;     
+    return true;
+}
+
+bool fizx_body_get_layer(FIZX_State state, GenId body_gid, i32* out_layer){
+    i32 idx = fizx_is_valid_body_gen_id(&state, body_gid);
     BOUNDS_CHECK(idx, state.entities.layer_length);
     *out_layer = state.entities.layer[idx];
     return true;
@@ -2834,16 +2882,16 @@ GenId fizx_body_alloc(
     state->entities.mask[body_idx] = config.mask;
     
     BOUNDS_CHECK(body_idx, state->entities.constrain_angular_clockwise_length);
-    state->entities.constrain_angular_clockwise[body_idx] = config.constrain_angular_clockwise;
+    state->entities.constrain_angular_clockwise[body_idx] = config.constrain_config.angular_clockwise;
     
     BOUNDS_CHECK(body_idx, state->entities.constrain_angular_counter_clockwise_length);
-    state->entities.constrain_angular_counter_clockwise[body_idx] = config.constrain_angular_counter_clockwise;
+    state->entities.constrain_angular_counter_clockwise[body_idx] = config.constrain_config.angular_counter_clockwise;
 
     BOUNDS_CHECK(body_idx, state->entities.constrain_axis_x_length);
-    state->entities.constrain_axis_x[body_idx] = config.constrain_axis_x;
+    state->entities.constrain_axis_x[body_idx] = config.constrain_config.axis_x;
     
     BOUNDS_CHECK(body_idx, state->entities.constrain_axis_y_length);
-    state->entities.constrain_axis_y[body_idx] = config.constrain_axis_y;
+    state->entities.constrain_axis_y[body_idx] = config.constrain_config.axis_y;
 
     fizx_body_clear_forces_and_velocities_unsafe(state, body_idx);
 
@@ -4447,12 +4495,12 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                     if(
                         (
                             constrain_angular_counter_clockwise &&  
-                            *ang_vel > 0.0f
+                            *ang_vel < 0.0f
                         )
                         ||
                         (
                             constrain_angular_clockwise &&
-                            *ang_vel < 0.0f                    
+                            *ang_vel > 0.0f                    
                         )
                     ){
                         *ang_vel = 0.0f;

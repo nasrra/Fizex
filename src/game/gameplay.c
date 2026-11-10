@@ -271,10 +271,12 @@ struct Entity{
     GenId sprite_gid;
     GenId physics_body_gid;
     GenId game_clickable_area_gid;
+    
     // the behvaioural state of the entity; implementation depends on entity type.
     i32 state;
     // the tag of the entity, for additional specification needs.
     i32 tag;
+    
     i32 max_turns_until_turn_end_callback;
     i32 turns_until_turn_end_callback; 
     f32 health;
@@ -290,6 +292,8 @@ struct Entity{
     bool is_invincible;
     bool boost_depleted;
     bool serialisation_disabled;
+
+    void (*set_state_callback)(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state);
 };
 
 typedef struct{
@@ -1345,6 +1349,15 @@ void entity_manager_set_visibility_layer(EntityManager* entity_manager, i32 laye
 ///
 
 
+void entity_set_state_unsafe(EntityManager* entity_manager, i32 entity_idx, i32 state){
+    BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
+    Entity* entity = &entity_manager->entity[entity_idx];
+    entity->state = state;
+    if(entity->set_state_callback != NULL){
+        entity->set_state_callback(entity_manager, entity, entity_idx, state);
+    }
+}
+
 void entity_set_local_transform_unsafe_ext(EntityManager* manager, i32 entity_idx, Transform2D transform, bool update_components_transform){
 
     BOUNDS_CHECK(entity_idx, manager->entity_length);
@@ -2058,6 +2071,19 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D tra
 #define WINDMILL_HINGE_DEFAULT_PHYSICS_LAYER  PHYSICS_LAYER_ENVIRONMENT_MID
 #define WINDMILL_HINGE_DEFAULT_PHYSICS_MASK  ~(PHYSICS_LAYER_ENVIRONMENT) 
 
+#define WINDMILL_HINGE_COUNTER_CLOCKWISE_CONSTRAINTS  \
+(FIZX_ConstrainConfig){                               \
+    .angular_counter_clockwise = true,                \
+    .axis_x = true,                                   \
+    .axis_y = true                                    \
+}
+#define WINDMILL_HINGE_CLOCKWISE_CONSTRAINTS    \
+(FIZX_ConstrainConfig){                         \
+    .angular_clockwise = true,                  \
+    .axis_x = true,                             \
+    .axis_y = true                              \
+}
+
 void windmill_hinge_update(Entity* entity, i32 entity_idx, GameState* game_state, f32 delta_time){    
     // Transform2D rotated_transform = transform2d_rotate(entity->global_transform, to_radians(66.67f) * delta_time);
     // entity_set_global_transform_unsafe(&game_state->entity_manager, entity_idx, rotated_transform);
@@ -2081,9 +2107,7 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
             entity->is_physics_body = true;
             
             FIZX_BodyConfig config = {
-                .constrain_angular_clockwise = true,
-                .constrain_axis_x = true,
-                .constrain_axis_y = true,
+                .constrain_config = WINDMILL_HINGE_COUNTER_CLOCKWISE_CONSTRAINTS,
                 .layer = WINDMILL_HINGE_DEFAULT_PHYSICS_LAYER,
                 .mask = WINDMILL_HINGE_DEFAULT_PHYSICS_MASK,
                 .angular_drag = 0.70f
@@ -2175,10 +2199,46 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
 ///
 
 
+#define WINDMILL_COUNTER_CLOCKWISE_STATE 0
+#define WINDMILL_CLOCKWISE_STATE 1
 #define WINDMILL_BODY_TEXTURE_VIEW      (GFX_TextureView){.top_left = {128, 0}, .bot_right = {256, 128}}
 #define WINDMILL_DEFAULT_PHYSICS_LAYER  PHYSICS_LAYER_ENVIRONMENT_MID
 #define WINDMILL_DEFAULT_PHYSICS_MASK   PHYSICS_LAYER_ALL 
 #define WINDMILL_PHYSICS_MATERIAL (FIZX_Material){.static_friction = 0.75f, .kinetic_friction = 0.65f, .density = 10.0f, .restitution = 0.167f}
+
+void windmill_set_state_callback(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state){    
+    
+    BOUNDS_CHECK(entity_idx, entity_manager->entity_hierarchy.length);
+    i32 windmill_hinge_idx = entity_manager->entity_hierarchy.node[entity_idx].first_child;
+    
+    if(!windmill_hinge_idx){
+        os_output_message("windmill does not have a child entity.");
+        return;
+    }
+    
+    BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
+    Entity* hinge_entity = &entity_manager->entity[windmill_hinge_idx];
+    
+    switch(state){
+        default:{
+            ASSERT(false, "unkown state was set.");
+        } break;
+        case WINDMILL_COUNTER_CLOCKWISE_STATE:{
+            fizx_body_set_constraints(
+                &entity_manager->fizx_state, 
+                hinge_entity->physics_body_gid, 
+                WINDMILL_HINGE_COUNTER_CLOCKWISE_CONSTRAINTS
+            );
+        }break;
+        case WINDMILL_CLOCKWISE_STATE:{
+            fizx_body_set_constraints(
+                &entity_manager->fizx_state, 
+                hinge_entity->physics_body_gid, 
+                WINDMILL_HINGE_CLOCKWISE_CONSTRAINTS
+            );
+        }break;
+    }
+}
 
 GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
@@ -2186,6 +2246,8 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
         entity->type_id = EntityTypeId_WindMill;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
+                
+        entity->set_state_callback = windmill_set_state_callback;
                 
         { // physics_body_alloc();
 
@@ -3404,6 +3466,7 @@ GenId level_manager_load_level_file_recurssive(
                         parent_gid,
                         &entity
                     );
+                    i32 entity_idx = gen_id_get_index(deserialised_entity->entity_gid);
                     
                     if(entity){
                         if(parent_idx == 0){
@@ -3411,7 +3474,7 @@ GenId level_manager_load_level_file_recurssive(
                             string_push(&entity->serialisation_file_path, file_path);
                         }
                         else{
-                            entity->state = deserialised_entity->state;
+                            entity_set_state_unsafe(entity_manager, entity_idx, deserialised_entity->state);
                             entity->tag = deserialised_entity->tag;
                         }
                         string_push(&entity->name, deserialised_entity->name);
