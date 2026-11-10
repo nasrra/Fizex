@@ -38,8 +38,8 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
 ///
 
 
-#define CUE_BALL_FIZX_BODY_LINEAR_DRAG 1.15f
-#define CUE_BALL_FIZX_BODY_ANGULAR_DRAG 1.55f
+#define CUE_BALL_FIZX_BODY_LINEAR_DRAG 1.35f
+#define CUE_BALL_FIZX_BODY_ANGULAR_DRAG 1.85f
 #define CUE_BALL_FIZX_SHAPE_MATERIAL    \
                                         \
     (FIZX_Material) {                   \
@@ -49,8 +49,8 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
         .restitution = 0.45f,           \
         .rotational_response = true     \
     }
-#define NUMBER_BALL_FIZX_BODY_LINEAR_DRAG 1.25f
-#define NUMBER_BALL_FIZX_BODY_ANGULAR_DRAG 1.55f
+#define NUMBER_BALL_FIZX_BODY_LINEAR_DRAG 1.45f
+#define NUMBER_BALL_FIZX_BODY_ANGULAR_DRAG 1.85f
 #define NUMBER_BALL_FIZX_SHAPE_MATERIAL     \
                                             \
     (FIZX_Material) {                       \
@@ -1802,7 +1802,7 @@ GenId entity_spawn_board_turn_text(EntityManager* entity_manager, String name, T
         { // sprite_alloc();
 
 
-            String str = {
+        String str = {
                 .chars = "text",
                 .length = 4,
                 .count = 4
@@ -3723,7 +3723,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
 
             CollisionCallbackContext collision_callback_ctx = {.game_state = game_state};
             if(!in_editor_mode){
-                fizx_state_fixed_update(fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME, 32);            
+                fizx_state_fixed_update(fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME * 1.25f, 24);            
             }
 
             { // set_entity_positions_to_fizx_positions();

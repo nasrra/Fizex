@@ -106,3 +106,14 @@
 - turn timer decay of turns.
 
 + WINDMILL: SPIN THE BALLS AROUND.
+
+
+==================
+==== FEEDBACK ====
+==================
+
+
+- Levels have too many balls.
+- Balls enter their rest points too slowly.
+- speed boost level needs to be narrowed in.
+- balls that have been lined up need to have a line going out of them, showing the player where they are going.
