@@ -38,8 +38,8 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
 ///
 
 
-#define CUE_BALL_FIZX_BODY_LINEAR_DRAG 1.4f
-#define CUE_BALL_FIZX_BODY_ANGULAR_DRAG 1.9f
+#define CUE_BALL_FIZX_BODY_LINEAR_DRAG 1.45f
+#define CUE_BALL_FIZX_BODY_ANGULAR_DRAG 1.95f
 #define CUE_BALL_FIZX_SHAPE_MATERIAL    \
                                         \
     (FIZX_Material) {                   \
@@ -49,8 +49,8 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
         .restitution = 0.45f,           \
         .rotational_response = true     \
     }
-#define NUMBER_BALL_FIZX_BODY_LINEAR_DRAG 1.5f
-#define NUMBER_BALL_FIZX_BODY_ANGULAR_DRAG 1.9f
+#define NUMBER_BALL_FIZX_BODY_LINEAR_DRAG 1.55f
+#define NUMBER_BALL_FIZX_BODY_ANGULAR_DRAG 1.95f
 #define NUMBER_BALL_FIZX_SHAPE_MATERIAL     \
                                             \
     (FIZX_Material) {                       \
