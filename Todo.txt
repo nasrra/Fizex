@@ -58,6 +58,7 @@
     - extra 1
     - extra 2
     
+- update clickable area hierarchy when deleting an entity; otherwise it crashes as it tries to delete an entity that is no longer allocated 
 
 
 - Desk Fan

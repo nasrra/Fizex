@@ -2406,10 +2406,22 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                         }break;
                     }
                                         
-                    // refresh the local transform because it might have been updated.
-                    BOUNDS_CHECK(editor_mouse_state->selected_editor_ui_entity.entity_idx, entity_manager->entity_length);
-                    Transform2D local_transform = entity_manager->entity[editor_mouse_state->selected_editor_ui_entity.entity_idx].local_transform;
-                    entity_set_local_transform_unsafe(entity_manager, editor_mouse_state->selected_editor_ui_entity.entity_idx, local_transform);
+                    { // refresh_entity_after_changes();
+
+                        BOUNDS_CHECK(editor_mouse_state->selected_editor_ui_entity.entity_idx, entity_manager->entity_length);
+                        Entity* entity = &entity_manager->entity[editor_mouse_state->selected_editor_ui_entity.entity_idx];                        
+                        entity_set_local_transform_unsafe(
+                            entity_manager, 
+                            editor_mouse_state->selected_editor_ui_entity.entity_idx, 
+                            entity->local_transform
+                        );
+                        
+                        entity_set_state_unsafe(
+                            entity_manager, 
+                            editor_mouse_state->selected_editor_ui_entity.entity_idx,
+                            entity->state
+                        );
+                    }
                 }
 
                 editor_state->is_typing = false;
