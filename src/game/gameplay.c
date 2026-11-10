@@ -1834,7 +1834,7 @@ GenId entity_spawn_board_turn_text(EntityManager* entity_manager, String name, T
 #define WORLD_CAMERA_COORDINATE_SPACE GFX_CoordinateSpace_Cartesian
 #define WORLD_CAMERA_DEFAULT_NEAR_Z 0.01f
 #define WORLD_CAMERA_DEFAULT_FAR_Z 100.0f
-#define WORLD_CAMERA_DEFAULT_ORTHOGRAPHIC_SIZE 22.0f
+#define WORLD_CAMERA_DEFAULT_ORTHOGRAPHIC_SIZE 20.0f
 #define UI_CAMERA_COORDINATE_SPACE GFX_CoordinateSpace_Rasterised 
 #define UI_CAMERA_DEFAULT_NEAR_Z 0.01f
 #define UI_CAMERA_DEFAULT_FAR_Z 100.0f
@@ -2201,7 +2201,8 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
 
 #define WINDMILL_COUNTER_CLOCKWISE_STATE 0
 #define WINDMILL_CLOCKWISE_STATE 1
-#define WINDMILL_BODY_TEXTURE_VIEW      (GFX_TextureView){.top_left = {128, 0}, .bot_right = {256, 128}}
+#define WINDMILL_COUNTER_CLOCKWISE_BODY_TEXTURE_VIEW    (GFX_TextureView){.top_left = {1920, 0}, .bot_right = {2048, 128}}
+#define WINDMILL_CLOCKWISE_BODY_TEXTURE_VIEW            (GFX_TextureView){.top_left = {1920, 128}, .bot_right = {2048, 256}}
 #define WINDMILL_DEFAULT_PHYSICS_LAYER  PHYSICS_LAYER_ENVIRONMENT_MID
 #define WINDMILL_DEFAULT_PHYSICS_MASK   PHYSICS_LAYER_ALL 
 #define WINDMILL_PHYSICS_MATERIAL (FIZX_Material){.static_friction = 0.75f, .kinetic_friction = 0.65f, .density = 10.0f, .restitution = 0.167f}
@@ -2229,12 +2230,22 @@ void windmill_set_state_callback(EntityManager* entity_manager, Entity* entity, 
                 hinge_entity->physics_body_gid, 
                 WINDMILL_HINGE_COUNTER_CLOCKWISE_CONSTRAINTS
             );
+            gfx_sprite_set_texture_view(
+                entity_manager->gfx_state, 
+                entity->sprite_gid, 
+                WINDMILL_COUNTER_CLOCKWISE_BODY_TEXTURE_VIEW
+            );
         }break;
         case WINDMILL_CLOCKWISE_STATE:{
             fizx_body_set_constraints(
                 &entity_manager->fizx_state, 
                 hinge_entity->physics_body_gid, 
                 WINDMILL_HINGE_CLOCKWISE_CONSTRAINTS
+            );
+            gfx_sprite_set_texture_view(
+                entity_manager->gfx_state, 
+                entity->sprite_gid, 
+                WINDMILL_CLOCKWISE_BODY_TEXTURE_VIEW
             );
         }break;
     }
@@ -2287,14 +2298,14 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
             entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
             entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
             gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
-            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, WINDMILL_BODY_TEXTURE_VIEW);
+            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, WINDMILL_CLOCKWISE_BODY_TEXTURE_VIEW);
             gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
             gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
-            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 0.34f, .g = 0.34f, .b = 0.34f, .a = 1.0f});
+            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 1.0f, .g = 1.0f, .b = 1.0f, .a = 1.0f});
             gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
-            gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
+            gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
         }
 
         Entity* hinge_entity;

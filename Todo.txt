@@ -45,8 +45,8 @@
     / speed boost tutorial
     + speed boost 1
     + speed boost 2
-    - windmill tutorial
-    - windmill 1
+    + windmill tutorial
+    + windmill 1
     - windmill 2
     - thwamper tutorial
     - thwamper 1
@@ -78,7 +78,6 @@
 =====================
 ==== BACK BURNER ==== 
 =====================
-
 
 - implement two stage editor:
     - level editor mode: only move and edit native entities.
