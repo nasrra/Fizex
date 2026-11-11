@@ -31,6 +31,8 @@ bool entity_manager_get_entity(EntityManager manager, GenId entity_gid, Entity**
 bool entity_is_active_unsafe(EntityManager entity_manager, i32 entity_idx);
 bool entity_is_active(EntityManager entity_manager, GenId entity_gid);
 GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transform2D transform, GenId parent_gid, Entity** out_entity);
+void entity_set_active_unsafe(EntityManager* entity_manager, i32 entity_idx,  bool is_active);
+bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_active);
 
 
 ///
@@ -1288,21 +1290,24 @@ void entity_on_entity_hierarchy_dealloc(IntrusiveList* list, i32 node_idx, void*
     entity_manager_dealloc_entity_data_unsafe(manager, node_idx);
 }
 
-bool entity_manager_dealloc_entity(EntityManager* manager, GenId gid){
-    i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, gid);
-    if(!idx){
-        return false;
-    }
-
+void entity_manager_dealloc_entity_unsafe(EntityManager* manager, i32 entity_idx){
     // TODO:
     // may want to add functionality later so the user can deallocate an entity independently from its children.
 
     // NOTE:
     // the on_dealloc callback for this calls entity_manager_dealloc_entity_data_unsafe.
     bool preserve_sub_tree = false;
-    if(!intrusive_list_remove_node_and_children(&manager->entity_hierarchy, idx, manager)){
+    if(!intrusive_list_remove_node_and_children(&manager->entity_hierarchy, entity_idx, manager)){
         ASSERT(false, "failed to remove entity from entity hierarchy.");
+    }    
+}
+
+bool entity_manager_dealloc_entity(EntityManager* manager, GenId gid){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&manager->gen_id_allocator, gid);
+    if(!idx){
+        return false;
     }
+    entity_manager_dealloc_entity_unsafe(manager, idx);
     return true;
 }
 
@@ -1808,13 +1813,7 @@ void generic_entity_update(Entity* entity, EntityManager* entity_manager){
     }
 }
 
-bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_active){
-
-    i32 entity_idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, entity_gid);
-    if(!entity_idx){
-        return false;
-    }
-
+void entity_set_active_unsafe(EntityManager* entity_manager, i32 entity_idx,  bool is_active){
     BOUNDS_CHECK(entity_idx, entity_manager->entity_hierarchy.length);
     entity_manager->entity_hierarchy.node[entity_idx].is_active = is_active;
 
@@ -1834,8 +1833,17 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
                 gfx_sprite_set_inactive(entity_manager->gfx_state, entity->sprite_gid);
             }break;
         }
+    }    
+}
+
+bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_active){
+
+    i32 entity_idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, entity_gid);
+    if(!entity_idx){
+        return false;
     }
     
+    entity_set_active_unsafe(entity_manager, entity_idx, is_active);
     return true;
 }
 
@@ -3003,11 +3011,21 @@ typedef struct{
     GenId sprite_gid;
 } NumberBallPocketStateTimerTickCallbackContext;
 
-void number_ball_on_pocket_state_timer_on_tick_callback(void* user_data, f32 current_tick, f32 delta_tick){
+void number_ball_pocketed_state_timer_on_tick_callback(void* user_data, f32 current_tick, f32 delta_tick){
     NumberBallPocketStateTimerTickCallbackContext* ctx = (NumberBallPocketStateTimerTickCallbackContext*)user_data;
     f32 ratio = current_tick / BALL_POCKETED_LIFETIME;
     GFX_Colour colour = gfx_colour_mul_val(POCKET_COLOUR, ratio);
     gfx_sprite_set_colour(ctx->gfx_state, ctx->sprite_gid, colour);
+}
+
+typedef struct{
+    EntityManager* entity_manager;
+    i32 entity_idx;
+} NumberBallPocketStateTimerTimeoutCallbackContext;
+
+void number_ball_pocketed_state_timer_on_timeout_callback(void* user_data){
+    NumberBallPocketStateTimerTimeoutCallbackContext* ctx = (NumberBallPocketStateTimerTimeoutCallbackContext*)user_data;
+    entity_set_active_unsafe(ctx->entity_manager, ctx->entity_idx, false);
 }
 
 void number_ball_set_state_callback(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state){
@@ -3027,16 +3045,27 @@ void number_ball_set_state_callback(EntityManager* entity_manager, Entity* entit
                 .sprite_gid = entity->sprite_gid
             };
             
-            TimerContext timer_ctx = {
-                .tick_callback = number_ball_on_pocket_state_timer_on_tick_callback,
-                // this is deep copied into the internal data storage.
+            NumberBallPocketStateTimerTimeoutCallbackContext timeout_ctx = {
+                .entity_manager = entity_manager,
+                .entity_idx = entity_idx
+            };
+            
+            TimerContext timer_ctx = {                
                 .tick_data = &tick_ctx,
                 .tick_data_size = sizeof(tick_ctx),
+                .tick_callback = number_ball_pocketed_state_timer_on_tick_callback,
+                
+                .timeout_data = &timeout_ctx,
+                .timeout_data_size = sizeof(timeout_ctx),
+                .timeout_callback = number_ball_pocketed_state_timer_on_timeout_callback,
+                
                 .time_scale = 1.0f,
-                .end_time = BALL_POCKETED_LIFETIME   
+                .end_time = BALL_POCKETED_LIFETIME,
             };
             
             timer_manager_timer_start(&entity_manager->timer_manager, timer_ctx);
+        
+            
         }break;
     }
 }
