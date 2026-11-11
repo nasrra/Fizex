@@ -2319,7 +2319,7 @@ void windmill_set_state_callback(EntityManager* entity_manager, Entity* entity, 
     }
 }
 
-void windmill_update(EntityManager* entity_manager, i32 entity_idx){
+void windmill_update(EntityManager* entity_manager, Entity* entity, i32 entity_idx){
     
     BOUNDS_CHECK(entity_idx, entity_manager->entity_hierarchy.length);
     i32 windmill_hinge_idx = entity_manager->entity_hierarchy.node[entity_idx].first_child;
@@ -2334,7 +2334,7 @@ void windmill_update(EntityManager* entity_manager, i32 entity_idx){
     
     f32 angular_velocity;
     if(fizx_body_get_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, &angular_velocity)){
-        switch(hinge_entity->state){
+        switch(entity->state){
             case WINDMILL_CLOCKWISE_STATE:{
                 f32 min_val = -1.0f;
                 if(angular_velocity > min_val){
@@ -4087,7 +4087,8 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             switch(entity->type_id){
                 case EntityTypeId_BallCue:{ball_cue_update(entity, game_state, delta_time);}break;
                 case EntityTypeId_WindMillHinge:{windmill_hinge_update(entity, i, game_state, delta_time);}break;
-                case EntityTypeId_WindMill:{windmill_update(&game_state->entity_manager, i);}break;
+                case EntityTypeId_WindMill:{windmill_update(&game_state->entity_manager, entity, 
+                i);}break;
             }
         }
     }

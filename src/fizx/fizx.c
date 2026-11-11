@@ -4494,7 +4494,6 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                 BOUNDS_CHECK(body_idx, state->entities.shape_collision_displacement.length);
                 f32* displacement_x = &state->entities.shape_collision_displacement.x[body_idx];
                 f32* displacement_y = &state->entities.shape_collision_displacement.y[body_idx];
-
                 
                 if(gravity_affected){
                     *lin_vel_x += gravity.x;
