@@ -39,7 +39,7 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
 
 
 #define BALL_PHYSICS_SHAPE_RADIUS 0.55f
-
+#define BALL_POCKETED_LIFETIME 1.0f
 
 ///
 /// @ NumberBall Defines
@@ -1884,7 +1884,7 @@ GenId entity_spawn_board_turn_text(EntityManager* entity_manager, String name, T
             gfx_sprite_string_set_layer(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_UI);
             gfx_sprite_string_set_depth(        entity_manager->gfx_state, entity->sprite_gid, 0);
             gfx_sprite_string_set_colour(       entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
-            gfx_sprite_string_set_colour_state( entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_string_set_colour_blend( entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
         }        
     }
     return entity_gid;
@@ -2026,7 +2026,7 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform
             gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
-            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
         }
@@ -2116,7 +2116,7 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D tra
             gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_TopLeft);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 0.34f, .g = 0.34f, .b = 0.34f, .a = 1.0f});
-            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
         }
@@ -2401,7 +2401,7 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
             gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 1.0f, .g = 1.0f, .b = 1.0f, .a = 1.0f});
-            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
         }
@@ -2464,7 +2464,9 @@ void pocket_on_sustain_collision_callback(FIZX_CollisionInfo info, void* user_da
             case EntityTypeId_BallSeven:
             case EntityTypeId_BallNine:
             case EntityTypeId_BallZero:{
-                entity_set_state(&ctx->game_state->entity_manager, source_entity_gid, NUMBER_BALL_POCKETED_STATE);
+                if(entity->state != NUMBER_BALL_POCKETED_STATE){
+                    entity_set_state(&ctx->game_state->entity_manager, source_entity_gid, NUMBER_BALL_POCKETED_STATE);
+                }
             }break;
         }
                 
@@ -2528,7 +2530,7 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, Transform2D transform, 
             gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, POCKET_COLOUR);
-            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
         }
@@ -2599,7 +2601,7 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform
             gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
-            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
         }
@@ -2801,7 +2803,7 @@ GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, Ge
             gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
-            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 2);    
         }
@@ -2922,7 +2924,7 @@ GenId entity_spawn_pocket_interior_wall(EntityManager* entity_manager, Transform
             gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_DEBUG);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 0.5f, .g = 0.5f, .b = 1.0f, .a = 0.5f});
-            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Override);
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Override);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_EDITOR_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
         }
@@ -2996,6 +2998,18 @@ void number_ball_on_enter_collision_callback(FIZX_CollisionInfo info, void* user
     }
 }
 
+typedef struct{
+    GFX_State* gfx_state;
+    GenId sprite_gid;
+} NumberBallPocketStateTimerTickCallbackContext;
+
+void number_ball_on_pocket_state_timer_on_tick_callback(void* user_data, f32 current_tick, f32 delta_tick){
+    NumberBallPocketStateTimerTickCallbackContext* ctx = (NumberBallPocketStateTimerTickCallbackContext*)user_data;
+    f32 ratio = current_tick / BALL_POCKETED_LIFETIME;
+    GFX_Colour colour = gfx_colour_mul_val(POCKET_COLOUR, ratio);
+    gfx_sprite_set_colour(ctx->gfx_state, ctx->sprite_gid, colour);
+}
+
 void number_ball_set_state_callback(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state){
     switch(state){
         default:{
@@ -3007,7 +3021,22 @@ void number_ball_set_state_callback(EntityManager* entity_manager, Entity* entit
         case NUMBER_BALL_POCKETED_STATE:{
             // todo: 
             // - fadeout colour to pocket colour.
-            // - timed deactivation.
+            // - timed deactivation.    
+            NumberBallPocketStateTimerTickCallbackContext tick_ctx = {
+                .gfx_state = entity_manager->gfx_state,
+                .sprite_gid = entity->sprite_gid
+            };
+            
+            TimerContext timer_ctx = {
+                .tick_callback = number_ball_on_pocket_state_timer_on_tick_callback,
+                // this is deep copied into the internal data storage.
+                .tick_data = &tick_ctx,
+                .tick_data_size = sizeof(tick_ctx),
+                .time_scale = 1.0f,
+                .end_time = BALL_POCKETED_LIFETIME   
+            };
+            
+            timer_manager_timer_start(&entity_manager->timer_manager, timer_ctx);
         }break;
     }
 }
@@ -3118,8 +3147,8 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, Transform2D transf
             gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
             gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
-            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
-            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_NONE);
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_MaskedOverride);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0); 
         }
@@ -3292,7 +3321,7 @@ GenId entity_spawn_boost_pad(EntityManager* entity_manager, Transform2D transfor
             gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
-            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 3);
         }
@@ -3355,7 +3384,7 @@ GenId entity_spawn_valid_placement_area(EntityManager* entity_manager, Transform
             gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_DEBUG);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 0.5f, .g = 1.0f, .b = 0.5f, .a = 0.5f});
-            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Override);
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Override);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_EDITOR_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1024);
         }
@@ -3425,7 +3454,7 @@ GenId entity_spawn_invalid_placement_area(EntityManager* entity_manager, Transfo
             gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_DEBUG);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 0.75f, .g = 0.5f, .b = 0.75f, .a = 0.5f});
-            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Override);
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Override);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_EDITOR_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1023);
         }

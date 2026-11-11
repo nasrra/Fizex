@@ -215,7 +215,7 @@ typedef enum{
 //     GFX_SpriteState state;
 //     i32 virtual_texture;
 //     i32 material;
-//     i32 colour_state;
+//     i32 colour_blend;
 //     i32 layer;
 //     i32 _padding_2;
 // } GFX_DeviceSprite;
@@ -233,7 +233,7 @@ typedef struct{
     GFX_SpriteState state;
     i32 virtual_texture;
     i32 material;
-    i32 colour_state;
+    i32 colour_blend;
 } GFX_DeviceSprite;
 
 typedef struct{
@@ -281,9 +281,10 @@ typedef struct{
 } GFX_BlitPipeline;
 
 typedef enum{
-    GFX_ColourState_Tint,
-    GFX_ColourState_Override
-} GFX_ColourState;
+    GFX_ColourBlend_Tint,
+    GFX_ColourBlend_Override,
+    GFX_ColourBlend_MaskedOverride
+} GFX_ColourBlend;
 
 typedef enum{
     GFX_SpriteType_Solo,
@@ -417,6 +418,7 @@ typedef struct{
 // the upper 32-bits of the 64 bit number.
 #define GFX_DEVICE_SPRITE_LAYER_BIT_MASK 0xFFFFFFFF00000000ULL
 
+#define GFX_COLOUR_NONE         (GFX_Colour){0}
 #define GFX_COLOUR_RED          (GFX_Colour){.r = 1.0f, .a = 1.0f}
 #define GFX_COLOUR_GREEN        (GFX_Colour){.g = 1.0f, .a = 1.0f}
 #define GFX_COLOUR_LIGHT_GREEN  (GFX_Colour){.r = 0.5f, .g = 1.0f, .b = 0.5f, .a = 1.0f}
@@ -576,13 +578,23 @@ typedef struct{
 DEFINE_QUICKSORT_STRUCT(GFX_DeviceSprite, u64, .depth_layer, quicksort_device_sprite);
 
 
+///
+/// @ GFX_Colour
+///
 
 
-//////////
-//  functions: FreeType.
-//////////
+GFX_Colour gfx_colour_mul_val(GFX_Colour colour, f32 val){
+    colour.r *= val;
+    colour.g *= val;
+    colour.b *= val;
+    colour.a *= val;
+    return colour;
+}
 
 
+///
+/// @ FreeType
+///
 
 
 #include <ft2build.h>
@@ -911,31 +923,29 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
         return true;
     }
 
-///
+/// sprite colour blend.
 
-/// sprite colour state.
-
-    void gfx_sprite_set_colour_state_unsafe(GFX_State* state, i32 sprite_idx, GFX_ColourState colour_state){
+    void gfx_sprite_set_colour_blend_unsafe(GFX_State* state, i32 sprite_idx, GFX_ColourBlend colour_blend){
         GFX_SpriteManager* sprite_manager = &state->sprite_manager;
         BOUNDS_CHECK(sprite_idx, sprite_manager->device_sprite_length);
         GFX_DeviceSprite* sprite = &sprite_manager->device_sprite[sprite_idx];
-        sprite->colour_state = colour_state;
+        sprite->colour_blend = colour_blend;
     }
 
-    bool gfx_sprite_set_colour_state(GFX_State* state, GenId sprite_gid, GFX_ColourState colour_state){
+    bool gfx_sprite_set_colour_blend(GFX_State* state, GenId sprite_gid, GFX_ColourBlend colour_blend){
         i32 idx = gen_id_allocator_is_gen_id_valid(&state->sprite_manager.gen_id_allocator, sprite_gid);
         if(!idx){
             return false;
         }
-        gfx_sprite_set_colour_state_unsafe(state, idx, colour_state);
+        gfx_sprite_set_colour_blend_unsafe(state, idx, colour_blend);
         return true;
     }
 
-    void gfx_sprite_string_set_colour_state_unsafe(GFX_State* state, i32 sprite_idx, GFX_ColourState colour_state){
+    void gfx_sprite_string_set_colour_blend_unsafe(GFX_State* state, i32 sprite_idx, GFX_ColourBlend colour_blend){
         i32 first_idx = sprite_idx;
         i32 idx = first_idx;
         while(true){
-            gfx_sprite_set_colour_state_unsafe(state, sprite_idx, colour_state);
+            gfx_sprite_set_colour_blend_unsafe(state, sprite_idx, colour_blend);
             BOUNDS_CHECK(idx, state->sprite_manager.host_sprite_length);
             GFX_HostSprite* host = &state->sprite_manager.host_sprite[idx];
             idx = host->next_in_chain;
@@ -945,7 +955,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
         }
     }
 
-    bool gfx_sprite_string_set_colour_state(GFX_State* state, GenId sprite_gid, GFX_ColourState colour_state){
+    bool gfx_sprite_string_set_colour_blend(GFX_State* state, GenId sprite_gid, GFX_ColourBlend colour_blend){
         i32 first_idx = gen_id_allocator_is_gen_id_valid(&state->sprite_manager.gen_id_allocator, sprite_gid);
         if(!first_idx){
             return false;
@@ -955,7 +965,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
             ASSERT(false, "sprite is not within a sprite-chain.");
             return false;
         }
-        gfx_sprite_string_set_colour_state_unsafe(state, first_idx, colour_state);
+        gfx_sprite_string_set_colour_blend_unsafe(state, first_idx, colour_blend);
         return true;
     }
 
@@ -3251,7 +3261,7 @@ void gfx_draw_line(GFX_State* state, GFX_Colour colour, Vector2 start, Vector2 e
     gfx_sprite_set_material(        state, sprite_gid, material);
     gfx_sprite_set_origin(          state, sprite_gid, GFX_SpriteOrigin_Center);
     gfx_sprite_set_colour(          state, sprite_gid, colour);
-    gfx_sprite_set_colour_state(    state, sprite_gid, GFX_ColourState_Override);
+    gfx_sprite_set_colour_blend(    state, sprite_gid, GFX_ColourBlend_Override);
     gfx_sprite_set_layer(           state, sprite_gid, layer);
     gfx_sprite_set_depth(           state, sprite_gid, depth);
 }
@@ -3301,7 +3311,7 @@ void gfx_draw_fill_rect(GFX_State* state, Rectangle shape, GFX_Colour colour, GF
     gfx_sprite_set_material(        state, sprite_gid, material);
     gfx_sprite_set_origin(          state, sprite_gid, origin);
     gfx_sprite_set_colour(          state, sprite_gid, colour);
-    gfx_sprite_set_colour_state(    state, sprite_gid, GFX_ColourState_Override);
+    gfx_sprite_set_colour_blend(    state, sprite_gid, GFX_ColourBlend_Override);
     gfx_sprite_set_layer(           state, sprite_gid, layer);
     gfx_sprite_set_depth(           state, sprite_gid, depth);
 }

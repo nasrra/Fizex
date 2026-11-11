@@ -111,10 +111,11 @@ const sprite_state_inactive: i32 = 1;
 const sprite_state_deallocated: i32 = 0;
 
 /**========================================
-    COLOUR STATES.
+    COLOUR BLENDS.
 ========================================**/
-const colour_state_tint: i32 = 0;
-const colour_state_override: i32 = 1;
+const colour_blend_tint: i32 = 0;
+const colour_blend_override: i32 = 1;
+const colour_blend_masked_override: i32 = 2;
 
 /**========================================
     MATERIALS.
@@ -167,7 +168,7 @@ struct pixel_coords{
 //     // 112 - 116
 //     material_id: i32,
 //     // 116 - 120
-//     colour_state: i32,
+//     colour_blend: i32,
 //     // 116 - 124
 //     layer: i32,
 //     // 124 - 128
@@ -204,7 +205,7 @@ struct sprite{
     material_id: i32,
     
     // 120 - 124
-    colour_state: i32,    
+    colour_blend: i32,    
 }
 
 struct sprite_array{
@@ -301,10 +302,16 @@ fn fs_main(
         case material_simple_text:      {colour = fs_draw_text_simple(sprite, vec2i(in.pixel_position));}
     }
 
-    switch sprite.colour_state{
+    switch sprite.colour_blend{
         case default:{return fail_colour;}
-        case colour_state_tint: {colour = vec4f(mix(colour.rgb, colour.rgb * sprite.colour.rgb, sprite.colour.a), colour.a);}
-        case colour_state_override: {colour = vec4f(mix(colour.rgb, sprite.colour.rgb, sprite.colour.a), sprite.colour.a);}
+        case colour_blend_tint: {colour = vec4f(mix(colour.rgb, colour.rgb * sprite.colour.rgb, sprite.colour.a), colour.a);}
+        case colour_blend_override: {colour = vec4f(mix(colour.rgb, sprite.colour.rgb, sprite.colour.a), sprite.colour.a);}
+        case colour_blend_masked_override:{
+            var og_alpha: f32;
+            og_alpha = colour.a;
+            colour = vec4f(mix(colour.rgb, sprite.colour.rgb, sprite.colour.a), colour.a);
+            colour.a = og_alpha;
+        }
     }
 
     // gamma correction.
