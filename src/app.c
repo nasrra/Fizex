@@ -6,7 +6,7 @@
 #include "base_layer/base_structures.c"
 #include "input/input.h"
 #include "renderer/gfx.c"
-
+#include "sound.c"
 GFX_State* global_gfx_state;
 
 #include "fizx/fizx.c"
@@ -134,6 +134,7 @@ void app_main(){
     Editor_State editor_state = {0};
     editor_state_init(&editor_state, persistent, &gfx_state, game_state.entity_manager.entity_length);
 
+    sound_init();
 
 #ifndef NDEBUG
     { // load editor config.
@@ -218,6 +219,9 @@ void app_main(){
         f32 previous_time_in_seconds    = 0.0f;
         f32 fixed_update_accumulator    = 0.0f;
         while(!window_ctx->is_destroyed){
+            
+            sound_update();
+            
             u128 process_tick = os_get_proccess_tick();
             // micro to mili.
             u128 process_tick_in_mili = process_tick / 1000;
@@ -275,8 +279,7 @@ void app_main(){
                     }
                     editor_save_config(&editor_state, transient);
                 } 
-                
-                
+                                
                 in_editor_mode = editor_state.menu != Editor_Menu_None;                
             }
 

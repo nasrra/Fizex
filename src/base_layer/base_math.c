@@ -201,7 +201,7 @@ typedef struct{
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define ABS(val) ((val) < 0 ? (-(val)) : (val))
-#define CLAMP(val, min, max) ((val) < min ? (min) : ((val) > max ? (max) : (val)))
+#define CLAMP(val, min, max) ((val) < (min) ? (min) : ((val) > (max) ? (max) : (val)))
 
 ///
 /// @ functions: f32

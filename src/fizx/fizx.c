@@ -10,6 +10,15 @@
     - response type (trigger, kinematic, dynamic) should be global across a body's shapes; look at the is_kinematic in resolve rigid function lol.
 */
 
+
+///
+/// @ forward declatations.
+///
+
+
+typedef struct FIZX_State FIZX_State;
+
+
 /**====================
     types.
 ====================**//**/
@@ -47,20 +56,23 @@ typedef struct{
     f32 depth_2;
 
     i32 source_layer;
-    // this is the entity index of the `source` in the fizx state.
-    i32 source_entity_idx;
+    // this is the entity index of the `source`  (the body that has recieved the collision)  body's shape in the fizx state.
+    i32 source_shape_idx;
     void* source_user_data;
 
     i32 target_layer;
-    // this is the entity index of the `target` in the fizx state.
-    i32 target_entity_idx;
+    // this is the entity index of the `target` (the body that has collided with the source) body's shape in the fizx state.
+    i32 target_shape_idx;
     void* target_user_data;
 
+    FIZX_State* fizx_state;
+
     bool two_contact_points;
+
 } FIZX_CollisionInfo;
 
 typedef struct{
-
+    
     Vector2 contact_point_1;
     Vector2 contact_point_2;
     Vector2 normal_1;
@@ -77,7 +89,7 @@ typedef struct{
     
 } FIZX_QueryCollisionInfo;
 
-typedef void (*FIZX_CollisionCallback)(FIZX_CollisionInfo, void*);
+typedef void (*FIZX_CollisionCallback)(FIZX_CollisionInfo info, void* user_data);
 
 typedef enum{
     FIZX_ShapeBehaviour_Dynamic,
@@ -597,7 +609,7 @@ typedef struct{
     i32 kinematic;
 } FIZX_BodyCount;
 
-typedef struct{
+struct FIZX_State{
     f64 step_time_in_ms;
     f64 sub_step_time_in_ms;
     f64 body_movement_step_in_ms;
@@ -656,7 +668,7 @@ typedef struct{
     FIZX_BodyCount line_collider_count;
     FIZX_BodyCount line_rigid_count;
     bool is_init;
-} FIZX_State;
+};
 
 /**====================
     defines.
@@ -1719,6 +1731,29 @@ i32 fizx_is_valid_body_gen_id(const FIZX_State* state, GenId body_gid){
     return idx;
 }
 
+Vector2 fizx_body_get_linear_velocity_unsafe(const FIZX_State* state, i32 body_idx){
+    Vector2 linear_velocity;
+    BOUNDS_CHECK(body_idx, state->entities.linear_velocity.length);
+    linear_velocity.x = state->entities.linear_velocity.x[body_idx];
+    linear_velocity.y = state->entities.linear_velocity.y[body_idx];    
+    return linear_velocity;
+}
+
+bool fizx_body_get_linear_velocity(const FIZX_State* state, GenId body_gid, Vector2* out_velocity){
+    i32 idx = fizx_is_valid_body_gen_id(state, body_gid);
+    if(!idx){
+        return false;
+    }
+    
+    BOUNDS_CHECK(idx, state->body_hierarchy.length);
+    if(!state->body_hierarchy.node[idx].is_active){
+        return false;
+    }
+
+    *out_velocity = fizx_body_get_linear_velocity_unsafe(state, idx);
+    return true;
+}
+
 bool fizx_body_get_constraints(const FIZX_State* state, GenId body_gid, FIZX_ConstrainConfig* out_config){
     i32 idx = fizx_is_valid_body_gen_id(state, body_gid);
     if(!idx){
@@ -2127,9 +2162,9 @@ bool fizx_line_set_direction(FIZX_State* state, GenId line_gid, Vector2 directio
     return true;
 }
 
-i32 fizx_shape_get_parent_unsafe(FIZX_State state, i32 shape_idx){
-    BOUNDS_CHECK(shape_idx, state.body_hierarchy.length);
-    return state.body_hierarchy.node[shape_idx].parent;
+i32 fizx_shape_get_parent_unsafe(const FIZX_State* state, i32 shape_idx){
+    BOUNDS_CHECK(shape_idx, state->body_hierarchy.length);
+    return state->body_hierarchy.node[shape_idx].parent;
 }
 
 bool fizx_shape_set_on_enter_callback(FIZX_State* state, GenId shape_gid, FIZX_CollisionCallback callback){
@@ -2470,25 +2505,6 @@ bool fizx_body_set_global_position(FIZX_State* state, GenId body_gid, Vector2 po
         return false;
     }
     fizx_body_set_global_position_unsafe(state, idx, position);
-    return true;
-}
-
-Vector2 fizx_body_get_linear_velocity_unsafe(FIZX_State state, i32 body_idx){
-    Soa_Vector2* soa = &state.entities.linear_velocity;
-    BOUNDS_CHECK(body_idx, soa->length);
-    return (Vector2){.x = soa->x[body_idx], .y = soa->y[body_idx]};
-}
-
-bool fizx_body_get_linear_velocity(FIZX_State state, GenId body_gid, Vector2* out_linear_velocity){
-    i32 idx = fizx_validate_body_gen_id(&state, body_gid);
-    if(idx == 0){
-        ASSERT(false, "not a body gid");
-        return false;
-    }
-    if(!fizx_body_is_active_unsafe(&state, idx)){
-        return false;
-    }
-    *out_linear_velocity = fizx_body_get_linear_velocity_unsafe(state, idx);
     return true;
 }
 
@@ -7513,6 +7529,7 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                             i32 target_layer = state->entities.layer[target_entity_idx];
                                                         
                             collision_info = (FIZX_CollisionInfo){
+                                .fizx_state         = state,
                                 .contact_point_1    = contact_point_1,
                                 .contact_point_2    = contact_point_2,
                                 .normal_1           = normal_1,
@@ -7523,8 +7540,8 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                                 .source_user_data   = source_user_data,
                                 .target_user_data   = target_user_data,
                                 // see `collision_manifold_set_data_one_way` to know why and how this works.
-                                .target_entity_idx  = target_entity_idx,
-                                .source_entity_idx  = source_entity_idx,
+                                .target_shape_idx  = target_entity_idx,
+                                .source_shape_idx  = source_entity_idx,
                                 .target_layer       = target_layer,
                                 .source_layer       = source_layer
                             };
@@ -7673,6 +7690,7 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                         i32 source_layer = state->entities.layer[source_entity_idx];
                                                     
                         collision_info = (FIZX_CollisionInfo){
+                            .fizx_state         = state,
                             .contact_point_1    = contact_point_1,
                             .contact_point_2    = contact_point_2,
                             .normal_1           = normal_1,
@@ -7683,8 +7701,8 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                             .source_user_data   = source_user_data,
                             .target_user_data   = target_user_data,
                             // see `collision_manifold_set_data_one_way` to know why and how this works.
-                            .target_entity_idx  = target_entity_idx,
-                            .source_entity_idx  = source_entity_idx,
+                            .target_shape_idx  = target_entity_idx,
+                            .source_shape_idx  = source_entity_idx,
                             .target_layer       = target_layer,
                             .source_layer       = source_layer
                         };

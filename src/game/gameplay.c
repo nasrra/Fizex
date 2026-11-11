@@ -453,6 +453,7 @@ typedef struct{
 #define ENTITY_NAME_LENGTH 32
 #define PLAYER_MOUSE_MAX_DRAW_RADIUS 3.5f
 #define PLAYER_MOUSE_LAUNCH_FORCE 7.0f
+#define PLAYER_MAXIMUM_BALL_LAUNCH_FORCE PLAYER_MOUSE_MAX_DRAW_RADIUS * PLAYER_MOUSE_LAUNCH_FORCE
 
 #define LEVEL_FILE_LINE_LENGTH 2048
      
@@ -500,13 +501,13 @@ typedef struct{
 #define PHYSICS_LAYER_ENVIRONMENT_BOT   (1 << 4)
 #define PHYSICS_LAYER_RAYCAST           (1 << 5)
 #define PHYSICS_LAYER_GUIDELINE         (1 << 6)
-#define PHYSICS_LAYER_BALL_CUE          (1 << 7)
+#define PHYSICS_LAYER_CUE_BALL          (1 << 7)
 #define PHYSICS_LAYER_PLACEMENT_AREA    (1 << 8)
 
-#define PHYSICS_LAYER_BALL (PHYSICS_LAYER_BALL_CUE | PHYSICS_LAYER_NUMBER_BALL)
+#define PHYSICS_LAYER_BALL (PHYSICS_LAYER_CUE_BALL | PHYSICS_LAYER_NUMBER_BALL)
 #define PHYSICS_LAYER_ENVIRONMENT (PHYSICS_LAYER_ENVIRONMENT_TOP | PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_ENVIRONMENT_BOT)
 
-#define BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK (PHYSICS_LAYER_BALL_CUE | PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_ENVIRONMENT_BOT)
+#define BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK (PHYSICS_LAYER_CUE_BALL | PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_ENVIRONMENT_BOT)
 #define BALL_CUE_FRAGMENTATION_PHYSICS_LAYER_MASK (PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID) 
 
 
@@ -1923,7 +1924,7 @@ typedef struct{
 
 void thwamper_smackdown_area_query_callback(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data){
     i32 thwamper_body_idx = *(i32*)user_data;
-    i32 body_idx = fizx_shape_get_parent_unsafe(*state, info.target_entity_idx);
+    i32 body_idx = fizx_shape_get_parent_unsafe(state, info.target_entity_idx);
     if(body_idx == thwamper_body_idx){
         return;
     }
@@ -2497,7 +2498,7 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform
             FIZX_BodyConfig body_config = {
                 .linear_drag = CUE_BALL_FIZX_BODY_LINEAR_DRAG,
                 .angular_drag = CUE_BALL_FIZX_BODY_ANGULAR_DRAG,
-                .layer = PHYSICS_LAYER_BALL_CUE,
+                .layer = PHYSICS_LAYER_CUE_BALL,
                 .mask = BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK
             };
             
@@ -2773,7 +2774,23 @@ GenId entity_spawn_empty(EntityManager* entity_manager, Transform2D transform, G
 ///
 
 
-GenId entity_spawn_game_ball(EntityManager* entity_manager, Transform2D transform, GenId parent, i32 ball_number, Entity** out_entity){
+void number_ball_on_enter_collision_callback(FIZX_CollisionInfo info, void* user_data){
+    
+    if((info.source_layer & PHYSICS_LAYER_BALL)){
+        i32 body_idx = fizx_shape_get_parent_unsafe(info.fizx_state, info.source_shape_idx);
+        Vector2 velocity = fizx_body_get_linear_velocity_unsafe(info.fizx_state, body_idx);
+        // clamp to the min and max launch force as speed boosts and other forces can make the ball move faster.
+        velocity.x = CLAMP(velocity.x, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
+        velocity.y = CLAMP(velocity.y, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
+        velocity = vector2_div_val(velocity, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE * 0.5f);
+        // make sure to clamp it so that it is between 0 and 1, as the velocity is in a square space not radial.
+        // this is for the FMOD param which needs to be between 0 and 1 as well.
+        f32 length = CLAMP(vector2_len(velocity), 0.0f, 1.0f);
+        sound_play_ball_hit(length);
+    }
+}
+
+GenId entity_spawn_number_ball(EntityManager* entity_manager, Transform2D transform, GenId parent, i32 ball_number, Entity** out_entity){
 
     GFX_TextureView texture_view;
     EntityTypeId type_id;
@@ -2864,6 +2881,7 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, Transform2D transfor
                 NUMBER_BALL_FIZX_SHAPE_MATERIAL
             );
             
+            fizx_shape_set_on_enter_callback(&entity_manager->fizx_state, entity_shape_gid, number_ball_on_enter_collision_callback);
             fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
         }
         
@@ -2890,43 +2908,43 @@ GenId entity_spawn_game_ball(EntityManager* entity_manager, Transform2D transfor
 }
 
 GenId entity_spawn_ball_one(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 1, out_entity);
+    return entity_spawn_number_ball(entity_manager, transform, parent, 1, out_entity);
 }
 
 GenId entity_spawn_ball_two(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 2, out_entity);
+    return entity_spawn_number_ball(entity_manager, transform, parent, 2, out_entity);
 }
 
 GenId entity_spawn_ball_three(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 3, out_entity);
+    return entity_spawn_number_ball(entity_manager, transform, parent, 3, out_entity);
 }
 
 GenId entity_spawn_ball_four(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 4, out_entity);
+    return entity_spawn_number_ball(entity_manager, transform, parent, 4, out_entity);
 }
 
 GenId entity_spawn_ball_five(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 5, out_entity);
+    return entity_spawn_number_ball(entity_manager, transform, parent, 5, out_entity);
 }
 
 GenId entity_spawn_ball_six(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 6, out_entity);
+    return entity_spawn_number_ball(entity_manager, transform, parent, 6, out_entity);
 }
 
 GenId entity_spawn_ball_seven(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 7, out_entity);
+    return entity_spawn_number_ball(entity_manager, transform, parent, 7, out_entity);
 }
 
 GenId entity_spawn_ball_eight(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 8, out_entity);
+    return entity_spawn_number_ball(entity_manager, transform, parent, 8, out_entity);
 }
 
 GenId entity_spawn_ball_nine(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 9, out_entity);
+    return entity_spawn_number_ball(entity_manager, transform, parent, 9, out_entity);
 }
 
 GenId entity_spawn_ball_zero(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
-    return entity_spawn_game_ball(entity_manager, transform, parent, 0, out_entity);
+    return entity_spawn_number_ball(entity_manager, transform, parent, 0, out_entity);
 }
 
 
@@ -3814,7 +3832,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             Entity* cue_ball_entity;
             if(entity_manager_get_entity(*entity_manager, board_state->cue_ball_entity_gid, &cue_ball_entity)){
                 Vector2 linear_velocity;
-                if(fizx_body_get_linear_velocity(*fizx_state, cue_ball_entity->physics_body_gid, &linear_velocity)){                
+                if(fizx_body_get_linear_velocity(fizx_state, cue_ball_entity->physics_body_gid, &linear_velocity)){
                     if(vector2_len_sqrd(linear_velocity)){
                         balls_are_moving = true;
                     }
@@ -3829,7 +3847,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                 
                 if(entity_manager_get_entity(*entity_manager, number_ball_entity_gid, &number_ball_entity)){
                     Vector2 linear_velocity;
-                    if(fizx_body_get_linear_velocity(*fizx_state, number_ball_entity->physics_body_gid, &linear_velocity)){
+                    if(fizx_body_get_linear_velocity(fizx_state, number_ball_entity->physics_body_gid, &linear_velocity)){
                         if(vector2_len_sqrd(linear_velocity)){
                             balls_are_moving = true;
                             break;
@@ -4042,6 +4060,7 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                                 clicked_entity->physics_body_gid, 
                                 impulse
                             );
+                            sound_play_cue_ball_hit();
                         }
                     }break;
                 }
