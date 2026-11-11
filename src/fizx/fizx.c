@@ -1123,6 +1123,7 @@ inline void fizx_resolve_rigid_collisions(
 
         // resolve_rigid_collision_rotational();
         if(owner_rotational_response || other_rotational_response){
+        
             // f32 restitution = MIN(owner_restitution, other_restitution);
             // note: this is okay as it is assumed that restitution is between 0 and 1.
             f32 restitution = (owner_restitution + other_restitution) * 0.5f;
@@ -1889,14 +1890,36 @@ bool fizx_body_set_mask(FIZX_State* state, GenId body_gid, i32 mask){
     return true;
 }
 
-bool fizx_body_get_transform(FIZX_State* state, GenId body_gid, Transform2D* out_transform){
-
-    i32 idx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, body_gid);
-    if(!idx){
+bool fizx_body_get_transform(const FIZX_State* state, GenId body_gid, Transform2D* out_transform){
+    i32 body_idx = fizx_is_valid_body_gen_id(state, body_gid);
+    if(!body_idx){
         return false;
     }
 
-    *out_transform = soa_transform2d_copy_elem(&state->entities.global_transform, idx);
+    *out_transform = soa_transform2d_copy_elem(&state->entities.global_transform, body_idx);
+    return true;
+}
+
+bool fizx_body_get_angular_velocity(const FIZX_State* state, GenId body_gid, f32* out_angular_velocity){
+    i32 body_idx = fizx_is_valid_body_gen_id(state, body_gid);
+    if(!body_idx){
+        return false;
+    }
+
+    BOUNDS_CHECK(body_idx, state->entities.angular_velocity_length);
+    *out_angular_velocity = state->entities.angular_velocity[body_idx];
+    return true;
+}
+
+bool fizx_body_set_angular_velocity(FIZX_State* state, GenId body_gid, f32 angular_velocity){
+    i32 body_idx = fizx_is_valid_body_gen_id(state, body_gid);
+    if(!body_idx){
+        return false;
+    }
+    
+    BOUNDS_CHECK(body_idx, state->entities.angular_velocity_length);
+    state->entities.angular_velocity[body_idx] = angular_velocity;
+    
     return true;
 }
 

@@ -2025,8 +2025,8 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform
 #define WINDMILL_BLADE_TEXTURE_VIEW      (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
 #define WINDMILL_BLADE_PHYSICS_MATERIAL \
     (FIZX_Material){                    \
-        .static_friction = 0.01f,       \
-        .kinetic_friction = 0.0f,       \
+        .static_friction = 0.02f,       \
+        .kinetic_friction = 0.01f,      \
         .density = 1.20f,               \
         .restitution = 0.0f,            \
         .rotational_response = true     \
@@ -2149,7 +2149,7 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
                 .constrain_config = WINDMILL_HINGE_COUNTER_CLOCKWISE_CONSTRAINTS,
                 .layer = WINDMILL_HINGE_DEFAULT_PHYSICS_LAYER,
                 .mask = WINDMILL_HINGE_DEFAULT_PHYSICS_MASK,
-                .angular_drag = 0.70f
+                .angular_drag = 0.75f
             };
 
             entity->physics_body_gid = fizx_body_alloc(
@@ -2287,6 +2287,38 @@ void windmill_set_state_callback(EntityManager* entity_manager, Entity* entity, 
                 WINDMILL_CLOCKWISE_BODY_TEXTURE_VIEW
             );
         }break;
+    }
+}
+
+void windmill_update(EntityManager* entity_manager, i32 entity_idx){
+    
+    BOUNDS_CHECK(entity_idx, entity_manager->entity_hierarchy.length);
+    i32 windmill_hinge_idx = entity_manager->entity_hierarchy.node[entity_idx].first_child;
+    
+    if(!windmill_hinge_idx){
+        os_output_message("windmill does not have a child entity.");
+        return;
+    }
+    
+    BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
+    Entity* hinge_entity = &entity_manager->entity[windmill_hinge_idx];
+    
+    f32 angular_velocity;
+    if(fizx_body_get_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, &angular_velocity)){
+        switch(hinge_entity->state){
+            case WINDMILL_CLOCKWISE_STATE:{
+                f32 min_val = -1.0f;
+                if(angular_velocity > min_val){
+                    fizx_body_set_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, min_val);
+                }
+            }break;
+            case WINDMILL_COUNTER_CLOCKWISE_STATE:{
+                f32 min_val = 1.0f;
+                if(angular_velocity < min_val){
+                    fizx_body_set_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, min_val);
+                }
+            }break;
+        }
     }
 }
 
@@ -3939,6 +3971,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             switch(entity->type_id){
                 case EntityTypeId_BallCue:{ball_cue_update(entity, game_state, delta_time);}break;
                 case EntityTypeId_WindMillHinge:{windmill_hinge_update(entity, i, game_state, delta_time);}break;
+                case EntityTypeId_WindMill:{windmill_update(&game_state->entity_manager, i);}break;
             }
         }
     }

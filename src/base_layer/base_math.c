@@ -1783,7 +1783,7 @@ bool soa_transform2d_init(Soa_Transform2D* soa, MemoryArena* arena, i32 length){
     return true;
 }
 
-Transform2D soa_transform2d_copy_elem(Soa_Transform2D* soa, i32 index){
+Transform2D soa_transform2d_copy_elem(const Soa_Transform2D* soa, i32 index){
     BOUNDS_CHECK(index, soa->length);
     Transform2D dst = {
         .position = {.x = soa->position.x[index], .y = soa->position.y[index]},
