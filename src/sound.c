@@ -75,23 +75,24 @@ bool sound_play_one_shot_event(char* event_name, FMOD_STUDIO_EVENTINSTANCE** out
         return false;
     }
     
-    *out_event_inst = event_inst;
-    return true;
-}
-
-void sound_update(){
-    FMOD_Studio_System_Update(fmod_studio_system);
     // fmod_error_check(FMOD_Studio_System_FlushCommands(fmod_studio_system));
 
-    // FMOD_STUDIO_BUS* master_bus;
+    FMOD_STUDIO_BUS* master_bus;
     
-    // fmod_error_check( 
-    //     FMOD_Studio_System_GetBus(
-    //         fmod_studio_system,
-    //         "bus:/",
-    //         &master_bus
-    //     )
-    // );
+    fmod_error_check( 
+        FMOD_Studio_System_GetBus(
+            fmod_studio_system,
+            "bus:/",
+            &master_bus
+        )
+    );
+
+    fmod_error_check(
+        FMOD_Studio_Bus_SetVolume(
+            master_bus,
+            0.8f
+        )
+    );
     
     // f32 volume;
     // f32 final_volume;
@@ -102,6 +103,13 @@ void sound_update(){
     //         &final_volume
     //     )
     // );
+    
+    *out_event_inst = event_inst;
+    return true;
+}
+
+void sound_update(){
+    FMOD_Studio_System_Update(fmod_studio_system);
 }
 
 void sound_init(){
@@ -144,9 +152,9 @@ void sound_init(){
     `remarks`
     `velocity` should be between 0 and 1.
 */
-bool sound_play_ball_hit(f32 velocity){
+bool sound_play_ball_hit_ball(f32 velocity){
     FMOD_STUDIO_EVENTINSTANCE* event_inst;
-    if(!sound_play_one_shot_event("event:/Sfx/ball_hit", &event_inst)){
+    if(!sound_play_one_shot_event("event:/Sfx/ball_hit_ball", &event_inst)){
         return false;
     }
     
@@ -160,6 +168,30 @@ bool sound_play_ball_hit(f32 velocity){
     return true;
 }
 
+/*
+    `remarks`
+    `velocity` should be between 0 and 1.
+*/
+bool sound_play_ball_hit_wall(f32 velocity){
+    FMOD_STUDIO_EVENTINSTANCE* event_inst;
+    if(!sound_play_one_shot_event("event:/Sfx/ball_hit_wall", &event_inst)){
+        return false;
+    }
+    
+    FMOD_Studio_EventInstance_SetParameterByName(
+        event_inst,
+        "velocity",
+        velocity,
+        false
+    );
+
+    return true;
+}
+
+/*
+    `remarks`
+    `velocity` should be between 0 and 1.
+*/
 bool sound_play_cue_ball_hit(f32 power){
 
     FMOD_STUDIO_EVENTINSTANCE* event_inst;

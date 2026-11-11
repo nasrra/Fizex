@@ -2663,6 +2663,23 @@ void ball_cue_update(Entity* entity, GameState* game_state, f32 delta_time){
 ///
 
 
+void wall_on_enter_collision_callback(FIZX_CollisionInfo info, void* user_data){
+    
+    if((info.source_layer & PHYSICS_LAYER_BALL)){
+        i32 body_idx = fizx_shape_get_parent_unsafe(info.fizx_state, info.source_shape_idx);
+        Vector2 velocity = fizx_body_get_linear_velocity_unsafe(info.fizx_state, body_idx);
+        // clamp to the min and max launch force as speed boosts and other forces can make the ball move faster.
+        velocity.x = CLAMP(velocity.x, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
+        velocity.y = CLAMP(velocity.y, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
+        velocity = vector2_div_val(velocity, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE * 0.5f);
+        // make sure to clamp it so that it is between 0 and 1, as the velocity is in a square space not radial.
+        // this is for the FMOD param which needs to be between 0 and 1 as well.
+        f32 length = CLAMP(vector2_len(velocity), 0.0f, 1.0f);
+        
+        sound_play_ball_hit_wall(length);
+    }
+}
+
 GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
@@ -2694,7 +2711,8 @@ GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, Ge
                 .restitution = 0.224f, 
                 .rotational_response = true
             };
-            fizx_rectangle_rigid_alloc(
+            
+            GenId shape_gid = fizx_rectangle_rigid_alloc(
                 &entity_manager->fizx_state,
                 entity->physics_body_gid,
                 shape_transform,
@@ -2704,6 +2722,8 @@ GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, Ge
                 square,
                 material
             );
+            
+            fizx_shape_set_on_enter_callback(&entity_manager->fizx_state, shape_gid, wall_on_enter_collision_callback);
             
             fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);     
         }        
@@ -2788,7 +2808,8 @@ void number_ball_on_enter_collision_callback(FIZX_CollisionInfo info, void* user
         // make sure to clamp it so that it is between 0 and 1, as the velocity is in a square space not radial.
         // this is for the FMOD param which needs to be between 0 and 1 as well.
         f32 length = CLAMP(vector2_len(velocity), 0.0f, 1.0f);
-        sound_play_ball_hit(length);
+        
+        sound_play_ball_hit_ball(length);
     }
 }
 
