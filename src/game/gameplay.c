@@ -34,34 +34,51 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
 
 
 ///
-/// @ Ball
+/// @ Ball defines
 ///
 
 
-#define CUE_BALL_FIZX_BODY_LINEAR_DRAG 1.45f
-#define CUE_BALL_FIZX_BODY_ANGULAR_DRAG 1.95f
-#define CUE_BALL_FIZX_SHAPE_MATERIAL    \
-                                        \
-    (FIZX_Material) {                   \
-        .static_friction = 0.5f,        \
-        .kinetic_friction = 0.334f,     \
-        .density = 1.85f,               \
-        .restitution = 0.45f,           \
-        .rotational_response = true     \
-    }
-#define NUMBER_BALL_FIZX_BODY_LINEAR_DRAG 1.55f
-#define NUMBER_BALL_FIZX_BODY_ANGULAR_DRAG 1.95f
-#define NUMBER_BALL_FIZX_SHAPE_MATERIAL     \
-                                            \
-    (FIZX_Material) {                       \
-        .static_friction = 0.5f,            \
-        .kinetic_friction = 0.334f,         \
-        .density = 1.65f,                   \
-        .restitution = 0.55f,               \
-        .rotational_response = true         \
-    }
+#define BALL_PHYSICS_SHAPE_RADIUS 0.55f
 
-#define BALL_FIZX_SHAPE_RADIUS 0.55f
+
+///
+/// @ NumberBall Defines
+///
+
+
+#define NUMBER_BALL_DEFAULT_STATE 0
+#define NUMBER_BALL_POCKETED_STATE 1
+#define NUMBER_BALL_PHYSICS_BODY_DEFAULT_MASK \
+    (PHYSICS_LAYER_BALL | PHYSICS_LAYER_ENVIRONMENT)
+    
+#define NUMBER_BALL_PHYSICS_BODY_POCKETED_MASK \
+    (NUMBER_BALL_PHYSICS_BODY_DEFAULT_MASK | PHYSICS_LAYER_POCKET_INTERIOR_WALL)
+
+#define NUMBER_BALL_PHYSICS_BODY_LINEAR_DRAG 1.55f
+#define NUMBER_BALL_PHYSICS_BODY_ANGULAR_DRAG 1.95f
+#define NUMBER_BALL_PHYSICS_SHAPE_MATERIAL \
+(FIZX_Material) {                          \
+    .static_friction = 0.5f,               \
+    .kinetic_friction = 0.334f,            \
+    .density = 1.65f,                      \
+    .restitution = 0.55f,                  \
+    .rotational_response = true            \
+}
+
+///
+/// @ CueBall defines
+///
+
+#define CUE_BALL_PHYSICS_BODY_LINEAR_DRAG 1.45f
+#define CUE_BALL_PHSYICS_BODY_ANGULAR_DRAG 1.95f
+#define CUE_BALL_PHYSICS_SHAPE_MATERIAL \
+(FIZX_Material) {                       \
+    .static_friction = 0.5f,            \
+    .kinetic_friction = 0.334f,         \
+    .density = 1.85f,                   \
+    .restitution = 0.45f,               \
+    .rotational_response = true         \
+}
 
 
 ///
@@ -230,7 +247,8 @@ enum EntityTypeId{
     EntityTypeId_UiCamera               = 22,
     EntityTypeId_Empty                  = 23,
     EntityTypeId_ValidPlacementArea     = 24,
-    EntityTypeId_InvalidPlacementArea   = 25
+    EntityTypeId_InvalidPlacementArea   = 25,
+    EntityTypeId_PocketInteriorWall     = 26
 };
 
 typedef enum{
@@ -493,16 +511,17 @@ typedef struct{
 /// @ Physics layers.
 ///
 
-#define PHYSICS_LAYER_NONE              0
-#define PHYSICS_LAYER_ALL               I32_MAX
-#define PHYSICS_LAYER_NUMBER_BALL       (1 << 1)
-#define PHYSICS_LAYER_ENVIRONMENT_TOP   (1 << 2)
-#define PHYSICS_LAYER_ENVIRONMENT_MID   (1 << 3)
-#define PHYSICS_LAYER_ENVIRONMENT_BOT   (1 << 4)
-#define PHYSICS_LAYER_RAYCAST           (1 << 5)
-#define PHYSICS_LAYER_GUIDELINE         (1 << 6)
-#define PHYSICS_LAYER_CUE_BALL          (1 << 7)
-#define PHYSICS_LAYER_PLACEMENT_AREA    (1 << 8)
+#define PHYSICS_LAYER_NONE                  0
+#define PHYSICS_LAYER_ALL                   I32_MAX
+#define PHYSICS_LAYER_NUMBER_BALL           (1 << 1)
+#define PHYSICS_LAYER_ENVIRONMENT_TOP       (1 << 2)
+#define PHYSICS_LAYER_ENVIRONMENT_MID       (1 << 3)
+#define PHYSICS_LAYER_ENVIRONMENT_BOT       (1 << 4)
+#define PHYSICS_LAYER_RAYCAST               (1 << 5)
+#define PHYSICS_LAYER_GUIDELINE             (1 << 6)
+#define PHYSICS_LAYER_CUE_BALL              (1 << 7)
+#define PHYSICS_LAYER_PLACEMENT_AREA        (1 << 8)
+#define PHYSICS_LAYER_POCKET_INTERIOR_WALL  (1 << 9)
 
 #define PHYSICS_LAYER_BALL (PHYSICS_LAYER_CUE_BALL | PHYSICS_LAYER_NUMBER_BALL)
 #define PHYSICS_LAYER_ENVIRONMENT (PHYSICS_LAYER_ENVIRONMENT_TOP | PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_ENVIRONMENT_BOT)
@@ -873,14 +892,14 @@ void guideline_collision_callback(FIZX_State* state, FIZX_QueryCollisionInfo inf
     GuidelineCollisionCallbackContext* ctx = (GuidelineCollisionCallbackContext*)user_data;
         
     Vector2 end = (Vector2){
-        .x = info.contact_point_1.x + (info.normal_1.x * (BALL_FIZX_SHAPE_RADIUS - F32_EPSILON * 100.0f)),
-        .y = info.contact_point_1.y + (info.normal_1.y * (BALL_FIZX_SHAPE_RADIUS - F32_EPSILON * 100.0f))
+        .x = info.contact_point_1.x + (info.normal_1.x * (BALL_PHYSICS_SHAPE_RADIUS - F32_EPSILON * 100.0f)),
+        .y = info.contact_point_1.y + (info.normal_1.y * (BALL_PHYSICS_SHAPE_RADIUS - F32_EPSILON * 100.0f))
     };
     
     Circle query_circle = {
         .x = end.x,
         .y = end.y,
-        .radius = BALL_FIZX_SHAPE_RADIUS
+        .radius = BALL_PHYSICS_SHAPE_RADIUS
     };
     
     GuidelineCircleCollisionCallbackContext query_ctx = {
@@ -1395,6 +1414,16 @@ void entity_set_state_unsafe(EntityManager* entity_manager, i32 entity_idx, i32 
     if(entity->set_state_callback != NULL){
         entity->set_state_callback(entity_manager, entity, entity_idx, state);
     }
+}
+
+bool entity_set_state(EntityManager* entity_manager, GenId entity_gid, i32 state){
+    i32 idx = gen_id_allocator_is_gen_id_valid(&entity_manager->gen_id_allocator, entity_gid);
+    if(!idx){
+        return false;
+    }
+    
+    entity_set_state_unsafe(entity_manager, idx, state);
+    return true;
 }
 
 void entity_set_local_transform_unsafe_ext(EntityManager* manager, i32 entity_idx, Transform2D transform, bool update_components_transform){
@@ -2397,7 +2426,9 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
 ///
 
 
-void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_data){
+#define POCKET_COLOUR (GFX_Colour){.r = 0.34f, .g = 0.34f, .b = 0.34f, .a = 1.0f}
+
+void pocket_on_sustain_collision_callback(FIZX_CollisionInfo info, void* user_data){
     
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
     GenId source_entity_gid = *(GenId*)info.source_user_data;
@@ -2423,7 +2454,8 @@ void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_d
         switch(entity->type_id){
             case EntityTypeId_BallCue:{
                 ctx->game_state->board_state.cue_ball_count -= 1; 
-            }
+                entity_set_active(&ctx->game_state->entity_manager, source_entity_gid, false);
+            }break;
             case EntityTypeId_BallEight:
             case EntityTypeId_BallOne:
             case EntityTypeId_BallTwo:
@@ -2434,7 +2466,7 @@ void pocket_fizx_shape_on_sustain_callback(FIZX_CollisionInfo info, void* user_d
             case EntityTypeId_BallSeven:
             case EntityTypeId_BallNine:
             case EntityTypeId_BallZero:{
-                entity_set_active(&ctx->game_state->entity_manager, source_entity_gid, false);
+                entity_set_state(&ctx->game_state->entity_manager, source_entity_gid, NUMBER_BALL_POCKETED_STATE);
             }break;
         }
                 
@@ -2464,7 +2496,7 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, Transform2D transform, 
                 body_config
             );
 
-            Circle physics_shape = {.radius = 0.55f};
+            Circle physics_shape = {.radius = 0.5f};
             Transform2D physics_shape_transform = TRANSFORM2D_IDENTITY;
             void* shape_user_data = &entity_gid;
             
@@ -2481,7 +2513,7 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, Transform2D transform, 
             fizx_shape_set_on_sustain_callback(
                 &entity_manager->fizx_state,
                 shape_gid,
-                pocket_fizx_shape_on_sustain_callback
+                pocket_on_sustain_collision_callback
             );
             
             fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
@@ -2497,7 +2529,7 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, Transform2D transform, 
             gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
             gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
-            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 0.34f, .g = 0.34f, .b = 0.34f, .a = 1.0f});
+            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, POCKET_COLOUR);
             gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Tint);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
@@ -2530,8 +2562,8 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform
             entity->is_physics_body = true;
 
             FIZX_BodyConfig body_config = {
-                .linear_drag = CUE_BALL_FIZX_BODY_LINEAR_DRAG,
-                .angular_drag = CUE_BALL_FIZX_BODY_ANGULAR_DRAG,
+                .linear_drag = CUE_BALL_PHYSICS_BODY_LINEAR_DRAG,
+                .angular_drag = CUE_BALL_PHSYICS_BODY_ANGULAR_DRAG,
                 .layer = PHYSICS_LAYER_CUE_BALL,
                 .mask = BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK
             };
@@ -2542,7 +2574,7 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform
                 body_config
             );
 
-            Circle circle = {.radius = BALL_FIZX_SHAPE_RADIUS};
+            Circle circle = {.radius = BALL_PHYSICS_SHAPE_RADIUS};
             Transform2D shape_transform = TRANSFORM2D_IDENTITY;
             fizx_circle_rigid_alloc(
                 &entity_manager->fizx_state,
@@ -2552,7 +2584,7 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform
                 FIZX_CollisionCallbackBehaviour_All,
                 &entity_gid,
                 circle,
-                CUE_BALL_FIZX_SHAPE_MATERIAL
+                CUE_BALL_PHYSICS_SHAPE_MATERIAL
             );
             
             fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
@@ -2782,6 +2814,72 @@ GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, Ge
     return entity_gid;
 }
 
+GenId entity_spawn_pocket_interior_wall(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+    GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
+    Entity* entity;
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
+    
+        entity->type_id = EntityTypeId_PocketInteriorWall;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_EDITOR;
+        
+        { // alloc_physics_body();
+            entity->is_physics_body = true;
+                        
+            FIZX_BodyConfig body_config = {
+                .layer = PHYSICS_LAYER_POCKET_INTERIOR_WALL,
+                .mask = PHYSICS_LAYER_BALL
+            };
+            
+            entity->physics_body_gid = fizx_body_alloc(
+                &entity_manager->fizx_state, 
+                TRANSFORM2D_IDENTITY, 
+                body_config
+            );
+            
+            Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
+            Transform2D shape_transform = TRANSFORM2D_IDENTITY;
+            FIZX_Material material = {
+                .static_friction = 0.75f, 
+                .kinetic_friction = 0.5f, 
+                .density = 22.6f, 
+                .restitution = 0.224f,
+                .rotational_response = false
+            };
+            
+            GenId shape_gid = fizx_rectangle_rigid_alloc(
+                &entity_manager->fizx_state,
+                entity->physics_body_gid,
+                shape_transform,
+                FIZX_ShapeBehaviour_Kinematic,
+                FIZX_CollisionCallbackBehaviour_All,
+                &entity_gid,
+                square,
+                material
+            );
+                        
+            fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);     
+        }        
+
+        { // alloc_sprite();
+        
+            entity->is_sprite = true;
+            entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
+            entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
+            gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+            gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_DEBUG);
+            gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
+            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 0.5f, .g = 0.5f, .b = 1.0f, .a = 0.5f});
+            gfx_sprite_set_colour_state(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourState_Override);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_EDITOR_WORLD);
+            gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
+        }
+        
+        entity_set_local_transform(entity_manager, entity_gid, transform);
+        *out_entity = entity;
+    }
+    return entity_gid;
+}
+
 
 ///
 /// @ LevelRoot.
@@ -2824,7 +2922,7 @@ GenId entity_spawn_empty(EntityManager* entity_manager, Transform2D transform, G
 
 
 ///
-/// @ NumberBall.
+/// @ NumberBall procedures.
 ///
 
 
@@ -2842,6 +2940,21 @@ void number_ball_on_enter_collision_callback(FIZX_CollisionInfo info, void* user
         f32 length = CLAMP(vector2_len(velocity), 0.0f, 1.0f);
         
         sound_play_ball_hit_ball(length);
+    }
+}
+
+void number_ball_set_state_callback(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state){
+    switch(state){
+        default:{
+            ASSERT(false, "unknown state set");
+        }break;
+        case NUMBER_BALL_DEFAULT_STATE:{
+            // do nothing...
+        }break;
+        case NUMBER_BALL_POCKETED_STATE:{
+            Entity* entity = &entity_manager->entity[entity_idx];
+            fizx_body_set_mask(&entity_manager->fizx_state, entity->physics_body_gid, NUMBER_BALL_PHYSICS_BODY_POCKETED_MASK);
+        }break;
     }
 }
 
@@ -2903,6 +3016,7 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, Transform2D transf
     {
         entity->type_id = type_id;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
+        entity->set_state_callback = number_ball_set_state_callback;
 
         { // alloc_physics_body();
             entity->is_physics_body = true;
@@ -2911,10 +3025,10 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, Transform2D transf
             bool constrain_angular_clockwise = false;
 
             FIZX_BodyConfig body_config = {
-                .linear_drag = NUMBER_BALL_FIZX_BODY_LINEAR_DRAG,
-                .angular_drag = NUMBER_BALL_FIZX_BODY_ANGULAR_DRAG,
+                .linear_drag = NUMBER_BALL_PHYSICS_BODY_LINEAR_DRAG,
+                .angular_drag = NUMBER_BALL_PHYSICS_BODY_ANGULAR_DRAG,
                 .layer = PHYSICS_LAYER_NUMBER_BALL,
-                .mask = PHYSICS_LAYER_ALL,
+                .mask = NUMBER_BALL_PHYSICS_BODY_DEFAULT_MASK,
             };
     
             entity->physics_body_gid = fizx_body_alloc(
@@ -2923,7 +3037,7 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, Transform2D transf
                 body_config
             );
             
-            Circle circle = {.radius = BALL_FIZX_SHAPE_RADIUS};    
+            Circle circle = {.radius = BALL_PHYSICS_SHAPE_RADIUS};    
             Transform2D shape_transform = TRANSFORM2D_IDENTITY;    
             GenId entity_shape_gid = fizx_circle_rigid_alloc(
                 &entity_manager->fizx_state,
@@ -2933,7 +3047,7 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, Transform2D transf
                 FIZX_CollisionCallbackBehaviour_All,
                 &entity_gid,
                 circle,
-                NUMBER_BALL_FIZX_SHAPE_MATERIAL
+                NUMBER_BALL_PHYSICS_SHAPE_MATERIAL
             );
             
             fizx_shape_set_on_enter_callback(&entity_manager->fizx_state, entity_shape_gid, number_ball_on_enter_collision_callback);
@@ -3345,6 +3459,9 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
         case EntityTypeId_InvalidPlacementArea:{
             entity_gid = entity_spawn_invalid_placement_area(entity_manager, transform, parent_gid, &entity);
         }break;
+        case EntityTypeId_PocketInteriorWall:{
+            entity_gid = entity_spawn_pocket_interior_wall(entity_manager, transform, parent_gid, &entity);
+        }
     }
     
     if(entity){        
@@ -3367,7 +3484,6 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
 ///
 /// functions: LevelManager.
 ///
-
 
 
 void level_manager_init(
@@ -4099,10 +4215,10 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                         fizx_state_query_circle_cast_area(
                             fizx_state, guideline_collision_callback, &guideline_ctx, 
                             PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID, 
-                            vector2_add(guideline_state->start_position, vector2_mul_val(launch_direction, BALL_FIZX_SHAPE_RADIUS * 1.75f)),
+                            vector2_add(guideline_state->start_position, vector2_mul_val(launch_direction, BALL_PHYSICS_SHAPE_RADIUS * 1.75f)),
                             launch_direction, 
                             100.0f, 
-                            BALL_FIZX_SHAPE_RADIUS,
+                            BALL_PHYSICS_SHAPE_RADIUS,
                             FIZX_CollisionCallbackBehaviour_Closest
                         );            
                         
@@ -4150,7 +4266,7 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                     Circle query_area = {
                         .x = clicked_entity->global_transform.position.x,
                         .y = clicked_entity->global_transform.position.y,
-                        .radius = BALL_FIZX_SHAPE_RADIUS
+                        .radius = BALL_PHYSICS_SHAPE_RADIUS
                     };
                     
                     fizx_state_query_circle_area(
