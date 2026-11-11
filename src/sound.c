@@ -7,7 +7,7 @@
 FMOD_STUDIO_SYSTEM* fmod_studio_system;
 
 void fmod_error_check(FMOD_RESULT result){
-    ASSERT(result == FMOD_OK, "result is not okay");
+    ASSERT(result == FMOD_OK, "fmod result is not okay");
 }
 
 FMOD_STUDIO_BANK* fmod_master_bank;
@@ -26,38 +26,58 @@ FMOD_RESULT sound_one_shot_event_callback(
     return FMOD_OK;
 }
 
-#define SOUND_PLAY_ONE_SHOT_EVENT(_event_name)          \
-    FMOD_STUDIO_EVENTDESCRIPTION* __sound001_event_desc;\
-                                                        \
-    fmod_error_check(                                   \
-        FMOD_Studio_System_GetEvent(                    \
-            fmod_studio_system,                         \
-            _event_name,                                \
-            &__sound001_event_desc                      \
-        )                                               \
-    );                                                  \
-                                                        \
-    FMOD_STUDIO_EVENTINSTANCE* __sound0002_event_inst;  \
-                                                        \
-    fmod_error_check(                                   \
-        FMOD_Studio_EventDescription_CreateInstance(    \
-            __sound001_event_desc,                      \
-            &__sound0002_event_inst                     \
-        )                                               \
-    );                                                  \
-    fmod_error_check(                                   \
-        FMOD_Studio_EventInstance_SetCallback(          \
-            __sound0002_event_inst,                     \
-            sound_one_shot_event_callback,              \
-            FMOD_STUDIO_EVENT_CALLBACK_SOUND_STOPPED    \
-        )                                               \
-    );                                                  \
-                                                        \
-    fmod_error_check(                                   \
-        FMOD_Studio_EventInstance_Start(                \
-            __sound0002_event_inst                      \
-        )                                               \
+bool sound_play_one_shot_event(char* event_name, FMOD_STUDIO_EVENTINSTANCE** out_event_inst){
+    
+    FMOD_RESULT result;
+    
+    FMOD_STUDIO_EVENTDESCRIPTION* event_desc;
+      
+    result = FMOD_Studio_System_GetEvent(                  
+        fmod_studio_system,                       
+        event_name,
+        &event_desc                    
     );
+    
+    if(result != FMOD_OK){
+        ASSERT(false, "fmod result is not okay");
+        return false;
+    }
+                                                
+    FMOD_STUDIO_EVENTINSTANCE* event_inst;
+                                                
+    result = FMOD_Studio_EventDescription_CreateInstance(  
+        event_desc,                    
+        &event_inst                   
+    );
+                                         
+    if(result != FMOD_OK){
+        ASSERT(false, "fmod result is not okay");
+        return false;
+    }
+    
+    result = FMOD_Studio_EventInstance_SetCallback(        
+        event_inst,                   
+        sound_one_shot_event_callback,            
+        FMOD_STUDIO_EVENT_CALLBACK_SOUND_STOPPED  
+    );
+    
+    if(result != FMOD_OK){
+        ASSERT(false, "fmod result is not okay");
+        return false;
+    }
+                                                
+    result = FMOD_Studio_EventInstance_Start(              
+        event_inst                    
+    );                                             
+
+    if(result != FMOD_OK){
+        ASSERT(false, "fmod result is not okay");
+        return false;
+    }
+    
+    *out_event_inst = event_inst;
+    return true;
+}
 
 void sound_update(){
     FMOD_Studio_System_Update(fmod_studio_system);
@@ -124,13 +144,35 @@ void sound_init(){
     `remarks`
     `velocity` should be between 0 and 1.
 */
-void sound_play_ball_hit(f32 velocity){
-    SOUND_PLAY_ONE_SHOT_EVENT("event:/Sfx/ball_hit");
+bool sound_play_ball_hit(f32 velocity){
+    FMOD_STUDIO_EVENTINSTANCE* event_inst;
+    if(!sound_play_one_shot_event("event:/Sfx/ball_hit", &event_inst)){
+        return false;
+    }
+    
     FMOD_Studio_EventInstance_SetParameterByName(
-        __sound0002_event_inst,
+        event_inst,
         "velocity",
         velocity,
         false
     );
+
+    return true;
 }
-void sound_play_cue_ball_hit(){SOUND_PLAY_ONE_SHOT_EVENT("event:/Sfx/cue_ball_hit");}
+
+bool sound_play_cue_ball_hit(f32 power){
+
+    FMOD_STUDIO_EVENTINSTANCE* event_inst;
+    if(!sound_play_one_shot_event("event:/Sfx/cue_ball_hit", &event_inst)){
+        return false;
+    }
+    
+    FMOD_Studio_EventInstance_SetParameterByName(
+        event_inst,
+        "velocity",
+        power,
+        false
+    );
+    
+    return true;
+}

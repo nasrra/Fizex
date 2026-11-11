@@ -990,6 +990,8 @@ void player_turn_timer_timeout_callback(void* user_data){
         ctx->cue_ball_physics_body_gid,
         impulse
     );
+    
+    sound_play_cue_ball_hit(1.0f);
 }
 
 typedef struct{
@@ -4019,8 +4021,9 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                             PLAYER_MOUSE_MAX_DRAW_RADIUS
                         );
                         
+                        Vector2 cursour_position = vector2_sub(guideline_state->start_position, guideline_state->mouse_to_start_dist);
+                        
                         { // draw_launch_cursour();
-                            Vector2 cursour_position = vector2_sub(guideline_state->start_position, guideline_state->mouse_to_start_dist);
                             Circle launch_cursour_shape = {.x = cursour_position.x, .y = cursour_position.y, .radius = 0.1f};
                             gfx_draw_wire_circle(
                                 entity_manager->gfx_state, 
@@ -4060,7 +4063,18 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                                 clicked_entity->physics_body_gid, 
                                 impulse
                             );
-                            sound_play_cue_ball_hit();
+                            
+                            f32 power = 
+                                CLAMP(
+                                    vector2_len(
+                                        vector2_sub(cursour_position, clicked_entity->global_transform.position)
+                                    ) 
+                                    / PLAYER_MOUSE_MAX_DRAW_RADIUS,
+                                    0.0f,
+                                    PLAYER_MOUSE_MAX_DRAW_RADIUS
+                                );
+                            
+                            sound_play_cue_ball_hit(power);
                         }
                     }break;
                 }
