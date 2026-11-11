@@ -2810,7 +2810,7 @@ void wall_on_enter_collision_callback(FIZX_CollisionInfo info, void* user_data){
         // clamp to the min and max launch force as speed boosts and other forces can make the ball move faster.
         velocity.x = CLAMP(velocity.x, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
         velocity.y = CLAMP(velocity.y, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
-        velocity = vector2_div_val(velocity, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE * 0.5f);
+        velocity = vector2_div_val(velocity, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
         // make sure to clamp it so that it is between 0 and 1, as the velocity is in a square space not radial.
         // this is for the FMOD param which needs to be between 0 and 1 as well.
         f32 length = CLAMP(vector2_len(vector2_mul(velocity, info.normal_1)), 0.0f, 0.99f);
@@ -3073,7 +3073,7 @@ void number_ball_on_enter_collision_callback(FIZX_CollisionInfo info, void* user
         // clamp to the min and max launch force as speed boosts and other forces can make the ball move faster.
         velocity.x = CLAMP(velocity.x, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
         velocity.y = CLAMP(velocity.y, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
-        velocity = vector2_div_val(velocity, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE * 0.5f);
+        velocity = vector2_div_val(velocity, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE * 0.45f);
         // make sure to clamp it so that it is between 0 and 1, as the velocity is in a square space not radial.
         // this is for the FMOD param which needs to be between 0 and 1 as well.
         f32 length = CLAMP(vector2_len(vector2_mul(velocity, info.normal_1)), 0.0f, 0.99f);
