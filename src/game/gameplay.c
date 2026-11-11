@@ -64,12 +64,16 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
     .rotational_response = true            \
 }
 
+
 ///
 /// @ CueBall defines
 ///
 
+
 #define CUE_BALL_PHYSICS_BODY_LINEAR_DRAG 1.45f
 #define CUE_BALL_PHSYICS_BODY_ANGULAR_DRAG 1.95f
+#define CUE_BALL_DEFAULT_STATE 0
+#define CUE_BALL_POCKETED_STATE 1
 #define CUE_BALL_PHYSICS_SHAPE_MATERIAL \
 (FIZX_Material) {                       \
     .static_friction = 0.5f,            \
@@ -526,7 +530,7 @@ typedef struct{
 #define PHYSICS_LAYER_BALL (PHYSICS_LAYER_CUE_BALL | PHYSICS_LAYER_NUMBER_BALL)
 #define PHYSICS_LAYER_ENVIRONMENT (PHYSICS_LAYER_ENVIRONMENT_TOP | PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_ENVIRONMENT_BOT)
 
-#define BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK (PHYSICS_LAYER_CUE_BALL | PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_ENVIRONMENT_BOT)
+#define CUE_BALL_PHYSICS_BODY_DEFAULT_MASK (PHYSICS_LAYER_CUE_BALL | PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_ENVIRONMENT_BOT)
 #define BALL_CUE_FRAGMENTATION_PHYSICS_LAYER_MASK (PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID) 
 
 
@@ -2460,7 +2464,9 @@ void pocket_on_sustain_collision_callback(FIZX_CollisionInfo info, void* user_da
         switch(entity->type_id){
             case EntityTypeId_BallCue:{
                 ctx->game_state->board_state.cue_ball_count -= 1; 
-                entity_set_active(&ctx->game_state->entity_manager, source_entity_gid, false);
+                if(entity->state != CUE_BALL_POCKETED_STATE){
+                    entity_set_state(&ctx->game_state->entity_manager, source_entity_gid, CUE_BALL_POCKETED_STATE);
+                }
             }break;
             case EntityTypeId_BallEight:
             case EntityTypeId_BallOne:
@@ -2555,7 +2561,67 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, Transform2D transform, 
 ///
 
 
-GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+typedef struct{
+    GFX_State* gfx_state;
+    GenId sprite_gid;
+} CueBallPocketStateTimerTickCallbackContext;
+
+void cue_ball_pocketed_state_timer_on_tick_callback(void* user_data, f32 current_tick, f32 delta_tick){
+    CueBallPocketStateTimerTickCallbackContext* ctx = (CueBallPocketStateTimerTickCallbackContext*)user_data;
+    f32 ratio = current_tick / BALL_POCKETED_LIFETIME;
+    GFX_Colour colour = gfx_colour_mul_val(POCKET_COLOUR, ratio);
+    gfx_sprite_set_colour(ctx->gfx_state, ctx->sprite_gid, colour);
+}
+
+typedef struct{
+    EntityManager* entity_manager;
+    i32 entity_idx;
+} CueBallPocketStateTimerTimeoutCallbackContext;
+
+void cue_ball_pocketed_state_timer_on_timeout_callback(void* user_data){
+    CueBallPocketStateTimerTimeoutCallbackContext* ctx = (CueBallPocketStateTimerTimeoutCallbackContext*)user_data;
+    entity_set_active_unsafe(ctx->entity_manager, ctx->entity_idx, false);
+}
+
+void cue_ball_set_state_callback(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state){
+    switch(state){
+        default:{
+            ASSERT(false, "unknown state set");
+        }break;
+        case CUE_BALL_DEFAULT_STATE:{
+            // do nothing...
+        }break;
+        case CUE_BALL_POCKETED_STATE:{
+            CueBallPocketStateTimerTickCallbackContext tick_ctx = {
+                .gfx_state = entity_manager->gfx_state,
+                .sprite_gid = entity->sprite_gid
+            };
+            
+            CueBallPocketStateTimerTimeoutCallbackContext timeout_ctx = {
+                .entity_manager = entity_manager,
+                .entity_idx = entity_idx
+            };
+            
+            TimerContext timer_ctx = {                
+                .tick_data = &tick_ctx,
+                .tick_data_size = sizeof(tick_ctx),
+                .tick_callback = cue_ball_pocketed_state_timer_on_tick_callback,
+                
+                .timeout_data = &timeout_ctx,
+                .timeout_data_size = sizeof(timeout_ctx),
+                .timeout_callback = cue_ball_pocketed_state_timer_on_timeout_callback,
+                
+                .time_scale = 1.0f,
+                .end_time = BALL_POCKETED_LIFETIME,
+            };
+            
+            timer_manager_timer_start(&entity_manager->timer_manager, timer_ctx);            
+
+        }break;
+    }
+}
+
+GenId entity_spawn_cue_ball(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     // clickable entity (angry bird).
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     i32 entity_idx = gen_id_get_index(entity_gid);
@@ -2568,12 +2634,13 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform
         { // physics_body_alloc();
 
             entity->is_physics_body = true;
+            entity->set_state_callback = cue_ball_set_state_callback;
 
             FIZX_BodyConfig body_config = {
                 .linear_drag = CUE_BALL_PHYSICS_BODY_LINEAR_DRAG,
                 .angular_drag = CUE_BALL_PHSYICS_BODY_ANGULAR_DRAG,
                 .layer = PHYSICS_LAYER_CUE_BALL,
-                .mask = BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK
+                .mask = CUE_BALL_PHYSICS_BODY_DEFAULT_MASK
             };
             
             entity->physics_body_gid = fizx_body_alloc(
@@ -2608,8 +2675,8 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform
             gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
             gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
-            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
-            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
+            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_NONE);
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_MaskedOverride);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
         }
@@ -2642,7 +2709,7 @@ GenId entity_spawn_ball_cue(EntityManager* entity_manager, Transform2D transform
 
 void ball_cue_fragment_timer_timeout(void* user_data){
     BallCueFragmentationTimerTimeoutCallbackContext* ctx = (BallCueFragmentationTimerTimeoutCallbackContext*)user_data;
-    fizx_body_set_mask(&ctx->entity_manager->fizx_state, ctx->ball_cue_physics_gid, BALL_CUE_DEFAULT_PHYSICS_LAYER_MASK);
+    fizx_body_set_mask(&ctx->entity_manager->fizx_state, ctx->ball_cue_physics_gid, CUE_BALL_PHYSICS_BODY_DEFAULT_MASK);
 }
 
 void ball_cue_update(Entity* entity, GameState* game_state, f32 delta_time){
@@ -2679,7 +2746,7 @@ void ball_cue_update(Entity* entity, GameState* game_state, f32 delta_time){
                 Vector2 new_direction = vector2_rotate(direction, -0.334f);     
                 Vector2 impulse_force = vector2_mul_val(new_direction, velocity_len);
                 
-                GenId fragment_gid = entity_spawn_ball_cue(
+                GenId fragment_gid = entity_spawn_cue_ball(
                     &game_state->entity_manager, 
                     (String){.chars = "spawned cue ball", .count = 16, .length = 16}, 
                     entity->transform, 
@@ -2698,7 +2765,7 @@ void ball_cue_update(Entity* entity, GameState* game_state, f32 delta_time){
                 Vector2 new_direction = vector2_rotate(direction, 0.334f);     
                 Vector2 impulse_force = vector2_mul_val(new_direction, velocity_len);
                 
-                GenId fragment_gid = entity_spawn_ball_cue(
+                GenId fragment_gid = entity_spawn_cue_ball(
                     &game_state->entity_manager, 
                     (String){.chars = "spawned cue ball", .count = 16, .length = 16}, 
                     entity->transform, 
@@ -2716,7 +2783,7 @@ void ball_cue_update(Entity* entity, GameState* game_state, f32 delta_time){
             // Vector2 outter_left_direction = vector2_rotate(direction, -0.99f);            
             // Transform2D outter_left_transform = entity->transform;
             // outter_left_transform.position = vector2_sub(outter_left_transform.position, outter_left_direction);
-            // entity_spawn_ball_cue(
+            // entity_spawn_cue_ball(
             //     &game_state->entity_manager, 
             //     (String){.chars = "spawned cue ball", .count = 16, .length = 16}, 
             //     outter_left_transform, 
@@ -2852,12 +2919,21 @@ void pocket_interior_wall_on_exit_collision_callback(FIZX_CollisionInfo info, vo
                         fizx_body_set_mask(
                             &ctx->game_state->entity_manager.fizx_state, 
                             entity->physics_body_gid, 
-                            NUMBER_BALL_PHYSICS_BODY_DEFAULT_MASK | PHYSICS_LAYER_POCKET_INTERIOR_WALL
+                            PHYSICS_LAYER_POCKET_INTERIOR_WALL
                         );
                     }
                 }break;
                 case EntityTypeId_BallCue:{
-                    // do nothing yet.
+                    if(
+                        entity->overlaps_pocket_interior_wall_count == 0 &&
+                        entity->state == CUE_BALL_POCKETED_STATE
+                    ){
+                        fizx_body_set_mask(
+                            &ctx->game_state->entity_manager.fizx_state, 
+                            entity->physics_body_gid, 
+                            PHYSICS_LAYER_POCKET_INTERIOR_WALL
+                        );
+                    }
                 }break;
             }
         }
@@ -3037,9 +3113,6 @@ void number_ball_set_state_callback(EntityManager* entity_manager, Entity* entit
             // do nothing...
         }break;
         case NUMBER_BALL_POCKETED_STATE:{
-            // todo: 
-            // - fadeout colour to pocket colour.
-            // - timed deactivation.    
             NumberBallPocketStateTimerTickCallbackContext tick_ctx = {
                 .gfx_state = entity_manager->gfx_state,
                 .sprite_gid = entity->sprite_gid
@@ -3063,9 +3136,7 @@ void number_ball_set_state_callback(EntityManager* entity_manager, Entity* entit
                 .end_time = BALL_POCKETED_LIFETIME,
             };
             
-            timer_manager_timer_start(&entity_manager->timer_manager, timer_ctx);
-        
-            
+            timer_manager_timer_start(&entity_manager->timer_manager, timer_ctx);            
         }break;
     }
 }
@@ -3515,7 +3586,7 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
             entity_gid = entity_spawn_wall(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_BallCue:{
-            entity_gid = entity_spawn_ball_cue(entity_manager, transform, parent_gid, &entity);
+            entity_gid = entity_spawn_cue_ball(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_BallOne:{
             entity_gid = entity_spawn_ball_one(entity_manager, transform, parent_gid, &entity);
