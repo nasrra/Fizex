@@ -53,7 +53,7 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 #define NUMBER_BALL_PHYSICS_BODY_DEFAULT_MASK \
     (PHYSICS_LAYER_BALL | PHYSICS_LAYER_ENVIRONMENT)
 
-#define NUMBER_BALL_PHYSICS_BODY_LINEAR_DRAG 1.55f
+#define NUMBER_BALL_PHYSICS_BODY_LINEAR_DRAG 2.4f
 #define NUMBER_BALL_PHYSICS_BODY_ANGULAR_DRAG 1.95f
 #define NUMBER_BALL_PHYSICS_SHAPE_MATERIAL \
 (FIZX_Material) {                          \
@@ -70,7 +70,7 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 ///
 
 
-#define CUE_BALL_PHYSICS_BODY_LINEAR_DRAG 1.45f
+#define CUE_BALL_PHYSICS_BODY_LINEAR_DRAG 2.4f
 #define CUE_BALL_PHSYICS_BODY_ANGULAR_DRAG 1.95f
 #define CUE_BALL_DEFAULT_STATE 0
 #define CUE_BALL_POCKETED_STATE 1
@@ -2463,8 +2463,8 @@ void pocket_on_sustain_collision_callback(FIZX_CollisionInfo info, void* user_da
         
         switch(entity->type_id){
             case EntityTypeId_BallCue:{
-                ctx->game_state->board_state.cue_ball_count -= 1; 
                 if(entity->state != CUE_BALL_POCKETED_STATE){
+                    ctx->game_state->board_state.cue_ball_count -= 1; 
                     entity_set_state(&ctx->game_state->entity_manager, source_entity_gid, CUE_BALL_POCKETED_STATE);
                 }
             }break;
@@ -2813,7 +2813,7 @@ void wall_on_enter_collision_callback(FIZX_CollisionInfo info, void* user_data){
         velocity = vector2_div_val(velocity, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE * 0.5f);
         // make sure to clamp it so that it is between 0 and 1, as the velocity is in a square space not radial.
         // this is for the FMOD param which needs to be between 0 and 1 as well.
-        f32 length = CLAMP(vector2_len(velocity), 0.0f, 1.0f);
+        f32 length = CLAMP(vector2_len(vector2_mul(velocity, info.normal_1)), 0.0f, 0.99f);
         
         sound_play_ball_hit_wall(length);
     }
@@ -3076,7 +3076,7 @@ void number_ball_on_enter_collision_callback(FIZX_CollisionInfo info, void* user
         velocity = vector2_div_val(velocity, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE * 0.5f);
         // make sure to clamp it so that it is between 0 and 1, as the velocity is in a square space not radial.
         // this is for the FMOD param which needs to be between 0 and 1 as well.
-        f32 length = CLAMP(vector2_len(velocity), 0.0f, 1.0f);
+        f32 length = CLAMP(vector2_len(vector2_mul(velocity, info.normal_1)), 0.0f, 0.99f);
         
         sound_play_ball_hit_ball(length);
     }

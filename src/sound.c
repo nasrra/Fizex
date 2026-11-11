@@ -165,6 +165,8 @@ bool sound_play_ball_hit_ball(f32 velocity){
         false
     );
 
+    // os_output_message("asd\n");
+
     return true;
 }
 
