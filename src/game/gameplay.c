@@ -50,9 +50,6 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
 #define NUMBER_BALL_POCKETED_STATE 1
 #define NUMBER_BALL_PHYSICS_BODY_DEFAULT_MASK \
     (PHYSICS_LAYER_BALL | PHYSICS_LAYER_ENVIRONMENT)
-    
-#define NUMBER_BALL_PHYSICS_BODY_POCKETED_MASK \
-    (NUMBER_BALL_PHYSICS_BODY_DEFAULT_MASK | PHYSICS_LAYER_POCKET_INTERIOR_WALL)
 
 #define NUMBER_BALL_PHYSICS_BODY_LINEAR_DRAG 1.55f
 #define NUMBER_BALL_PHYSICS_BODY_ANGULAR_DRAG 1.95f
@@ -296,7 +293,8 @@ struct Entity{
     i32 tag;
     
     i32 max_turns_until_turn_end_callback;
-    i32 turns_until_turn_end_callback; 
+    i32 turns_until_turn_end_callback;
+    i32 overlaps_pocket_interior_wall_count; // the amount of interior walls the entity is overlapping. 
     f32 health;
     f32 camera_orthographic_size;
     f32 camera_perspective_fov;
@@ -2814,6 +2812,59 @@ GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, Ge
     return entity_gid;
 }
 
+
+///
+/// @ PocketInteriorWall
+///
+
+void pocket_interior_wall_on_exit_collision_callback(FIZX_CollisionInfo info, void* user_data){
+    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
+    if((info.source_layer & PHYSICS_LAYER_BALL)){
+        GenId entity_gid = *(GenId*)info.source_user_data;
+        Entity* entity;
+        if(entity_manager_get_entity(ctx->game_state->entity_manager, entity_gid, &entity)){
+            entity->overlaps_pocket_interior_wall_count -= 1;
+            switch(entity->type_id){
+                case EntityTypeId_BallOne:
+                case EntityTypeId_BallTwo:
+                case EntityTypeId_BallThree:
+                case EntityTypeId_BallFour:
+                case EntityTypeId_BallFive:
+                case EntityTypeId_BallSix:
+                case EntityTypeId_BallSeven:
+                case EntityTypeId_BallEight:
+                case EntityTypeId_BallNine:
+                case EntityTypeId_BallZero:{
+                    if(
+                        entity->overlaps_pocket_interior_wall_count == 0 &&
+                        entity->state == NUMBER_BALL_POCKETED_STATE
+                    ){
+                        fizx_body_set_mask(
+                            &ctx->game_state->entity_manager.fizx_state, 
+                            entity->physics_body_gid, 
+                            NUMBER_BALL_PHYSICS_BODY_DEFAULT_MASK | PHYSICS_LAYER_POCKET_INTERIOR_WALL
+                        );
+                    }
+                }break;
+                case EntityTypeId_BallCue:{
+                    // do nothing yet.
+                }break;
+            }
+        }
+    }
+}
+
+void pocket_interior_wall_on_enter_collision_callback(FIZX_CollisionInfo info, void* user_data){
+    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
+    if((info.source_layer & PHYSICS_LAYER_BALL)){
+        GenId entity_gid = *(GenId*)info.source_user_data;
+        Entity* entity;
+        if(entity_manager_get_entity(ctx->game_state->entity_manager, entity_gid, &entity)){
+            entity->overlaps_pocket_interior_wall_count += 1;
+        }
+    }
+}
+
 GenId entity_spawn_pocket_interior_wall(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
@@ -2856,7 +2907,9 @@ GenId entity_spawn_pocket_interior_wall(EntityManager* entity_manager, Transform
                 square,
                 material
             );
-                        
+            
+            fizx_shape_set_on_exit_callback(&entity_manager->fizx_state, shape_gid, pocket_interior_wall_on_exit_collision_callback);            
+            fizx_shape_set_on_enter_callback(&entity_manager->fizx_state, shape_gid, pocket_interior_wall_on_enter_collision_callback);
             fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);     
         }        
 
@@ -2952,8 +3005,9 @@ void number_ball_set_state_callback(EntityManager* entity_manager, Entity* entit
             // do nothing...
         }break;
         case NUMBER_BALL_POCKETED_STATE:{
-            Entity* entity = &entity_manager->entity[entity_idx];
-            fizx_body_set_mask(&entity_manager->fizx_state, entity->physics_body_gid, NUMBER_BALL_PHYSICS_BODY_POCKETED_MASK);
+            // todo: 
+            // - fadeout colour to pocket colour.
+            // - timed deactivation.
         }break;
     }
 }
@@ -4474,7 +4528,6 @@ void load_world_level_button_on_hover_callback(Clay_ElementId element_id, Clay_P
         level_manager_defer_load_level(ctx->level_manager, level_load_ctx);
     }    
 }
-
 
 void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_time, bool in_editor_mode){
 
