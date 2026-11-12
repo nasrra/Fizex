@@ -204,8 +204,9 @@ typedef struct{
 #define CLAMP(val, min, max) ((val) < (min) ? (min) : ((val) > (max) ? (max) : (val)))
 
 ///
-/// @ functions: f32
+/// @ f32
 ///
+
 
 
 f32 f32_step_clamp(f32 val, f32 step){

@@ -17,6 +17,8 @@ typedef struct {
     i32 editor_visibility_layer_enabled;
     i32 grid_enabled;
     f32 grid_step;
+    i32 constrain_rotation;
+    f32 rotation_step;
 } DeserialisedEditorConfig;
 
 typedef enum{
@@ -121,8 +123,10 @@ typedef struct{
     bool previous_entity_editor_layer_enabled;
     bool entity_editor_layer_enabled;
 
+    f32 rotation_step; // degrees not radians.
     f32 grid_step;
     bool grid_enabled;
+    bool constrain_rotation;
 } Editor_State;
 
 typedef struct {
@@ -849,8 +853,18 @@ void editor_save_config(Editor_State* editor_state, MemoryArena* transient){
     string_push_chars(&char_buffer, sprintf_scratch_space, written);
     string_push_chars(&char_buffer, "\n", 1);
                 
-    // grid enabled.
+    // grid step.
     written = snprintf(sprintf_scratch_space, sprintf_scratch_space_length, "%f", editor_state->grid_step);
+    string_push_chars(&char_buffer, sprintf_scratch_space, written);
+    string_push_chars(&char_buffer, "\n", 1);
+    
+    // constrain rotation enabled.
+    written = snprintf(sprintf_scratch_space, sprintf_scratch_space_length, "%d", editor_state->constrain_rotation);
+    string_push_chars(&char_buffer, sprintf_scratch_space, written);
+    string_push_chars(&char_buffer, "\n", 1);
+
+    // constrain rotation step.
+    written = snprintf(sprintf_scratch_space, sprintf_scratch_space_length, "%f", editor_state->rotation_step);
     string_push_chars(&char_buffer, sprintf_scratch_space, written);
     string_push_chars(&char_buffer, "\n", 1);
                 
@@ -1290,16 +1304,19 @@ void gfx_clay_level_management(Editor_State* editor_state, GameState* game_state
             );        
         }        
         
-        { // draw_grid_settings();
+        { // draw_constrain_settings();
 
             CLAY_TEXT(
-                gfx_string_to_clay_string(STRING_FROM_LITERAL("Grid Settings", transient)), 
+                gfx_string_to_clay_string(STRING_FROM_LITERAL("Constrain Settings", transient)), 
                 EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
             );  
 
             char* chars;                        
             MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
             Clay_String grid_step_val_string = {.chars = (const char *) chars};
+            
+            MEMORY_ARENA_ALLOC_MEMORY(transient, chars, F32_STRING_MIN_LENGTH);
+            Clay_String rotation_step_val_string = {.chars = (const char *) chars};
             
             f32 horizontal_percent_size = 0.75f;
             f32 vertical_percent_size = 0.05f;
@@ -1341,9 +1358,45 @@ void gfx_clay_level_management(Editor_State* editor_state, GameState* game_state
                     );
                 }
             }
-        
-        }
+            
+            // rotation_step_toggle();
+            EDITOR_GFX_CLAY_TOGGLE_BUTTON(
+                gfx_string_to_clay_string(STRING_FROM_LITERAL("Constrain Rotation", transient)),
+                horizontal_percent_size,
+                vertical_percent_size,
+                &editor_state->constrain_rotation
+            );
+            
+            { // draw_contrain_rotation_step();
+                { // draw_label();
 
+                    CLAY_TEXT(
+                        gfx_string_to_clay_string(STRING_FROM_LITERAL("Rotation Step", transient)), 
+                        EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG
+                    );
+                }
+                
+                { // draw_value();
+                
+                    rotation_step_val_string.length = 
+                    snprintf((char*)rotation_step_val_string.chars, F32_STRING_MIN_LENGTH, "%f", editor_state->rotation_step);
+                    ASSERT(rotation_step_val_string.length > 0, "failed to encode float.");
+                
+                    GFX_CLAY_INPUT_TEXT_BOX(
+                        CLAY_STRING("Rotation Step"),
+                        rotation_step_val_string,
+                        horizontal_percent_size,
+                        vertical_percent_size,
+                        editor_state, 
+                        (void*)(&editor_state->rotation_step), 
+                        Editor_ButtonDataStorageType_F32, 
+                        transient,
+                        0
+                    );
+                }
+
+            }
+        }
     }
 }
 
@@ -2620,12 +2673,20 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                             
                             Vector2 diff = vector2_sub(game_entity->global_transform.position, mouse_world_position);
                             
-                            if(editor_mouse_state->previous_behaviour == Editor_MouseStateBehaviour_Rotate){
+                            if(editor_state->constrain_rotation){
+                                f32 step = degrees_to_radians(editor_state->rotation_step);        
+                                f32 free_form_radians = vector2_radian_difference_scalar(diff.x, diff.y, 0.0f, -1.0f);
+                                f32 stepped_radians = f32_step_clamp(free_form_radians, step);
+                                game_entity->local_transform.sine = f32_sin(stepped_radians);
+                                game_entity->local_transform.cosine = f32_cos(stepped_radians);
+                                entity_set_local_transform_unsafe(entity_manager, entity_idx, game_entity->local_transform);
+                            }
+                            else if(editor_mouse_state->previous_behaviour == Editor_MouseStateBehaviour_Rotate){
                                 Vector2 prev_diff = editor_mouse_state->rotate_behaviour_state.previous_positional_difference;
                                 f32 radians = vector2_radian_difference_scalar(diff.x, diff.y, prev_diff.x, prev_diff.y);
                                 entity_set_local_transform_unsafe(entity_manager, entity_idx, transform2d_rotate(game_entity->local_transform, radians));
-                            }
-        
+                            }                            
+                                
                             editor_mouse_state->rotate_behaviour_state.previous_positional_difference = diff;
                         }break;
                     }

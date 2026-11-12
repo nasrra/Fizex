@@ -146,7 +146,7 @@ void app_main(){
     sound_init();
 
 #ifndef NDEBUG
-    { // load editor config.
+    { // load_editor_config().
         
         size_t buffer_size;
         void* file_data = os_load_file(STRING_FROM_LITERAL("../editor/editor.txt", transient), &buffer_size);
@@ -155,14 +155,16 @@ void app_main(){
                 
         i32 lines_read = sscanf(
             file_data,
-            "%d\n%d\n%d\n%f",
+            "%d\n%d\n%d\n%f\n%d\n%f",
             &config.world_visibility_layer_enabled,
             &config.editor_visibility_layer_enabled,
             &config.grid_enabled,
-            &config.grid_step
+            &config.grid_step,
+            &config.constrain_rotation,
+            &config.rotation_step
         );        
         
-        if(lines_read == 4){
+        if(lines_read == 6){
             
             editor_state.entity_world_layer_enabled = (bool)config.world_visibility_layer_enabled;
             editor_state.entity_editor_layer_enabled = (bool)config.editor_visibility_layer_enabled;
@@ -175,6 +177,8 @@ void app_main(){
         
             editor_state.grid_enabled = (bool)config.grid_enabled;
             editor_state.grid_step = config.grid_step;
+            editor_state.constrain_rotation = (bool)config.constrain_rotation;
+            editor_state.rotation_step = config.rotation_step;
         }
         else{
             ASSERT(false, "mangled editor config");
