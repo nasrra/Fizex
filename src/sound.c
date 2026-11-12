@@ -58,7 +58,7 @@ bool sound_play_one_shot_event(char* event_name, FMOD_STUDIO_EVENTINSTANCE** out
     result = FMOD_Studio_EventInstance_SetCallback(        
         event_inst,                   
         sound_one_shot_event_callback,            
-        FMOD_STUDIO_EVENT_CALLBACK_SOUND_STOPPED  
+        FMOD_STUDIO_EVENT_CALLBACK_STOPPED  
     );
     
     if(result != FMOD_OK){
@@ -93,16 +93,6 @@ bool sound_play_one_shot_event(char* event_name, FMOD_STUDIO_EVENTINSTANCE** out
             0.8f
         )
     );
-    
-    // f32 volume;
-    // f32 final_volume;
-    // fmod_error_check(
-    //     FMOD_Studio_Bus_GetVolume(
-    //         master_bus,
-    //         &volume,
-    //         &final_volume
-    //     )
-    // );
     
     *out_event_inst = event_inst;
     return true;
@@ -194,7 +184,7 @@ bool sound_play_ball_hit_wall(f32 velocity){
     `remarks`
     `velocity` should be between 0 and 1.
 */
-bool sound_play_cue_ball_hit(f32 power){
+bool sound_play_cue_ball_hit(f32 velocity){
 
     FMOD_STUDIO_EVENTINSTANCE* event_inst;
     if(!sound_play_one_shot_event("event:/Sfx/cue_ball_hit", &event_inst)){
@@ -204,7 +194,24 @@ bool sound_play_cue_ball_hit(f32 power){
     FMOD_Studio_EventInstance_SetParameterByName(
         event_inst,
         "velocity",
-        power,
+        velocity,
+        false
+    );
+    
+    return true;
+}
+
+bool sound_play_ball_hit_pocket_interior_wall(f32 velocity){
+    FMOD_STUDIO_EVENTINSTANCE* event_inst;
+    
+    if(!sound_play_one_shot_event("event:/Sfx/ball_hit_pocket_interior_wall", &event_inst)){
+        return false;
+    }
+    
+    FMOD_Studio_EventInstance_SetParameterByName(
+        event_inst,
+        "velocity",
+        velocity,
         false
     );
     

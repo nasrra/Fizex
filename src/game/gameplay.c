@@ -228,7 +228,7 @@ enum EntityTypeId{
     EntityTypeId_None                   = 0,
     EntityTypeId_LevelRoot              = 1,
     EntityTypeId_Wall                   = 2,
-    EntityTypeId_BallCue                = 3,
+    EntityTypeId_CueBall                = 3,
     EntityTypeId_BallOne                = 4,
     EntityTypeId_BallTwo                = 5,
     EntityTypeId_BallThree              = 6,
@@ -1200,7 +1200,7 @@ void board_state_complete_turn(BoardState* board_state, EntityManager* entity_ma
                     Entity* new_cue_ball = NULL;
                     board_state->cue_ball_entity_gid = entity_spawn(
                         entity_manager, 
-                        EntityTypeId_BallCue, 
+                        EntityTypeId_CueBall, 
                         TRANSFORM2D_IDENTITY, 
                         board_state->cue_ball_spawn_point,
                         &new_cue_ball
@@ -1720,7 +1720,7 @@ void load_board_level_callback(GameState* game_state, void* user_data){
                     case EntityTypeId_BallZero:{
                         ARRAY_PUSH(board_state->number_ball, board_state->number_ball_length, &board_state->number_ball_count, entity_gid);
                     }break;
-                    case EntityTypeId_BallCue:{
+                    case EntityTypeId_CueBall:{
                         board_state->cue_ball_entity_gid = entity_gid;
                     }break;
                     case EntityTypeId_WorldCamera:
@@ -2462,7 +2462,7 @@ void pocket_on_sustain_collision_callback(FIZX_CollisionInfo info, void* user_da
         }
         
         switch(entity->type_id){
-            case EntityTypeId_BallCue:{
+            case EntityTypeId_CueBall:{
                 if(entity->state != CUE_BALL_POCKETED_STATE){
                     ctx->game_state->board_state.cue_ball_count -= 1; 
                     entity_set_state(&ctx->game_state->entity_manager, source_entity_gid, CUE_BALL_POCKETED_STATE);
@@ -2628,7 +2628,7 @@ GenId entity_spawn_cue_ball(EntityManager* entity_manager, Transform2D transform
     Entity* entity;
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity))
     {
-        entity->type_id = EntityTypeId_BallCue;
+        entity->type_id = EntityTypeId_CueBall;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
 
         { // physics_body_alloc();
@@ -2923,7 +2923,7 @@ void pocket_interior_wall_on_exit_collision_callback(FIZX_CollisionInfo info, vo
                         );
                     }
                 }break;
-                case EntityTypeId_BallCue:{
+                case EntityTypeId_CueBall:{
                     if(
                         entity->overlaps_pocket_interior_wall_count == 0 &&
                         entity->state == CUE_BALL_POCKETED_STATE
@@ -2945,8 +2945,40 @@ void pocket_interior_wall_on_enter_collision_callback(FIZX_CollisionInfo info, v
     if((info.source_layer & PHYSICS_LAYER_BALL)){
         GenId entity_gid = *(GenId*)info.source_user_data;
         Entity* entity;
+        
+        i32 body_idx = fizx_shape_get_parent_unsafe(info.fizx_state, info.source_shape_idx);
+        Vector2 velocity = fizx_body_get_linear_velocity_unsafe(info.fizx_state, body_idx);
+        // clamp to the min and max launch force as speed boosts and other forces can make the ball move faster.
+        velocity.x = CLAMP(velocity.x, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
+        velocity.y = CLAMP(velocity.y, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
+        velocity = vector2_div_val(velocity, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE * 0.45f);
+        // make sure to clamp it so that it is between 0 and 1, as the velocity is in a square space not radial.
+        // this is for the FMOD param which needs to be between 0 and 1 as well.
+        f32 length = CLAMP(vector2_len(vector2_mul(velocity, info.normal_1)), 0.0f, 0.99f);
+        
         if(entity_manager_get_entity(ctx->game_state->entity_manager, entity_gid, &entity)){
             entity->overlaps_pocket_interior_wall_count += 1;
+            switch(entity->type_id){
+                case EntityTypeId_BallZero:
+                case EntityTypeId_BallOne:
+                case EntityTypeId_BallTwo:
+                case EntityTypeId_BallThree:
+                case EntityTypeId_BallFour:
+                case EntityTypeId_BallFive:
+                case EntityTypeId_BallSix:
+                case EntityTypeId_BallSeven:
+                case EntityTypeId_BallEight:
+                case EntityTypeId_BallNine:{
+                    if(entity->state == NUMBER_BALL_POCKETED_STATE && entity->overlaps_pocket_interior_wall_count){
+                        sound_play_ball_hit_pocket_interior_wall(length);
+                    }
+                }break;
+                case EntityTypeId_CueBall:{
+                    if(entity->state == CUE_BALL_POCKETED_STATE && entity->overlaps_pocket_interior_wall_count){
+                        sound_play_ball_hit_pocket_interior_wall(length);
+                    }
+                }break;
+            }
         }
     }
 }
@@ -3585,7 +3617,7 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
         case EntityTypeId_Wall:{
             entity_gid = entity_spawn_wall(entity_manager, transform, parent_gid, &entity);
         }break;
-        case EntityTypeId_BallCue:{
+        case EntityTypeId_CueBall:{
             entity_gid = entity_spawn_cue_ball(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_BallOne:{
@@ -4268,7 +4300,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             generic_entity_update(entity, entity_manager);
             
             switch(entity->type_id){
-                case EntityTypeId_BallCue:{ball_cue_update(entity, game_state, delta_time);}break;
+                case EntityTypeId_CueBall:{ball_cue_update(entity, game_state, delta_time);}break;
                 case EntityTypeId_WindMillHinge:{windmill_hinge_update(entity, i, game_state, delta_time);}break;
                 case EntityTypeId_WindMill:{windmill_update(&game_state->entity_manager, entity, 
                 i);}break;

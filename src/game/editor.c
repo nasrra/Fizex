@@ -1531,7 +1531,7 @@ void gfx_clay_native_entity_spawner_layout(Editor_State* editor_state, GameState
         
         EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("None"), button_width, button_height, transient, editor_state, EntityTypeId_None);
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Cue"), button_width, button_height, transient, editor_state, EntityTypeId_BallCue);
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Cue"), button_width, button_height, transient, editor_state, EntityTypeId_CueBall);
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball One"), button_width, button_height, transient, editor_state, EntityTypeId_BallOne);
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Two"), button_width, button_height, transient, editor_state, EntityTypeId_BallTwo);
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Three"), button_width, button_height, transient, editor_state, EntityTypeId_BallThree);
