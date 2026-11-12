@@ -45,9 +45,11 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 #define PLAYER_SHAKE_MAGNITUDE_FACTOR 0.085f
 #define PLAYER_SHAKE_PENALTY_FACTOR 4.0f
 
+
 ///
 /// @ Physics layers.
 ///
+
 
 #define PHYSICS_LAYER_NONE                  0
 #define PHYSICS_LAYER_ALL                   I32_MAX
@@ -60,6 +62,7 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 #define PHYSICS_LAYER_CUE_BALL              (1 << 7)
 #define PHYSICS_LAYER_PLACEMENT_AREA        (1 << 8)
 #define PHYSICS_LAYER_POCKET_INTERIOR_WALL  (1 << 9)
+#define PHYSICS_LAYER_POCKETED_BALL         (1 << 10)
 
 #define PHYSICS_LAYER_BALL (PHYSICS_LAYER_CUE_BALL | PHYSICS_LAYER_NUMBER_BALL)
 #define PHYSICS_LAYER_ENVIRONMENT (PHYSICS_LAYER_ENVIRONMENT_TOP | PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_ENVIRONMENT_BOT)
@@ -188,6 +191,7 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 #define BALL_PHYSICS_SHAPE_RADIUS 0.55f
 #define BALL_POCKETED_LIFETIME 1.0f
+
 
 ///
 /// @ NumberBall Defines
@@ -2974,7 +2978,7 @@ void pocket_interior_wall_set_state_callback(EntityManager* entity_manager, Enti
 
 void pocket_interior_wall_on_exit_collision_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    if((info.source_layer & PHYSICS_LAYER_BALL) == 0){
+    if((info.source_layer & (PHYSICS_LAYER_BALL | PHYSICS_LAYER_POCKETED_BALL)) == 0){
         return;
     }
     
@@ -3012,10 +3016,19 @@ void pocket_interior_wall_on_exit_collision_callback(FIZX_CollisionInfo info, vo
                 source_entity->overlaps_pocket_interior_wall_count == 0 &&
                 source_entity->state == NUMBER_BALL_POCKETED_STATE
             ){
+                // set to pocketed layer and pocket mask so that the ball only interacts with the pocket
+                // and not any other balls inside or outside the pocket.
+            
                 fizx_body_set_mask(
                     &ctx->game_state->entity_manager.fizx_state, 
                     source_entity->physics_body_gid, 
                     PHYSICS_LAYER_POCKET_INTERIOR_WALL
+                );
+            
+                fizx_body_set_layer(
+                    &ctx->game_state->entity_manager.fizx_state, 
+                    source_entity->physics_body_gid, 
+                    PHYSICS_LAYER_POCKETED_BALL
                 );
             }
         }break;
@@ -3024,10 +3037,19 @@ void pocket_interior_wall_on_exit_collision_callback(FIZX_CollisionInfo info, vo
                 source_entity->overlaps_pocket_interior_wall_count == 0 &&
                 source_entity->state == CUE_BALL_POCKETED_STATE
             ){
+                // set to pocketed layer and pocket mask so that the ball only interacts with the pocket
+                // and not any other balls inside or outside the pocket.
+
                 fizx_body_set_mask(
                     &ctx->game_state->entity_manager.fizx_state, 
                     source_entity->physics_body_gid, 
                     PHYSICS_LAYER_POCKET_INTERIOR_WALL
+                );
+            
+                fizx_body_set_layer(
+                    &ctx->game_state->entity_manager.fizx_state, 
+                    source_entity->physics_body_gid, 
+                    PHYSICS_LAYER_POCKETED_BALL
                 );
             }
         }break;
@@ -3036,7 +3058,7 @@ void pocket_interior_wall_on_exit_collision_callback(FIZX_CollisionInfo info, vo
 
 void pocket_interior_wall_on_enter_collision_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    if((info.source_layer & PHYSICS_LAYER_BALL) == 0){
+    if((info.source_layer & (PHYSICS_LAYER_BALL | PHYSICS_LAYER_POCKETED_BALL)) == 0){
         return;
     }
 
@@ -3106,7 +3128,7 @@ GenId entity_spawn_pocket_interior_wall(EntityManager* entity_manager, Transform
                         
             FIZX_BodyConfig body_config = {
                 .layer = PHYSICS_LAYER_POCKET_INTERIOR_WALL,
-                .mask = PHYSICS_LAYER_BALL
+                .mask = (PHYSICS_LAYER_BALL | PHYSICS_LAYER_POCKETED_BALL)
             };
             
             entity->physics_body_gid = fizx_body_alloc(
