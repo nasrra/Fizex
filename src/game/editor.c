@@ -55,7 +55,7 @@ typedef struct{
 
 typedef struct{
     PolygonRectangle shape;
-    u64 depth_layer;
+    u32 depth_layer;
 }Editor_EntityClickableArea;
 
 typedef struct{
@@ -2199,7 +2199,7 @@ void editor_state_update_clickable_area_hierarchy_area_recurssive(
     }
     
     for(i32 idx = 1; idx < entity_manager->entity_length; idx++){
-        u64 depth_layer = 0;
+        u32 depth_layer = 0;
         PolygonRectangle rectangle = {0};
         void* user_data = NULL;
         
@@ -2326,7 +2326,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
     { // set_clickable_area_hierarchy_areas();
 
         for(i32 idx = 1; idx < entity_manager->entity_length; idx++){
-            u64 depth_layer = 0;
+            u32 depth_layer = 0;
             PolygonRectangle rectangle = {0};
             void* user_data = NULL;
             

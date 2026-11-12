@@ -1844,7 +1844,7 @@ void generic_entity_update(Entity* entity, EntityManager* entity_manager){
         
         Transform2D preferred_transform = {0};
         PolygonRectangle clickable_area_shape = {0};
-        u64 depth_layer = 0;
+        u32 depth_layer = 0;
         
         // note that we infer this is a sprite; no need to check 'is_sprite' flag or 'sprite_gid'.
         if(gfx_sprite_get_transform(*gfx_state, entity->sprite_gid, &preferred_transform)){

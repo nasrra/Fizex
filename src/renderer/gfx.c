@@ -216,11 +216,12 @@ typedef struct{
         `remarks`
         the lower 32 bits are `depth`, where as the upper 32 bits is the `layer`.
     */
-    u64 depth_layer;
+    u32 depth_layer;
     GFX_SpriteState state;
     i32 virtual_texture;
     i32 material;
     i32 colour_blend;
+    i32 padding;
 } GFX_DeviceSprite;
 
 typedef struct{
@@ -409,10 +410,10 @@ typedef enum{
 #define GFX_SPRITE_ORIGIN_CENTER_VERTEX_OFFSET (Vector2){0}
 #define GFX_SPRITE_ORIGIN_TOP_LEFT_VERTEX_OFFSET (Vector2){.x = 0.5f, .y = -0.5f}
 
-// the lower 32-bits of the 64 bit number.
-#define GFX_DEVICE_SPRITE_DEPTH_BIT_MASK 0x00000000FFFFFFFFULL
-// the upper 32-bits of the 64 bit number.
-#define GFX_DEVICE_SPRITE_LAYER_BIT_MASK 0xFFFFFFFF00000000ULL
+// the lower 16-bits of the 32 bit number.
+#define GFX_DEVICE_SPRITE_DEPTH_BIT_MASK 65535u
+// the upper 16-bits of the 32 bit number.
+#define GFX_DEVICE_SPRITE_LAYER_BIT_MASK 4294901760u
 
 #define GFX_COLOUR_NONE         (GFX_Colour){0}
 #define GFX_COLOUR_RED          (GFX_Colour){.r = 1.0f, .a = 1.0f}
@@ -529,7 +530,7 @@ typedef enum{
     remarks:
     As the camera is not expected to rotate or move from its fixed position; this is okay.
 **/
-DEFINE_QUICKSORT_STRUCT(GFX_DeviceSprite, u64, .depth_layer, quicksort_device_sprite);
+DEFINE_QUICKSORT_STRUCT(GFX_DeviceSprite, u32, .depth_layer, quicksort_device_sprite);
 
 
 ///
@@ -1043,21 +1044,21 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
 
 /// sprite layer.
 
-    u32 gfx_sprite_get_layer_unsafe(GFX_State* state, i32 sprite_idx){
+    u16 gfx_sprite_get_layer_unsafe(GFX_State* state, i32 sprite_idx){
         GFX_SpriteManager* sprite_manager = &state->sprite_manager;
         BOUNDS_CHECK(sprite_idx, sprite_manager->device_sprite_length);
         GFX_DeviceSprite* sprite = &sprite_manager->device_sprite[sprite_idx];
-        return (u32)((sprite->depth_layer & GFX_DEVICE_SPRITE_LAYER_BIT_MASK) >> 32);
+        return (u32)((sprite->depth_layer & GFX_DEVICE_SPRITE_LAYER_BIT_MASK) >> 16);
     }
 
-    void gfx_sprite_set_layer_unsafe(GFX_State* state, i32 sprite_idx, u32 layer){
+    void gfx_sprite_set_layer_unsafe(GFX_State* state, i32 sprite_idx, u16 layer){
         GFX_SpriteManager* sprite_manager = &state->sprite_manager;
         BOUNDS_CHECK(sprite_idx, sprite_manager->device_sprite_length);
         GFX_DeviceSprite* sprite = &sprite_manager->device_sprite[sprite_idx];
-        sprite->depth_layer = (sprite->depth_layer & GFX_DEVICE_SPRITE_DEPTH_BIT_MASK) | ((u64)layer << 32);
+        sprite->depth_layer = (sprite->depth_layer & GFX_DEVICE_SPRITE_DEPTH_BIT_MASK) | ((u32)layer << 16);
     }
 
-    bool gfx_sprite_set_layer(GFX_State* state, GenId sprite_gid, u32 layer){
+    bool gfx_sprite_set_layer(GFX_State* state, GenId sprite_gid, u16 layer){
         GFX_SpriteManager* sprite_manager = &state->sprite_manager;
         i32 idx = gen_id_allocator_is_gen_id_valid(&sprite_manager->gen_id_allocator, sprite_gid);
         if(!idx){return false;}
@@ -1065,7 +1066,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
         return true;
     }
 
-    void gfx_sprite_string_set_layer_unsafe(GFX_State* state, i32 sprite_idx, u32 layer){
+    void gfx_sprite_string_set_layer_unsafe(GFX_State* state, i32 sprite_idx, u16 layer){
         i32 first_idx = sprite_idx;
         i32 idx = first_idx;
         while(true){
@@ -1079,7 +1080,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
         }
     }
 
-    bool gfx_sprite_string_set_layer(GFX_State* state, GenId sprite_gid, u32 layer){
+    bool gfx_sprite_string_set_layer(GFX_State* state, GenId sprite_gid, u16 layer){
         i32 first_idx = gen_id_allocator_is_gen_id_valid(&state->sprite_manager.gen_id_allocator, sprite_gid);
         if(!first_idx){
             return false;
@@ -1104,14 +1105,14 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
         return (u32)(sprite->depth_layer & GFX_DEVICE_SPRITE_DEPTH_BIT_MASK);
     }
 
-    void gfx_sprite_set_depth_unsafe(GFX_State* state, i32 sprite_idx, u32 depth){
+    void gfx_sprite_set_depth_unsafe(GFX_State* state, i32 sprite_idx, u16 depth){
         GFX_SpriteManager* sprite_manager = &state->sprite_manager;
         BOUNDS_CHECK(sprite_idx, sprite_manager->device_sprite_length);
         GFX_DeviceSprite* sprite = &sprite_manager->device_sprite[sprite_idx];
-        sprite->depth_layer = (sprite->depth_layer & GFX_DEVICE_SPRITE_LAYER_BIT_MASK) | ((u64)depth);
+        sprite->depth_layer = (sprite->depth_layer & GFX_DEVICE_SPRITE_LAYER_BIT_MASK) | ((u32)depth);
     }
 
-    bool gfx_sprite_set_depth(GFX_State* state, GenId sprite_gid, u32 depth){
+    bool gfx_sprite_set_depth(GFX_State* state, GenId sprite_gid, u16 depth){
         GFX_SpriteManager* sprite_manager = &state->sprite_manager;
         i32 idx = gen_id_allocator_is_gen_id_valid(&sprite_manager->gen_id_allocator, sprite_gid);
         if(!idx){return false;}
@@ -1119,7 +1120,7 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
         return true;
     }
 
-    void gfx_sprite_string_set_depth_unsafe(GFX_State* state, i32 sprite_idx, u32 depth){
+    void gfx_sprite_string_set_depth_unsafe(GFX_State* state, i32 sprite_idx, u16 depth){
         i32 first_idx = sprite_idx;
         i32 idx = first_idx;
         while(true){
@@ -1151,13 +1152,13 @@ inline bool gfx_sprite_is_first_in_chain(GFX_HostSprite sprite){
 
 /// sprite depth_layer.
 
-u64 gfx_sprite_get_depth_layer_unsafe(GFX_State* state, i32 sprite_idx){
+u32 gfx_sprite_get_depth_layer_unsafe(GFX_State* state, i32 sprite_idx){
     GFX_SpriteManager* sprite_manager = &state->sprite_manager;
     BOUNDS_CHECK(sprite_idx, sprite_manager->device_sprite_length);
     return sprite_manager->device_sprite[sprite_idx].depth_layer;
 }
 
-bool gfx_sprite_get_depth_layer(GFX_State* state, GenId sprite_gid, u64* out_depth_layer){
+bool gfx_sprite_get_depth_layer(GFX_State* state, GenId sprite_gid, u32* out_depth_layer){
     i32 idx = gen_id_allocator_is_gen_id_valid(&state->sprite_manager.gen_id_allocator, sprite_gid);
     if(!idx){
         return false;
@@ -3721,6 +3722,7 @@ void gfx_clay_end_layout(GFX_State* gfx_state, f32 delta_time, u32 sprite_layer,
                 GFX_Colour colour = gfx_clay_clay_to_gfx_colour(renderCommand->renderData.rectangle.backgroundColor);
                 Rectangle rect = gfx_clay_clay_to_rectangle(renderCommand->boundingBox);
                 gfx_draw_fill_rect(gfx_state, rect, colour, GFX_SpriteOrigin_TopLeft, sprite_layer, depth, widget_material);
+            
             }break;
             case CLAY_RENDER_COMMAND_TYPE_TEXT:{
                 Rectangle rect = gfx_clay_clay_to_rectangle(renderCommand->boundingBox);

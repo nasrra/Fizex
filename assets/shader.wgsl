@@ -87,7 +87,7 @@ GROUP & BINDING
     LAYERS
 ========================================**/
 // everything above this layer (2,3,4...) is considered a screen layer.
-const screen_layer = 1;
+const ui_max_layer: u32 = 1u;
 
 /**========================================
     COLOURS
@@ -190,22 +190,22 @@ struct sprite{
     vertex_offset: vec2f,
     
     // 108 - 112
-    depth: u32,
+    depth_layer: u32,
     
     // 100 - 108
-    layer: u32,
-    
-    // 112 - 116
     state: i32,
     
-    // 116 - 120
+    // 112 - 116
     virtual_texture_index: i32,
     
     // 116 - 120
     material_id: i32,
     
+    // 116 - 120
+    colour_blend: i32,
+    
     // 120 - 124
-    colour_blend: i32,    
+    padding: i32,
 }
 
 struct sprite_array{
@@ -264,13 +264,11 @@ fn vs_main (
 
     var position: vec4f;
     var adjusted_vertex_position = in_vertex_position + vec3f(sprite.vertex_offset, 0.0);
-    if(sprite.layer <= screen_layer){
+
+    // screen layer in game code is 1, but since depth and layer are interleaved, layer is the upper bits, so its the num below.
+    if ((sprite.depth_layer >> 16u) <= ui_max_layer) {
         position = user_uniform.ui_cam_mat * sprite.transform * vec4f(adjusted_vertex_position, 1.0);
-        // position = sprite.transform * vec4f(adjusted_vertex_position, 1.0);
-
-    }
-    else{
-
+    } else {
         position = user_uniform.world_cam_mat * sprite.transform * vec4f(adjusted_vertex_position, 1.0);
     }
 

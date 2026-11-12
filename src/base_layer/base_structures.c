@@ -8,7 +8,7 @@
 typedef struct{
     // clickable area.
     PolygonRectangle rectangle;
-    u64 depth_layer;
+    u32 depth_layer;
     void* user_data;
 } ClickableArea;
 
@@ -1977,7 +1977,7 @@ void clickable_area_hierarchy_init(ClickableAreaHierarchy* state, MemoryArena* a
     gen_id_allocator_init(&state->gen_id_allocator, arena, entity_amount);
     
     // this is okay, as gen_id_allocator_init() asserts that entity_amount is greater than 0.
-    state->area[0].depth_layer = U64_MAX; // NIL is at the fartherest layer from the camera.
+    state->area[0].depth_layer = U32_MAX; // NIL is at the fartherest layer from the camera.
     state->previous_idx_count = 0;
     state->is_init = true;
 }
@@ -2013,14 +2013,14 @@ bool clickable_area_hierarchy_set_clickable_area_rectangle_shape(ClickableAreaHi
     bypasses all genid checks.
 */
 void clickable_area_hierarchy_set_clickable_area_depth_layer_unsafe(
-    ClickableAreaHierarchy* hierarchy, i32 area_idx, u64 depth_layer
+    ClickableAreaHierarchy* hierarchy, i32 area_idx, u32 depth_layer
 ){
     NIL_BOUNDS_CHECK(area_idx, hierarchy->area_length);
     ClickableArea* area = &hierarchy->area[area_idx];
     area->depth_layer = depth_layer;
 }
 
-bool clickable_area_hierarchy_set_clickable_area_depth_layer(ClickableAreaHierarchy* hierarchy, GenId area_gid, u64 depth_layer){
+bool clickable_area_hierarchy_set_clickable_area_depth_layer(ClickableAreaHierarchy* hierarchy, GenId area_gid, u32 depth_layer){
     i32 idx = gen_id_allocator_is_gen_id_valid(&hierarchy->gen_id_allocator, area_gid);
     if(!idx){
         return false;    
@@ -2106,7 +2106,7 @@ void clickable_area_hierarchy_update(ClickableAreaHierarchy* hierarchy, Vector2 
         
         Vector2 normal;
         f32 depth;
-        u64 selected_area_depth_layer = 0;
+        u32 selected_area_depth_layer = 0;
         bool overlaps = polygon_overlaps_point_scalar(
             area->rectangle.x, area->rectangle.y,
             4, // this will need to change: if the whole thing breaks you know why :)))
