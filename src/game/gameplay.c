@@ -36,6 +36,152 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 
 ///
+/// @ Player.
+///
+
+
+#define PLAYER_TURN_TIMER_END_TIME 15.0f
+#define PLAYER_SHAKE_TIME_FACTOR 100.0f
+#define PLAYER_SHAKE_MAGNITUDE_FACTOR 0.085f
+#define PLAYER_SHAKE_PENALTY_FACTOR 4.0f
+
+///
+/// @ Physics layers.
+///
+
+#define PHYSICS_LAYER_NONE                  0
+#define PHYSICS_LAYER_ALL                   I32_MAX
+#define PHYSICS_LAYER_NUMBER_BALL           (1 << 1)
+#define PHYSICS_LAYER_ENVIRONMENT_TOP       (1 << 2)
+#define PHYSICS_LAYER_ENVIRONMENT_MID       (1 << 3)
+#define PHYSICS_LAYER_ENVIRONMENT_BOT       (1 << 4)
+#define PHYSICS_LAYER_RAYCAST               (1 << 5)
+#define PHYSICS_LAYER_GUIDELINE             (1 << 6)
+#define PHYSICS_LAYER_CUE_BALL              (1 << 7)
+#define PHYSICS_LAYER_PLACEMENT_AREA        (1 << 8)
+#define PHYSICS_LAYER_POCKET_INTERIOR_WALL  (1 << 9)
+
+#define PHYSICS_LAYER_BALL (PHYSICS_LAYER_CUE_BALL | PHYSICS_LAYER_NUMBER_BALL)
+#define PHYSICS_LAYER_ENVIRONMENT (PHYSICS_LAYER_ENVIRONMENT_TOP | PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_ENVIRONMENT_BOT)
+
+#define CUE_BALL_PHYSICS_BODY_DEFAULT_MASK (PHYSICS_LAYER_CUE_BALL | PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_ENVIRONMENT_BOT)
+#define BALL_CUE_FRAGMENTATION_PHYSICS_LAYER_MASK (PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID) 
+
+
+///
+/// @ Virtual Texture ID.
+///
+
+
+#define VIRTUAL_TEXTURE_ID_FONT 1
+#define VIRTUAL_TEXTURE_ID_GAME_BOARD 2
+
+
+///
+/// @ TextureView defines.
+///
+
+
+#define TEXTURE_VIEW_WALL           (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
+#define TEXTURE_VIEW_BALL_CUE       (GFX_TextureView){.top_left = {1664, 0}, .bot_right = {1792, 128}}
+#define TEXTURE_VIEW_BALL_ONE       (GFX_TextureView){.top_left = {256, 0}, .bot_right = {384, 128}}
+#define TEXTURE_VIEW_BALL_TWO       (GFX_TextureView){.top_left = {384, 0}, .bot_right = {512, 128}}
+#define TEXTURE_VIEW_BALL_THREE     (GFX_TextureView){.top_left = {512, 0}, .bot_right = {640, 128}}
+#define TEXTURE_VIEW_BALL_FOUR      (GFX_TextureView){.top_left = {640, 0}, .bot_right = {768, 128}}
+#define TEXTURE_VIEW_BALL_FIVE      (GFX_TextureView){.top_left = {768, 0}, .bot_right = {896, 128}}
+#define TEXTURE_VIEW_BALL_SIX       (GFX_TextureView){.top_left = {896, 0}, .bot_right = {1024, 128}}
+#define TEXTURE_VIEW_BALL_SEVEN     (GFX_TextureView){.top_left = {1024, 0}, .bot_right = {1152, 128}}
+#define TEXTURE_VIEW_BALL_EIGHT     (GFX_TextureView){.top_left = {1152, 0}, .bot_right = {1280, 128}}
+#define TEXTURE_VIEW_BALL_NINE      (GFX_TextureView){.top_left = {1280, 0}, .bot_right = {1408, 128}}
+#define TEXTURE_VIEW_BALL_ZERO      (GFX_TextureView){.top_left = {1408, 0}, .bot_right = {1536, 128}}
+#define TEXTURE_VIEW_BOOST_PAD      (GFX_TextureView){.top_left = {1536, 0}, .bot_right = {1664, 128}}
+#define TEXTURE_VIEW_POCKET         (GFX_TextureView){.top_left = {128, 0}, .bot_right = {256, 128}}
+
+#define FONT_HEIGHT_IN_PIXELS 48
+
+#define SPRITE_LAYER_GAME_WORLD 3
+#define SPRITE_LAYER_EDITOR_WORLD 2
+#define SPRITE_LAYER_GAME_UI 1
+#define SPRITE_LAYER_EDITOR_UI 0
+
+#define SPRITE_MATERIAL_DEBUG 1
+#define SPRITE_MATERIAL_IMAGE 2
+#define SPRITE_MATERIAL_TEXT 3
+
+
+///
+/// @ WindmillHinge defines
+///
+
+
+#define WINDMILL_HINGE_PHYSICS_BODY_LAYER (PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_GUIDELINE)
+#define WINDMILL_HINGE_PHYSICS_BODY_MASK PHYSICS_LAYER_BALL 
+
+#define WINDMILL_HINGE_COUNTER_CLOCKWISE_CONSTRAINTS  \
+(FIZX_ConstrainConfig){                               \
+    .angular_counter_clockwise = true,                \
+    .axis_x = true,                                   \
+    .axis_y = true                                    \
+}
+#define WINDMILL_HINGE_CLOCKWISE_CONSTRAINTS    \
+(FIZX_ConstrainConfig){                         \
+    .angular_clockwise = true,                  \
+    .axis_x = true,                             \
+    .axis_y = true                              \
+}
+
+
+///
+/// @ Windmill defines
+///
+
+
+#define WINDMILL_PHYSICS_BODY_LAYER  PHYSICS_LAYER_ENVIRONMENT_MID
+#define WINDMILL_PHYSICS_BODY_MASK   PHYSICS_LAYER_ALL 
+#define WINDMILL_PHYSICS_SHAPE_MATERIAL \
+(FIZX_Material){                        \
+    .static_friction = 0.75f,           \
+    .kinetic_friction = 0.65f,          \
+    .density = 10.0f,                   \
+    .restitution = 0.167f               \
+}
+
+#define WINDMILL_COUNTER_CLOCKWISE_STATE 0
+#define WINDMILL_COUNTER_CLOCKWISE_BODY_TEXTURE_VIEW    (GFX_TextureView){.top_left = {1920, 0}, .bot_right = {2048, 128}}
+
+#define WINDMILL_CLOCKWISE_STATE 1
+#define WINDMILL_CLOCKWISE_BODY_TEXTURE_VIEW            (GFX_TextureView){.top_left = {1920, 128}, .bot_right = {2048, 256}}
+
+
+///
+/// @ Pocket defines.
+/// 
+
+
+#define POCKET_PHYSICS_BODY_LAYER (PHYSICS_LAYER_ENVIRONMENT_BOT)
+
+
+///
+/// @ Wall defines
+///
+
+
+#define WALL_PHYSICS_BODY_LAYER (PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_GUIDELINE)
+
+
+///
+/// @ PocketInteriorWall defines
+///
+
+
+#define POCKET_INTERIOR_WALL_PHYSICS_BODY_LAYER PHYSICS_LAYER_POCKET_INTERIOR_WALL
+#define POCKET_INTERIOR_WALL_DEFAULT_STATE 0
+#define POCKET_INTERIOR_WALL_DEFAULT_STATE_COLOUR (GFX_Colour){.r = 0.45f, .g = 0.45f, .b = 1.0f, .a = 0.45f}
+#define POCKET_INTERIOR_WALL_GUIDELINE_STATE 1
+#define POCKET_INTERIOR_WALL_GUIDLEINE_STATE_COLOUR (GFX_Colour){.r = 0.65f, .g = 0.65f, .b = 1.0f, .a = 0.65f}
+
+
+///
 /// @ Ball defines
 ///
 
@@ -49,9 +195,10 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 
 #define NUMBER_BALL_DEFAULT_STATE 0
+#define NUMBER_BALL_PHYSICS_BODY_MASK (PHYSICS_LAYER_BALL | PHYSICS_LAYER_ENVIRONMENT)
+#define NUMBER_BALL_PHYSICS_BODY_LAYER (PHYSICS_LAYER_BALL | PHYSICS_LAYER_GUIDELINE)
+
 #define NUMBER_BALL_POCKETED_STATE 1
-#define NUMBER_BALL_PHYSICS_BODY_DEFAULT_MASK \
-    (PHYSICS_LAYER_BALL | PHYSICS_LAYER_ENVIRONMENT)
 
 #define NUMBER_BALL_PHYSICS_BODY_LINEAR_DRAG 2.4f
 #define NUMBER_BALL_PHYSICS_BODY_ANGULAR_DRAG 1.95f
@@ -499,81 +646,6 @@ typedef struct{
 **/
 #define DELTA_TIME_ACCUMULATOR_SLOW_DOWN 0.0333147881012903f
 
-
-///
-/// @ Player.
-///
-
-
-#define PLAYER_TURN_TIMER_END_TIME 15.0f
-#define PLAYER_SHAKE_TIME_FACTOR 100.0f
-#define PLAYER_SHAKE_MAGNITUDE_FACTOR 0.085f
-#define PLAYER_SHAKE_PENALTY_FACTOR 4.0f
-
-
-///
-/// @ Physics layers.
-///
-
-#define PHYSICS_LAYER_NONE                  0
-#define PHYSICS_LAYER_ALL                   I32_MAX
-#define PHYSICS_LAYER_NUMBER_BALL           (1 << 1)
-#define PHYSICS_LAYER_ENVIRONMENT_TOP       (1 << 2)
-#define PHYSICS_LAYER_ENVIRONMENT_MID       (1 << 3)
-#define PHYSICS_LAYER_ENVIRONMENT_BOT       (1 << 4)
-#define PHYSICS_LAYER_RAYCAST               (1 << 5)
-#define PHYSICS_LAYER_GUIDELINE             (1 << 6)
-#define PHYSICS_LAYER_CUE_BALL              (1 << 7)
-#define PHYSICS_LAYER_PLACEMENT_AREA        (1 << 8)
-#define PHYSICS_LAYER_POCKET_INTERIOR_WALL  (1 << 9)
-
-#define PHYSICS_LAYER_BALL (PHYSICS_LAYER_CUE_BALL | PHYSICS_LAYER_NUMBER_BALL)
-#define PHYSICS_LAYER_ENVIRONMENT (PHYSICS_LAYER_ENVIRONMENT_TOP | PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_ENVIRONMENT_BOT)
-
-#define CUE_BALL_PHYSICS_BODY_DEFAULT_MASK (PHYSICS_LAYER_CUE_BALL | PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_ENVIRONMENT_BOT)
-#define BALL_CUE_FRAGMENTATION_PHYSICS_LAYER_MASK (PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID) 
-
-
-///
-/// @ Virtual Texture ID.
-///
-
-
-#define VIRTUAL_TEXTURE_ID_FONT 1
-#define VIRTUAL_TEXTURE_ID_GAME_BOARD 2
-
-
-///
-/// @ texture views.
-///
-
-
-#define TEXTURE_VIEW_WALL           (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
-#define TEXTURE_VIEW_BALL_CUE       (GFX_TextureView){.top_left = {1664, 0}, .bot_right = {1792, 128}}
-#define TEXTURE_VIEW_BALL_ONE       (GFX_TextureView){.top_left = {256, 0}, .bot_right = {384, 128}}
-#define TEXTURE_VIEW_BALL_TWO       (GFX_TextureView){.top_left = {384, 0}, .bot_right = {512, 128}}
-#define TEXTURE_VIEW_BALL_THREE     (GFX_TextureView){.top_left = {512, 0}, .bot_right = {640, 128}}
-#define TEXTURE_VIEW_BALL_FOUR      (GFX_TextureView){.top_left = {640, 0}, .bot_right = {768, 128}}
-#define TEXTURE_VIEW_BALL_FIVE      (GFX_TextureView){.top_left = {768, 0}, .bot_right = {896, 128}}
-#define TEXTURE_VIEW_BALL_SIX       (GFX_TextureView){.top_left = {896, 0}, .bot_right = {1024, 128}}
-#define TEXTURE_VIEW_BALL_SEVEN     (GFX_TextureView){.top_left = {1024, 0}, .bot_right = {1152, 128}}
-#define TEXTURE_VIEW_BALL_EIGHT     (GFX_TextureView){.top_left = {1152, 0}, .bot_right = {1280, 128}}
-#define TEXTURE_VIEW_BALL_NINE      (GFX_TextureView){.top_left = {1280, 0}, .bot_right = {1408, 128}}
-#define TEXTURE_VIEW_BALL_ZERO      (GFX_TextureView){.top_left = {1408, 0}, .bot_right = {1536, 128}}
-#define TEXTURE_VIEW_BOOST_PAD      (GFX_TextureView){.top_left = {1536, 0}, .bot_right = {1664, 128}}
-#define TEXTURE_VIEW_POCKET         (GFX_TextureView){.top_left = {128, 0}, .bot_right = {256, 128}}
-
-#define FONT_HEIGHT_IN_PIXELS 48
-
-#define SPRITE_LAYER_GAME_WORLD 3
-#define SPRITE_LAYER_EDITOR_WORLD 2
-#define SPRITE_LAYER_GAME_UI 1
-#define SPRITE_LAYER_EDITOR_UI 0
-
-#define SPRITE_MATERIAL_DEBUG 1
-#define SPRITE_MATERIAL_IMAGE 2
-#define SPRITE_MATERIAL_TEXT 3
-
 ///
 /// globals.
 ///
@@ -946,7 +1018,12 @@ void guideline_collision_callback(FIZX_State* state, FIZX_QueryCollisionInfo inf
 
     }
     
-    fizx_state_query_circle_area(state, guideline_circle_collision_callback, &query_ctx, PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID, query_circle);    
+    fizx_state_query_circle_area(
+        state, guideline_circle_collision_callback,
+        &query_ctx, 
+        PHYSICS_LAYER_GUIDELINE, 
+        query_circle
+    );    
     
     gfx_draw_wire_circle(
         ctx->entity_manager->gfx_state, query_circle, GFX_COLOUR_WHITE, 
@@ -2151,25 +2228,8 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D tra
 
 
 ///
-/// @ WindMillHinge.
+/// @ WindMillHinge procedures
 ///
-
-
-#define WINDMILL_HINGE_DEFAULT_PHYSICS_LAYER  PHYSICS_LAYER_ENVIRONMENT_MID
-#define WINDMILL_HINGE_DEFAULT_PHYSICS_MASK  ~(PHYSICS_LAYER_ENVIRONMENT) 
-
-#define WINDMILL_HINGE_COUNTER_CLOCKWISE_CONSTRAINTS  \
-(FIZX_ConstrainConfig){                               \
-    .angular_counter_clockwise = true,                \
-    .axis_x = true,                                   \
-    .axis_y = true                                    \
-}
-#define WINDMILL_HINGE_CLOCKWISE_CONSTRAINTS    \
-(FIZX_ConstrainConfig){                         \
-    .angular_clockwise = true,                  \
-    .axis_x = true,                             \
-    .axis_y = true                              \
-}
 
 void windmill_hinge_update(Entity* entity, i32 entity_idx, GameState* game_state, f32 delta_time){    
     // Transform2D rotated_transform = transform2d_rotate(entity->global_transform, to_radians(66.67f) * delta_time);
@@ -2195,8 +2255,8 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
             
             FIZX_BodyConfig config = {
                 .constrain_config = WINDMILL_HINGE_COUNTER_CLOCKWISE_CONSTRAINTS,
-                .layer = WINDMILL_HINGE_DEFAULT_PHYSICS_LAYER,
-                .mask = WINDMILL_HINGE_DEFAULT_PHYSICS_MASK,
+                .layer = WINDMILL_HINGE_PHYSICS_BODY_LAYER,
+                .mask = WINDMILL_HINGE_PHYSICS_BODY_MASK,
                 .angular_drag = 0.75f
             };
 
@@ -2282,17 +2342,9 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
 
 
 ///
-/// @ WindMill.
+/// @ WindMill procedures
 ///
 
-
-#define WINDMILL_COUNTER_CLOCKWISE_STATE 0
-#define WINDMILL_CLOCKWISE_STATE 1
-#define WINDMILL_COUNTER_CLOCKWISE_BODY_TEXTURE_VIEW    (GFX_TextureView){.top_left = {1920, 0}, .bot_right = {2048, 128}}
-#define WINDMILL_CLOCKWISE_BODY_TEXTURE_VIEW            (GFX_TextureView){.top_left = {1920, 128}, .bot_right = {2048, 256}}
-#define WINDMILL_DEFAULT_PHYSICS_LAYER  PHYSICS_LAYER_ENVIRONMENT_MID
-#define WINDMILL_DEFAULT_PHYSICS_MASK   PHYSICS_LAYER_ALL 
-#define WINDMILL_PHYSICS_MATERIAL (FIZX_Material){.static_friction = 0.75f, .kinetic_friction = 0.65f, .density = 10.0f, .restitution = 0.167f}
 
 void windmill_set_state_callback(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state){    
     
@@ -2383,8 +2435,8 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
 
             entity->is_physics_body = true;            
             FIZX_BodyConfig body_config = {
-                .layer = WINDMILL_DEFAULT_PHYSICS_LAYER,
-                .mask = WINDMILL_DEFAULT_PHYSICS_MASK                
+                .layer = WINDMILL_PHYSICS_BODY_LAYER,
+                .mask = WINDMILL_PHYSICS_BODY_MASK                
             };
 
             entity->physics_body_gid = fizx_body_alloc(
@@ -2405,7 +2457,7 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
                 FIZX_CollisionCallbackBehaviour_All,
                 shape_user_data,
                 physics_shape,
-                WINDMILL_PHYSICS_MATERIAL
+                WINDMILL_PHYSICS_SHAPE_MATERIAL
             );
             
             fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
@@ -2509,7 +2561,7 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, Transform2D transform, 
             entity->is_physics_body = true;
             
             FIZX_BodyConfig body_config = {
-                .layer = PHYSICS_LAYER_ENVIRONMENT_MID,
+                .layer = POCKET_PHYSICS_BODY_LAYER,
                 .mask = PHYSICS_LAYER_ALL
             };
             
@@ -2840,8 +2892,8 @@ GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, Ge
             entity->is_physics_body = true;
                         
             FIZX_BodyConfig body_config = {
-                .layer = PHYSICS_LAYER_ENVIRONMENT_MID,
-                .mask = PHYSICS_LAYER_ALL
+                .layer = WALL_PHYSICS_BODY_LAYER,
+                .mask = PHYSICS_LAYER_BALL
             };
             
             entity->physics_body_gid = fizx_body_alloc(
@@ -2900,95 +2952,143 @@ GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, Ge
 
 
 ///
-/// @ PocketInteriorWall
+/// @ PocketInteriorWall procedures
 ///
+
+
+void pocket_interior_wall_set_state_callback(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state){
+    switch(state){
+        default:{ 
+            ASSERT(false, "unknown state set.");
+        } break;
+        case POCKET_INTERIOR_WALL_DEFAULT_STATE:{
+            fizx_body_set_layer(&entity_manager->fizx_state, entity->physics_body_gid, POCKET_INTERIOR_WALL_PHYSICS_BODY_LAYER);
+            gfx_sprite_set_colour(entity_manager->gfx_state, entity->sprite_gid, POCKET_INTERIOR_WALL_DEFAULT_STATE_COLOUR);
+        }break;
+        case POCKET_INTERIOR_WALL_GUIDELINE_STATE:{
+            fizx_body_set_layer(&entity_manager->fizx_state, entity->physics_body_gid, (POCKET_INTERIOR_WALL_PHYSICS_BODY_LAYER | PHYSICS_LAYER_GUIDELINE));
+            gfx_sprite_set_colour(entity_manager->gfx_state, entity->sprite_gid, POCKET_INTERIOR_WALL_GUIDLEINE_STATE_COLOUR);
+        }break;
+    }
+}
 
 void pocket_interior_wall_on_exit_collision_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    if((info.source_layer & PHYSICS_LAYER_BALL)){
-        GenId entity_gid = *(GenId*)info.source_user_data;
-        Entity* entity;
-        if(entity_manager_get_entity(ctx->game_state->entity_manager, entity_gid, &entity)){
-            entity->overlaps_pocket_interior_wall_count -= 1;
-            switch(entity->type_id){
-                case EntityTypeId_BallOne:
-                case EntityTypeId_BallTwo:
-                case EntityTypeId_BallThree:
-                case EntityTypeId_BallFour:
-                case EntityTypeId_BallFive:
-                case EntityTypeId_BallSix:
-                case EntityTypeId_BallSeven:
-                case EntityTypeId_BallEight:
-                case EntityTypeId_BallNine:
-                case EntityTypeId_BallZero:{
-                    if(
-                        entity->overlaps_pocket_interior_wall_count == 0 &&
-                        entity->state == NUMBER_BALL_POCKETED_STATE
-                    ){
-                        fizx_body_set_mask(
-                            &ctx->game_state->entity_manager.fizx_state, 
-                            entity->physics_body_gid, 
-                            PHYSICS_LAYER_POCKET_INTERIOR_WALL
-                        );
-                    }
-                }break;
-                case EntityTypeId_CueBall:{
-                    if(
-                        entity->overlaps_pocket_interior_wall_count == 0 &&
-                        entity->state == CUE_BALL_POCKETED_STATE
-                    ){
-                        fizx_body_set_mask(
-                            &ctx->game_state->entity_manager.fizx_state, 
-                            entity->physics_body_gid, 
-                            PHYSICS_LAYER_POCKET_INTERIOR_WALL
-                        );
-                    }
-                }break;
+    if((info.source_layer & PHYSICS_LAYER_BALL) == 0){
+        return;
+    }
+    
+    GenId source_entity_gid = *(GenId*)info.source_user_data;
+    GenId target_entity_gid = *(GenId*)info.target_user_data;
+    
+    Entity* source_entity;
+    if(!entity_manager_get_entity(ctx->game_state->entity_manager, source_entity_gid, &source_entity)){
+        return;    
+    }   
+    
+    Entity* target_entity;
+    if(!entity_manager_get_entity(ctx->game_state->entity_manager, target_entity_gid, &target_entity)){
+        return;
+    }
+
+    ASSERT(target_entity->type_id == EntityTypeId_PocketInteriorWall, "not a pocket interior wall.");
+    if(target_entity->state == POCKET_INTERIOR_WALL_DEFAULT_STATE){
+        // only decrement when the pocket wall is set to the "enter mode", (i.e,) when the guideline doesnt hit it.
+        source_entity->overlaps_pocket_interior_wall_count -= 1;
+    }
+
+    switch(source_entity->type_id){
+        case EntityTypeId_BallOne:
+        case EntityTypeId_BallTwo:
+        case EntityTypeId_BallThree:
+        case EntityTypeId_BallFour:
+        case EntityTypeId_BallFive:
+        case EntityTypeId_BallSix:
+        case EntityTypeId_BallSeven:
+        case EntityTypeId_BallEight:
+        case EntityTypeId_BallNine:
+        case EntityTypeId_BallZero:{
+            if(
+                source_entity->overlaps_pocket_interior_wall_count == 0 &&
+                source_entity->state == NUMBER_BALL_POCKETED_STATE
+            ){
+                fizx_body_set_mask(
+                    &ctx->game_state->entity_manager.fizx_state, 
+                    source_entity->physics_body_gid, 
+                    PHYSICS_LAYER_POCKET_INTERIOR_WALL
+                );
             }
-        }
+        }break;
+        case EntityTypeId_CueBall:{
+            if(
+                source_entity->overlaps_pocket_interior_wall_count == 0 &&
+                source_entity->state == CUE_BALL_POCKETED_STATE
+            ){
+                fizx_body_set_mask(
+                    &ctx->game_state->entity_manager.fizx_state, 
+                    source_entity->physics_body_gid, 
+                    PHYSICS_LAYER_POCKET_INTERIOR_WALL
+                );
+            }
+        }break;
     }
 }
 
 void pocket_interior_wall_on_enter_collision_callback(FIZX_CollisionInfo info, void* user_data){
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    if((info.source_layer & PHYSICS_LAYER_BALL)){
-        GenId entity_gid = *(GenId*)info.source_user_data;
-        Entity* entity;
-        
-        i32 body_idx = fizx_shape_get_parent_unsafe(info.fizx_state, info.source_shape_idx);
-        Vector2 velocity = fizx_body_get_linear_velocity_unsafe(info.fizx_state, body_idx);
-        // clamp to the min and max launch force as speed boosts and other forces can make the ball move faster.
-        velocity.x = CLAMP(velocity.x, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
-        velocity.y = CLAMP(velocity.y, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
-        velocity = vector2_div_val(velocity, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE * 0.45f);
-        // make sure to clamp it so that it is between 0 and 1, as the velocity is in a square space not radial.
-        // this is for the FMOD param which needs to be between 0 and 1 as well.
-        f32 length = CLAMP(vector2_len(vector2_mul(velocity, info.normal_1)), 0.0f, 0.99f);
-        
-        if(entity_manager_get_entity(ctx->game_state->entity_manager, entity_gid, &entity)){
-            entity->overlaps_pocket_interior_wall_count += 1;
-            switch(entity->type_id){
-                case EntityTypeId_BallZero:
-                case EntityTypeId_BallOne:
-                case EntityTypeId_BallTwo:
-                case EntityTypeId_BallThree:
-                case EntityTypeId_BallFour:
-                case EntityTypeId_BallFive:
-                case EntityTypeId_BallSix:
-                case EntityTypeId_BallSeven:
-                case EntityTypeId_BallEight:
-                case EntityTypeId_BallNine:{
-                    if(entity->state == NUMBER_BALL_POCKETED_STATE && entity->overlaps_pocket_interior_wall_count){
-                        sound_play_ball_hit_pocket_interior_wall(length);
-                    }
-                }break;
-                case EntityTypeId_CueBall:{
-                    if(entity->state == CUE_BALL_POCKETED_STATE && entity->overlaps_pocket_interior_wall_count){
-                        sound_play_ball_hit_pocket_interior_wall(length);
-                    }
-                }break;
+    if((info.source_layer & PHYSICS_LAYER_BALL) == 0){
+        return;
+    }
+
+    GenId source_entity_gid = *(GenId*)info.source_user_data;
+    GenId target_entity_gid = *(GenId*)info.target_user_data;
+    
+    i32 body_idx = fizx_shape_get_parent_unsafe(info.fizx_state, info.source_shape_idx);
+    Vector2 velocity = fizx_body_get_linear_velocity_unsafe(info.fizx_state, body_idx);
+    // clamp to the min and max launch force as speed boosts and other forces can make the ball move faster.
+    velocity.x = CLAMP(velocity.x, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
+    velocity.y = CLAMP(velocity.y, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
+    velocity = vector2_div_val(velocity, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE * 0.45f);
+    // make sure to clamp it so that it is between 0 and 1, as the velocity is in a square space not radial.
+    // this is for the FMOD param which needs to be between 0 and 1 as well.
+    f32 length = CLAMP(vector2_len(vector2_mul(velocity, info.normal_1)), 0.0f, 0.99f);
+
+    Entity* source_entity;
+    if(!entity_manager_get_entity(ctx->game_state->entity_manager, source_entity_gid, &source_entity)){
+        return;
+    }
+    
+    Entity* target_entity;
+    if(!entity_manager_get_entity(ctx->game_state->entity_manager, target_entity_gid, &target_entity)){
+        return;
+    }
+    
+    ASSERT(target_entity->type_id == EntityTypeId_PocketInteriorWall, "not a pocket interior wall.");
+    if(target_entity->state == POCKET_INTERIOR_WALL_DEFAULT_STATE){
+        // only increment when the pocket wall is set to the "enter mode", (i.e,) when the guideline doesnt hit it.
+        source_entity->overlaps_pocket_interior_wall_count += 1;
+    }
+
+    switch(source_entity->type_id){
+        case EntityTypeId_BallZero:
+        case EntityTypeId_BallOne:
+        case EntityTypeId_BallTwo:
+        case EntityTypeId_BallThree:
+        case EntityTypeId_BallFour:
+        case EntityTypeId_BallFive:
+        case EntityTypeId_BallSix:
+        case EntityTypeId_BallSeven:
+        case EntityTypeId_BallEight:
+        case EntityTypeId_BallNine:{
+            if(source_entity->state == NUMBER_BALL_POCKETED_STATE){
+                sound_play_ball_hit_pocket_interior_wall(length);
             }
-        }
+        }break;
+        case EntityTypeId_CueBall:{
+            if(source_entity->state == CUE_BALL_POCKETED_STATE){
+                sound_play_ball_hit_pocket_interior_wall(length);
+            }
+        }break;
     }
 }
 
@@ -2999,6 +3099,7 @@ GenId entity_spawn_pocket_interior_wall(EntityManager* entity_manager, Transform
     
         entity->type_id = EntityTypeId_PocketInteriorWall;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_EDITOR;
+        entity->set_state_callback = pocket_interior_wall_set_state_callback;
         
         { // alloc_physics_body();
             entity->is_physics_body = true;
@@ -3048,7 +3149,7 @@ GenId entity_spawn_pocket_interior_wall(EntityManager* entity_manager, Transform
             gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
             gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_DEBUG);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
-            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 0.5f, .g = 0.5f, .b = 1.0f, .a = 0.5f});
+            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, POCKET_INTERIOR_WALL_DEFAULT_STATE_COLOUR);
             gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Override);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_EDITOR_WORLD);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
@@ -3182,7 +3283,7 @@ void number_ball_set_state_callback(EntityManager* entity_manager, Entity* entit
                 .end_time = BALL_POCKETED_LIFETIME,
             };
             
-            timer_manager_timer_start(&entity_manager->timer_manager, timer_ctx);            
+            timer_manager_timer_start(&entity_manager->timer_manager, timer_ctx);
         }break;
     }
 }
@@ -3256,8 +3357,8 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, Transform2D transf
             FIZX_BodyConfig body_config = {
                 .linear_drag = NUMBER_BALL_PHYSICS_BODY_LINEAR_DRAG,
                 .angular_drag = NUMBER_BALL_PHYSICS_BODY_ANGULAR_DRAG,
-                .layer = PHYSICS_LAYER_NUMBER_BALL,
-                .mask = NUMBER_BALL_PHYSICS_BODY_DEFAULT_MASK,
+                .layer = NUMBER_BALL_PHYSICS_BODY_LAYER,
+                .mask = NUMBER_BALL_PHYSICS_BODY_MASK,
             };
     
             entity->physics_body_gid = fizx_body_alloc(
@@ -4445,7 +4546,7 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                                                      
                         fizx_state_query_circle_cast_area(
                             fizx_state, guideline_collision_callback, &guideline_ctx, 
-                            PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID, 
+                            PHYSICS_LAYER_GUIDELINE, 
                             vector2_add(guideline_state->start_position, vector2_mul_val(launch_direction, BALL_PHYSICS_SHAPE_RADIUS * 1.75f)),
                             launch_direction, 
                             100.0f, 
