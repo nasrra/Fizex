@@ -2667,13 +2667,35 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
             if(selected_game_entity_idx == i){
                 switch(editor_mouse_state->current_behaviour){
                     case Editor_MouseStateBehaviour_Move:{
-                        gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_LIGHT_BLUE, game_entity->global_transform.position, VECTOR2_UP, 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
-                        gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_PINK, game_entity->global_transform.position, VECTOR2_RIGHT, 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
-                        gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->global_transform.position, transform2d_get_forward_angle_vector(game_entity->global_transform), 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+                        gfx_draw_arrow(
+                            editor_gfx_state, GFX_COLOUR_LIGHT_BLUE, game_entity->global_transform.position, VECTOR2_UP, 
+                            1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG,
+                            GFX_LineScaling_WorldCamera
+                        );
+                        gfx_draw_arrow(
+                            editor_gfx_state, GFX_COLOUR_PINK, game_entity->global_transform.position, VECTOR2_RIGHT, 
+                            1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG,
+                            GFX_LineScaling_WorldCamera
+                        );
+                        gfx_draw_arrow(
+                            editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->global_transform.position, 
+                            transform2d_get_forward_angle_vector(game_entity->global_transform), 
+                            1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG,
+                            GFX_LineScaling_WorldCamera
+                        );
                     }break;
                     case Editor_MouseStateBehaviour_Rotate:{
-                        gfx_draw_arrow(editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->global_transform.position, transform2d_get_forward_angle_vector(game_entity->global_transform), 1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
-                        gfx_draw_line(editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->global_transform.position, mouse_world_position, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, 0.05f);
+                        gfx_draw_arrow(
+                            editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->global_transform.position, 
+                            transform2d_get_forward_angle_vector(game_entity->global_transform), 
+                            1.0f, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG,
+                            GFX_LineScaling_WorldCamera
+                        );
+                        gfx_draw_line(
+                            editor_gfx_state, GFX_COLOUR_ORANGE, game_entity->global_transform.position, mouse_world_position, 
+                            SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, GFX_DEFAULT_WIREFRAME_THICKNESS,
+                            GFX_LineScaling_WorldCamera
+                        );
                     }
                 }
                 clickable_area_colour = EDITOR_ENTTY_CLICKABLE_AREA_ACTIVE_COLOUR;
@@ -2690,7 +2712,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
             clickable_area_hierarchy_get_clickable_area_unsafe(clickable_area_hierarchy, i, &clickable_area);
             // draw the clickable area.
             i32 sprite_depth = 100;
-            gfx_draw_wire_poly( 
+            gfx_draw_wire_poly(
                 editor_gfx_state,
                 clickable_area->rectangle.x,
                 clickable_area->rectangle.y,
@@ -2698,7 +2720,8 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 clickable_area_colour,
                 SPRITE_LAYER_EDITOR_WORLD,
                 sprite_depth,
-                SPRITE_MATERIAL_DEBUG
+                SPRITE_MATERIAL_DEBUG,
+                GFX_LineScaling_WorldCamera
             );
         }
     }

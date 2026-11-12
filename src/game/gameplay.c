@@ -217,7 +217,7 @@ struct BoardState{
 
 typedef struct{
     Matrix4x4 world_camera_matrix;
-    Matrix4x4 screen_camera_matrix;
+    Matrix4x4 ui_camera_matrix;
     f32 time;
     f32 world_camera_far_z;
     f32 world_camera_near_z;
@@ -937,7 +937,8 @@ void guideline_collision_callback(FIZX_State* state, FIZX_QueryCollisionInfo inf
                         SPRITE_LAYER_EDITOR_WORLD,
                         0,
                         SPRITE_MATERIAL_DEBUG, 
-                        0.05f
+                        2.0f,
+                        GFX_LineScaling_WorldCamera
                     );    
                 }break;
             }
@@ -947,7 +948,10 @@ void guideline_collision_callback(FIZX_State* state, FIZX_QueryCollisionInfo inf
     
     fizx_state_query_circle_area(state, guideline_circle_collision_callback, &query_ctx, PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT_MID, query_circle);    
     
-    gfx_draw_wire_circle(ctx->entity_manager->gfx_state, query_circle, GFX_COLOUR_WHITE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);
+    gfx_draw_wire_circle(
+        ctx->entity_manager->gfx_state, query_circle, GFX_COLOUR_WHITE, 
+        SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG, GFX_LineScaling_WorldCamera
+    );
 
     gfx_draw_line(
         ctx->entity_manager->gfx_state,
@@ -957,7 +961,8 @@ void guideline_collision_callback(FIZX_State* state, FIZX_QueryCollisionInfo inf
         SPRITE_LAYER_EDITOR_WORLD,
         0,
         SPRITE_MATERIAL_DEBUG, 
-        0.05f
+        2.0f,
+        GFX_LineScaling_WorldCamera
     );
 }
 
@@ -1981,7 +1986,11 @@ void thwamper_on_turn_end_callback(GameState* game_state, i32 entity_idx){
     i32 body_idx = gen_id_get_index(entity->physics_body_gid);
     Circle area = {.x = entity->global_transform.position.x, .y = entity->global_transform.position.y, 2.0f};
     fizx_state_query_circle_area(&game_state->entity_manager.fizx_state, thwamper_smackdown_area_query_callback, &body_idx, PHYSICS_LAYER_BALL, area);
-    gfx_draw_wire_circle(game_state->entity_manager.gfx_state, area, GFX_COLOUR_WHITE, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG);    
+    gfx_draw_wire_circle(
+        game_state->entity_manager.gfx_state, area, GFX_COLOUR_WHITE, 
+        SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG,
+        GFX_LineScaling_WorldCamera
+    );    
 }
 
 GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
@@ -4422,7 +4431,8 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
                                 GFX_COLOUR_YELLOW, 
                                 SPRITE_LAYER_EDITOR_WORLD, 
                                 0, 
-                                SPRITE_MATERIAL_DEBUG
+                                SPRITE_MATERIAL_DEBUG,
+                                GFX_LineScaling_WorldCamera
                             );
                         }
                                         

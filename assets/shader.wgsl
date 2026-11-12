@@ -129,7 +129,7 @@ const material_simple_text = 3;
 ========================================**/
 struct ubo{
     world_cam_mat: mat4x4f,
-    screen_cam_mat: mat4x4f,
+    ui_cam_mat: mat4x4f,
     time: f32,
     world_cam_far_z: f32,
     world_cam_near_z: f32,
@@ -265,7 +265,7 @@ fn vs_main (
     var position: vec4f;
     var adjusted_vertex_position = in_vertex_position + vec3f(sprite.vertex_offset, 0.0);
     if(sprite.layer <= screen_layer){
-        position = user_uniform.screen_cam_mat * sprite.transform * vec4f(adjusted_vertex_position, 1.0);
+        position = user_uniform.ui_cam_mat * sprite.transform * vec4f(adjusted_vertex_position, 1.0);
         // position = sprite.transform * vec4f(adjusted_vertex_position, 1.0);
 
     }

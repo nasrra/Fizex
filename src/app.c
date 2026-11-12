@@ -1,3 +1,20 @@
+
+
+///
+/// @ defines
+///
+
+
+#define WINDOW_WIDTH 1920
+#define WINDOW_HEIGHT 1080
+#define GFX_DEFAULT_WIREFRAME_THICKNESS 2.00f
+
+
+///
+/// @ includes
+///
+
+
 #include "os.h"
 #include "base_layer/base.h"
 #include "base_layer/base_cpu.c"
@@ -13,14 +30,6 @@ GFX_State* global_gfx_state;
 #include "fizx/fizx_draw.c"
 #include "game/gameplay.c"
 #include "game/editor.c"
-
-/**====================
-    defines.
-====================**//**/
-
-#define WINDOW_WIDTH 1920
-#define WINDOW_HEIGHT 1080
-#define GFX_DEFAULT_WIREFRAME_THICKNESS 0.05f
 
 
 ///
@@ -113,7 +122,7 @@ void app_main(){
         );
         
         gfx_orthographic_camera_init(
-            &gfx_state.screen_camera, 
+            &gfx_state.ui_camera, 
             UI_CAMERA_COORDINATE_SPACE, 
             CAMERA_POSITIONAL_OFFSET, 
             UI_CAMERA_DEFAULT_NEAR_Z,
@@ -350,7 +359,7 @@ void app_main(){
                         **/
                         f32 aspect_ratio = os_window_calc_aspect_ratio(*gfx_state.window_ctx);
                         gfx_camera_update_projection_matrix(&gfx_state.world_camera, aspect_ratio);
-                        gfx_camera_update_projection_matrix(&gfx_state.screen_camera, aspect_ratio);
+                        gfx_camera_update_projection_matrix(&gfx_state.ui_camera, aspect_ratio);
                     
                         Ubo ubo = {
                             .world_camera_matrix =
@@ -361,13 +370,13 @@ void app_main(){
                                     ),
                                 gfx_state.world_camera.model
                             ),
-                            .screen_camera_matrix =
+                            .ui_camera_matrix =
                                 matrix4x4_mul(
                                     matrix4x4_mul(
-                                        gfx_state.screen_camera.projection,
-                                        gfx_state.screen_camera.view
+                                        gfx_state.ui_camera.projection,
+                                        gfx_state.ui_camera.view
                                     ),
-                                gfx_state.screen_camera.model
+                                gfx_state.ui_camera.model
                             ),
                             .world_camera_far_z     = gfx_state.world_camera.far_z,
                             .world_camera_near_z    = gfx_state.world_camera.near_z,            

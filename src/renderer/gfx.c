@@ -390,7 +390,7 @@ typedef struct{
     */
     Rectangle destination_rectangle;
     GFX_Camera world_camera;
-    GFX_Camera screen_camera;
+    GFX_Camera ui_camera;
     /*
         the window that this gfx_state has been linked to.
     */
@@ -406,9 +406,18 @@ typedef struct{
     bool is_init;
 } GFX_State;
 
-/*====================
-    defines
-====================*//**/
+typedef enum{
+    GFX_LineScaling_None,
+    GFX_LineScaling_WorldCamera,
+    GFX_LineScaling_UiCamera
+} GFX_LineScaling;
+
+
+
+///
+/// @ Defines
+///
+
 
 #define GFX_SPRITE_ORIGIN_CENTER_VERTEX_OFFSET (Vector2){0}
 #define GFX_SPRITE_ORIGIN_TOP_LEFT_VERTEX_OFFSET (Vector2){.x = 0.5f, .y = -0.5f}
@@ -432,19 +441,12 @@ typedef struct{
 #define GFX_COLOUR_BLACK        (GFX_Colour){.a = 1.0f}
 #define GFX_COLOUR_PURPLE       (GFX_Colour){.r = 0.5f, .b = 0.5f, .a = 1.0f}
 
-/*
-    The amount of entries in @group(0).
-*/
+// The amount of entries in @group(0).
 #define GFX_BLIT_PIPELINE_BIND_GROUP_ENTRY_COUNT 2
-/*
-    The binding of the sampler object in @group(0).
-*/
+// The binding of the sampler object in @group(0).
 #define GFX_BLIT_PIPELINE_SAMPLER_BINDING 0
-/*
-    The binding of the texture object in @group(0).
-*/
+// The binding of the texture object in @group(0).
 #define GFX_BLIT_PIPELINE_TEXTURE_BINDING 1
-
 /*
     The maximum amount of virtual textures a shader can store.
 
@@ -453,70 +455,35 @@ typedef struct{
     so only 4096 unique texture ids can be stored; which is more than enough for most games.
 */
 #define GFX_DEVICE_VIRTUAL_TEXTURE_MAX_AMOUNT 4096
-
-/*
-    The value of a vertex shader location is the same as the respective WGSL attribute `@location(g)` in the shader.
-*/
+// The value of a vertex shader location is the same as the respective WGSL attribute `@location(g)` in the shader.
 #define GFX_SHADER_VERTEX_LOCATION_POSITION 0
-/*
-    The value of a vertex shader location is the same as the respective WGSL attribute `@location(g)` in the shader.
-*/
+// The value of a vertex shader location is the same as the respective WGSL attribute `@location(g)` in the shader.
 #define GFX_SHADER_VERTEX_LOCATION_UV 1
-/*
-    The value of a vertex shader location is the same as the respective WGSL attribute `@location(g)` in the shader.
-*/
+// The value of a vertex shader location is the same as the respective WGSL attribute `@location(g)` in the shader.
 #define GFX_SHADER_VERTEX_LOCATION_SPRITE_INDEX 2
-
-/*
-    The value of a shader group is the same as the respective WGSL attribute `@group(g)` in the shader.</para>
-*/
+// The value of a shader group is the same as the respective WGSL attribute `@group(g)` in the shader.
 #define GFX_SHADER_GROUP_BUFFERS 0
-/*
-    The value of a shader group is the same as the respective WGSL attribute `@group(g)` in the shader.</para>
-*/
+// The value of a shader group is the same as the respective WGSL attribute `@group(g)` in the shader.
 #define GFX_SHADER_GROUP_TEXTURE_ARRAYS 1
-/*
-    The value of a shader group is the same as the respective WGSL attribute `@group(g)` in the shader.</para>
-*/
+// The value of a shader group is the same as the respective WGSL attribute `@group(g)` in the shader.
 #define GFX_SHADER_GROUP_UTILITIES 2
-
-/*
-    The value of a shader binding is the same as the respective WGSL attribute @binding(b) in the shader.
-*/
+// The value of a shader binding is the same as the respective WGSL attribute @binding(b) in the shader.
 #define GFX_SHADER_BINDING_USER_UNIFORM 0
-/*
-    The value of a shader binding is the same as the respective WGSL attribute @binding(b) in the shader.
-*/
+/// The value of a shader binding is the same as the respective WGSL attribute @binding(b) in the shader.
 #define GFX_SHADER_BINDING_USER_STORAGE 1
-/*
-    The value of a shader binding is the same as the respective WGSL attribute @binding(b) in the shader.
-*/
+// The value of a shader binding is the same as the respective WGSL attribute @binding(b) in the shader.
 #define GFX_SHADER_BINDING_VIRTUAL_TEXTURES_UNIFORM 2
-/*
-    The value of a shader binding is the same as the respective WGSL attribute @binding(b) in the shader.
-*/
+// The value of a shader binding is the same as the respective WGSL attribute @binding(b) in the shader.
 #define GFX_SHADER_BINDING_SPRITE_STORAGE 3
-/*
-    The value of a shader binding is the same as the respective WGSL attribute @binding(b) in the shader.
-*/
+// The value of a shader binding is the same as the respective WGSL attribute @binding(b) in the shader.
 #define GFX_SHADER_BINDING_NON_FILTER_SAMPLER 0
-
-/*
-    The amount of bindings a shader group has.
-*/
+// The amount of bindings a shader group has.
 #define GFX_SHADER_BUFFERS_GROUP_BINDING_COUNT 4
-/*
-    The amount of bindings a shader group has.
-*/
+// The amount of bindings a shader group has.
 #define GFX_SHADER_UTILITIES_GROUP_BINDING_COUNT 1
-
-/*
-    The index where font textures are stored within the `TextureArrays` array.
-*/
+// The index where font textures are stored within the `TextureArrays` array.
 #define GFX_VIRTUAL_TEXTURE_MANAGER_FONT_TEXTURE_ARRAY_IDX 1
-/*
-    The index where the first image textures are stored within the `TextureArrays` array.
-*/
+// The index where the first image textures are stored within the `TextureArrays` array.
 #define GFX_VIRTUAL_TEXTURE_MANAGER_IMAGE_TEXTURE_ARRAY_START_INDEX \
             GFX_VIRTUAL_TEXTURE_MANAGER_FONT_TEXTURE_ARRAY_IDX + 1
 /*
@@ -3248,13 +3215,27 @@ void gfx_camera_update_projection_matrix(GFX_Camera* camera, f32 surface_aspect_
     }
 }
 
-void gfx_draw_line(GFX_State* state, GFX_Colour colour, Vector2 start, Vector2 end, u32 layer, u32 depth, i32 material, f32 thickness){
+void gfx_draw_line(
+    GFX_State* state, GFX_Colour colour, 
+    Vector2 start, Vector2 end, 
+    u32 layer, u32 depth, i32 material, 
+    f32 thickness, GFX_LineScaling scaling_type
+){
     ASSERT(state->is_init, "renderer context has not been init.");
     Transform2D transform = TRANSFORM2D_IDENTITY;
     transform = transform2d_rotate(transform, vector2_get_angle_between_points(start, end));
     transform.position = vector2_mul_val(vector2_add(end, start), 0.5f);
-    transform.scale =  (Vector2){.y = thickness, .x = vector2_len(vector2_sub(end, start))};
-
+    transform.scale = (Vector2){.y = thickness, .x = vector2_len(vector2_sub(end, start))};
+    
+    switch(scaling_type){
+        case GFX_LineScaling_WorldCamera:{
+            transform.scale.y *= state->world_camera.orthographic_size / state->final_render_texture.extents.height;
+        }break;
+        case GFX_LineScaling_UiCamera:{
+            transform.scale.y *= state->ui_camera.orthographic_size / state->final_render_texture.extents.height;
+        }break;
+    }
+    
     GenId sprite_gid = gfx_one_frame_sprite_alloc(state);
     gfx_sprite_set_active(          state, sprite_gid);
     gfx_sprite_set_transform(       state, sprite_gid, transform);
@@ -3266,7 +3247,11 @@ void gfx_draw_line(GFX_State* state, GFX_Colour colour, Vector2 start, Vector2 e
     gfx_sprite_set_depth(           state, sprite_gid, depth);
 }
 
-void gfx_draw_wire_circle(GFX_State* state, Circle shape, GFX_Colour colour, u32 layer, u32 depth, i32 material){
+void gfx_draw_wire_circle(
+    GFX_State* state, Circle shape, GFX_Colour colour, 
+    u32 layer, u32 depth, i32 material, 
+    GFX_LineScaling scaling_type
+){
     f32 rotation = TAU / state->draw_circle_vertex_count;;
     f32 sin = f32_sin(rotation);
     f32 cos = f32_cos(rotation);
@@ -3282,24 +3267,31 @@ void gfx_draw_wire_circle(GFX_State* state, Circle shape, GFX_Colour colour, u32
         f32 end_y = sin * rel_x + cos * rel_y + shape.y;
         Vector2 start = {.x = start_x, .y = start_y};
         Vector2 end = {.x = end_x, .y = end_y};
-        gfx_draw_line(state, colour, start, end, layer, depth, material, state->draw_wireframe_thickness);
+        gfx_draw_line(state, colour, start, end, layer, depth, material, state->draw_wireframe_thickness, scaling_type);
         // iterate around the circle.
         start_x = end_x;
         start_y = end_y;
     }
 }
 
-void gfx_draw_wire_poly(GFX_State* state, f32* vertices_x, f32* vertices_y, i32 vertices_length, GFX_Colour colour, u32 layer, u32 depth, i32 material){
+void gfx_draw_wire_poly(
+    GFX_State* state, f32* vertices_x, f32* vertices_y, i32 vertices_length, 
+    GFX_Colour colour, u32 layer, u32 depth, i32 material,
+    GFX_LineScaling scaling_type
+){
     i32 next_index;
     for(i32 start_index = 0; start_index < vertices_length; start_index++){
         next_index = (start_index + 1) % vertices_length;
         Vector2 start = {.x = vertices_x[start_index], .y = vertices_y[start_index]};
         Vector2 end = {.x = vertices_x[next_index], .y = vertices_y[next_index]};
-        gfx_draw_line(state, colour, start, end, layer, depth, material, state->draw_wireframe_thickness);
+        gfx_draw_line(state, colour, start, end, layer, depth, material, state->draw_wireframe_thickness, scaling_type);
     }
 }
 
-void gfx_draw_fill_rect(GFX_State* state, Rectangle shape, GFX_Colour colour, GFX_SpriteOrigin origin, u32 layer, u32 depth, i32 material){
+void gfx_draw_fill_rect(
+    GFX_State* state, Rectangle shape, GFX_Colour colour, 
+    GFX_SpriteOrigin origin, u32 layer, u32 depth, i32 material
+){
     Transform2D transform = transform2d_make(
         (Vector2){.x = shape.x, .y = shape.y},
         (Vector2){.x = shape.width, .y = shape.height},
@@ -3316,7 +3308,11 @@ void gfx_draw_fill_rect(GFX_State* state, Rectangle shape, GFX_Colour colour, GF
     gfx_sprite_set_depth(           state, sprite_gid, depth);
 }
 
-void gfx_draw_wire_rect(GFX_State* state, Rectangle shape, GFX_Colour colour, u32 layer, u32 depth, i32 material){
+void gfx_draw_wire_rect(
+    GFX_State* state, Rectangle shape, GFX_Colour colour, 
+    u32 layer, u32 depth, i32 material, GFX_LineScaling scaling_type
+){
+
     f32 top_y = shape.y;
     f32 left_x = shape.x;
     f32 right_x = shape.x + shape.width;
@@ -3327,13 +3323,17 @@ void gfx_draw_wire_rect(GFX_State* state, Rectangle shape, GFX_Colour colour, u3
     Vector2 bottom_left = {.x = left_x, .y = bottom_y};
     Vector2 bottom_right = {.x = right_x, .y = bottom_y};
 
-    gfx_draw_line(state, colour, top_left, top_right, layer, depth, material, state->draw_wireframe_thickness);
-    gfx_draw_line(state, colour, top_right, bottom_right, layer, depth, material, state->draw_wireframe_thickness);
-    gfx_draw_line(state, colour, bottom_right, bottom_left, layer, depth, material, state->draw_wireframe_thickness);
-    gfx_draw_line(state, colour, bottom_left, top_left, layer, depth, material, state->draw_wireframe_thickness);
+    gfx_draw_line(state, colour, top_left, top_right, layer, depth, material, state->draw_wireframe_thickness, scaling_type);
+    gfx_draw_line(state, colour, top_right, bottom_right, layer, depth, material, state->draw_wireframe_thickness, scaling_type);
+    gfx_draw_line(state, colour, bottom_right, bottom_left, layer, depth, material, state->draw_wireframe_thickness, scaling_type);
+    gfx_draw_line(state, colour, bottom_left, top_left, layer, depth, material, state->draw_wireframe_thickness, scaling_type);
 }
 
-void gfx_draw_arrow(GFX_State* state, GFX_Colour colour, Vector2 origin, Vector2 direction, f32 length, u32 layer, u32 depth, i32 material){
+void gfx_draw_arrow(
+    GFX_State* state, GFX_Colour colour, Vector2 origin, Vector2 direction, f32 length, 
+    u32 layer, u32 depth, i32 material, GFX_LineScaling line_scaling
+){
+
     f32 prong_length = CLAMP(length * 0.2f, 0, state->draw_arrow_prong_max_length);
     Vector2 end_point;
     Vector2 prong_direction;
@@ -3342,17 +3342,17 @@ void gfx_draw_arrow(GFX_State* state, GFX_Colour colour, Vector2 origin, Vector2
     // main line.
     direction = vector2_normalise(direction);
     end_point = vector2_add(origin, vector2_mul_val(direction, length));
-    gfx_draw_line(state, colour, origin, end_point, layer, depth, material, state->draw_wireframe_thickness);
+    gfx_draw_line(state, colour, origin, end_point, layer, depth, material, state->draw_wireframe_thickness, line_scaling);
 
     // prong 1.
     prong_direction = vector2_rotate(direction, 2.55f);
     prong_end_point = vector2_add(end_point, vector2_mul_val(prong_direction, prong_length));
-    gfx_draw_line(state, colour, end_point, prong_end_point, layer, depth, material, state->draw_wireframe_thickness);
+    gfx_draw_line(state, colour, end_point, prong_end_point, layer, depth, material, state->draw_wireframe_thickness, line_scaling);
 
     // prong 2.
     prong_direction = vector2_rotate(direction, -2.55f);
     prong_end_point = vector2_add(end_point, vector2_mul_val(prong_direction, prong_length));
-    gfx_draw_line(state, colour, end_point, prong_end_point, layer, depth, material, state->draw_wireframe_thickness);
+    gfx_draw_line(state, colour, end_point, prong_end_point, layer, depth, material, state->draw_wireframe_thickness, line_scaling);
 }
 
 void gfx_write_to_texture_array(

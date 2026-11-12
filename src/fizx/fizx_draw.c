@@ -55,7 +55,11 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                     .radius = 0.1f
                 };
 
-                gfx_draw_wire_circle(gfx, shape, info.colour_global_position, info.sprite_layer, info.sprite_depth, info.material_idx);
+                gfx_draw_wire_circle(
+                    gfx, shape, info.colour_global_position, 
+                    info.sprite_layer, info.sprite_depth, info.material_idx,
+                    GFX_LineScaling_WorldCamera
+                );
 
                 BOUNDS_CHECK(shape_idx, state.body_hierarchy.length);
                 shape_idx = state.body_hierarchy.node[shape_idx].next_sibling;
@@ -111,7 +115,11 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                 // draw in accordance with the shape.
                 if(fizx_shape_category_is_polygon(category)){
                     fizx_shape_get_vertices_unsafe(state.entities.global_vertex, shape_idx, &poly_vert_x, &poly_vert_y, &poly_vert_length);
-                    gfx_draw_wire_poly(gfx, poly_vert_x, poly_vert_y, poly_vert_length, colour, info.sprite_layer, info.sprite_depth, info.material_idx);
+                    gfx_draw_wire_poly(
+                        gfx, poly_vert_x, poly_vert_y, poly_vert_length, colour, 
+                        info.sprite_layer, info.sprite_depth, info.material_idx,
+                        GFX_LineScaling_WorldCamera
+                    );
                 }
                 else if(fizx_shape_category_is_circle(category)){
                     BOUNDS_CHECK(shape_idx, state.entities.centroid.length);
@@ -121,11 +129,19 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                         .y = state.entities.centroid.y[shape_idx],
                         .radius = state.entities.global_radius[shape_idx]
                     };
-                    gfx_draw_wire_circle(gfx, shape, colour, info.sprite_layer, info.sprite_depth, info.material_idx);
+                    gfx_draw_wire_circle(
+                        gfx, shape, colour, info.sprite_layer, 
+                        info.sprite_depth, info.material_idx,
+                        GFX_LineScaling_WorldCamera
+                    );
                 }
                 else if(fizx_shape_category_is_line(category)){
                     fizx_shape_get_vertices_unsafe(state.entities.global_vertex, shape_idx, &poly_vert_x, &poly_vert_y, &poly_vert_length);
-                    gfx_draw_wire_poly(gfx, poly_vert_x, poly_vert_y, poly_vert_length, colour, info.sprite_layer, info.sprite_depth, info.material_idx);
+                    gfx_draw_wire_poly(
+                        gfx, poly_vert_x, poly_vert_y, poly_vert_length, colour, 
+                        info.sprite_layer, info.sprite_depth, info.material_idx,
+                        GFX_LineScaling_WorldCamera
+                    );
                 }
                 else{
                     ASSERT(false, "unknown shape category (shape type)");
@@ -165,7 +181,11 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                     .radius = 0.05f
                 };
 
-                gfx_draw_wire_circle(gfx, shape, info.colour_centroid, info.sprite_layer, info.sprite_depth, info.material_idx);
+                gfx_draw_wire_circle(
+                    gfx, shape, info.colour_centroid, info.sprite_layer, 
+                    info.sprite_depth, info.material_idx,
+                    GFX_LineScaling_WorldCamera
+                );
 
                 BOUNDS_CHECK(shape_idx, state.body_hierarchy.length);
                 shape_idx = state.body_hierarchy.node[shape_idx].next_sibling;
@@ -197,7 +217,11 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
 
             Vector2 start = {.x = start_x, .y = start_y};
             Vector2 end = {.x = end_x, .y = end_y};
-            gfx_draw_line(gfx, info.colour_linear_velocity, start, end, info.sprite_layer, info.sprite_depth, info.material_idx, gfx->draw_wireframe_thickness);
+            gfx_draw_line(
+                gfx, info.colour_linear_velocity, start, end, info.sprite_layer, 
+                info.sprite_depth, info.material_idx, gfx->draw_wireframe_thickness,
+                GFX_LineScaling_WorldCamera
+            );
         }
     }
 
@@ -230,7 +254,11 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                 y[2] = state.entities.aabb.min_y[shape_idx];
                 y[3] = y[2];
 
-                gfx_draw_wire_poly(gfx, x, y, 4, info.colour_aabb, info.sprite_layer, info.sprite_depth, info.material_idx);
+                gfx_draw_wire_poly(
+                    gfx, x, y, 4, info.colour_aabb, info.sprite_layer, 
+                    info.sprite_depth, info.material_idx,
+                    GFX_LineScaling_WorldCamera
+                );
 
                 BOUNDS_CHECK(shape_idx, state.body_hierarchy.length);
                 shape_idx = state.body_hierarchy.node[body_idx].next_sibling;
@@ -252,7 +280,11 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                 .width = state.bvh.branches.aabb.max_x[i] - state.bvh.branches.aabb.min_x[i],
                 .height = state.bvh.branches.aabb.max_y[i] - state.bvh.branches.aabb.min_y[i]
             };
-            gfx_draw_wire_rect(gfx, shape, info.colour_bvh_branch, info.sprite_layer, info.sprite_depth, info.material_idx);
+            gfx_draw_wire_rect(
+                gfx, shape, info.colour_bvh_branch, info.sprite_layer, 
+                info.sprite_depth, info.material_idx,
+                GFX_LineScaling_WorldCamera    
+            );
         }
     }
 
@@ -267,7 +299,11 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                 .width = state.bvh.leaves.aabb.max_x[i] - state.bvh.leaves.aabb.min_x[i],
                 .height = state.bvh.leaves.aabb.max_y[i] - state.bvh.leaves.aabb.min_y[i]
             };
-            gfx_draw_wire_rect(gfx, shape, info.colour_bvh_leaf, info.sprite_layer, info.sprite_depth, info.material_idx);
+            gfx_draw_wire_rect(
+                gfx, shape, info.colour_bvh_leaf, info.sprite_layer, 
+                info.sprite_depth, info.material_idx,
+                GFX_LineScaling_WorldCamera
+            );
         }
     }
 
@@ -308,7 +344,11 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                 .radius = 0.25f
             };
 
-            gfx_draw_wire_circle(gfx, owner_location_gizmo, GFX_COLOUR_PINK, info.sprite_layer, info.sprite_depth, info.material_idx);
+            gfx_draw_wire_circle(
+                gfx, owner_location_gizmo, GFX_COLOUR_PINK, 
+                info.sprite_layer, info.sprite_depth, info.material_idx,
+                GFX_LineScaling_WorldCamera
+            );
 
             // get normal data.
             BOUNDS_CHECK(collision_idx, state.collision_manifold.normal_1.length);
@@ -324,14 +364,22 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
             shape.x = contact_point_x;
             shape.y = contact_point_y;
             shape.radius = 0.1f;
-            gfx_draw_wire_circle(gfx, shape, info.colour_collision_other, info.sprite_layer, info.sprite_depth, info.material_idx);
+            gfx_draw_wire_circle(
+                gfx, shape, info.colour_collision_other, 
+                info.sprite_layer, info.sprite_depth, info.material_idx,
+                GFX_LineScaling_WorldCamera
+            );
 
             // draw normal from contact point.
             normal_start.x = contact_point_x;
             normal_start.y = contact_point_y;
             normal_end.x = contact_point_x + normal_x;
             normal_end.y = contact_point_y + normal_y;
-            gfx_draw_line(gfx, info.colour_collision_normal, normal_start, normal_end, info.sprite_layer, info.sprite_depth, info.material_idx, gfx->draw_wireframe_thickness);
+            gfx_draw_line(
+                gfx, info.colour_collision_normal, normal_start, normal_end, 
+                info.sprite_layer, info.sprite_depth, info.material_idx, 
+                gfx->draw_wireframe_thickness, GFX_LineScaling_WorldCamera
+            );
 
             // draw second contact point if there is one.
             BOUNDS_CHECK(collision_idx, state.collision_manifold.contact_point_count_length);
@@ -352,14 +400,22 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                 shape.x = contact_point_x;
                 shape.y = contact_point_y;
                 shape.radius = 0.1f;
-                gfx_draw_wire_circle(gfx, shape, info.colour_collision_other, info.sprite_layer, info.sprite_depth, info.material_idx);
+                gfx_draw_wire_circle(
+                    gfx, shape, info.colour_collision_other, 
+                    info.sprite_layer, info.sprite_depth, info.material_idx,
+                    GFX_LineScaling_WorldCamera    
+                );
 
                 // draw normal from contact point.
                 normal_start.x = contact_point_x;
                 normal_start.y = contact_point_y;
                 normal_end.x = contact_point_x + normal_x;
                 normal_end.y = contact_point_y + normal_y;
-                gfx_draw_line(gfx, info.colour_collision_normal, normal_start, normal_end, info.sprite_layer, info.sprite_depth, info.material_idx, gfx->draw_wireframe_thickness);
+                gfx_draw_line(
+                    gfx, info.colour_collision_normal, normal_start, normal_end, 
+                    info.sprite_layer, info.sprite_depth, info.material_idx, 
+                    gfx->draw_wireframe_thickness, GFX_LineScaling_WorldCamera
+                );
             }
         }
     }
@@ -376,7 +432,11 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
                 .radius = 0.1f
             };
 
-            gfx_draw_wire_circle(gfx, shape, info.colour_center_of_mass, info.sprite_layer, info.sprite_depth, info.material_idx);
+            gfx_draw_wire_circle(
+                gfx, shape, info.colour_center_of_mass, 
+                info.sprite_layer, info.sprite_depth, info.material_idx,
+                GFX_LineScaling_WorldCamera
+            );
         }
     }
 }
