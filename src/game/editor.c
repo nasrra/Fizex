@@ -1238,7 +1238,7 @@ void editor_go_up_selected_entity_tree_button_on_hover_callback(Clay_ElementId e
 ///
 
 
-void gfx_clay_level_management(Editor_State* editor_state, GameState* game_state, MemoryArena* transient){
+void gfx_clay_level_management(Editor_State* editor_state, GameState* game_state, MemoryArena* transient, f32 delta_time){
     EDITOR_GFX_CLAY_SIDE_PANEL(){
 
         if(Clay_Hovered()){
@@ -1246,6 +1246,13 @@ void gfx_clay_level_management(Editor_State* editor_state, GameState* game_state
         }
 
         CLAY_TEXT(CLAY_STRING("Level Management"), EDITOR_GFX_CLAY_HEADER_TEXT_CONFIG);
+
+        // draw frame time.
+        String delta_time_string = {0};
+        string_init(&delta_time_string, transient, F32_STRING_MIN_LENGTH);
+        string_clear(&delta_time_string);
+        string_push_f32(&delta_time_string, delta_time);
+        CLAY_TEXT(gfx_string_to_clay_string(delta_time_string), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
 
         f32 button_width = 1.0f;
         f32 button_height = 0.1f;
@@ -2306,12 +2313,13 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                 gfx_clay_entity_tree_view(editor_state, game_state, transient);
             }break;
             case Editor_Menu_LevelManagement:{
-                gfx_clay_level_management(editor_state, game_state, transient);
+                gfx_clay_level_management(editor_state, game_state, transient, delta_time);
             }break;
             case Editor_Menu_AssetEntitySpawner:{
                 gfx_clay_asset_entity_spawner_layout(editor_state, game_state, transient);
             }break;
         }
+        
         gfx_clay_end_layout(editor_gfx_state, delta_time, SPRITE_LAYER_EDITOR_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
     }
 

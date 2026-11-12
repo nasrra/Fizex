@@ -180,6 +180,13 @@ void string_to_ntstring(String string, MemoryArena* arena, char** out_ntstring, 
     (*out_ntstring)[string.count] = '\0';
 }
 
+void string_push_f32(String* dst, f32 val){
+    i32 available_space = dst->length - dst->count;
+    i32 written = 
+    snprintf(dst->chars + dst->count, available_space + 1, "%g", val); // add one as standard lib functions think the string is null terminated :)))
+    dst->count += written < available_space ? written : available_space;
+}
+
 
 //
 // @ GenIdAllocator

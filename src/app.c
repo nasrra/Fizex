@@ -47,6 +47,9 @@ void app_main(){
     MemoryArena* persistent = os_get_persistent_memory();
     MemoryArena* transient = os_get_transient_memory();
 
+    String delta_time_str = {0};
+    string_init(&delta_time_str, transient, 10);
+
     IntrusiveList intrsuive_list = {0};
     intrusive_list_init(&intrsuive_list, transient, 16, false);
     intrusive_list_add_branch(&intrsuive_list, 1, 0);
@@ -105,7 +108,7 @@ void app_main(){
             .final_render_texture_width = WINDOW_WIDTH,
             .final_render_texture_height = WINDOW_HEIGHT,
             .graphics_pipeline_shader_file_path = STRING_FROM_LITERAL("../assets/shader.wgsl", transient),
-            .max_sprites = 1024,
+            .max_sprites = 2048,
             .draw_wireframe_thickness = GFX_DEFAULT_WIREFRAME_THICKNESS,
             .draw_circle_vertex_count = 24,
             .draw_arrow_prong_max_length = 0.5f
@@ -409,6 +412,7 @@ void app_main(){
                 transient->stride = 0;
                 was_in_editor_mode = in_editor_mode;
             }
+            
         }
     }
 

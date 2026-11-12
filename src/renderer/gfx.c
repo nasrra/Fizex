@@ -207,19 +207,6 @@ typedef enum{
     Remember to look at alignments and sizes when changing this:
     https://www.w3.org/TR/WGSL/#alignment-and-size
 */
-// typedef struct{
-//     Matrix4x4 transform;
-//     GFX_TextureView texture_view;
-//     GFX_Colour colour;
-//     Vector2 vertex_offset;
-//     GFX_SpriteState state;
-//     i32 virtual_texture;
-//     i32 material;
-//     i32 colour_blend;
-//     i32 layer;
-//     i32 _padding_2;
-// } GFX_DeviceSprite;
-
 typedef struct{
     Matrix4x4 transform;
     GFX_TextureView texture_view;
@@ -2975,6 +2962,12 @@ void gfx_state_draw(GFX_State* state){
         wgpuRenderPassEncoderEnd(render_pass);
         wgpuRenderPassEncoderRelease(render_pass);
     }
+
+    /**
+        particle render pass: 
+        additive blend mode, with gpu depth compare.
+    **/
+
 
     /**
         render pass 2: blit to the back buffer.
