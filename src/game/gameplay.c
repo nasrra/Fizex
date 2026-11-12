@@ -3100,8 +3100,13 @@ GenId entity_spawn_empty(EntityManager* entity_manager, Transform2D transform, G
 void number_ball_on_enter_collision_callback(FIZX_CollisionInfo info, void* user_data){
     
     if((info.source_layer & PHYSICS_LAYER_BALL)){
-        i32 body_idx = fizx_shape_get_parent_unsafe(info.fizx_state, info.source_shape_idx);
-        Vector2 velocity = fizx_body_get_linear_velocity_unsafe(info.fizx_state, body_idx);
+        i32 source_body_idx = fizx_shape_get_parent_unsafe(info.fizx_state, info.source_shape_idx);
+        i32 target_body_idx = fizx_shape_get_parent_unsafe(info.fizx_state, info.target_shape_idx);
+        Vector2 velocity = 
+            vector2_sub(
+                fizx_body_get_linear_velocity_unsafe(info.fizx_state, source_body_idx),
+                fizx_body_get_linear_velocity_unsafe(info.fizx_state, target_body_idx)
+            );
         // clamp to the min and max launch force as speed boosts and other forces can make the ball move faster.
         velocity.x = CLAMP(velocity.x, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
         velocity.y = CLAMP(velocity.y, -PLAYER_MAXIMUM_BALL_LAUNCH_FORCE, PLAYER_MAXIMUM_BALL_LAUNCH_FORCE);
