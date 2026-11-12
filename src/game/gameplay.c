@@ -3305,6 +3305,8 @@ void number_ball_set_state_callback(EntityManager* entity_manager, Entity* entit
                 .end_time = BALL_POCKETED_LIFETIME,
             };
             
+            soud_play_number_ball_pocketed();
+            
             timer_manager_timer_start(&entity_manager->timer_manager, timer_ctx);
         }break;
     }
