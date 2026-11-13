@@ -152,7 +152,7 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 
 #define WINDMILL_PHYSICS_BODY_LAYER  PHYSICS_LAYER_ENVIRONMENT_MID
-#define WINDMILL_PHYSICS_BODY_MASK   PHYSICS_LAYER_ALL 
+#define WINDMILL_PHYSICS_BODY_MASK   PHYSICS_LAYER_BALL 
 #define WINDMILL_PHYSICS_SHAPE_MATERIAL \
 (FIZX_Material){                        \
     .static_friction = 0.75f,           \
@@ -588,6 +588,7 @@ struct Entity{
     bool is_physics_body;
     bool is_invincible;
     bool boost_depleted;
+    bool within_windmill_area_of_influence;
     bool serialisation_disabled;
 
     void (*set_state_callback)(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state);
@@ -2545,7 +2546,7 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D tra
             Entity* parent_entity;            
             if(
                 entity_manager_get_entity(*entity_manager, parent, &parent_entity) &&
-                parent_entity->is_physics_body                
+                parent_entity->is_physics_body
             ){
 
                 Rectangle physics_shape = {.x = 0.0f, .y = 0.0f, .width = width, .height = height};
@@ -2789,6 +2790,24 @@ void windmill_update(EntityManager* entity_manager, Entity* entity, i32 entity_i
     }
 }
 
+void windmill_area_of_influence_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
+    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
+    GenId source_entity_gid = *(GenId*)info.source_user_data;
+    Entity* source_entity;
+    if(entity_manager_get_entity(ctx->game_state->entity_manager, source_entity_gid, &source_entity)){
+        source_entity->within_windmill_area_of_influence = true;
+    }
+}
+
+void windmill_area_of_influence_on_exit_callback(FIZX_CollisionInfo info, void* user_data){
+    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
+    GenId source_entity_gid = *(GenId*)info.source_user_data;
+    Entity* source_entity;
+    if(entity_manager_get_entity(ctx->game_state->entity_manager, source_entity_gid, &source_entity)){
+        source_entity->within_windmill_area_of_influence = false;
+    }
+}
+
 GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
@@ -2827,6 +2846,16 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
                 WINDMILL_PHYSICS_SHAPE_MATERIAL
             );
             
+            Circle area_of_influence_shape = {
+                .radius = 3.0f
+            };
+            GenId area_of_influence_shape_gid = fizx_circle_collider_alloc(
+                &entity_manager->fizx_state, entity->physics_body_gid, TRANSFORM2D_IDENTITY, FIZX_ShapeBehaviour_Trigger,
+                FIZX_CollisionCallbackBehaviour_All, shape_user_data, area_of_influence_shape
+            );
+            
+            fizx_shape_set_on_enter_callback(&entity_manager->fizx_state, area_of_influence_shape_gid, windmill_area_of_influence_on_enter_callback);
+            fizx_shape_set_on_exit_callback(&entity_manager->fizx_state, area_of_influence_shape_gid, windmill_area_of_influence_on_exit_callback);
             fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
         }
                 
@@ -4763,6 +4792,9 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                     if(vector2_len_sqrd(linear_velocity)){
                         balls_are_moving = true;
                     }
+                }
+                if(cue_ball_entity->within_windmill_area_of_influence){
+                    balls_are_moving = true;
                 } 
             }
             
@@ -4779,8 +4811,11 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                             balls_are_moving = true;
                             break;
                         }
-
                     } 
+                    if(number_ball_entity->within_windmill_area_of_influence){
+                        balls_are_moving = true;
+                        break;
+                    }
                 }
             }
             

@@ -34,10 +34,13 @@
     + collision checks.
     + specified areas.
 
++ evaluate board should chec whether or not any balls are within a windmill's radius.
+
 
 ===============
 ==== TO DO ====
 ===============
+
 
 - levels
     / intro 1
@@ -59,7 +62,6 @@
     - extra 2
     
 - update clickable area hierarchy when deleting an entity; otherwise it crashes as it tries to delete an entity that is no longer allocated 
-
 
 - Desk Fan
     - button operated
@@ -118,3 +120,11 @@
 + speed boost level needs to be narrowed in.
 + balls that have been lined up need to have a line going out of them, showing the player where they are going.
 + linear velocity is wrong.
+
+
+
+==================
+==== RANDOM ======
+==================
+ 
+- 5+s compile time, give CuteMath a sub.

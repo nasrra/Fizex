@@ -729,92 +729,114 @@ struct FIZX_State{
 // add a macro check here to flip owner and other indexes.
 
 #define FIZX_COLLISION_DETECTION(manifold, info, entities, body_hierarchy, shape_collisions_to_resolve, rigid_collisions_to_resolve) do {   \
-    for(i32 COLLISION_DETECTION_i = 0; COLLISION_DETECTION_i < info.length; COLLISION_DETECTION_i++){                                       \
-        i32 COLLISION_DETECTION_owner_leaf_idx;                                                                                             \
-        i32 COLLISION_DETECTION_other_leaf_idx;                                                                                             \
-        if(FIZX_COLLISION_DETECTION_CONFIG_FLIP_NARROW_PHASE_SHAPE_ORDERING){                                                                            \
-            COLLISION_DETECTION_owner_leaf_idx = info.other_leaf_index[COLLISION_DETECTION_i];                                              \
-            COLLISION_DETECTION_other_leaf_idx = info.owner_leaf_index[COLLISION_DETECTION_i];                                              \
+    for(i32 __fizx0001_i = 0; __fizx0001_i < info.length; __fizx0001_i++){                                                                  \
+        i32 __fizx0001_owner_leaf_idx;                                                                                                      \
+        i32 __fizx0001_other_leaf_idx;                                                                                                      \
+        if(FIZX_COLLISION_DETECTION_CONFIG_FLIP_NARROW_PHASE_SHAPE_ORDERING){                                                               \
+            __fizx0001_owner_leaf_idx = info.other_leaf_index[__fizx0001_i];                                                                \
+            __fizx0001_other_leaf_idx = info.owner_leaf_index[__fizx0001_i];                                                                \
         }                                                                                                                                   \
         else{                                                                                                                               \
-            COLLISION_DETECTION_owner_leaf_idx = info.owner_leaf_index[COLLISION_DETECTION_i];                                              \
-            COLLISION_DETECTION_other_leaf_idx = info.other_leaf_index[COLLISION_DETECTION_i];                                              \
+            __fizx0001_owner_leaf_idx = info.owner_leaf_index[__fizx0001_i];                                                                \
+            __fizx0001_other_leaf_idx = info.other_leaf_index[__fizx0001_i];                                                                \
         }                                                                                                                                   \
-        BOUNDS_CHECK(COLLISION_DETECTION_owner_leaf_idx, entities.bvh_leaf_idx_length);                                                     \
-        i32 COLLISION_DETECTION_owner_bvh_idx = entities.bvh_leaf_idx[COLLISION_DETECTION_owner_leaf_idx];                                  \
-        i32 COLLISION_DETECTION_other_bvh_idx = entities.bvh_leaf_idx[COLLISION_DETECTION_other_leaf_idx];                                  \
+        BOUNDS_CHECK(__fizx0001_owner_leaf_idx, entities.bvh_leaf_idx_length);                                                              \
+        i32 __fizx0001_owner_entity_idx = entities.bvh_leaf_idx[__fizx0001_owner_leaf_idx];                                                 \
+        i32 __fizx0001_other_entity_idx = entities.bvh_leaf_idx[__fizx0001_other_leaf_idx];                                                 \
                                                                                                                                             \
-        bool COLLISION_DETECTION_broad_phase = fizx_collision_detection_broad_phase(                                                        \
-            body_hierarchy, entities.aabb, COLLISION_DETECTION_owner_bvh_idx, COLLISION_DETECTION_other_bvh_idx                             \
-        );                                                                                                                                  \
-        if(!COLLISION_DETECTION_broad_phase){                                                                                               \
+                                                                                                                                            \
+        BOUNDS_CHECK(__fizx0001_owner_entity_idx, entities.layer_length);                                                                   \
+        i32 __fizx_0001_owner_layer = entities.layer[__fizx0001_owner_entity_idx];                                                          \
+                                                                                                                                            \
+        BOUNDS_CHECK(__fizx0001_other_entity_idx, entities.layer_length);                                                                   \
+        i32 __fizx_0001_other_layer = entities.layer[__fizx0001_other_entity_idx];                                                          \
+                                                                                                                                            \
+        BOUNDS_CHECK(__fizx0001_owner_entity_idx, entities.mask_length);                                                                    \
+        i32 __fizx_0001_owner_mask = entities.mask[__fizx0001_owner_entity_idx];                                                            \
+                                                                                                                                            \
+        BOUNDS_CHECK(__fizx0001_other_entity_idx, entities.mask_length);                                                                    \
+        i32 __fizx_0001_other_mask = entities.mask[__fizx0001_other_entity_idx];                                                            \
+                                                                                                                                            \
+                                                                                                                                            \
+        if(                                                                                                                                 \
+            (__fizx_0001_owner_mask & __fizx_0001_other_layer) == 0 &&                                                                      \
+            (__fizx_0001_other_mask & __fizx_0001_owner_layer) == 0                                                                         \
+        ){                                                                                                                                  \
             continue;                                                                                                                       \
         }                                                                                                                                   \
                                                                                                                                             \
-        FIZX_IndexPair COLLISION_DETECTION_idx_pair;                                                                                        \
-        bool COLLISION_DETECTION_narrow_phase = false;                                                                                      \
+                                                                                                                                            \
+        bool __fizx0001_broad_phase = fizx_collision_detection_broad_phase(                                                                 \
+            body_hierarchy, entities.aabb, __fizx0001_owner_entity_idx, __fizx0001_other_entity_idx                                         \
+        );                                                                                                                                  \
+        if(!__fizx0001_broad_phase){                                                                                                        \
+            continue;                                                                                                                       \
+        }                                                                                                                                   \
+                                                                                                                                            \
+        FIZX_IndexPair __fizx0001_idx_pair;                                                                                                 \
+        bool __fizx0001_narrow_phase = false;                                                                                               \
         if(FIZX_COLLISION_DETECTION_CONFIG_POLY_TO_POLY){                                                                                   \
-            COLLISION_DETECTION_narrow_phase = fizx_collision_detection_polygon_to_polygon(                                                 \
+            __fizx0001_narrow_phase = fizx_collision_detection_polygon_to_polygon(                                                          \
                 manifold, entities.global_vertex, entities.centroid,                                                                        \
                 entities.user_data, entities.user_data_length, entities.user_data_element_size,                                             \
-                COLLISION_DETECTION_owner_bvh_idx, COLLISION_DETECTION_other_bvh_idx, &COLLISION_DETECTION_idx_pair                         \
+                __fizx0001_owner_entity_idx, __fizx0001_other_entity_idx, &__fizx0001_idx_pair                                              \
             );                                                                                                                              \
         }                                                                                                                                   \
         else if(FIZX_COLLISION_DETECTION_CONFIG_POLY_TO_CIRC){                                                                              \
-            COLLISION_DETECTION_narrow_phase = fizx_collision_detection_polygon_to_circle(                                                  \
+            __fizx0001_narrow_phase = fizx_collision_detection_polygon_to_circle(                                                           \
                 manifold, entities.global_vertex, entities.centroid,                                                                        \
                 entities.user_data, entities.user_data_length, entities.user_data_element_size,                                             \
                 entities.global_radius, entities.global_radius_length,                                                                      \
-                COLLISION_DETECTION_owner_bvh_idx, COLLISION_DETECTION_other_bvh_idx, &COLLISION_DETECTION_idx_pair                         \
+                __fizx0001_owner_entity_idx, __fizx0001_other_entity_idx, &__fizx0001_idx_pair                                              \
             );                                                                                                                              \
         }                                                                                                                                   \
         else if(FIZX_COLLISION_DETECTION_CONFIG_CIRC_TO_CIRC){                                                                              \
-            COLLISION_DETECTION_narrow_phase = fizx_collision_detection_circle_to_circle(                                                   \
+            __fizx0001_narrow_phase = fizx_collision_detection_circle_to_circle(                                                            \
                 manifold, entities.centroid,                                                                                                \
                 entities.user_data, entities.user_data_length, entities.user_data_element_size,                                             \
                 entities.global_radius, entities.global_radius_length,                                                                      \
-                COLLISION_DETECTION_owner_bvh_idx, COLLISION_DETECTION_other_bvh_idx, &COLLISION_DETECTION_idx_pair                         \
+                __fizx0001_owner_entity_idx, __fizx0001_other_entity_idx, &__fizx0001_idx_pair                                              \
             );                                                                                                                              \
         }                                                                                                                                   \
         else if(                                                                                                                            \
             FIZX_COLLISION_DETECTION_CONFIG_POLY_TO_LINE ||                                                                                 \
             FIZX_COLLISION_DETECTION_CONFIG_LINE_TO_LINE                                                                                    \
         ){                                                                                                                                  \
-            COLLISION_DETECTION_narrow_phase = fizx_collision_detection_polygon_to_line(                                                    \
+            __fizx0001_narrow_phase = fizx_collision_detection_polygon_to_line(                                                             \
                 manifold, entities.global_vertex, entities.global_radius, entities.global_radius_length, entities.user_data,                \
                 entities.user_data_length, entities.user_data_element_size,                                                                 \
-                COLLISION_DETECTION_owner_bvh_idx, COLLISION_DETECTION_other_bvh_idx, &COLLISION_DETECTION_idx_pair                         \
+                __fizx0001_owner_entity_idx, __fizx0001_other_entity_idx, &__fizx0001_idx_pair                                              \
             );                                                                                                                              \
         }                                                                                                                                   \
         else if(FIZX_COLLISION_DETECTION_CONFIG_CIRC_TO_LINE){                                                                              \
-            COLLISION_DETECTION_narrow_phase = fizx_collision_detection_circle_to_line(                                                     \
+            __fizx0001_narrow_phase = fizx_collision_detection_circle_to_line(                                                              \
                 manifold, entities.global_vertex, entities.centroid,                                                                        \
                 entities.user_data, entities.user_data_length, entities.user_data_element_size,                                             \
                 entities.global_radius, entities.global_radius_length,                                                                      \
-                COLLISION_DETECTION_owner_bvh_idx, COLLISION_DETECTION_other_bvh_idx, &COLLISION_DETECTION_idx_pair                         \
+                __fizx0001_owner_entity_idx, __fizx0001_other_entity_idx, &__fizx0001_idx_pair                                              \
             );                                                                                                                              \
         }                                                                                                                                   \
-        if(!COLLISION_DETECTION_narrow_phase){                                                                                              \
+        if(!__fizx0001_narrow_phase){                                                                                                       \
             continue;                                                                                                                       \
         }                                                                                                                                   \
                                                                                                                                             \
         if(FIZX_COLLISION_DETECTION_CONFIG_FLIP_COLLISION_OWNER){                                                                           \
-            i32 temp = COLLISION_DETECTION_idx_pair.a_to_b;                                                                                 \
-            COLLISION_DETECTION_idx_pair.a_to_b = COLLISION_DETECTION_idx_pair.b_to_a;                                                      \
-            COLLISION_DETECTION_idx_pair.b_to_a = temp;                                                                                     \
+            i32 temp = __fizx0001_idx_pair.a_to_b;                                                                                          \
+            __fizx0001_idx_pair.a_to_b = __fizx0001_idx_pair.b_to_a;                                                                        \
+            __fizx0001_idx_pair.b_to_a = temp;                                                                                              \
         }                                                                                                                                   \
                                                                                                                                             \
         if(FIZX_COLLISION_DETECTION_CONFIG_RESOLVE_SHAPE_COLLISION){                                                                        \
             categorised_overlap_array_push(                                                                                                 \
                 shape_collisions_to_resolve,                                                                                                \
-                &COLLISION_DETECTION_idx_pair.a_to_b, sizeof(COLLISION_DETECTION_idx_pair.a_to_b),                                          \
+                &__fizx0001_idx_pair.a_to_b, sizeof(__fizx0001_idx_pair.a_to_b),                                                            \
                 FIZX_COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY, FIZX_COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY        \
             );                                                                                                                              \
         }                                                                                                                                   \
         if(FIZX_COLLISION_DETECTION_CONFIG_RESOLVE_RIGID_COLLISION){                                                                        \
             categorised_overlap_array_push(                                                                                                 \
                 rigid_collisions_to_resolve,                                                                                                \
-                &COLLISION_DETECTION_idx_pair.a_to_b, sizeof(COLLISION_DETECTION_idx_pair.a_to_b),                                          \
+                &__fizx0001_idx_pair.a_to_b, sizeof(__fizx0001_idx_pair.a_to_b),                                                            \
                 FIZX_COLLISION_DETECTION_CONFIG_OWNER_RESOLUTION_CATEGORY, FIZX_COLLISION_DETECTION_CONFIG_OTHER_RESOLUTION_CATEGORY        \
             );                                                                                                                              \
         }                                                                                                                                   \
