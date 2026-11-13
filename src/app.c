@@ -404,7 +404,7 @@ void app_main(){
             { // draw();
             
                 game_state_draw(&game_state, transient, delta_time, in_editor_mode);
-                gfx_state_draw(&gfx_state);
+                gfx_state_draw(&gfx_state, transient);
             }
             
             // prepare_for_next_frame();

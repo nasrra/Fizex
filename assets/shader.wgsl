@@ -152,64 +152,18 @@ struct pixel_coords{
     bot_right: vec2i
 }
 
-// struct sprite{
-//     // 1 - 64.
-//     transform: mat4x4f,
-//     // 64 - 80
-//     pixel_coords: pixel_coords,
-//     // 80 - 96
-//     colour: vec4f,
-//     // 96 - 100
-//     vertex_offset: vec2f,
-//     // 100 - 108
-//     state: i32,
-//     // 108 - 112
-//     virtual_texture_index: i32,
-//     // 112 - 116
-//     material_id: i32,
-//     // 116 - 120
-//     colour_blend: i32,
-//     // 116 - 124
-//     layer: i32,
-//     // 124 - 128
-//     padding_0: i32,
-// }
+const sprite_amount: i32 = 2048;
 
 struct sprite{
-    
-    // 1 - 64.
-    transform: mat4x4f,
-    
-    // 64 - 80
-    pixel_coords: pixel_coords,
-    
-    // 80 - 96
-    colour: vec4f,
-    
-    // 96 - 100
-    vertex_offset: vec2f,
-    
-    // 108 - 112
-    depth_layer: u32,
-    
-    // 100 - 108
-    state: i32,
-    
-    // 112 - 116
-    virtual_texture_index: i32,
-    
-    // 116 - 120
-    material_id: i32,
-    
-    // 116 - 120
-    colour_blend: i32,
-    
-    // 120 - 124
-    padding: i32,
-}
-
-struct sprite_array{
-    instance: array<sprite, 2048>
+    transform:              array<mat4x4f, sprite_amount>,
+    pixel_coords:           array<pixel_coords, sprite_amount>,
+    colour:                 array<vec4f, sprite_amount>,
+    vertex_offset:          array<vec2f, sprite_amount>,
+    depth_layer:            array<u32, sprite_amount>,
+    state:                  array<i32, sprite_amount>,
+    virtual_texture_idx:    array<i32, sprite_amount>,
+    material_id:            array<i32, sprite_amount>,
+    colour_blend:           array<i32, sprite_amount>
 }
 
 struct vertex_output {
@@ -224,7 +178,7 @@ struct vertex_output {
         note that clip space Z value is not normalised (0-1).
     **/
     @location(2) clip_space_position: vec4f,
-    @location(3) @interpolate(flat) sprite_index: u32
+    @location(3) @interpolate(flat) sprite_idx: u32
 }
 
 /**========================================
@@ -233,7 +187,7 @@ struct vertex_output {
 @group(0) @binding(0) var<uniform> user_uniform: ubo;
 // @group(0) @binding(1) var<storage> user_storage: user_storage_array;
 @group(0) @binding(2) var<uniform> virtual_textures: virtual_texture_array;
-@group(0) @binding(3) var<storage> sprites: sprite_array;
+@group(0) @binding(3) var<storage> sprites: sprite;
 @group(1) @binding(1) var textures_fonts: texture_2d_array<f32>;
 @group(1) @binding(2) var textures_512_512: texture_2d_array<f32>;
 @group(1) @binding(3) var textures_360_162: texture_2d_array<f32>;
@@ -250,35 +204,38 @@ struct vertex_output {
 fn vs_main (
     @location(0) in_vertex_position: vec3f,
     @location(1) in_vertex_uv: vec2f,
-    // @location(2) in_vertex_sprite_index: i32,
-    @builtin(instance_index) sprite_index: u32,
+    @builtin(instance_index) sprite_idx: u32,
     @builtin(vertex_index) in_vertex_index: u32
 ) -> vertex_output {
     var out: vertex_output; // Fixed struct declaration syntax
 
-    var sprite = sprites.instance[sprite_index];
-    if(sprite.state != sprite_state_active){
+    if(sprites.state[sprite_idx] != sprite_state_active){
         return out;
     }
 
 
     var position: vec4f;
-    var adjusted_vertex_position = in_vertex_position + vec3f(sprite.vertex_offset, 0.0);
+    var adjusted_vertex_position = in_vertex_position + vec3f(sprites.vertex_offset[sprite_idx], 0.0);
 
     // screen layer in game code is 1, but since depth and layer are interleaved, layer is the upper bits, so its the num below.
-    if ((sprite.depth_layer >> 16u) <= ui_max_layer) {
-        position = user_uniform.ui_cam_mat * sprite.transform * vec4f(adjusted_vertex_position, 1.0);
+    if ((sprites.depth_layer[sprite_idx] >> 16u) <= ui_max_layer) {
+        position = user_uniform.ui_cam_mat * sprites.transform[sprite_idx] * vec4f(adjusted_vertex_position, 1.0);
     } else {
-        position = user_uniform.world_cam_mat * sprite.transform * vec4f(adjusted_vertex_position, 1.0);
+        position = user_uniform.world_cam_mat * sprites.transform[sprite_idx] * vec4f(adjusted_vertex_position, 1.0);
     }
 
     out.clip_space_position = position;
     out.position = position;
     out.vertex_position = vec4f(adjusted_vertex_position, 1.0); // Fixed vec3 to vec4 assignment.
-    out.sprite_index = sprite_index;
+    out.sprite_idx = sprite_idx;
 
     // 2. Linearly interpolate across the quad based on which corner vertex we are on
-    out.pixel_position = mix(vec2f(sprite.pixel_coords.top_left), vec2f(sprite.pixel_coords.bot_right), in_vertex_uv);
+    out.pixel_position = 
+        mix(
+            vec2f(sprites.pixel_coords[sprite_idx].top_left), 
+            vec2f(sprites.pixel_coords[sprite_idx].bot_right), 
+            in_vertex_uv
+        );
 
     return out;
 }
@@ -288,26 +245,26 @@ fn fs_main(
     in: vertex_output
 ) -> @location(0) vec4f {
 
-    var sprite = sprites.instance[in.sprite_index];
-
     var colour: vec4f;
 
-    switch sprite.material_id {
+    switch sprites.material_id[in.sprite_idx] {
         // return magenta if the material isnt valid.
         case default:{return fail_colour;}
         case material_debug:            {colour = vec4f(0,0,0,0);} // default to white in case colour state is set to Tint.
-        case material_simple_sprite:    {colour = fs_draw_sprite_simple(sprite, vec2i(in.pixel_position));}
-        case material_simple_text:      {colour = fs_draw_text_simple(sprite, vec2i(in.pixel_position));}
+        case material_simple_sprite:    {colour = fs_draw_sprite_simple(in.sprite_idx, vec2i(in.pixel_position));}
+        case material_simple_text:      {colour = fs_draw_text_simple(in.sprite_idx, vec2i(in.pixel_position));}
     }
+    
+    let sprite_colour = sprites.colour[in.sprite_idx];
 
-    switch sprite.colour_blend{
+    switch sprites.colour_blend[in.sprite_idx]{
         case default:{return fail_colour;}
-        case colour_blend_tint: {colour = vec4f(mix(colour.rgb, colour.rgb * sprite.colour.rgb, sprite.colour.a), colour.a);}
-        case colour_blend_override: {colour = vec4f(mix(colour.rgb, sprite.colour.rgb, sprite.colour.a), sprite.colour.a);}
+        case colour_blend_tint: {colour = vec4f(mix(colour.rgb, colour.rgb * sprite_colour.rgb, sprite_colour.a), colour.a);}
+        case colour_blend_override: {colour = vec4f(mix(colour.rgb, sprite_colour.rgb, sprite_colour.a), sprite_colour.a);}
         case colour_blend_masked_override:{
             var og_alpha: f32;
             og_alpha = colour.a;
-            colour = vec4f(mix(colour.rgb, sprite.colour.rgb, sprite.colour.a), colour.a);
+            colour = vec4f(mix(colour.rgb, sprite_colour.rgb, sprite_colour.a), colour.a);
             colour.a = og_alpha;
         }
     }
@@ -320,10 +277,10 @@ fn fs_main(
 }
 
 fn fs_draw_sprite_simple(
-    sprite: sprite, pixel_position: vec2i
+    sprite_idx: u32, pixel_position: vec2i
 ) -> vec4f {
 
-    let virtual_texture = virtual_textures.textures[sprite.virtual_texture_index];
+    let virtual_texture = virtual_textures.textures[sprites.virtual_texture_idx[sprite_idx]];
     if(virtual_texture.is_loaded == 0){
         return fail_colour;
     }
@@ -340,10 +297,10 @@ fn fs_draw_sprite_simple(
 }
 
 fn fs_draw_text_simple(
-    sprite: sprite, pixel_position: vec2i
+    sprite_idx: u32, pixel_position: vec2i
 ) -> vec4f {
 
-    let virtual_texture = virtual_textures.textures[sprite.virtual_texture_index];
+    let virtual_texture = virtual_textures.textures[sprites.virtual_texture_idx[sprite_idx]];
     if(virtual_texture.is_loaded == 0){
         return fail_colour;
     }
