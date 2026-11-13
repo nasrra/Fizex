@@ -174,6 +174,32 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 
 #define POCKET_PHYSICS_BODY_LAYER (PHYSICS_LAYER_ENVIRONMENT_BOT)
+#define POCKET_COLOUR (GFX_Colour){.r = 0.34f, .g = 0.34f, .b = 0.34f, .a = 1.0f}
+#define POCKET_PARTICLE_EMITTER_CONFIG                              \
+(ParticleEmitterConfig){                                            \
+    .colour = GFX_COLOUR_GREEN,                                     \
+    .gradient_end_colour = GFX_COLOUR_YELLOW,                       \
+    .fade_colour = (GFX_Colour){.r = 1.0f, .g = 1.0f, .b = 1.0f},   \
+    .direction_min_range = -45.0f,                                  \
+    .direction_max_range = 45.0f,                                   \
+    .min_scale = (Vector2){0.05f, 0.05f},                           \
+    .max_scale = (Vector2){0.1f, 0.1f},                             \
+    .min_linear_velocity = 2.25f,                                   \
+    .max_linear_velocity = 3.25f,                                   \
+    .radial_spawn_inner_ring = 1.05f,                               \
+    .radial_spawn_outer_ring = 1.15f,                               \
+    .min_lifetime = 0.224f,                                         \
+    .max_lifetime = 0.334f,                                         \
+    .layer = SPRITE_LAYER_WORLD_ENVIRONMENT_MID_FX,                 \
+    .depth = 0,                                                     \
+    .uniform_scale = true,                                          \
+    .min_angular_velocity = -1.0f,                                  \
+    .max_angular_velocity = 1.0f,                                   \
+    .fade_over_lifetime = true,                                     \
+    .use_gradient = true,                                           \
+    .radial_spawn = true,                                           \
+    .use_radial_spawn_direction = true                              \
+}
 
 
 ///
@@ -291,6 +317,7 @@ struct Particle{
 
 struct ParticleEmitterConfig{
     GFX_Colour colour;
+    GFX_Colour gradient_end_colour;
     GFX_Colour fade_colour;
     Vector2 min_scale;
     Vector2 max_scale;
@@ -307,10 +334,15 @@ struct ParticleEmitterConfig{
     f32 max_lifetime;
     f32 min_angular_velocity;
     f32 max_angular_velocity;
+    f32 radial_spawn_inner_ring;
+    f32 radial_spawn_outer_ring;
     u16 layer;
     u16 depth;
     bool uniform_scale;
     bool fade_over_lifetime;
+    bool use_gradient;
+    bool radial_spawn;
+    bool use_radial_spawn_direction;
 };
 
 struct ParticleSystem{
@@ -910,32 +942,58 @@ void particle_emitter_emit(ParticleEmitter* emitter, Vector2 position, i32 parti
         }
         
         // position.
-        particle->transform.position    = position;
+        Vector2 radial_direction = {0};
+        if(emitter->config.radial_spawn){
+            // 6.2832 radians = 360 degrees 
+            f32 radians = f32_rand_range(-3.1416f, 3.1416f);
+            f32 ring_offset = f32_rand_range(
+                emitter->config.radial_spawn_inner_ring,
+                emitter->config.radial_spawn_outer_ring
+            );
+            radial_direction = vector2_rotate(VECTOR2_UP, radians);
+            Vector2 spawn_offset = vector2_mul_val(radial_direction, ring_offset);
+            particle->transform.position = vector2_add(position, spawn_offset);            
+        }
+        else{
+            particle->transform.position = position;
+        }
         
         // linear velocity.
         f32 velocity = f32_rand_range(
             emitter->config.min_linear_velocity,
             emitter->config.max_linear_velocity 
         );
-        Vector2 direction = (emitter->config.direction_min_range || emitter->config.direction_max_range)
-        ?   vector2_rotate(
-                emitter->config.direction, 
+        
+        Vector2 direction = emitter->config.use_radial_spawn_direction
+        ? radial_direction
+        : emitter->config.direction
+        ;
+        if(emitter->config.direction_min_range || emitter->config.direction_max_range){
+            direction = vector2_rotate(
+                direction, 
                 degrees_to_radians(
                     f32_rand_range(
                         emitter->config.direction_min_range, 
                         emitter->config.direction_max_range
                     )
                 )
-            )
-        :  emitter->config.direction
-        ;
+            );
+        }
+        
         particle->linear_velocity = vector2_mul_val(
             direction,
             velocity
         );
         
         // colour setting.
-        particle->colour = emitter->config.colour;
+        if(emitter->config.use_gradient){        
+            f32 gradient_ratio = f32_rand_range(0.0f, 1.0f);
+            particle->colour = gfx_colour_lerp(emitter->config.colour, emitter->config.gradient_end_colour, gradient_ratio);
+        }
+        else{
+            particle->colour = emitter->config.colour;
+        }
+        
         particle->fade_colour = emitter->config.fade_colour;
         particle->fade_over_lifetime = emitter->config.fade_over_lifetime;
 
@@ -2802,16 +2860,13 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
 
 
 ///
-/// @ Pocket.
+/// @ Pocket procedures.
 ///
 
-
-#define POCKET_COLOUR (GFX_Colour){.r = 0.34f, .g = 0.34f, .b = 0.34f, .a = 1.0f}
 
 void pocket_on_sustain_collision_callback(FIZX_CollisionInfo info, void* user_data){
     
     CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    GenId source_entity_gid = *(GenId*)info.source_user_data;
 
     if((info.source_layer & PHYSICS_LAYER_BALL) == 0){
         return;
@@ -2826,14 +2881,22 @@ void pocket_on_sustain_collision_callback(FIZX_CollisionInfo info, void* user_da
     }
 
     if(depth >= 0.85f){
-        Entity* entity;
-        if(!entity_manager_get_entity(ctx->game_state->entity_manager, source_entity_gid, &entity)){
+    
+        Entity* source_entity;
+        GenId source_entity_gid = *(GenId*)info.source_user_data;
+        if(!entity_manager_get_entity(ctx->game_state->entity_manager, source_entity_gid, &source_entity)){
+            return;
+        }
+    
+        Entity* target_entity;
+        GenId target_entity_gid = *(GenId*)info.target_user_data;
+        if(!entity_manager_get_entity(ctx->game_state->entity_manager, target_entity_gid, &target_entity)){
             return;
         }
         
-        switch(entity->type_id){
+        switch(source_entity->type_id){
             case EntityTypeId_CueBall:{
-                if(entity->state != CUE_BALL_POCKETED_STATE){
+                if(source_entity->state != CUE_BALL_POCKETED_STATE){
                     ctx->game_state->board_state.cue_ball_count -= 1; 
                     entity_set_state(&ctx->game_state->entity_manager, source_entity_gid, CUE_BALL_POCKETED_STATE);
                 }
@@ -2848,7 +2911,8 @@ void pocket_on_sustain_collision_callback(FIZX_CollisionInfo info, void* user_da
             case EntityTypeId_BallSeven:
             case EntityTypeId_BallNine:
             case EntityTypeId_BallZero:{
-                if(entity->state != NUMBER_BALL_POCKETED_STATE){
+                if(source_entity->state != NUMBER_BALL_POCKETED_STATE){
+                    particle_emitter_emit(&target_entity->particle_emitter, target_entity->global_transform.position, 48);
                     entity_set_state(&ctx->game_state->entity_manager, source_entity_gid, NUMBER_BALL_POCKETED_STATE);
                 }
             }break;
@@ -2864,6 +2928,13 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, Transform2D transform, 
 
         entity->type_id = EntityTypeId_Pocket;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
+
+        entity->particle_emitter = 
+            particle_system_create_emitter(
+                &entity_manager->particle_system, 
+                POCKET_PARTICLE_EMITTER_CONFIG,
+                96
+            );
 
         { // physics_body_alloc();
 
@@ -3699,7 +3770,7 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, Transform2D transf
         entity->particle_emitter = particle_system_create_emitter(
             &entity_manager->particle_system, 
             BALL_ON_BALL_PARTICLE_EMITTER_CONFIG,
-            32
+            48
         );
 
         { // alloc_physics_body();
@@ -4633,7 +4704,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
 
             CollisionCallbackContext collision_callback_ctx = {.game_state = game_state};
             if(!in_editor_mode){
-                fizx_state_fixed_update(fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME * 1.25f, 24);            
+                fizx_state_fixed_update(fizx_state, &collision_callback_ctx, FIXED_DELTA_TIME * 1.20f, 24);            
             }
 
             { // set_entity_positions_to_fizx_positions();

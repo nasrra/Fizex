@@ -564,6 +564,15 @@ GFX_Colour gfx_colour_mul_val(GFX_Colour colour, f32 val){
     return colour;
 }
 
+GFX_Colour gfx_colour_lerp(GFX_Colour start, GFX_Colour end, f32 t){
+    GFX_Colour colour;
+    colour.r = start.r + (end.r - start.r) * t;
+    colour.g = start.g + (end.g - start.g) * t;
+    colour.b = start.b + (end.b - start.b) * t;
+    colour.a = start.a + (end.a - start.a) * t;
+    return colour;
+}
+
 
 ///
 /// @ FreeType
@@ -3130,7 +3139,7 @@ void gfx_state_draw(GFX_State* state, MemoryArena* transient){
     }
 
     /**
-        particle render pass: 
+        particle render pass:
         additive blend mode, with gpu depth compare.
     **/
 
