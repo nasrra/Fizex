@@ -152,7 +152,7 @@ struct pixel_coords{
     bot_right: vec2i
 }
 
-const sprite_amount: i32 = 2048;
+const sprite_amount: i32 = 4096;
 
 struct sprite{
     transform:              array<mat4x4f, sprite_amount>,
@@ -250,7 +250,7 @@ fn fs_main(
     switch sprites.material_id[in.sprite_idx] {
         // return magenta if the material isnt valid.
         case default:{return fail_colour;}
-        case material_debug:            {colour = vec4f(0,0,0,0);} // default to white in case colour state is set to Tint.
+        case material_debug:            {colour = vec4f(1,1,1,1);} // default to white in case colour state is set to Tint.
         case material_simple_sprite:    {colour = fs_draw_sprite_simple(in.sprite_idx, vec2i(in.pixel_position));}
         case material_simple_text:      {colour = fs_draw_text_simple(in.sprite_idx, vec2i(in.pixel_position));}
     }
@@ -260,7 +260,7 @@ fn fs_main(
     switch sprites.colour_blend[in.sprite_idx]{
         case default:{return fail_colour;}
         case colour_blend_tint: {colour = vec4f(mix(colour.rgb, colour.rgb * sprite_colour.rgb, sprite_colour.a), colour.a);}
-        case colour_blend_override: {colour = vec4f(mix(colour.rgb, sprite_colour.rgb, sprite_colour.a), sprite_colour.a);}
+        case colour_blend_override: {colour = sprite_colour;}// {colour = vec4f(mix(colour.rgb, sprite_colour.rgb, sprite_colour.a), sprite_colour.a);}
         case colour_blend_masked_override:{
             var og_alpha: f32;
             og_alpha = colour.a;

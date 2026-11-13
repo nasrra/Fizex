@@ -3046,12 +3046,12 @@ void gfx_state_draw(GFX_State* state, MemoryArena* transient){
         for(i32 i = 0; i < sorted_idx_length; i++){
             i32 sidx = sorted_idx[i];
             BOUNDS_CHECK(sidx, device_sprite->length);
+            device_sprite_scratch_space->state[i]           = device_sprite->state[sidx];
             device_sprite_scratch_space->transform[i]       = device_sprite->transform[sidx];
             device_sprite_scratch_space->texture_view[i]    = device_sprite->texture_view[sidx];
             device_sprite_scratch_space->colour[i]          = device_sprite->colour[sidx];
             device_sprite_scratch_space->vertex_offset[i]   = device_sprite->vertex_offset[sidx];
             device_sprite_scratch_space->depth_layer[i]     = device_sprite->depth_layer[sidx];
-            device_sprite_scratch_space->state[i]           = device_sprite->state[sidx];
             device_sprite_scratch_space->virtual_texture[i] = device_sprite->virtual_texture[sidx]; 
             device_sprite_scratch_space->material[i]        = device_sprite->material[sidx]; 
             device_sprite_scratch_space->colour_blend[i]    = device_sprite->colour_blend[sidx];
@@ -3086,7 +3086,8 @@ void gfx_state_draw(GFX_State* state, MemoryArena* transient){
             .view = state->final_render_texture.view,
             .loadOp = WGPULoadOp_Clear,
             .storeOp = WGPUStoreOp_Store,
-            .clearValue = (WGPUColor){.r = 0.01f, .g = 0.01f, .b = 0.01f, .a = 1.0f},
+            // clear colour.
+            .clearValue = (WGPUColor){.r = 0.1f, .g = 0.25f, .b = 0.1f, .a = 1.0f},
             .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED
         };
 

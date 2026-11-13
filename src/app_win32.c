@@ -38,7 +38,7 @@ Define this in the header file:
     - fullscreen.
     - ClipCursor support (for multi monitor configs).
     - file i/o.
-    - GetKeyboardLayout (for internatioal keyboard support).
+- GetKeyboardLayout (for internatioal keyboard support).
     - WM_SET_CURSOR (for cursor visibility).
     - Blit speed improvements (BltBit)
     - swap out of WinMain to have consistent update loop timing.
@@ -166,6 +166,8 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
                 case VK_NEXT:       {input_set_key_down(Key_PageDown);}break;
                 case VK_HOME:       {input_set_key_down(Key_Home);}break;
                 case VK_END:        {input_set_key_down(Key_End);}break;
+                case VK_DELETE:     {input_set_key_down(Key_Delete);}break;
+                case VK_CONTROL:    {input_set_key_down(Key_LeftControl); input_set_key_down(Key_RightControl);}break;
             }
         }break;
         case WM_SYSKEYUP:
@@ -245,6 +247,8 @@ LRESULT main_window_callback(HWND window, UINT message, WPARAM  w_param, LPARAM 
                 case VK_NEXT:       {input_set_key_up(Key_PageDown);}break;
                 case VK_HOME:       {input_set_key_up(Key_Home);}break;
                 case VK_END:        {input_set_key_up(Key_End);}break;
+                case VK_DELETE:     {input_set_key_up(Key_Delete);}break;
+                case VK_CONTROL:    {input_set_key_up(Key_LeftControl); input_set_key_up(Key_RightControl);}break;
             }
         }break;
         case WM_LBUTTONDOWN:{input_set_mouse_button_down(MouseButton_Left);}break;

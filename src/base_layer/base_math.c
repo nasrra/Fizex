@@ -452,9 +452,11 @@ void vector2_transform_scalar(
 Vector2 vector2_rotate(Vector2 vector, f32 radians){
     f32 sin = f32_sin(radians);
     f32 cos = f32_cos(radians);
-    vector.x = (vector.x * cos) - (vector.y * sin);
-    vector.y = (vector.x * sin) + (vector.y * cos);
-    return vector;
+    Vector2 result = {
+        .x =  (vector.x * cos) - (vector.y * sin),
+        .y =  (vector.x * sin) + (vector.y * cos)
+    };
+    return result;
 }
 
 Vector2 vector2_unary(Vector2 val){

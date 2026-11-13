@@ -108,7 +108,7 @@ void app_main(){
             .final_render_texture_width = WINDOW_WIDTH,
             .final_render_texture_height = WINDOW_HEIGHT,
             .graphics_pipeline_shader_file_path = STRING_FROM_LITERAL("../assets/shader.wgsl", transient),
-            .max_sprites = 2048,
+            .max_sprites = 4096,
             .draw_wireframe_thickness = GFX_DEFAULT_WIREFRAME_THICKNESS,
             .draw_circle_vertex_count = 24,
             .draw_arrow_prong_max_length = 0.5f
@@ -227,7 +227,13 @@ void app_main(){
     }    
 
     bool was_in_editor_mode = false;
-    bool in_editor_mode = false;
+    bool in_editor_mode = false;    
+
+    ParticleEmitter emitter = particle_system_create_emitter(
+        &game_state.entity_manager.particle_system, 
+        BALL_ON_BALL_PARTICLE_EMITTER_CONFIG, 
+        32
+    );
 
     { // update_loop();
 
@@ -249,6 +255,10 @@ void app_main(){
             { // app begin update.
                 os_window_update(window_ctx);
                 input_update(delta_time);
+                     
+                if(input_is_key_just_pressed(Key_Space)){
+                    particle_emitter_emit(&emitter, (Vector2){0}, 4);
+                }
                                                 
                 if(input_is_key_just_pressed(Key_F1)){
                     if(editor_state.menu == Editor_Menu_LevelManagement){
@@ -298,12 +308,13 @@ void app_main(){
                                 
                 in_editor_mode = editor_state.menu != Editor_Menu_None;                
             }
-
+            
             { // game update.
 
-                game_state_preupdate(&game_state, delta_time, transient);
-                game_state_update(&game_state, persistent, transient, delta_time, in_editor_mode);
-                game_state_late_update(&game_state, delta_time, in_editor_mode);
+                f32 game_delta_time = delta_time * game_state.time_scale;
+                game_state_preupdate(&game_state, game_delta_time, transient);
+                game_state_update(&game_state, persistent, transient, game_delta_time, in_editor_mode);
+                game_state_late_update(&game_state, game_delta_time, in_editor_mode);
             }
 
 

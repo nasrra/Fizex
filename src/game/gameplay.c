@@ -17,6 +17,10 @@ typedef struct EntityManager EntityManager;
 typedef struct Entity Entity;
 typedef struct LevelManager LevelManager;
 typedef struct DeferredLevelLoadContext DeferredLevelLoadContext;
+typedef struct Particle Particle;
+typedef struct ParticleEmitter ParticleEmitter;
+typedef struct ParticleSystem ParticleSystem;
+typedef struct ParticleEmitterConfig ParticleEmitterConfig;
 typedef enum BoardTurn BoardTurn;
 typedef enum EntityTypeId EntityTypeId;
 
@@ -102,8 +106,16 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 #define FONT_HEIGHT_IN_PIXELS 48
 
-#define SPRITE_LAYER_GAME_WORLD 3
+#define SPRITE_LAYER_WORLD_ENVIRONMENT_BOT      8
+#define SPRITE_LAYER_WORLD_ENVIRONMENT_BOT_FX   7
+#define SPRITE_LAYER_WORLD_ENVIRONMENT_MID      6
+#define SPRITE_LAYER_WORLD_ENVIRONMENT_MID_FX   5
+#define SPRITE_LAYER_WORLD_ENVIRONMENT_TOP      4
+#define SPRITE_LAYER_WORLD_ENVIRONMENT_TOP_FX   3
+
 #define SPRITE_LAYER_EDITOR_WORLD 2
+
+
 #define SPRITE_LAYER_GAME_UI 1
 #define SPRITE_LAYER_EDITOR_UI 0
 
@@ -191,6 +203,26 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 #define BALL_PHYSICS_SHAPE_RADIUS 0.55f
 #define BALL_POCKETED_LIFETIME 1.0f
+#define BALL_ON_BALL_PARTICLE_EMITTER_CONFIG                        \
+(ParticleEmitterConfig){                                            \
+    .colour = GFX_COLOUR_WHITE,                                     \
+    .fade_colour = (GFX_Colour){.r = 1.0f, .g = 1.0f, .b = 1.0f},   \
+    .direction = VECTOR2_RIGHT,                                     \
+    .direction_min_range = -180.0f,                                 \
+    .direction_max_range = 180.0f,                                  \
+    .min_scale = (Vector2){0.1f, 0.1f},                             \
+    .max_scale = (Vector2){0.25f, 0.25f},                           \
+    .min_linear_velocity = 5.5f,                                    \
+    .max_linear_velocity = 10.0f,                                   \
+    .min_lifetime = 0.0835f,                                        \
+    .max_lifetime = 0.167f,                                         \
+    .layer = SPRITE_LAYER_WORLD_ENVIRONMENT_MID_FX,                 \
+    .depth = 0,                                                     \
+    .uniform_scale = true,                                          \
+    .min_angular_velocity = -1.0f,                                  \
+    .max_angular_velocity = 1.0f,                                   \
+    .fade_over_lifetime = true                                      \
+}
 
 
 ///
@@ -236,8 +268,67 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 
 ///
-/// types.
+/// @ Types
 ///
+
+struct Particle{
+    // the emitter this particle is attached to.
+    ParticleEmitter* emitter;
+    Transform2D transform;
+    Vector2 linear_velocity;
+    GFX_Colour colour;
+    GFX_Colour fade_colour;
+    f32 lifetime;
+    f32 age;
+    // note: this is in radians.
+    f32 angular_velocity;
+    u16 layer;
+    u16 depth;
+    i32 sibling_idx; // can be NIL.
+    bool is_active;
+    bool fade_over_lifetime;
+};
+
+struct ParticleEmitterConfig{
+    GFX_Colour colour;
+    GFX_Colour fade_colour;
+    Vector2 min_scale;
+    Vector2 max_scale;
+    Vector2 direction;
+    // `remarks`
+    // this value is in anglular degrees.
+    f32 direction_min_range;
+    // `remarks`
+    // this value is in anglular degrees.
+    f32 direction_max_range;
+    f32 min_linear_velocity;
+    f32 max_linear_velocity;
+    f32 min_lifetime;
+    f32 max_lifetime;
+    f32 min_angular_velocity;
+    f32 max_angular_velocity;
+    u16 layer;
+    u16 depth;
+    bool uniform_scale;
+    bool fade_over_lifetime;
+};
+
+struct ParticleSystem{
+    GenIdAllocator gen_id_allocator;
+    Particle* particle;
+    i32 particle_length;
+};
+
+struct ParticleEmitter{
+    ParticleEmitterConfig config;
+    // the first allocated particle in the particle chain.
+    GenId first_particle_gid;
+    // the next particle to use when emitting.
+    GenId next_particle_gid;
+    ParticleSystem* system;
+    bool is_init;
+};
+
 
 typedef void (*TimerTimeoutCallback)(void* user_data);
 typedef void (*TimerTickCallback)(void* user_data, f32 current_tick, f32 delta_tick);
@@ -431,6 +522,7 @@ struct Entity{
     Transform2D global_transform;
     Transform2D local_transform;
     Transform2D sprite_local_transform;
+    ParticleEmitter particle_emitter;
     
     // this is only applicable to the root entity that was loaded from a file.
     String serialisation_file_path;
@@ -492,6 +584,8 @@ typedef struct{
 struct EntityManager{
     
     GenIdAllocator gen_id_allocator;
+    
+    ParticleSystem particle_system;
     
     Entity* entity;
     i32 entity_length;
@@ -658,8 +752,217 @@ static f32 fixed_update_accumulator = 0.0f;
 
 
 ///
+/// @ ParticleSystem procedures.
+///
+
+
+void particle_system_init(ParticleSystem* system, MemoryArena* arena, i32 particle_amount){
+    gen_id_allocator_init(&system->gen_id_allocator, arena, particle_amount);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, system->particle, &system->particle_length, particle_amount);
+}
+
+void particle_system_update_and_draw(ParticleSystem* system, GFX_State* gfx_state, f32 delta_time){    
+    for(i32 i = 0; i < system->particle_length; i++){
+        Particle* particle = &system->particle[i];
+        
+        BOUNDS_CHECK(i, system->gen_id_allocator.length); 
+        if(
+            !system->gen_id_allocator.allocated[i] ||
+            !particle->is_active
+        ){
+            continue;
+        }
+
+        // lifetime handling.
+        particle->age = MIN(particle->age + delta_time, particle->lifetime);
+        f32 age_ratio = particle->age / particle->lifetime;
+        
+        // transform handling.
+        particle->transform.position = vector2_add(
+            particle->transform.position,
+            vector2_mul_val(particle->linear_velocity, delta_time)
+        );
+        
+        particle->transform = transform2d_rotate(particle->transform, particle->angular_velocity * delta_time);
+        
+        // colour handling.
+        GFX_Colour colour = particle->colour;
+        if(particle->fade_over_lifetime){
+            colour.r = particle->colour.r - ABS(particle->fade_colour.r - particle->colour.r) * age_ratio;
+            colour.g = particle->colour.g - ABS(particle->fade_colour.g - particle->colour.g) * age_ratio;
+            colour.b = particle->colour.b - ABS(particle->fade_colour.b - particle->colour.b) * age_ratio;
+            colour.a = particle->colour.a - ABS(particle->fade_colour.a - particle->colour.a) * age_ratio;
+        }
+        else{
+            colour = particle->colour;
+        }
+            
+        // sprite drawing.
+        GenId sprite_gid = gfx_one_frame_sprite_alloc(gfx_state);
+        gfx_sprite_set_active(          gfx_state, sprite_gid);
+        gfx_sprite_set_transform(       gfx_state, sprite_gid, particle->transform);
+        gfx_sprite_set_material(        gfx_state, sprite_gid, SPRITE_MATERIAL_DEBUG);
+        gfx_sprite_set_origin(          gfx_state, sprite_gid, GFX_SpriteOrigin_Center);
+        gfx_sprite_set_colour(          gfx_state, sprite_gid, colour);
+        gfx_sprite_set_colour_blend(    gfx_state, sprite_gid, GFX_ColourBlend_Override);
+        gfx_sprite_set_layer(           gfx_state, sprite_gid, particle->layer);
+        gfx_sprite_set_depth(           gfx_state, sprite_gid, particle->depth);
+
+        // prepare for next step.
+        if(particle->age >= particle->lifetime){
+            particle->age = 0.0f;
+            particle->is_active = false;
+        }
+    }
+}
+
+ParticleEmitter particle_system_create_emitter(ParticleSystem* system, ParticleEmitterConfig config, i32 max_particles){
+    
+    ParticleEmitter emitter = {0};
+    emitter.config = config;
+    
+    i32 prev_particle_idx = 0;
+    
+    for(i32 i = 0; i < max_particles; i++){
+        GenId particle_gid = gen_id_allocator_alloc(&system->gen_id_allocator);
+        if(!particle_gid){
+            break;
+        }
+        
+        i32 curr_particle_idx = gen_id_get_index(particle_gid);
+        
+        BOUNDS_CHECK(curr_particle_idx, system->particle_length);
+        Particle* curr_particle = &system->particle[curr_particle_idx];
+        curr_particle->transform = TRANSFORM2D_IDENTITY;
+        
+        if(prev_particle_idx){
+            
+            BOUNDS_CHECK(curr_particle_idx, system->particle_length);
+            Particle* prev_particle = &system->particle[prev_particle_idx];
+            prev_particle->sibling_idx = curr_particle_idx;
+
+            // if we have reached the end of the loop.
+            if(i == (max_particles - 1)){
+                // complete the circular loop.
+                i32 first_particle_idx = gen_id_get_index(emitter.first_particle_gid);
+                curr_particle->sibling_idx = first_particle_idx;
+            }
+        }
+        else{
+            // assign the first particle that was allocated.
+            emitter.first_particle_gid = particle_gid;
+            emitter.next_particle_gid = particle_gid;
+        }
+        
+        prev_particle_idx = curr_particle_idx;
+    }
+    
+    if(!emitter.first_particle_gid){
+        return (ParticleEmitter){0};
+    }
+    
+    emitter.system = system;
+    emitter.is_init = true;
+    return emitter;
+}
+
+void particle_emitter_emit(ParticleEmitter* emitter, Vector2 position, i32 particle_amount){
+    
+    ASSERT(emitter->system, "particle emitter doesnt have a particle system.");
+    i32 first_idx = gen_id_allocator_is_gen_id_valid(&emitter->system->gen_id_allocator, emitter->next_particle_gid);
+    
+    ASSERT(first_idx > 0, "attempted to emit particles from a stale emitter.");
+    i32 next_idx = first_idx;
+        
+    i32 counter = 0;
+    while(next_idx){
+        
+        BOUNDS_CHECK(next_idx, emitter->system->particle_length);
+        Particle* particle = &emitter->system->particle[next_idx];
+        
+        // update particle with new emission values.
+        particle->is_active             = true;
+        
+        // lifetime.
+        particle->lifetime = f32_rand_range(
+            emitter->config.min_lifetime,
+            emitter->config.max_lifetime
+        );
+        
+        // scale
+        if(!emitter->config.uniform_scale){
+            particle->transform.scale.x = f32_rand_range(
+                emitter->config.min_scale.x,
+                emitter->config.max_scale.x
+            );
+            
+            particle->transform.scale.y = f32_rand_range(
+                emitter->config.min_scale.y,
+                emitter->config.max_scale.y
+            );
+        }
+        else{
+            f32 max = MAX(emitter->config.max_scale.x, emitter->config.max_scale.y);
+            f32 min = MAX(emitter->config.min_scale.x, emitter->config.min_scale.y);
+        
+            f32 scale = f32_rand_range(min, max);
+            particle->transform.scale = (Vector2){scale, scale};
+        }
+        
+        // position.
+        particle->transform.position    = position;
+        
+        // linear velocity.
+        f32 velocity = f32_rand_range(
+            emitter->config.min_linear_velocity,
+            emitter->config.max_linear_velocity 
+        );
+        Vector2 direction = (emitter->config.direction_min_range || emitter->config.direction_max_range)
+        ?   vector2_rotate(
+                emitter->config.direction, 
+                degrees_to_radians(
+                    f32_rand_range(
+                        emitter->config.direction_min_range, 
+                        emitter->config.direction_max_range
+                    )
+                )
+            )
+        :  emitter->config.direction
+        ;
+        particle->linear_velocity = vector2_mul_val(
+            direction,
+            velocity
+        );
+        
+        // colour setting.
+        particle->colour = emitter->config.colour;
+        particle->fade_colour = emitter->config.fade_colour;
+        particle->fade_over_lifetime = emitter->config.fade_over_lifetime;
+
+        particle->layer = emitter->config.layer;
+        particle->depth = emitter->config.depth;
+        
+        particle->angular_velocity = f32_rand_range(
+            emitter->config.min_angular_velocity,
+            emitter->config.max_angular_velocity
+        );
+        
+        // prepare for next iteration.
+        next_idx = particle->sibling_idx;
+        counter += 1;
+        
+        if(counter >= particle_amount){
+            emitter->next_particle_gid = emitter->system->gen_id_allocator.gen_ids[next_idx];
+            break;
+        }
+    }
+}
+
+
+///
 /// @ Visibility Codes
 ///
+
 
 i32 create_entity_visibility_layer_code(
     bool world_layer_enabled,
@@ -1418,7 +1721,7 @@ bool entity_manager_is_entity_allocated_unsafe(EntityManager manager, i32 entity
 
 void entity_manager_init(
     EntityManager* manager, MemoryArena* arena, GFX_State* gfx_state,
-    i32 entity_amount, i32 physics_body_amount, 
+    i32 entity_amount, i32 physics_body_amount, i32 particle_amount,
     i32 timer_timeout_data_size, i32 timer_tick_data_size
 ){
     ASSERT(!manager->is_init, "already init.");
@@ -1460,6 +1763,8 @@ void entity_manager_init(
             entity_amount
         );
     }
+    
+    particle_system_init(&manager->particle_system, arena, particle_amount);
     
     manager->is_init = true;
 }
@@ -2129,7 +2434,7 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
             gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
-            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_WORLD_ENVIRONMENT_MID);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
         }
         
@@ -2219,7 +2524,7 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D tra
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_TopLeft);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 0.34f, .g = 0.34f, .b = 0.34f, .a = 1.0f});
             gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
-            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_WORLD_ENVIRONMENT_TOP);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
         }
                 
@@ -2479,7 +2784,7 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 1.0f, .g = 1.0f, .b = 1.0f, .a = 1.0f});
             gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
-            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_WORLD_ENVIRONMENT_TOP);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
         }
 
@@ -2610,7 +2915,7 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, Transform2D transform, 
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, POCKET_COLOUR);
             gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
-            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_WORLD_ENVIRONMENT_BOT);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
         }
         
@@ -2742,7 +3047,7 @@ GenId entity_spawn_cue_ball(EntityManager* entity_manager, Transform2D transform
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_NONE);
             gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_MaskedOverride);
-            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_WORLD_ENVIRONMENT_MID);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
         }
         
@@ -2944,8 +3249,8 @@ GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, Ge
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
             gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
-            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
-            gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 2);    
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_WORLD_ENVIRONMENT_TOP);
+            gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 2);
         }
         
         entity_set_local_transform(entity_manager, entity_gid, transform);
@@ -3231,6 +3536,8 @@ GenId entity_spawn_empty(EntityManager* entity_manager, Transform2D transform, G
 
 void number_ball_on_enter_collision_callback(FIZX_CollisionInfo info, void* user_data){
     
+    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
+    
     if((info.source_layer & PHYSICS_LAYER_BALL)){
         i32 source_body_idx = fizx_shape_get_parent_unsafe(info.fizx_state, info.source_shape_idx);
         i32 target_body_idx = fizx_shape_get_parent_unsafe(info.fizx_state, info.target_shape_idx);
@@ -3246,6 +3553,23 @@ void number_ball_on_enter_collision_callback(FIZX_CollisionInfo info, void* user
         // make sure to clamp it so that it is between 0 and 1, as the velocity is in a square space not radial.
         // this is for the FMOD param which needs to be between 0 and 1 as well.
         f32 length = CLAMP(vector2_len(vector2_mul(velocity, info.normal_1)), 0.0f, 0.99f);
+             
+        GenId target_entity_gid = *(GenId*)info.target_user_data;
+        Entity* target_entity;
+        if(entity_manager_get_entity(ctx->game_state->entity_manager, target_entity_gid, &target_entity)){
+            f32 velocity_ratio = CLAMP(length, 0.35f, 0.99f);
+            f32 size_ratio = CLAMP(length, 0.45f, 0.99f);
+            
+            i32 emit_amount = 8 + (i32)(length * 4.5f); 
+            
+            ParticleEmitterConfig dynamic_config = BALL_ON_BALL_PARTICLE_EMITTER_CONFIG;
+            dynamic_config.min_linear_velocity *= velocity_ratio;
+            dynamic_config.max_linear_velocity *= velocity_ratio;
+            dynamic_config.min_scale = vector2_mul_val(dynamic_config.min_scale, size_ratio);
+            dynamic_config.max_scale = vector2_mul_val(dynamic_config.max_scale, size_ratio);            
+            target_entity->particle_emitter.config = dynamic_config;
+            particle_emitter_emit(&target_entity->particle_emitter, info.contact_point_1, emit_amount);
+        }
         
         sound_play_ball_hit_ball(length);
     }
@@ -3372,6 +3696,12 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, Transform2D transf
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
         entity->set_state_callback = number_ball_set_state_callback;
 
+        entity->particle_emitter = particle_system_create_emitter(
+            &entity_manager->particle_system, 
+            BALL_ON_BALL_PARTICLE_EMITTER_CONFIG,
+            32
+        );
+
         { // alloc_physics_body();
             entity->is_physics_body = true;
     
@@ -3420,7 +3750,7 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, Transform2D transf
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_NONE);
             gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_MaskedOverride);
-            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_WORLD_ENVIRONMENT_MID);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0); 
         }
         
@@ -3593,7 +3923,7 @@ GenId entity_spawn_boost_pad(EntityManager* entity_manager, Transform2D transfor
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
             gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
-            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_GAME_WORLD);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_WORLD_ENVIRONMENT_BOT);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 3);
         }
         
@@ -4115,6 +4445,7 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
 
     i32 entity_amount = 2048;
     i32 physics_body_amount = 128;
+    i32 particle_amount = 2048;
     i32 timeout_data_element_size = 512;
     i32 tick_data_element_size = 512;
 
@@ -4145,7 +4476,8 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
     };
 
     entity_manager_init(
-        &game_state->entity_manager, persistent, gfx_state, entity_amount, physics_body_amount, 
+        &game_state->entity_manager, persistent, gfx_state, 
+        entity_amount, physics_body_amount, particle_amount, 
         timeout_data_element_size, tick_data_element_size 
     );
     
@@ -4277,8 +4609,8 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
     
     { // time management.
 
-        if(input_is_key_pressed(Key_Space)){
-            game_state->time_scale = 0.0f;
+        if(input_is_key_pressed(Key_LeftControl)){
+            game_state->time_scale = 0.5f;
         }
         else if(input_is_key_pressed(Key_F)) {
             game_state->time_scale = 0.1f;
@@ -4287,7 +4619,6 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             game_state->time_scale = 1.0f;
         }
 
-        delta_time *= game_state->time_scale;
         timer_manager_update(timer_manager, delta_time);
     }
 
@@ -4493,155 +4824,158 @@ void game_state_late_update(GameState* game_state, f32 delta_time, bool in_edito
     BoardState* board_state = &game_state->board_state;
     GuidelineState* guideline_state = &board_state->guideline_state;
     
-    if(!in_editor_mode){
+    if(in_editor_mode){
+        return;
+    }
 
-        if(
-            !mouse_state->hovering_ui_element &&
-            board_state->stage == BoardStage_Playing
-        ){
-            GenId clicked_entity_gid;
-            Entity* clicked_entity = NULL;
-            ClickableArea* area;
-                        
-            // select_entity();  
-            if(input_is_mouse_button_just_pressed(MouseButton_Left)){
-                clickable_area_hierarchy_update(
-                    clickable_area_hierarchy,
-                    mouse_world_position
-                );
-                if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
-                    if(entity_manager_get_entity(*entity_manager, *(GenId*)area->user_data, &clicked_entity)){
-                        mouse_state->clicked_entity_initial_position = clicked_entity->global_transform.position;
-                    }
-                }
-                
-                // zero out the shake magnitude from the last time we clicked on the cue ball.
-                // so that an offset isnt applied from the previous time we clicked on it.
-                guideline_state->shake_magnitude = 0.0f;
-            }
-            
+    if(
+        !mouse_state->hovering_ui_element &&
+        board_state->stage == BoardStage_Playing
+    ){
+        GenId clicked_entity_gid;
+        Entity* clicked_entity = NULL;
+        ClickableArea* area;
+                    
+        // select_entity();  
+        if(input_is_mouse_button_just_pressed(MouseButton_Left)){
+            clickable_area_hierarchy_update(
+                clickable_area_hierarchy,
+                mouse_world_position
+            );
             if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
-                clicked_entity_gid = *(GenId*)area->user_data;
-                entity_manager_get_entity(*entity_manager, clicked_entity_gid, &clicked_entity);
-            }
-            
-            if(clicked_entity){            
-            
-                switch(board_state->turn){
-                    case BoardTurn_Placement:{
-                        Vector2 new_position = vector2_add(
-                            mouse_state->clicked_entity_initial_position, 
-                            vector2_sub(mouse_world_position, mouse_state->clicked_entity_initial_position)
-                        );
-                        Transform2D transform = clicked_entity->global_transform;
-                        transform.position = new_position;
-                        entity_set_global_transform(entity_manager, clicked_entity_gid, transform);
-                    }break;
-                    case BoardTurn_Player:{
-                        guideline_state->start_position = mouse_state->clicked_entity_initial_position;
-            
-                        // get directions.
-                        guideline_state->mouse_to_start_dist = vector2_clamp_to_radius(
-                            vector2_sub(guideline_state->start_position, mouse_world_position), 
-                            PLAYER_MOUSE_MAX_DRAW_RADIUS
-                        );
-                        
-                        Vector2 cursour_position = vector2_sub(guideline_state->start_position, guideline_state->mouse_to_start_dist);
-                        
-                        { // draw_launch_cursour();
-                            Circle launch_cursour_shape = {.x = cursour_position.x, .y = cursour_position.y, .radius = 0.1f};
-                            gfx_draw_wire_circle(
-                                entity_manager->gfx_state, 
-                                launch_cursour_shape, 
-                                GFX_COLOUR_YELLOW, 
-                                SPRITE_LAYER_EDITOR_WORLD, 
-                                0, 
-                                SPRITE_MATERIAL_DEBUG,
-                                GFX_LineScaling_WorldCamera
-                            );
-                        }
-                                        
-                        GuidelineCollisionCallbackContext guideline_ctx = {
-                            .start_point = guideline_state->start_position,
-                            .entity_manager = entity_manager
-                        };
-                        
-                        Vector2 launch_direction = guideline_calculate_launch_direction(*guideline_state);
-                                                     
-                        fizx_state_query_circle_cast_area(
-                            fizx_state, guideline_collision_callback, &guideline_ctx, 
-                            PHYSICS_LAYER_GUIDELINE, 
-                            vector2_add(guideline_state->start_position, vector2_mul_val(launch_direction, BALL_PHYSICS_SHAPE_RADIUS * 1.75f)),
-                            launch_direction, 
-                            100.0f, 
-                            BALL_PHYSICS_SHAPE_RADIUS,
-                            FIZX_CollisionCallbackBehaviour_Closest
-                        );            
-                        
-                        // calculate impulse to apply to clicked entity.
-                        Vector2 impulse = vector2_mul_val(launch_direction, PLAYER_MOUSE_LAUNCH_FORCE * vector2_len(guideline_state->mouse_to_start_dist));
-                    
-                        // apply impulse when button is released.            
-                        if(input_is_mouse_button_just_released(MouseButton_Left)){
-                            fizx_body_clear_forces_and_velocities(fizx_state, clicked_entity->physics_body_gid);
-                            fizx_body_impulse_linear_force(
-                                fizx_state, 
-                                clicked_entity->physics_body_gid, 
-                                impulse
-                            );
-                            
-                            f32 power = 
-                                CLAMP(
-                                    vector2_len(
-                                        vector2_sub(cursour_position, clicked_entity->global_transform.position)
-                                    ) 
-                                    / PLAYER_MOUSE_MAX_DRAW_RADIUS,
-                                    0.0f,
-                                    PLAYER_MOUSE_MAX_DRAW_RADIUS
-                                );
-                            
-                            sound_play_cue_ball_hit(power);
-                        }
-                    }break;
+                if(entity_manager_get_entity(*entity_manager, *(GenId*)area->user_data, &clicked_entity)){
+                    mouse_state->clicked_entity_initial_position = clicked_entity->global_transform.position;
                 }
             }
+            
+            // zero out the shake magnitude from the last time we clicked on the cue ball.
+            // so that an offset isnt applied from the previous time we clicked on it.
+            guideline_state->shake_magnitude = 0.0f;
+        }
         
-            // deslect_entity();
-            // note: this is done after the clcked entity code so that a clicked entity
-            // can execute 'input_on_mouse_button_released' code paths. 
-            if(input_is_mouse_button_just_released(MouseButton_Left)){
-                if(
-                    clicked_entity &&
-                    board_state->turn == BoardTurn_Placement
-                ){
-
-                    PlacementTurnQueryCircleAreaCallbackContext ctx = {
-                        .entity_manager = entity_manager
-                    };                    
+        if(clickable_area_hierarchy_get_selected_area(clickable_area_hierarchy, &area)){
+            clicked_entity_gid = *(GenId*)area->user_data;
+            entity_manager_get_entity(*entity_manager, clicked_entity_gid, &clicked_entity);
+        }
+        
+        if(clicked_entity){            
+        
+            switch(board_state->turn){
+                case BoardTurn_Placement:{
+                    Vector2 new_position = vector2_add(
+                        mouse_state->clicked_entity_initial_position, 
+                        vector2_sub(mouse_world_position, mouse_state->clicked_entity_initial_position)
+                    );
+                    Transform2D transform = clicked_entity->global_transform;
+                    transform.position = new_position;
+                    entity_set_global_transform(entity_manager, clicked_entity_gid, transform);
+                }break;
+                case BoardTurn_Player:{
+                    guideline_state->start_position = mouse_state->clicked_entity_initial_position;
+        
+                    // get directions.
+                    guideline_state->mouse_to_start_dist = vector2_clamp_to_radius(
+                        vector2_sub(guideline_state->start_position, mouse_world_position), 
+                        PLAYER_MOUSE_MAX_DRAW_RADIUS
+                    );
                     
-                    Circle query_area = {
-                        .x = clicked_entity->global_transform.position.x,
-                        .y = clicked_entity->global_transform.position.y,
-                        .radius = BALL_PHYSICS_SHAPE_RADIUS
+                    Vector2 cursour_position = vector2_sub(guideline_state->start_position, guideline_state->mouse_to_start_dist);
+                    
+                    { // draw_launch_cursour();
+                        Circle launch_cursour_shape = {.x = cursour_position.x, .y = cursour_position.y, .radius = 0.1f};
+                        gfx_draw_wire_circle(
+                            entity_manager->gfx_state, 
+                            launch_cursour_shape, 
+                            GFX_COLOUR_YELLOW, 
+                            SPRITE_LAYER_EDITOR_WORLD, 
+                            0, 
+                            SPRITE_MATERIAL_DEBUG,
+                            GFX_LineScaling_WorldCamera
+                        );
+                    }
+                                    
+                    GuidelineCollisionCallbackContext guideline_ctx = {
+                        .start_point = guideline_state->start_position,
+                        .entity_manager = entity_manager
                     };
                     
-                    fizx_state_query_circle_area(
-                        &entity_manager->fizx_state, board_state_placement_turn_query_circle_area_callback, 
-                        &ctx, (PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT | PHYSICS_LAYER_PLACEMENT_AREA), query_area
-                    );
-
-                    if(ctx.hit_valid_placement_area && !ctx.hit_obstruction){
-                        board_state_enter_player_turn(board_state, entity_manager);
-                        os_output_message("success!\n");
+                    Vector2 launch_direction = guideline_calculate_launch_direction(*guideline_state);
+                                                 
+                    fizx_state_query_circle_cast_area(
+                        fizx_state, guideline_collision_callback, &guideline_ctx, 
+                        PHYSICS_LAYER_GUIDELINE, 
+                        vector2_add(guideline_state->start_position, vector2_mul_val(launch_direction, BALL_PHYSICS_SHAPE_RADIUS * 1.75f)),
+                        launch_direction, 
+                        100.0f, 
+                        BALL_PHYSICS_SHAPE_RADIUS,
+                        FIZX_CollisionCallbackBehaviour_Closest
+                    );            
+                    
+                    // calculate impulse to apply to clicked entity.
+                    Vector2 impulse = vector2_mul_val(launch_direction, PLAYER_MOUSE_LAUNCH_FORCE * vector2_len(guideline_state->mouse_to_start_dist));
+                
+                    // apply impulse when button is released.            
+                    if(input_is_mouse_button_just_released(MouseButton_Left)){
+                        fizx_body_clear_forces_and_velocities(fizx_state, clicked_entity->physics_body_gid);
+                        fizx_body_impulse_linear_force(
+                            fizx_state, 
+                            clicked_entity->physics_body_gid, 
+                            impulse
+                        );
+                        
+                        f32 power = 
+                            CLAMP(
+                                vector2_len(
+                                    vector2_sub(cursour_position, clicked_entity->global_transform.position)
+                                ) 
+                                / PLAYER_MOUSE_MAX_DRAW_RADIUS,
+                                0.0f,
+                                PLAYER_MOUSE_MAX_DRAW_RADIUS
+                            );
+                        
+                        sound_play_cue_ball_hit(power);
                     }
-                    else{
-                        os_output_message("failed!\n");
-                    }
-                }
-                clickable_area_hierarchy_reset(clickable_area_hierarchy); 
+                }break;
             }
         }
+    
+        // deslect_entity();
+        // note: this is done after the clcked entity code so that a clicked entity
+        // can execute 'input_on_mouse_button_released' code paths. 
+        if(input_is_mouse_button_just_released(MouseButton_Left)){
+            if(
+                clicked_entity &&
+                board_state->turn == BoardTurn_Placement
+            ){
+
+                PlacementTurnQueryCircleAreaCallbackContext ctx = {
+                    .entity_manager = entity_manager
+                };                    
+                
+                Circle query_area = {
+                    .x = clicked_entity->global_transform.position.x,
+                    .y = clicked_entity->global_transform.position.y,
+                    .radius = BALL_PHYSICS_SHAPE_RADIUS
+                };
+                
+                fizx_state_query_circle_area(
+                    &entity_manager->fizx_state, board_state_placement_turn_query_circle_area_callback, 
+                    &ctx, (PHYSICS_LAYER_NUMBER_BALL | PHYSICS_LAYER_ENVIRONMENT | PHYSICS_LAYER_PLACEMENT_AREA), query_area
+                );
+
+                if(ctx.hit_valid_placement_area && !ctx.hit_obstruction){
+                    board_state_enter_player_turn(board_state, entity_manager);
+                    os_output_message("success!\n");
+                }
+                else{
+                    os_output_message("failed!\n");
+                }
+            }
+            clickable_area_hierarchy_reset(clickable_area_hierarchy); 
+        }
     }
+    
+    particle_system_update_and_draw(&entity_manager->particle_system, entity_manager->gfx_state, delta_time);
 }
 
 #define GFX_CLAY_BG_COLOUR (Clay_Color){.r = 10, .g = 10, .b = 20, .a = 100}
