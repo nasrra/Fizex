@@ -77,9 +77,15 @@
     - 'allocated_idx_idx': the index  into 'allocated_idx', is zero when the entity isnt allocated.
     -  'allocated_idx': is a swapbackarray.
     
+- pocketing a ball is a bit flakey around the edges, 
+    - sometimes the ball clips through the pocket, 
+    - sometimes it doesnt go into the pocket fully, meaning it doesnt start colliding with the interior walls.
+
+   
 =====================
 ==== BACK BURNER ==== 
 =====================
+
 
 - implement two stage editor:
     - level editor mode: only move and edit native entities.

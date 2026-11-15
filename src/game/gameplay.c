@@ -590,6 +590,7 @@ struct Entity{
     bool boost_depleted;
     bool within_windmill_area_of_influence;
     bool serialisation_disabled;
+    bool is_particle_emitter;
 
     void (*set_state_callback)(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state);
 };
@@ -897,6 +898,28 @@ ParticleEmitter particle_system_create_emitter(ParticleSystem* system, ParticleE
     emitter.system = system;
     emitter.is_init = true;
     return emitter;
+}
+
+bool particle_emitter_dealloc(ParticleEmitter* emitter){
+    ASSERT(emitter->is_init, "emitter already deallocated");
+    ASSERT(emitter->system, "emitter doesnt come from a particle system.");
+    i32 first_idx = gen_id_allocator_is_gen_id_valid(&emitter->system->gen_id_allocator, emitter->first_particle_gid);
+    if(!first_idx){
+        return false;
+    }
+    
+    i32 next_idx = first_idx;
+    while(next_idx){
+        gen_id_allocator_dealloc_unsafe(&emitter->system->gen_id_allocator, next_idx);
+        BOUNDS_CHECK(next_idx, emitter->system->particle_length);
+        Particle* particle = &emitter->system->particle[next_idx];
+        next_idx = particle->sibling_idx;
+        if(next_idx==first_idx){
+            break;
+        }
+    }
+    *emitter = (ParticleEmitter){0};    
+    return true;
 }
 
 void particle_emitter_emit(ParticleEmitter* emitter, Vector2 position, i32 particle_amount){
@@ -1721,6 +1744,10 @@ void entity_manager_dealloc_entity_data_unsafe(EntityManager* manager, i32 idx){
     
     if(entity->is_clickable_in_game){
         clickable_area_hierarchy_dealloc_clickable_area(&manager->clickable_area_hierarchy, entity->game_clickable_area_gid);
+    }
+    
+    if(entity->is_particle_emitter){
+        particle_emitter_dealloc(&entity->particle_emitter);
     }
     
     string_clear(&entity->name);
@@ -2957,13 +2984,15 @@ GenId entity_spawn_pocket(EntityManager* entity_manager, Transform2D transform, 
 
         entity->type_id = EntityTypeId_Pocket;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
-
-        entity->particle_emitter = 
-            particle_system_create_emitter(
+        
+        { // particle_emitter_alloc();
+            entity->is_particle_emitter = true;
+            entity->particle_emitter = particle_system_create_emitter(
                 &entity_manager->particle_system, 
                 POCKET_PARTICLE_EMITTER_CONFIG,
                 96
-            );
+            );    
+        }
 
         { // physics_body_alloc();
 
@@ -3796,11 +3825,14 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, Transform2D transf
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
         entity->set_state_callback = number_ball_set_state_callback;
 
-        entity->particle_emitter = particle_system_create_emitter(
-            &entity_manager->particle_system, 
-            BALL_ON_BALL_PARTICLE_EMITTER_CONFIG,
-            48
-        );
+        { // alloc_particle_emitter();
+            entity->is_particle_emitter = true;
+            entity->particle_emitter = particle_system_create_emitter(
+                &entity_manager->particle_system, 
+                BALL_ON_BALL_PARTICLE_EMITTER_CONFIG,
+                48
+            );    
+        }
 
         { // alloc_physics_body();
             entity->is_physics_body = true;
@@ -3987,7 +4019,7 @@ GenId entity_spawn_boost_pad(EntityManager* entity_manager, Transform2D transfor
                         
             FIZX_BodyConfig body_config = {
                 .layer = PHYSICS_LAYER_ENVIRONMENT_BOT,
-                .mask = PHYSICS_LAYER_ALL 
+                .mask = PHYSICS_LAYER_BALL
             };
             
             entity->physics_body_gid = fizx_body_alloc(
