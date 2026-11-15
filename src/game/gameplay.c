@@ -28,7 +28,7 @@ GenId level_manager_load_level_file(LevelManager* level_manager, String file_pat
 void level_manager_defer_load_level(LevelManager* level_manager, DeferredLevelLoadContext ctx);
 void board_state_enter_player_turn(BoardState* state, EntityManager* entity_manager);
 void board_state_enter_ball_turn(BoardState* state);
-void board_state_enter_turn_based_turn(BoardState* state);
+void board_state_enter_turn_based_turn(BoardState* state, EntityManager* entity_manager);
 void board_state_enter_placement_turn(BoardState* state);
 void board_state_complete_turn(BoardState* state, EntityManager* entity_manager);
 bool entity_manager_get_entity(EntityManager manager, GenId entity_gid, Entity** out_entity);
@@ -552,7 +552,7 @@ typedef struct{
     Vector2 clicked_entity_initial_position;
 } GameMouseState;
 
-typedef void (*TurnBasedEntityOnTurnEndCallback)(GameState* game_state, i32 entity_idx);
+typedef void (*TurnBasedEntityOnTurnEndCallback)(EntityManager* entity_manager, i32 entity_idx);
 
 struct Entity{
 
@@ -600,6 +600,7 @@ struct Entity{
     bool boost_depleted;
     bool serialisation_disabled;
     bool is_particle_emitter;
+    bool turn_based_logic_in_progress;
 
     void (*set_state_callback)(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state);
 };
@@ -1609,8 +1610,23 @@ void board_state_enter_ball_turn(BoardState* state){
     timer_manager_timer_stop(state->timer_manager, state->player_turn_timer);
 }
 
-void board_state_enter_turn_based_turn(BoardState* state){
+void board_state_enter_turn_based_turn(BoardState* state, EntityManager* entity_manager){
     state->turn = BoardTurn_TurnBased;
+
+    for(i32 i = 0; i < state->turn_based_entity_length; i++){
+        Entity* turn_based_entity;
+        GenId turn_based_entity_gid = state->turn_based_entity[i];
+        if(entity_manager_get_entity(*entity_manager, turn_based_entity_gid, &turn_based_entity)){
+            if(turn_based_entity->turns_until_turn_end_callback == 0){
+                turn_based_entity->on_turn_end_callback(entity_manager, gen_id_get_index(turn_based_entity_gid));
+                turn_based_entity->turns_until_turn_end_callback = turn_based_entity->max_turns_until_turn_end_callback;
+            }
+            else{
+                turn_based_entity->turns_until_turn_end_callback -= 1;
+            }
+        }
+    }
+
     os_output_message("turn based turn.\n");
 }
 
@@ -2187,7 +2203,12 @@ void load_board_level_callback(GameState* game_state, void* user_data){
             
             { // check_if_turn_based();
                 if(entity->on_turn_end_callback){
-                    ARRAY_PUSH(board_state->turn_based_entity, board_state->turn_based_entity_length, &board_state->turn_based_entity_count, entity_gid);    
+                    ARRAY_PUSH(
+                        board_state->turn_based_entity, 
+                        board_state->turn_based_entity_length, 
+                        &board_state->turn_based_entity_count, 
+                        entity_gid
+                    );    
                 }
             }
                         
@@ -2460,15 +2481,15 @@ void thwamper_smackdown_area_query_callback(FIZX_State* state, FIZX_QueryCollisi
     fizx_body_impulse_linear_force_unsafe(state, body_idx, force);
 }
 
-void thwamper_on_turn_end_callback(GameState* game_state, i32 entity_idx){
+void thwamper_on_turn_end_callback(EntityManager* entity_manager, i32 entity_idx){
     os_output_message("thwamp! thwamp! thwamp!\n");
-    BOUNDS_CHECK(entity_idx, game_state->entity_manager.entity_length);
-    Entity* entity = &game_state->entity_manager.entity[entity_idx];
+    BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
+    Entity* entity = &entity_manager->entity[entity_idx];
     i32 body_idx = gen_id_get_index(entity->physics_body_gid);
     Circle area = {.x = entity->global_transform.position.x, .y = entity->global_transform.position.y, 2.0f};
-    fizx_state_query_circle_area(&game_state->entity_manager.fizx_state, thwamper_smackdown_area_query_callback, &body_idx, PHYSICS_LAYER_BALL, area);
+    fizx_state_query_circle_area(&entity_manager->fizx_state, thwamper_smackdown_area_query_callback, &body_idx, PHYSICS_LAYER_BALL, area);
     gfx_draw_wire_circle(
-        game_state->entity_manager.gfx_state, area, GFX_COLOUR_WHITE, 
+        entity_manager->gfx_state, area, GFX_COLOUR_WHITE, 
         SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG,
         GFX_LineScaling_WorldCamera
     );    
@@ -2575,7 +2596,7 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D tra
         entity->serialisation_disabled = true;
 
         f32 width = 3.0f;
-        f32 height = 0.1f;
+        f32 height = 0.5f;
 
         { // physics_shape_alloc();
 
@@ -2640,7 +2661,10 @@ void windmill_hinge_update(Entity* entity, i32 entity_idx, GameState* game_state
     // entity_set_global_transform_unsafe(&game_state->entity_manager, entity_idx, rotated_transform);
 }
 
-GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+GenId entity_spawn_windmill_hinge(
+    EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity,
+    bool up_wall, bool right_wall, bool left_wall, bool down_wall
+){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
         
     Entity* entity;
@@ -2698,11 +2722,15 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
         }
         
         Entity* blade_entity;
-        { // forward_blade();
+        Transform2D blade_transform;
+
+        blade_transform = TRANSFORM2D_IDENTITY;
+        blade_transform.position.y = 0.25f;
+        if(up_wall){
 
             GenId blade_gid = entity_spawn_windmill_blade(
                 entity_manager, 
-                transform2d_rotate(TRANSFORM2D_IDENTITY, degrees_to_radians(0)), 
+                transform2d_rotate(blade_transform, degrees_to_radians(0)), 
                 entity_gid, 
                 &blade_entity
             );
@@ -2713,11 +2741,13 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
             blade_entity = NULL;
         }
         
-        { // down_blade();
+        blade_transform = TRANSFORM2D_IDENTITY;
+        blade_transform.position.x = -0.25f;  
+        if(left_wall){
 
             GenId blade_gid = entity_spawn_windmill_blade(
                 entity_manager, 
-                transform2d_rotate(TRANSFORM2D_IDENTITY, degrees_to_radians(90)), 
+                transform2d_rotate(blade_transform, degrees_to_radians(90)), 
                 entity_gid,
                 &blade_entity
             );
@@ -2728,11 +2758,13 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
             blade_entity = NULL;
         }
         
-        { // backward_blade();
+        blade_transform = TRANSFORM2D_IDENTITY;
+        blade_transform.position.y = -0.25f;         
+        if(down_wall){
 
             GenId blade_gid = entity_spawn_windmill_blade(
                 entity_manager, 
-                transform2d_rotate(TRANSFORM2D_IDENTITY, degrees_to_radians(180)), 
+                transform2d_rotate(blade_transform, degrees_to_radians(180)), 
                 entity_gid,
                 &blade_entity
             );
@@ -2743,11 +2775,13 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
             blade_entity = NULL;
         }
 
-        { // up_blade();
+        blade_transform = TRANSFORM2D_IDENTITY;
+        blade_transform.position.x = 0.25f; 
+        if(right_wall){
         
             GenId blade_gid = entity_spawn_windmill_blade(
                 entity_manager, 
-                transform2d_rotate(TRANSFORM2D_IDENTITY, degrees_to_radians(270)), 
+                transform2d_rotate(blade_transform, degrees_to_radians(270)), 
                 entity_gid,
                 &blade_entity
             );
@@ -2887,22 +2921,29 @@ void windmill_update(EntityManager* entity_manager, Entity* entity, i32 entity_i
             case WINDMILL_CLOCKWISE_STATE:{
                 f32 min_val = -1.0f;
                 if(angular_velocity > min_val){
-                    fizx_body_set_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, min_val);
+                    fizx_body_set_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, min_val * 4.0f);
                 }
             }break;
             case WINDMILL_COUNTER_CLOCKWISE_STATE:{
                 f32 min_val = 1.0f;
                 if(angular_velocity < min_val){
-                    fizx_body_set_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, min_val);
+                    fizx_body_set_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, min_val * 4.0f);
                 }
             }break;
         }
     }
+    
+    bool has_reached_end = true;
+    fizx_body_has_reached_angular_bidirectional_constrain_end(
+        &entity_manager->fizx_state, 
+        hinge_entity->physics_body_gid,
+        &has_reached_end
+    );
+    
+    entity->turn_based_logic_in_progress = !has_reached_end;
 }
 
-void windmill_on_turn_end_callback(GameState* game_state, i32 entity_idx){
-    EntityManager* entity_manager = &game_state->entity_manager;
-    
+void windmill_on_turn_end_callback(EntityManager* entity_manager, i32 entity_idx){    
     BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
     Entity* windmill_entity = &entity_manager->entity[entity_idx];
     
@@ -3029,7 +3070,11 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
 
 
         Entity* hinge_entity;
-        if(!entity_spawn_windmill_hinge(entity_manager, TRANSFORM2D_IDENTITY, entity_gid, &hinge_entity)){
+        if(!entity_spawn_windmill_hinge(
+                entity_manager, TRANSFORM2D_IDENTITY, entity_gid, &hinge_entity,
+                true, true, true, true
+            )
+        ){
             entity_manager_dealloc_entity(entity_manager, entity_gid);
             return 0;
         }
@@ -4981,25 +5026,25 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                 case false:{
                     switch(board_state->turn){
                         case BoardTurn_Ball:{    
-                            board_state_enter_turn_based_turn(board_state);
+                            board_state_enter_turn_based_turn(board_state, entity_manager);
                         }break;
                         case BoardTurn_TurnBased:{
-        
+                            
+                            bool all_turn_logic_completed = true;
                             for(i32 i = 0; i < board_state->turn_based_entity_length; i++){
                                 Entity* turn_based_entity;
                                 GenId turn_based_entity_gid = board_state->turn_based_entity[i];
                                 if(entity_manager_get_entity(*entity_manager, turn_based_entity_gid, &turn_based_entity)){
-                                    if(turn_based_entity->turns_until_turn_end_callback == 0){
-                                        turn_based_entity->on_turn_end_callback(game_state, gen_id_get_index(turn_based_entity_gid));
-                                        turn_based_entity->turns_until_turn_end_callback = turn_based_entity->max_turns_until_turn_end_callback;
-                                    }
-                                    else{
-                                        turn_based_entity->turns_until_turn_end_callback -= 1;
+                                    if(turn_based_entity->turn_based_logic_in_progress){
+                                        all_turn_logic_completed = false;
+                                        break;
                                     }
                                 }
                             }
                             
-                            board_state_complete_turn(board_state, entity_manager);
+                            if(all_turn_logic_completed){
+                                board_state_complete_turn(board_state, entity_manager);
+                            }
                         }break;
                         case BoardTurn_Completed:{
 

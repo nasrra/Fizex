@@ -50,6 +50,7 @@ typedef struct{
     f32 angular_drag;
     FIZX_ConstrainConfig constrain_config;
     bool gravity_affected;
+    bool rotate_around_center_of_mass;
 } FIZX_BodyConfig;
 
 typedef enum{
@@ -548,6 +549,9 @@ typedef struct{
     **/
     bool* constrain_axis_y;
     i32 constrain_axis_y_length;
+    
+    bool* rotate_around_center_of_mass;
+    i32 rotate_around_center_of_mass_length;
 
     FIZX_CollisionCallback* shape_on_enter_callback;
     i32 shape_on_enter_callback_length;
@@ -1896,6 +1900,34 @@ bool fizx_body_snap_to_angular_bidirectional_constrain_end(FIZX_State* state, Ge
     return true;
 }
 
+bool fizx_body_has_reached_angular_bidirectional_constrain_end(const FIZX_State* state, GenId body_gid, bool* out_has_reach_end){
+    i32 body_idx = fizx_is_valid_body_gen_id(state, body_gid);
+    if(!body_idx){
+        return false;
+    }
+    
+    BOUNDS_CHECK(body_idx, state->entities.angular_constrain_mode_length);
+    if(state->entities.angular_constrain_mode[body_idx] != FIZX_AngularConstrainMode_Bidirectional){
+        return false;
+    }
+    
+    BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
+    BOUNDS_CHECK(body_idx, state->entities.angular_bidirectional_sincos_constrain_end.length);
+    
+    *out_has_reach_end = 
+        ABS(
+            state->entities.global_transform.sine[body_idx] - 
+            state->entities.angular_bidirectional_sincos_constrain_end.x[body_idx]
+        ) <= (F32_EPSILON * 10.0f) &&
+        ABS(
+            state->entities.global_transform.cosine[body_idx] - 
+            state->entities.angular_bidirectional_sincos_constrain_end.y[body_idx]
+        ) <= (F32_EPSILON * 10.0f)
+    ;
+    
+    return true;
+}
+
 void fizx_body_set_constraints_unsafe(FIZX_State* state, i32 body_idx, FIZX_ConstrainConfig config){
     BOUNDS_CHECK(body_idx, state->entities.angular_bidirectional_sincos_constrain_start.length);
     state->entities.angular_bidirectional_sincos_constrain_start.x[body_idx] = config.angular_bidirectional_sincos_constrain_start.x;
@@ -2113,6 +2145,7 @@ void fizx_soa_entity_init(FIZX_Soa_Entity* soa, MemoryArena* arena, i32 length, 
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->constrain_axis_y, &soa->constrain_axis_y_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->angular_constrain_mode, &soa->angular_constrain_mode_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->angular_constrain_direction, &soa->angular_constrain_direction_length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->rotate_around_center_of_mass, &soa->rotate_around_center_of_mass_length, length);
     soa->user_data_element_size = user_data_size;
 }
 
@@ -4643,6 +4676,9 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                 f32 angular_bidirectional_sincos_constrain_end_sin = state->entities.angular_bidirectional_sincos_constrain_end.x[body_idx];
                 f32 angular_bidirectional_sincos_constrain_end_cos = state->entities.angular_bidirectional_sincos_constrain_end.y[body_idx];
                 
+                BOUNDS_CHECK(body_idx, state->entities.rotate_around_center_of_mass_length);
+                bool rotate_around_center_of_mass = state->entities.rotate_around_center_of_mass[body_idx];
+                
                 if(gravity_affected){
                     *lin_vel_x += gravity.x;
                     *lin_vel_y += gravity.y;
@@ -4778,20 +4814,22 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                     *body_sine = n_sine;
                     *body_cosine = n_cosine;
                 
-                    // offset the body in relation to the center of mass.
-                    f32 rot_cos = f32_cos(rot_amt);
-                    f32 rot_sin = f32_sin(rot_amt);
-                    BOUNDS_CHECK(body_idx, state->entities.local_center_of_mass.length);
-                    f32 com_x = *body_pos_x + state->entities.local_center_of_mass.x[body_idx];
-                    f32 com_y = *body_pos_y + state->entities.local_center_of_mass.y[body_idx];
-
-                    // translate to origin.
-                    f32 com_offset_x = *body_pos_x - com_x;
-                    f32 com_offset_y = *body_pos_y - com_y;
-                    f32 rotated_x = com_offset_x * rot_cos - com_offset_y * rot_sin;
-                    f32 rotated_y = com_offset_x * rot_sin + com_offset_y * rot_cos;
-                    *body_pos_x = rotated_x + com_x;
-                    *body_pos_y = rotated_y + com_y;
+                    if(rotate_around_center_of_mass){
+                        // offset the body in relation to the center of mass.
+                        f32 rot_cos = f32_cos(rot_amt);
+                        f32 rot_sin = f32_sin(rot_amt);
+                        BOUNDS_CHECK(body_idx, state->entities.local_center_of_mass.length);
+                        f32 com_x = *body_pos_x + state->entities.local_center_of_mass.x[body_idx];
+                        f32 com_y = *body_pos_y + state->entities.local_center_of_mass.y[body_idx];
+    
+                        // translate to origin.
+                        f32 com_offset_x = *body_pos_x - com_x;
+                        f32 com_offset_y = *body_pos_y - com_y;
+                        f32 rotated_x = com_offset_x * rot_cos - com_offset_y * rot_sin;
+                        f32 rotated_y = com_offset_x * rot_sin + com_offset_y * rot_cos;
+                        *body_pos_x = rotated_x + com_x;
+                        *body_pos_y = rotated_y + com_y;                
+                    }
                 }
 
                 { // apply_linear_drag();
