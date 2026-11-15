@@ -41,6 +41,10 @@
 ==== TO DO ====
 ===============
 
+- remove shake mechanic.
+
+- rework windmills to turn based spiny walls.
+    - angular velocity handling - stop at 
 
 - levels
     / intro 1

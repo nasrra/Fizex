@@ -23,9 +23,22 @@ typedef struct FIZX_State FIZX_State;
     types.
 ====================**//**/
 
+typedef enum FIZX_AngularConstrainMode{
+    FIZX_AngularConstrainMode_None,
+    FIZX_AngularConstrainMode_Directional,
+    FIZX_AngularConstrainMode_Bidirectional
+} FIZX_AngularConstrainMode;
+
+typedef enum FIZX_AngularConstrainDirection{
+    FIZX_AngularConstrainDirection_Clockwise,
+    FIZX_AngularConstrainDirection_CounterClockwise
+} FIZX_AngularConstrainDirection;
+
 typedef struct{
-    bool angular_clockwise;
-    bool angular_counter_clockwise;
+    Vector2 angular_bidirectional_sincos_constrain_start;
+    Vector2 angular_bidirectional_sincos_constrain_end;
+    FIZX_AngularConstrainMode angular_constrain_mode;
+    FIZX_AngularConstrainDirection angular_constrain_direction;
     bool axis_x;
     bool axis_y;
 } FIZX_ConstrainConfig;
@@ -290,6 +303,36 @@ typedef struct{
        Elements are accessed via `entity_idx`
     **/
     Soa_Vector2 local_center_of_mass;
+    /*
+        The first sin-cos constrain in the pair.
+        
+        `remarks`
+        - Elements area accessed via `entity_idx`
+        - `x` is the sine.
+        - `y` is the cosine.
+    */
+    Soa_Vector2 angular_bidirectional_sincos_constrain_start;
+    /*
+        The second sin-cos constrain in the pair.
+        
+        `remarks`
+        - Elements area accessed via `entity_idx`
+        - `x` is the sine.
+        - `y` is the cosine.
+    */
+    Soa_Vector2 angular_bidirectional_sincos_constrain_end;
+    /*
+        `remarks`
+        Elements area accessed via `entity_idx`
+    */
+    FIZX_AngularConstrainMode* angular_constrain_mode;
+    i32 angular_constrain_mode_length;
+    /*
+        `remarks`
+        Elements area accessed via `entity_idx`
+    */
+    FIZX_AngularConstrainDirection* angular_constrain_direction;
+    i32 angular_constrain_direction_length;
     /**
         The Axis Aligned Bounding Boxes of all shapes.
 
@@ -490,7 +533,6 @@ typedef struct{
     */
     i32* mask;
     i32 mask_length;
-    
     /**
         `remarks`
         - exclusively for bodies.
@@ -506,22 +548,6 @@ typedef struct{
     **/
     bool* constrain_axis_y;
     i32 constrain_axis_y_length;
-    
-    /**
-        `remarks`
-        - exclusively for bodies.
-        - accessed via `entity_idx`
-    **/
-    bool* constrain_angular_clockwise;
-    i32 constrain_angular_clockwise_length;
-    
-    /**
-        `remarks`
-        - exclusively for bodies.
-        - accessed via `entity_idx`
-    **/
-    bool* constrain_angular_counter_clockwise;
-    i32 constrain_angular_counter_clockwise_length;
 
     FIZX_CollisionCallback* shape_on_enter_callback;
     i32 shape_on_enter_callback_length;
@@ -1782,38 +1808,64 @@ bool fizx_body_get_constraints(const FIZX_State* state, GenId body_gid, FIZX_Con
     if(!idx){
         return false;
     }
-    
-    BOUNDS_CHECK(idx, state->entities.constrain_angular_clockwise_length);
-    out_config->angular_clockwise = state->entities.constrain_angular_clockwise[idx];
 
-    BOUNDS_CHECK(idx, state->entities.constrain_angular_counter_clockwise_length);
-    out_config->angular_counter_clockwise = state->entities.constrain_angular_counter_clockwise[idx];
+    BOUNDS_CHECK(idx, state->entities.angular_bidirectional_sincos_constrain_start.length);
+    out_config->angular_bidirectional_sincos_constrain_start = (Vector2){
+        state->entities.angular_bidirectional_sincos_constrain_start.x[idx],
+        state->entities.angular_bidirectional_sincos_constrain_start.y[idx]
+    };
+
+    BOUNDS_CHECK(idx, state->entities.angular_bidirectional_sincos_constrain_end.length);
+    out_config->angular_bidirectional_sincos_constrain_end = (Vector2){
+        state->entities.angular_bidirectional_sincos_constrain_end.x[idx],
+        state->entities.angular_bidirectional_sincos_constrain_end.y[idx]
+    };
+
+    BOUNDS_CHECK(idx, state->entities.angular_constrain_mode_length);
+    out_config->angular_constrain_mode = state->entities.angular_constrain_mode[idx];
+    
+    BOUNDS_CHECK(idx, state->entities.angular_constrain_direction_length);
+    out_config->angular_constrain_direction = state->entities.angular_constrain_direction[idx];
 
     BOUNDS_CHECK(idx, state->entities.constrain_axis_x_length);
     out_config->axis_x = state->entities.constrain_axis_x[idx];
 
     BOUNDS_CHECK(idx, state->entities.constrain_axis_y_length);
-    out_config->axis_y = state->entities.constrain_axis_y[idx];
-    
+    out_config->axis_y = state->entities.constrain_axis_y[idx];    
+        
     return true;
 }
 
-bool fizx_body_set_constraints(const FIZX_State* state, GenId body_gid, FIZX_ConstrainConfig config){
+void fizx_body_set_constraints_unsafe(FIZX_State* state, i32 body_idx, FIZX_ConstrainConfig config){
+    BOUNDS_CHECK(body_idx, state->entities.angular_bidirectional_sincos_constrain_start.length);
+    state->entities.angular_bidirectional_sincos_constrain_start.x[body_idx] = config.angular_bidirectional_sincos_constrain_start.x;
+    state->entities.angular_bidirectional_sincos_constrain_start.y[body_idx] = config.angular_bidirectional_sincos_constrain_start.y;
+    
+    BOUNDS_CHECK(body_idx, state->entities.angular_bidirectional_sincos_constrain_start.length);
+    state->entities.angular_bidirectional_sincos_constrain_end.x[body_idx] = config.angular_bidirectional_sincos_constrain_end.x;
+    state->entities.angular_bidirectional_sincos_constrain_end.y[body_idx] = config.angular_bidirectional_sincos_constrain_end.y;
+
+    BOUNDS_CHECK(body_idx, state->entities.angular_constrain_mode_length);
+    state->entities.angular_constrain_mode[body_idx] = config.angular_constrain_mode;
+    
+    BOUNDS_CHECK(body_idx, state->entities.angular_constrain_direction_length);
+    state->entities.angular_constrain_direction[body_idx] = config.angular_constrain_direction;
+
+    BOUNDS_CHECK(body_idx, state->entities.constrain_axis_x_length);
+    state->entities.constrain_axis_x[body_idx] = config.axis_x;
+
+    BOUNDS_CHECK(body_idx, state->entities.constrain_axis_y_length);
+    state->entities.constrain_axis_y[body_idx] = config.axis_y;    
+}
+
+bool fizx_body_set_constraints(FIZX_State* state, GenId body_gid, FIZX_ConstrainConfig config){
     i32 idx = fizx_is_valid_body_gen_id(state, body_gid);
     if(!idx){
         return false;
     }
-    BOUNDS_CHECK(idx, state->entities.constrain_angular_clockwise_length);
-    state->entities.constrain_angular_clockwise[idx] = config.angular_clockwise;
 
-    BOUNDS_CHECK(idx, state->entities.constrain_angular_counter_clockwise_length);
-    state->entities.constrain_angular_counter_clockwise[idx] = config.angular_counter_clockwise;
-
-    BOUNDS_CHECK(idx, state->entities.constrain_axis_x_length);
-    state->entities.constrain_axis_x[idx] = config.axis_x; 
-
-    BOUNDS_CHECK(idx, state->entities.constrain_axis_y_length);
-    state->entities.constrain_axis_y[idx] = config.axis_y;     
+    fizx_body_set_constraints_unsafe(state, idx, config);
+    
     return true;
 }
 
@@ -1961,6 +2013,8 @@ void fizx_soa_entity_init(FIZX_Soa_Entity* soa, MemoryArena* arena, i32 length, 
     soa_vector2_init(&soa->centroid, arena, length);
     soa_vector2_init(&soa->shape_collision_displacement, arena, length);
     soa_vector2_init(&soa->local_center_of_mass, arena, length);
+    soa_vector2_init(&soa->angular_bidirectional_sincos_constrain_start, arena, length);
+    soa_vector2_init(&soa->angular_bidirectional_sincos_constrain_end, arena, length);
     soa_aabb_init(&soa->aabb, arena, length);
     fizx_soa_material_init(&soa->material, arena, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->angular_velocity, &soa->angular_velocity_length, length);
@@ -1986,12 +2040,10 @@ void fizx_soa_entity_init(FIZX_Soa_Entity* soa, MemoryArena* arena, i32 length, 
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->linear_drag, &soa->linear_drag_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->angular_drag, &soa->angular_drag_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->collision_callback_behaviour, &soa->collision_callback_behaviour_length, length);
-    
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->constrain_axis_x, &soa->constrain_axis_x_length, length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, soa->constrain_axis_y, &soa->constrain_axis_y_length, length);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->constrain_angular_clockwise, &soa->constrain_angular_clockwise_length, length);
-    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->constrain_angular_counter_clockwise, &soa->constrain_angular_counter_clockwise_length, length);
-    
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->angular_constrain_mode, &soa->angular_constrain_mode_length, length);
+    MEMORY_ARENA_ALLOC_ARRAY(arena, soa->angular_constrain_direction, &soa->angular_constrain_direction_length, length);
     soa->user_data_element_size = user_data_size;
 }
 
@@ -2463,15 +2515,57 @@ bool fizx_body_set_local_transform(FIZX_State* state, GenId body_gid, Transform2
     return true;
 }
 
+void fizx_body_set_global_rotation_unsafe(FIZX_State* state, i32 body_idx, f32 sine, f32 cosine){
+    f32 n_sine;
+    f32 n_cosine;
+    BOUNDS_CHECK(body_idx, state->entities.angular_constrain_mode_length);
+    if(state->entities.angular_constrain_mode[body_idx] == FIZX_AngularConstrainMode_Bidirectional){
+        
+        f32 transform_radians = f32_atan2(sine, cosine);
+        BOUNDS_CHECK(body_idx, state->entities.angular_bidirectional_sincos_constrain_start.length);
+        f32 start_radians = f32_atan2(
+            state->entities.angular_bidirectional_sincos_constrain_start.x[body_idx],
+            state->entities.angular_bidirectional_sincos_constrain_start.y[body_idx]
+        );
+        BOUNDS_CHECK(body_idx, state->entities.angular_bidirectional_sincos_constrain_end.length);
+        f32 end_radians = f32_atan2(
+            state->entities.angular_bidirectional_sincos_constrain_end.x[body_idx],
+            state->entities.angular_bidirectional_sincos_constrain_end.y[body_idx]
+        );
+
+        f32 min_radians;
+        f32 max_radians;
+        if(start_radians <= end_radians){
+            min_radians = start_radians;
+            max_radians = end_radians;
+        }
+        else{
+            min_radians = end_radians;
+            max_radians = start_radians;
+        }
+                
+        transform_radians = CLAMP(transform_radians, min_radians, max_radians);
+        n_sine = f32_sin(transform_radians);
+        n_cosine = f32_cos(transform_radians);
+    }
+    else{
+        n_sine = sine;
+        n_cosine = cosine;
+    }
+    state->entities.global_transform.sine[body_idx] = n_sine;
+    state->entities.global_transform.cosine[body_idx] = n_cosine;
+}
+
 void fizx_body_set_global_transform_unsafe(FIZX_State* state, i32 body_idx, Transform2D transform){
+    
+    
     // set the body transform.
     BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
     state->entities.global_transform.position.x[body_idx]   = transform.position.x;
     state->entities.global_transform.position.y[body_idx]   = transform.position.y;
     state->entities.global_transform.scale.x[body_idx]      = transform.scale.x;
     state->entities.global_transform.scale.y[body_idx]      = transform.scale.y;
-    state->entities.global_transform.cosine[body_idx]       = transform.cosine;
-    state->entities.global_transform.sine[body_idx]         = transform.sine;
+    fizx_body_set_global_rotation_unsafe(state, body_idx, transform.sine, transform.cosine);
 
     // set its shape(s) transform(s).
     BOUNDS_CHECK(body_idx, state->body_hierarchy.length);
@@ -2488,9 +2582,10 @@ void fizx_body_set_global_transform_unsafe(FIZX_State* state, i32 body_idx, Tran
         state->entities.global_transform.position.x[shape_idx]    = state->entities.local_transform.position.x[shape_idx] + transform.position.x;
         state->entities.global_transform.position.y[shape_idx]    = state->entities.local_transform.position.y[shape_idx] + transform.position.y;
         state->entities.global_transform.scale.x[shape_idx]       = state->entities.local_transform.scale.x[shape_idx] * transform.scale.x;
-        state->entities.global_transform.scale.y[shape_idx]       = state->entities.local_transform.scale.y[shape_idx] * transform.scale.y;
+        state->entities.global_transform.scale.y[shape_idx]       = state->entities.local_transform.scale.y[shape_idx] * transform.scale.y;        
         state->entities.global_transform.cosine[shape_idx]        = state->entities.local_transform.cosine[shape_idx] + transform.cosine;
         state->entities.global_transform.sine[shape_idx]          = state->entities.local_transform.sine[shape_idx] + transform.sine;
+        
         BOUNDS_CHECK(shape_idx, state->entities.base_radius_length);
         f32 global_radius = state->entities.base_radius[shape_idx] * MAX(state->entities.global_transform.scale.x[shape_idx], state->entities.global_transform.scale.y[shape_idx]);
         BOUNDS_CHECK(shape_idx, state->entities.global_radius_length);
@@ -2751,6 +2846,8 @@ void fizx_entity_clear_unsafe(FIZX_State* state, i32 entity_idx){
         soa_vector2_clear_element(&state->entities.centroid, entity_idx);
         soa_vector2_clear_element(&state->entities.local_center_of_mass, entity_idx);
         soa_vector2_clear_element(&state->entities.shape_collision_displacement, entity_idx);
+        soa_vector2_clear_element(&state->entities.angular_bidirectional_sincos_constrain_start, entity_idx);
+        soa_vector2_clear_element(&state->entities.angular_bidirectional_sincos_constrain_end, entity_idx);
     }
 
     { // clear f32s
@@ -2795,12 +2892,6 @@ void fizx_entity_clear_unsafe(FIZX_State* state, i32 entity_idx){
         
         BOUNDS_CHECK(entity_idx, state->entities.constrain_axis_y_length);
         state->entities.constrain_axis_y[entity_idx] = false;
-    
-        BOUNDS_CHECK(entity_idx, state->entities.constrain_angular_clockwise_length);
-        state->entities.constrain_angular_clockwise[entity_idx] = false;
-    
-        BOUNDS_CHECK(entity_idx, state->entities.constrain_angular_counter_clockwise_length);
-        state->entities.constrain_angular_counter_clockwise[entity_idx] = false;
     }
 
     { // decrement_the_category_counter_in_the_state();
@@ -2855,6 +2946,13 @@ void fizx_entity_clear_unsafe(FIZX_State* state, i32 entity_idx){
     }
 
     { // others();
+
+        BOUNDS_CHECK(entity_idx, state->entities.angular_constrain_direction_length);
+        state->entities.angular_constrain_direction[entity_idx] = 0;
+
+        BOUNDS_CHECK(entity_idx, state->entities.angular_constrain_mode_length);
+        state->entities.angular_constrain_mode[entity_idx] = 0;
+        
         soa_aabb_clear_element(&state->entities.aabb, entity_idx);
         fizx_soa_material_clear_element(&state->entities.material, entity_idx);
 
@@ -2942,18 +3040,8 @@ GenId fizx_body_alloc(
     state->entities.layer[body_idx] = config.layer;
     state->entities.mask[body_idx] = config.mask;
     
-    BOUNDS_CHECK(body_idx, state->entities.constrain_angular_clockwise_length);
-    state->entities.constrain_angular_clockwise[body_idx] = config.constrain_config.angular_clockwise;
-    
-    BOUNDS_CHECK(body_idx, state->entities.constrain_angular_counter_clockwise_length);
-    state->entities.constrain_angular_counter_clockwise[body_idx] = config.constrain_config.angular_counter_clockwise;
-
-    BOUNDS_CHECK(body_idx, state->entities.constrain_axis_x_length);
-    state->entities.constrain_axis_x[body_idx] = config.constrain_config.axis_x;
-    
-    BOUNDS_CHECK(body_idx, state->entities.constrain_axis_y_length);
-    state->entities.constrain_axis_y[body_idx] = config.constrain_config.axis_y;
-
+    fizx_body_set_constraints_unsafe(state, body_idx, config.constrain_config);
+        
     fizx_body_clear_forces_and_velocities_unsafe(state, body_idx);
 
     if(intrusive_list_add_root(&state->body_hierarchy, body_idx)){
@@ -4502,12 +4590,13 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                 f32 linear_drag         = state->entities.linear_drag[body_idx];
                 BOUNDS_CHECK(body_idx, state->entities.angular_drag_length);
                 f32 angular_drag        = state->entities.angular_drag[body_idx];
+
+                BOUNDS_CHECK(body_idx, state->entities.angular_constrain_mode_length);
+                FIZX_AngularConstrainMode angular_constrain_mode = state->entities.angular_constrain_mode[body_idx];
                 
-                BOUNDS_CHECK(body_idx, state->entities.constrain_angular_counter_clockwise_length);
-                bool constrain_angular_counter_clockwise  = state->entities.constrain_angular_counter_clockwise[body_idx];
-                BOUNDS_CHECK(body_idx, state->entities.constrain_angular_clockwise_length);
-                bool constrain_angular_clockwise          = state->entities.constrain_angular_clockwise[body_idx];
-                
+                BOUNDS_CHECK(body_idx, state->entities.angular_constrain_direction_length);
+                FIZX_AngularConstrainDirection angular_constrain_direction = state->entities.angular_constrain_direction[body_idx];
+                                
                 BOUNDS_CHECK(body_idx, state->entities.constrain_axis_x_length);
                 bool constrain_axis_x  = state->entities.constrain_axis_x[body_idx];
                 BOUNDS_CHECK(body_idx, state->entities.constrain_axis_y_length);
@@ -4516,6 +4605,14 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                 BOUNDS_CHECK(body_idx, state->entities.shape_collision_displacement.length);
                 f32* displacement_x = &state->entities.shape_collision_displacement.x[body_idx];
                 f32* displacement_y = &state->entities.shape_collision_displacement.y[body_idx];
+                
+                BOUNDS_CHECK(body_idx, state->entities.angular_bidirectional_sincos_constrain_start.length);
+                f32 angular_bidirectional_sincos_constrain_start_sin = state->entities.angular_bidirectional_sincos_constrain_start.x[body_idx];
+                f32 angular_bidirectional_sincos_constrain_start_cos = state->entities.angular_bidirectional_sincos_constrain_start.y[body_idx];
+                
+                BOUNDS_CHECK(body_idx, state->entities.angular_bidirectional_sincos_constrain_end.length);
+                f32 angular_bidirectional_sincos_constrain_end_sin = state->entities.angular_bidirectional_sincos_constrain_end.x[body_idx];
+                f32 angular_bidirectional_sincos_constrain_end_cos = state->entities.angular_bidirectional_sincos_constrain_end.y[body_idx];
                 
                 if(gravity_affected){
                     *lin_vel_x += gravity.x;
@@ -4552,24 +4649,80 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
 
                 // rotate_body_around_center_of_mass();
                 if(*ang_vel != 0.0f){
-                    if(
-                        (
-                            constrain_angular_counter_clockwise &&  
-                            *ang_vel < 0.0f
-                        )
-                        ||
-                        (
-                            constrain_angular_clockwise &&
-                            *ang_vel > 0.0f                    
-                        )
-                    ){
-                        *ang_vel = 0.0f;
-                    }
                 
                     // apply rotation.
-                    f32 rot_amt = *ang_vel * delta_time;
-                    rotor_multiply(*body_sine, *body_cosine, rot_amt, body_sine, body_cosine);
-
+                    f32 rot_amt;
+                    f32 n_sine;
+                    f32 n_cosine;
+                    switch(angular_constrain_mode){
+                        case FIZX_AngularConstrainMode_None:{
+                            rot_amt = *ang_vel * delta_time;
+                            rotor_multiply(*body_sine, *body_cosine, rot_amt, &n_sine, &n_cosine);
+                        }break;
+                        case FIZX_AngularConstrainMode_Directional:{
+                            switch(angular_constrain_direction){
+                                default:{
+                                    ASSERT(false, "unknown angular constrain direction");
+                                }break;
+                                case FIZX_AngularConstrainDirection_Clockwise:{
+                                    *ang_vel = CLAMP(*ang_vel, -F32_MAX, 0.0f);
+                                }break;
+                                case FIZX_AngularConstrainDirection_CounterClockwise:{
+                                    *ang_vel = CLAMP(*ang_vel, 0.0f, F32_MAX);
+                                }break;
+                            }
+                            rot_amt = *ang_vel * delta_time;
+                            rotor_multiply(*body_sine, *body_cosine, rot_amt, &n_sine, &n_cosine);
+                        }break;
+                        
+                        case FIZX_AngularConstrainMode_Bidirectional:{
+                            rot_amt = *ang_vel * delta_time;
+                            rotor_multiply(*body_sine, *body_cosine, rot_amt, &n_sine, &n_cosine);
+                            f32 start_radian_diff = vector2_radian_difference_scalar(
+                                angular_bidirectional_sincos_constrain_start_sin,
+                                angular_bidirectional_sincos_constrain_start_cos,
+                                n_sine,
+                                n_cosine
+                            );
+                            f32 end_radian_diff = vector2_radian_difference_scalar(
+                                angular_bidirectional_sincos_constrain_end_sin,
+                                angular_bidirectional_sincos_constrain_end_cos,
+                                n_sine, 
+                                n_cosine
+                            );
+                            switch(angular_constrain_direction){
+                                default:{
+                                    ASSERT(false, "unknown angular constrain direction");
+                                }break;
+                                case FIZX_AngularConstrainDirection_Clockwise:{
+                                    if(
+                                        start_radian_diff < 0.0f ||
+                                        end_radian_diff > 0.0f
+                                    ){
+                                        rot_amt = 0.0f;
+                                        *ang_vel = 0.0f;
+                                        n_sine = *body_sine;
+                                        n_cosine = *body_cosine;
+                                    }
+                                }break;
+                                case FIZX_AngularConstrainDirection_CounterClockwise:{
+                                    if(
+                                        start_radian_diff > 0.0f ||
+                                        end_radian_diff < 0.0f
+                                    ){
+                                        rot_amt = 0.0f;
+                                        *ang_vel = 0.0f;
+                                        n_sine = *body_sine;
+                                        n_cosine = *body_cosine;
+                                    }
+                                }break;
+                            }
+                        }break;
+                    }
+                    
+                    *body_sine = n_sine;
+                    *body_cosine = n_cosine;
+                
                     // offset the body in relation to the center of mass.
                     f32 rot_cos = f32_cos(rot_amt);
                     f32 rot_sin = f32_sin(rot_amt);
@@ -4629,40 +4782,6 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                             *lin_vel_y = new_velocity_y <= 0.0f ? 0.0f : new_velocity_y;
                         }
                     }
-
-                    // if(*lin_vel_x != 0.0f){
-                    //     f32 pre_velocity_x = *lin_vel_x;
-                    //     f32 direction_x_factor = pre_velocity_x < 0.0f ? 1.0f : -1.0f;
-                    //     f32 new_velocity_x = pre_velocity_x + (direction_x_factor * drag);
-                    
-                    //     // the to the right.
-                    //     if(direction_x_factor > 0.0f){
-                    //         // clamp the velocity if it has over shot or reached its end.
-                    //         *lin_vel_x = new_velocity_x >= 0.0f ? 0.0f : new_velocity_x;
-                    //     }
-                        
-                    //     // the drag pushes to the left.
-                    //     else{
-                    //         // clamp the velocity if it has over shot or reached its end.
-                    //         *lin_vel_x = new_velocity_x <= 0.0f ? 0.0f : new_velocity_x;
-                    //     }
-                    // }
-
-                    // if(*lin_vel_y != 0.0f){
-                    //     f32 pre_velocity_y = *lin_vel_y;
-                    //     f32 direction_y_factor = pre_velocity_y < 0 ? 1.0f : -1.0f;
-                    //     f32 new_velocity_y = pre_velocity_y + (direction_y_factor * drag);
-                    //     // the drag pushes to the up.
-                    //     if(direction_y_factor > 0.0f){
-                    //         // clamp the velocity if it has over shot or reached its end.
-                    //         *lin_vel_y = new_velocity_y >= 0.0f ? 0.0f : new_velocity_y;
-                    //     }
-                    //     // the drag pushes to the down.
-                    //     else{
-                    //         // clamp the velocity if it has over shot or reached its end.
-                    //         *lin_vel_y = new_velocity_y <= 0.0f ? 0.0f : new_velocity_y;
-                    //     }
-                    // }
                 }
 
                 { // apply_linear_velocity_translation();

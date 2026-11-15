@@ -115,7 +115,6 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 #define SPRITE_LAYER_EDITOR_WORLD 2
 
-
 #define SPRITE_LAYER_GAME_UI 1
 #define SPRITE_LAYER_EDITOR_UI 0
 
@@ -132,19 +131,30 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 #define WINDMILL_HINGE_PHYSICS_BODY_LAYER (PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_GUIDELINE)
 #define WINDMILL_HINGE_PHYSICS_BODY_MASK PHYSICS_LAYER_BALL 
 
-#define WINDMILL_HINGE_COUNTER_CLOCKWISE_CONSTRAINTS  \
-(FIZX_ConstrainConfig){                               \
-    .angular_counter_clockwise = true,                \
-    .axis_x = true,                                   \
-    .axis_y = true                                    \
+#define WINDMILL_HINGE_CLOCKWISE_CONSTRAINTS                                \
+(FIZX_ConstrainConfig){                                                     \
+    .angular_constrain_mode = FIZX_AngularConstrainMode_Directional,        \
+    .angular_constrain_direction = FIZX_AngularConstrainDirection_Clockwise,\
+    .axis_x = true,                                                         \
+    .axis_y = true                                                          \
 }
-#define WINDMILL_HINGE_CLOCKWISE_CONSTRAINTS    \
-(FIZX_ConstrainConfig){                         \
-    .angular_clockwise = true,                  \
-    .axis_x = true,                             \
-    .axis_y = true                              \
-}
+// #define WINDMILL_HINGE_COUNTER_CLOCKWISE_CONSTRAINTS                                \
+// (FIZX_ConstrainConfig){                                                             \
+//     .angular_constrain_mode = FIZX_AngularConstrainMode_Directional,                \
+//     .angular_constrain_direction = FIZX_AngularConstrainDirection_CounterClockwise, \
+//     .axis_x = true,                                                                 \
+//     .axis_y = true                                                                  \
+// }
 
+#define WINDMILL_HINGE_COUNTER_CLOCKWISE_CONSTRAINTS                                \
+(FIZX_ConstrainConfig){                                                             \
+    .angular_constrain_mode = FIZX_AngularConstrainMode_Bidirectional,              \
+    .angular_constrain_direction = FIZX_AngularConstrainDirection_CounterClockwise, \
+    .angular_bidirectional_sincos_constrain_start = (Vector2){f32_sin(0.5f), f32_cos(0.5f)}, \
+    .angular_bidirectional_sincos_constrain_end = (Vector2){f32_sin(-0.5f), f32_cos(-0.5f)},  \
+    .axis_x = true,                                                                 \
+    .axis_y = true                                                                  \
+}
 
 ///
 /// @ Windmill defines
