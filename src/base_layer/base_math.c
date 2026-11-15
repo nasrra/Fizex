@@ -449,13 +449,26 @@ void vector2_transform_scalar(
     *out_y = ry + transform_position_y;
 }
 
-Vector2 vector2_rotate(Vector2 vector, f32 radians){
+void vector2_rotate_by_sincos_scalar(f32 x, f32 y, f32 sin, f32 cos, f32* out_x, f32* out_y){
+    *out_x = (x * cos) - (y * sin);
+    *out_y = (x * sin) + (y * cos);
+}
+
+Vector2 vector2_rotate_by_sincos(Vector2 vector, f32 sin, f32 cos){
+    Vector2 result;
+    vector2_rotate_by_sincos_scalar(vector.x, vector.y, sin, cos, &result.x, &result.y);
+    return result;
+}
+
+void vector2_rotate_by_radians_scalar(f32 x, f32 y, f32 radians, f32* out_x, f32* out_y){
     f32 sin = f32_sin(radians);
     f32 cos = f32_cos(radians);
-    Vector2 result = {
-        .x =  (vector.x * cos) - (vector.y * sin),
-        .y =  (vector.x * sin) + (vector.y * cos)
-    };
+    vector2_rotate_by_sincos_scalar(x, y, sin, cos, out_x, out_y);
+}
+
+Vector2 vector2_rotate_by_radians(Vector2 vector, f32 radians){
+    Vector2 result;
+    vector2_rotate_by_radians_scalar(vector.x, vector.y, radians, &result.x, &result.y);
     return result;
 }
 

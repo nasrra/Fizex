@@ -3513,12 +3513,12 @@ void gfx_draw_arrow(
     gfx_draw_line(state, colour, origin, end_point, layer, depth, material, state->draw_wireframe_thickness, line_scaling);
 
     // prong 1.
-    prong_direction = vector2_rotate(direction, 2.55f);
+    prong_direction = vector2_rotate_by_radians(direction, 2.55f);
     prong_end_point = vector2_add(end_point, vector2_mul_val(prong_direction, prong_length));
     gfx_draw_line(state, colour, end_point, prong_end_point, layer, depth, material, state->draw_wireframe_thickness, line_scaling);
 
     // prong 2.
-    prong_direction = vector2_rotate(direction, -2.55f);
+    prong_direction = vector2_rotate_by_radians(direction, -2.55f);
     prong_end_point = vector2_add(end_point, vector2_mul_val(prong_direction, prong_length));
     gfx_draw_line(state, colour, end_point, prong_end_point, layer, depth, material, state->draw_wireframe_thickness, line_scaling);
 }

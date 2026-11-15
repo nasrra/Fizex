@@ -1836,6 +1836,66 @@ bool fizx_body_get_constraints(const FIZX_State* state, GenId body_gid, FIZX_Con
     return true;
 }
 
+void fizx_body_set_global_rotation_unsafe(FIZX_State* state, i32 body_idx, f32 sine, f32 cosine){
+    f32 n_sine;
+    f32 n_cosine;
+    BOUNDS_CHECK(body_idx, state->entities.angular_constrain_mode_length);
+    if(state->entities.angular_constrain_mode[body_idx] == FIZX_AngularConstrainMode_Bidirectional){
+        
+        f32 transform_radians = f32_atan2(sine, cosine);
+        BOUNDS_CHECK(body_idx, state->entities.angular_bidirectional_sincos_constrain_start.length);
+        f32 start_radians = f32_atan2(
+            state->entities.angular_bidirectional_sincos_constrain_start.x[body_idx],
+            state->entities.angular_bidirectional_sincos_constrain_start.y[body_idx]
+        );
+        BOUNDS_CHECK(body_idx, state->entities.angular_bidirectional_sincos_constrain_end.length);
+        f32 end_radians = f32_atan2(
+            state->entities.angular_bidirectional_sincos_constrain_end.x[body_idx],
+            state->entities.angular_bidirectional_sincos_constrain_end.y[body_idx]
+        );
+
+        f32 min_radians;
+        f32 max_radians;
+        if(start_radians <= end_radians){
+            min_radians = start_radians;
+            max_radians = end_radians;
+        }
+        else{
+            min_radians = end_radians;
+            max_radians = start_radians;
+        }
+                
+        transform_radians = CLAMP(transform_radians, min_radians, max_radians);
+        n_sine = f32_sin(transform_radians);
+        n_cosine = f32_cos(transform_radians);
+    }
+    else{
+        n_sine = sine;
+        n_cosine = cosine;
+    }
+    state->entities.global_transform.sine[body_idx] = n_sine;
+    state->entities.global_transform.cosine[body_idx] = n_cosine;
+}
+
+bool fizx_body_snap_to_angular_bidirectional_constrain_end(FIZX_State* state, GenId body_gid){
+    i32 body_idx = fizx_is_valid_body_gen_id(state, body_gid);
+    if(!body_idx){
+        return false;
+    }
+    
+    BOUNDS_CHECK(body_idx, state->entities.angular_constrain_mode_length);
+    if(state->entities.angular_constrain_mode[body_idx] != FIZX_AngularConstrainMode_Bidirectional){
+        return false;
+    }
+    
+    BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
+    BOUNDS_CHECK(body_idx, state->entities.angular_bidirectional_sincos_constrain_end.length);
+    state->entities.global_transform.sine[body_idx] = state->entities.angular_bidirectional_sincos_constrain_end.x[body_idx];
+    state->entities.global_transform.cosine[body_idx] = state->entities.angular_bidirectional_sincos_constrain_end.y[body_idx];
+    
+    return true;
+}
+
 void fizx_body_set_constraints_unsafe(FIZX_State* state, i32 body_idx, FIZX_ConstrainConfig config){
     BOUNDS_CHECK(body_idx, state->entities.angular_bidirectional_sincos_constrain_start.length);
     state->entities.angular_bidirectional_sincos_constrain_start.x[body_idx] = config.angular_bidirectional_sincos_constrain_start.x;
@@ -1856,6 +1916,15 @@ void fizx_body_set_constraints_unsafe(FIZX_State* state, i32 body_idx, FIZX_Cons
 
     BOUNDS_CHECK(body_idx, state->entities.constrain_axis_y_length);
     state->entities.constrain_axis_y[body_idx] = config.axis_y;    
+
+    // refresh the global transform so that the biderectional constrains apply.
+    BOUNDS_CHECK(body_idx, state->entities.global_transform.length);
+    fizx_body_set_global_rotation_unsafe(
+        state, 
+        body_idx, 
+        state->entities.global_transform.sine[body_idx], 
+        state->entities.global_transform.cosine[body_idx]
+    );
 }
 
 bool fizx_body_set_constraints(FIZX_State* state, GenId body_gid, FIZX_ConstrainConfig config){
@@ -1964,7 +2033,7 @@ bool fizx_body_set_mask(FIZX_State* state, GenId body_gid, i32 mask){
     return true;
 }
 
-bool fizx_body_get_transform(const FIZX_State* state, GenId body_gid, Transform2D* out_transform){
+bool fizx_body_get_global_transform(const FIZX_State* state, GenId body_gid, Transform2D* out_transform){
     i32 body_idx = fizx_is_valid_body_gen_id(state, body_gid);
     if(!body_idx){
         return false;
@@ -2515,47 +2584,6 @@ bool fizx_body_set_local_transform(FIZX_State* state, GenId body_gid, Transform2
     return true;
 }
 
-void fizx_body_set_global_rotation_unsafe(FIZX_State* state, i32 body_idx, f32 sine, f32 cosine){
-    f32 n_sine;
-    f32 n_cosine;
-    BOUNDS_CHECK(body_idx, state->entities.angular_constrain_mode_length);
-    if(state->entities.angular_constrain_mode[body_idx] == FIZX_AngularConstrainMode_Bidirectional){
-        
-        f32 transform_radians = f32_atan2(sine, cosine);
-        BOUNDS_CHECK(body_idx, state->entities.angular_bidirectional_sincos_constrain_start.length);
-        f32 start_radians = f32_atan2(
-            state->entities.angular_bidirectional_sincos_constrain_start.x[body_idx],
-            state->entities.angular_bidirectional_sincos_constrain_start.y[body_idx]
-        );
-        BOUNDS_CHECK(body_idx, state->entities.angular_bidirectional_sincos_constrain_end.length);
-        f32 end_radians = f32_atan2(
-            state->entities.angular_bidirectional_sincos_constrain_end.x[body_idx],
-            state->entities.angular_bidirectional_sincos_constrain_end.y[body_idx]
-        );
-
-        f32 min_radians;
-        f32 max_radians;
-        if(start_radians <= end_radians){
-            min_radians = start_radians;
-            max_radians = end_radians;
-        }
-        else{
-            min_radians = end_radians;
-            max_radians = start_radians;
-        }
-                
-        transform_radians = CLAMP(transform_radians, min_radians, max_radians);
-        n_sine = f32_sin(transform_radians);
-        n_cosine = f32_cos(transform_radians);
-    }
-    else{
-        n_sine = sine;
-        n_cosine = cosine;
-    }
-    state->entities.global_transform.sine[body_idx] = n_sine;
-    state->entities.global_transform.cosine[body_idx] = n_cosine;
-}
-
 void fizx_body_set_global_transform_unsafe(FIZX_State* state, i32 body_idx, Transform2D transform){
     
     
@@ -2565,7 +2593,8 @@ void fizx_body_set_global_transform_unsafe(FIZX_State* state, i32 body_idx, Tran
     state->entities.global_transform.position.y[body_idx]   = transform.position.y;
     state->entities.global_transform.scale.x[body_idx]      = transform.scale.x;
     state->entities.global_transform.scale.y[body_idx]      = transform.scale.y;
-    fizx_body_set_global_rotation_unsafe(state, body_idx, transform.sine, transform.cosine);
+    state->entities.global_transform.sine[body_idx]         = transform.sine;
+    state->entities.global_transform.cosine[body_idx]       = transform.cosine;
 
     // set its shape(s) transform(s).
     BOUNDS_CHECK(body_idx, state->body_hierarchy.length);
@@ -4695,25 +4724,51 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                                     ASSERT(false, "unknown angular constrain direction");
                                 }break;
                                 case FIZX_AngularConstrainDirection_Clockwise:{
-                                    if(
-                                        start_radian_diff < 0.0f ||
-                                        end_radian_diff > 0.0f
-                                    ){
-                                        rot_amt = 0.0f;
+                                    if(end_radian_diff < 0.0f){
                                         *ang_vel = 0.0f;
-                                        n_sine = *body_sine;
-                                        n_cosine = *body_cosine;
+                                        rot_amt = vector2_radian_difference_scalar(
+                                            *body_sine, 
+                                            *body_cosine,
+                                            angular_bidirectional_sincos_constrain_end_sin,
+                                            angular_bidirectional_sincos_constrain_end_cos
+                                        );
+                                        n_sine = angular_bidirectional_sincos_constrain_end_sin;
+                                        n_cosine = angular_bidirectional_sincos_constrain_end_cos;
+                                    }
+                                    else if(start_radian_diff > 0.0f){
+                                        *ang_vel = 0.0f;
+                                        rot_amt = vector2_radian_difference_scalar(
+                                            *body_sine, 
+                                            *body_cosine,
+                                            angular_bidirectional_sincos_constrain_start_sin,
+                                            angular_bidirectional_sincos_constrain_start_cos
+                                        );
+                                        n_sine = angular_bidirectional_sincos_constrain_start_sin;
+                                        n_cosine = angular_bidirectional_sincos_constrain_start_cos;
                                     }
                                 }break;
                                 case FIZX_AngularConstrainDirection_CounterClockwise:{
-                                    if(
-                                        start_radian_diff > 0.0f ||
-                                        end_radian_diff < 0.0f
-                                    ){
-                                        rot_amt = 0.0f;
+                                    if(end_radian_diff > 0.0f){
                                         *ang_vel = 0.0f;
-                                        n_sine = *body_sine;
-                                        n_cosine = *body_cosine;
+                                        rot_amt = vector2_radian_difference_scalar(
+                                            *body_sine, 
+                                            *body_cosine,
+                                            angular_bidirectional_sincos_constrain_end_sin,
+                                            angular_bidirectional_sincos_constrain_end_cos
+                                        );
+                                        n_sine = angular_bidirectional_sincos_constrain_end_sin;
+                                        n_cosine = angular_bidirectional_sincos_constrain_end_cos;
+                                    }
+                                    else if(start_radian_diff < 0.0f){
+                                        *ang_vel = 0.0f;
+                                        rot_amt = vector2_radian_difference_scalar(
+                                            *body_sine, 
+                                            *body_cosine,
+                                            angular_bidirectional_sincos_constrain_start_sin,
+                                            angular_bidirectional_sincos_constrain_start_cos
+                                        );
+                                        n_sine = angular_bidirectional_sincos_constrain_start_sin;
+                                        n_cosine = angular_bidirectional_sincos_constrain_start_cos;
                                     }
                                 }break;
                             }

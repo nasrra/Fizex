@@ -124,6 +124,18 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 
 ///
+/// @ Entity defines.
+///
+
+
+#define ENTITY_VISIBILITY_LAYER_NONE 0
+#define ENTITY_VISIBILITY_LAYER_WORLD (1 << 1)
+#define ENTITY_VISIBILITY_LAYER_EDITOR (1 << 2)
+#define ENTITY_MAX_PHYSICS_BODY_BIDIRECTIONAL_ANGULAR_CONSTRAIN_START_LENGTH 4
+#define ENTITY_MAX_PHYSICS_BODY_BIDIRECTIONAL_ANGULAR_CONSTRAIN_END_LENGTH 4
+
+
+///
 /// @ WindmillHinge defines
 ///
 
@@ -131,29 +143,14 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 #define WINDMILL_HINGE_PHYSICS_BODY_LAYER (PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_GUIDELINE)
 #define WINDMILL_HINGE_PHYSICS_BODY_MASK PHYSICS_LAYER_BALL 
 
+#define WINDMILL_HINGE_angular_bidirectional_sincos_constrain_start
+
 #define WINDMILL_HINGE_CLOCKWISE_CONSTRAINTS                                \
 (FIZX_ConstrainConfig){                                                     \
     .angular_constrain_mode = FIZX_AngularConstrainMode_Directional,        \
     .angular_constrain_direction = FIZX_AngularConstrainDirection_Clockwise,\
     .axis_x = true,                                                         \
     .axis_y = true                                                          \
-}
-// #define WINDMILL_HINGE_COUNTER_CLOCKWISE_CONSTRAINTS                                \
-// (FIZX_ConstrainConfig){                                                             \
-//     .angular_constrain_mode = FIZX_AngularConstrainMode_Directional,                \
-//     .angular_constrain_direction = FIZX_AngularConstrainDirection_CounterClockwise, \
-//     .axis_x = true,                                                                 \
-//     .axis_y = true                                                                  \
-// }
-
-#define WINDMILL_HINGE_COUNTER_CLOCKWISE_CONSTRAINTS                                \
-(FIZX_ConstrainConfig){                                                             \
-    .angular_constrain_mode = FIZX_AngularConstrainMode_Bidirectional,              \
-    .angular_constrain_direction = FIZX_AngularConstrainDirection_CounterClockwise, \
-    .angular_bidirectional_sincos_constrain_start = (Vector2){f32_sin(0.5f), f32_cos(0.5f)}, \
-    .angular_bidirectional_sincos_constrain_end = (Vector2){f32_sin(-0.5f), f32_cos(-0.5f)},  \
-    .axis_x = true,                                                                 \
-    .axis_y = true                                                                  \
 }
 
 ///
@@ -176,6 +173,8 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 #define WINDMILL_CLOCKWISE_STATE 1
 #define WINDMILL_CLOCKWISE_BODY_TEXTURE_VIEW            (GFX_TextureView){.top_left = {1920, 128}, .bot_right = {2048, 256}}
+
+#define WINDMILL_MAX_TURNS_UNTIL_TURN_END_CALLBACK 0
 
 
 ///
@@ -525,9 +524,9 @@ enum EntityTypeId{
     EntityTypeId_BallZero               = 13,
     EntityTypeId_Pocket                 = 14,
     EntityTypeId_BoostPad               = 15,
-    EntityTypeId_WindMill               = 16,
-    EntityTypeId_WindMillHinge          = 17,
-    EntityTypeId_WindMillBlade          = 18,
+    EntityTypeId_Windmill               = 16,
+    EntityTypeId_WindmillHinge          = 17,
+    EntityTypeId_WindmillBlade          = 18,
     EntityTypeId_Thwamper               = 19,
     EntityTypeId_BoardTurnText          = 20,
     EntityTypeId_WorldCamera            = 21,
@@ -555,15 +554,16 @@ typedef struct{
 
 typedef void (*TurnBasedEntityOnTurnEndCallback)(GameState* game_state, i32 entity_idx);
 
-#define ENTITY_VISIBILITY_LAYER_NONE 0
-#define ENTITY_VISIBILITY_LAYER_WORLD (1 << 1)
-#define ENTITY_VISIBILITY_LAYER_EDITOR (1 << 2)
-
 struct Entity{
 
     Transform2D global_transform;
     Transform2D local_transform;
     Transform2D sprite_local_transform;
+    Vector2 physics_body_bidirectional_angular_constrain_start[ENTITY_MAX_PHYSICS_BODY_BIDIRECTIONAL_ANGULAR_CONSTRAIN_START_LENGTH];
+    Vector2 physics_body_bidirectional_angular_constrain_end[ENTITY_MAX_PHYSICS_BODY_BIDIRECTIONAL_ANGULAR_CONSTRAIN_END_LENGTH];
+    i32 physics_body_bidirectional_angular_constrain_count;
+    i32 physics_body_bidirectional_angular_constrain_idx;
+    
     ParticleEmitter particle_emitter;
     
     // this is only applicable to the root entity that was loaded from a file.
@@ -598,7 +598,6 @@ struct Entity{
     bool is_physics_body;
     bool is_invincible;
     bool boost_depleted;
-    bool within_windmill_area_of_influence;
     bool serialisation_disabled;
     bool is_particle_emitter;
 
@@ -984,7 +983,7 @@ void particle_emitter_emit(ParticleEmitter* emitter, Vector2 position, i32 parti
                 emitter->config.radial_spawn_inner_ring,
                 emitter->config.radial_spawn_outer_ring
             );
-            radial_direction = vector2_rotate(VECTOR2_UP, radians);
+            radial_direction = vector2_rotate_by_radians(VECTOR2_UP, radians);
             Vector2 spawn_offset = vector2_mul_val(radial_direction, ring_offset);
             particle->transform.position = vector2_add(position, spawn_offset);            
         }
@@ -1003,7 +1002,7 @@ void particle_emitter_emit(ParticleEmitter* emitter, Vector2 position, i32 parti
         : emitter->config.direction
         ;
         if(emitter->config.direction_min_range || emitter->config.direction_max_range){
-            direction = vector2_rotate(
+            direction = vector2_rotate_by_radians(
                 direction, 
                 degrees_to_radians(
                     f32_rand_range(
@@ -2569,7 +2568,7 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D tra
     
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
         
-        entity->type_id = EntityTypeId_WindMillBlade;
+        entity->type_id = EntityTypeId_WindmillBlade;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
         entity->local_transform = transform;
         
@@ -2647,19 +2646,42 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
     Entity* entity;
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
 
-        entity->type_id = EntityTypeId_WindMillHinge;
+        entity->type_id = EntityTypeId_WindmillHinge;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
         
         entity->local_transform = transform;
         
         entity->serialisation_disabled = true;
         
+        {                
+            // entity->physics_body_bidirectional_angular_constrain_start[0]   = (Vector2){0.0f, 1.0f};
+            // entity->physics_body_bidirectional_angular_constrain_end[0]     = (Vector2){0.0f, -1.0f};
+
+            // entity->physics_body_bidirectional_angular_constrain_start[1]   = (Vector2){0.0f, -1.0f};
+            // entity->physics_body_bidirectional_angular_constrain_end[1]     = (Vector2){0.0f, 1.0f};
+            
+            // entity->physics_body_bidirectional_angular_constrain_count = 2;
+            
+            entity->physics_body_bidirectional_angular_constrain_start[0]   = (Vector2){0.0f, 1.0f};
+            entity->physics_body_bidirectional_angular_constrain_end[0]     = (Vector2){-1.0f, 0.0f};
+
+            entity->physics_body_bidirectional_angular_constrain_start[1]   = (Vector2){-1.0f, 0.0f};
+            entity->physics_body_bidirectional_angular_constrain_end[1]     = (Vector2){0.0f, -1.0f};
+
+            entity->physics_body_bidirectional_angular_constrain_start[2]   = (Vector2){0.0f, -1.0f};
+            entity->physics_body_bidirectional_angular_constrain_end[2]     = (Vector2){1.0f, 0.0f};
+
+            entity->physics_body_bidirectional_angular_constrain_start[3]   = (Vector2){1.0f, 0.0f};
+            entity->physics_body_bidirectional_angular_constrain_end[3]     = (Vector2){0.0f, 1.0f};
+        
+            entity->physics_body_bidirectional_angular_constrain_count = 4;
+        }
+        
         { // physics_body();
         
             entity->is_physics_body = true;
             
             FIZX_BodyConfig config = {
-                .constrain_config = WINDMILL_HINGE_COUNTER_CLOCKWISE_CONSTRAINTS,
                 .layer = WINDMILL_HINGE_PHYSICS_BODY_LAYER,
                 .mask = WINDMILL_HINGE_PHYSICS_BODY_MASK,
                 .angular_drag = 0.75f
@@ -2752,40 +2774,90 @@ GenId entity_spawn_windmill_hinge(EntityManager* entity_manager, Transform2D tra
 
 
 void windmill_set_state_callback(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state){    
-    
+        
     BOUNDS_CHECK(entity_idx, entity_manager->entity_hierarchy.length);
-    i32 windmill_hinge_idx = entity_manager->entity_hierarchy.node[entity_idx].first_child;
+    i32 hinge_idx = entity_manager->entity_hierarchy.node[entity_idx].first_child;
     
-    if(!windmill_hinge_idx){
+    if(!hinge_idx){
         os_output_message("windmill does not have a child entity.");
         return;
     }
     
     BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
-    Entity* hinge_entity = &entity_manager->entity[windmill_hinge_idx];
+    Entity* hinge_entity = &entity_manager->entity[hinge_idx];
     
     switch(state){
         default:{
             ASSERT(false, "unkown state was set.");
         } break;
         case WINDMILL_COUNTER_CLOCKWISE_STATE:{
+            BOUNDS_CHECK(0, hinge_entity->physics_body_bidirectional_angular_constrain_count);
             fizx_body_set_constraints(
                 &entity_manager->fizx_state, 
                 hinge_entity->physics_body_gid, 
-                WINDMILL_HINGE_COUNTER_CLOCKWISE_CONSTRAINTS
+                (FIZX_ConstrainConfig){
+                    .angular_constrain_mode = FIZX_AngularConstrainMode_Bidirectional,
+                    .angular_constrain_direction = FIZX_AngularConstrainDirection_CounterClockwise,
+                    .angular_bidirectional_sincos_constrain_start = vector2_rotate_by_sincos(
+                        hinge_entity->physics_body_bidirectional_angular_constrain_end[0],
+                        entity->global_transform.sine,
+                        entity->global_transform.cosine
+                    ),
+                    .angular_bidirectional_sincos_constrain_end = vector2_rotate_by_sincos(
+                        hinge_entity->physics_body_bidirectional_angular_constrain_start[0],
+                        entity->global_transform.sine,
+                        entity->global_transform.cosine
+                    ),
+                    .axis_x = true,
+                    .axis_y = true
+                }
             );
+            
+            fizx_body_snap_to_angular_bidirectional_constrain_end(&entity_manager->fizx_state, hinge_entity->physics_body_gid);
+            // we have to sync the physics and entity transform, as the next fixed update loop will have the entity
+            // overide the above physics transform mutation by syncing the physics transform to the entity's current global 
+            // transform. 
+            Transform2D hinge_physics_transform;
+            fizx_body_get_global_transform(&entity_manager->fizx_state, hinge_entity->physics_body_gid, &hinge_physics_transform);
+            entity_set_global_transform_unsafe(entity_manager, hinge_idx, hinge_physics_transform);
+            
             gfx_sprite_set_texture_view(
-                entity_manager->gfx_state, 
-                entity->sprite_gid, 
+                entity_manager->gfx_state,
+                entity->sprite_gid,
                 WINDMILL_COUNTER_CLOCKWISE_BODY_TEXTURE_VIEW
             );
         }break;
         case WINDMILL_CLOCKWISE_STATE:{
+            BOUNDS_CHECK(0, hinge_entity->physics_body_bidirectional_angular_constrain_count);
             fizx_body_set_constraints(
                 &entity_manager->fizx_state, 
                 hinge_entity->physics_body_gid, 
-                WINDMILL_HINGE_CLOCKWISE_CONSTRAINTS
+                (FIZX_ConstrainConfig){
+                    .angular_constrain_mode = FIZX_AngularConstrainMode_Bidirectional,
+                    .angular_constrain_direction = FIZX_AngularConstrainDirection_Clockwise,
+                    .angular_bidirectional_sincos_constrain_start = vector2_rotate_by_sincos(
+                        hinge_entity->physics_body_bidirectional_angular_constrain_start[0],
+                        entity->global_transform.sine,
+                        entity->global_transform.cosine
+                    ),
+                    .angular_bidirectional_sincos_constrain_end = vector2_rotate_by_sincos(
+                        hinge_entity->physics_body_bidirectional_angular_constrain_end[0],
+                        entity->global_transform.sine,
+                        entity->global_transform.cosine
+                    ),
+                    .axis_x = true,
+                    .axis_y = true
+                }
             );
+            
+            fizx_body_snap_to_angular_bidirectional_constrain_end(&entity_manager->fizx_state, hinge_entity->physics_body_gid);
+            // we have to sync the physics and entity transform, as the next fixed update loop will have the entity
+            // overide the above physics transform mutation by syncing the physics transform to the entity's current global 
+            // transform. 
+            Transform2D hinge_physics_transform;
+            fizx_body_get_global_transform(&entity_manager->fizx_state, hinge_entity->physics_body_gid, &hinge_physics_transform);
+            entity_set_global_transform_unsafe(entity_manager, hinge_idx, hinge_physics_transform);
+
             gfx_sprite_set_texture_view(
                 entity_manager->gfx_state, 
                 entity->sprite_gid, 
@@ -2807,6 +2879,7 @@ void windmill_update(EntityManager* entity_manager, Entity* entity, i32 entity_i
     
     BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
     Entity* hinge_entity = &entity_manager->entity[windmill_hinge_idx];
+    ASSERT(hinge_entity->type_id == EntityTypeId_WindmillHinge, "child entity is not a windmill hinge.");
     
     f32 angular_velocity;
     if(fizx_body_get_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, &angular_velocity)){
@@ -2827,21 +2900,67 @@ void windmill_update(EntityManager* entity_manager, Entity* entity, i32 entity_i
     }
 }
 
-void windmill_area_of_influence_on_enter_callback(FIZX_CollisionInfo info, void* user_data){
-    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    GenId source_entity_gid = *(GenId*)info.source_user_data;
-    Entity* source_entity;
-    if(entity_manager_get_entity(ctx->game_state->entity_manager, source_entity_gid, &source_entity)){
-        source_entity->within_windmill_area_of_influence = true;
+void windmill_on_turn_end_callback(GameState* game_state, i32 entity_idx){
+    EntityManager* entity_manager = &game_state->entity_manager;
+    
+    BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
+    Entity* windmill_entity = &entity_manager->entity[entity_idx];
+    
+    BOUNDS_CHECK(entity_idx, entity_manager->entity_hierarchy.length);
+    i32 windmill_hinge_idx = entity_manager->entity_hierarchy.node[entity_idx].first_child;
+    
+    if(!windmill_hinge_idx){
+        os_output_message("windmill does not have a child entity.");
+        return;
     }
-}
+    
+    BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
+    Entity* hinge_entity = &entity_manager->entity[windmill_hinge_idx];
+    ASSERT(hinge_entity->type_id == EntityTypeId_WindmillHinge, "child entity is not a windmill hinge.");
+    
+    FIZX_ConstrainConfig hinge_config;
+    if(fizx_body_get_constraints(&entity_manager->fizx_state, hinge_entity->physics_body_gid, &hinge_config)){
+        hinge_config.angular_constrain_mode = FIZX_AngularConstrainMode_Bidirectional;
+        switch(windmill_entity->state){
+            case WINDMILL_CLOCKWISE_STATE:{
+                hinge_config.angular_constrain_direction = FIZX_AngularConstrainDirection_Clockwise;
+                hinge_entity->physics_body_bidirectional_angular_constrain_idx += 1;
+                hinge_entity->physics_body_bidirectional_angular_constrain_idx %= hinge_entity->physics_body_bidirectional_angular_constrain_count;
+                
+                BOUNDS_CHECK(hinge_entity->physics_body_bidirectional_angular_constrain_idx, hinge_entity->physics_body_bidirectional_angular_constrain_count);
+                hinge_config.angular_bidirectional_sincos_constrain_start = vector2_rotate_by_sincos(
+                    hinge_entity->physics_body_bidirectional_angular_constrain_start[hinge_entity->physics_body_bidirectional_angular_constrain_idx],
+                    windmill_entity->global_transform.sine,
+                    windmill_entity->global_transform.cosine
+                );
+                hinge_config.angular_bidirectional_sincos_constrain_end = vector2_rotate_by_sincos(
+                    hinge_entity->physics_body_bidirectional_angular_constrain_end[hinge_entity->physics_body_bidirectional_angular_constrain_idx],
+                    windmill_entity->global_transform.sine,
+                    windmill_entity->global_transform.cosine
+                );
 
-void windmill_area_of_influence_on_exit_callback(FIZX_CollisionInfo info, void* user_data){
-    CollisionCallbackContext* ctx = (CollisionCallbackContext*)user_data;
-    GenId source_entity_gid = *(GenId*)info.source_user_data;
-    Entity* source_entity;
-    if(entity_manager_get_entity(ctx->game_state->entity_manager, source_entity_gid, &source_entity)){
-        source_entity->within_windmill_area_of_influence = false;
+            }break;
+            case WINDMILL_COUNTER_CLOCKWISE_STATE:{
+                hinge_config.angular_constrain_direction = FIZX_AngularConstrainDirection_CounterClockwise;
+                hinge_entity->physics_body_bidirectional_angular_constrain_idx -= 1;
+                if(hinge_entity->physics_body_bidirectional_angular_constrain_idx < 0){
+                    hinge_entity->physics_body_bidirectional_angular_constrain_idx = hinge_entity->physics_body_bidirectional_angular_constrain_count - 1;
+                }
+
+                BOUNDS_CHECK(hinge_entity->physics_body_bidirectional_angular_constrain_idx, hinge_entity->physics_body_bidirectional_angular_constrain_count);                
+                hinge_config.angular_bidirectional_sincos_constrain_end = vector2_rotate_by_sincos(
+                    hinge_entity->physics_body_bidirectional_angular_constrain_start[hinge_entity->physics_body_bidirectional_angular_constrain_idx],
+                    windmill_entity->global_transform.sine,
+                    windmill_entity->global_transform.cosine
+                );
+                hinge_config.angular_bidirectional_sincos_constrain_start = vector2_rotate_by_sincos(
+                    hinge_entity->physics_body_bidirectional_angular_constrain_end[hinge_entity->physics_body_bidirectional_angular_constrain_idx],
+                    windmill_entity->global_transform.sine,
+                    windmill_entity->global_transform.cosine
+                );
+            }break;
+        }
+        fizx_body_set_constraints(&entity_manager->fizx_state, hinge_entity->physics_body_gid, hinge_config);
     }
 }
 
@@ -2849,17 +2968,17 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
-        entity->type_id = EntityTypeId_WindMill;
+        entity->type_id = EntityTypeId_Windmill;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
                 
         entity->set_state_callback = windmill_set_state_callback;
-                
+                        
         { // physics_body_alloc();
-
+            
             entity->is_physics_body = true;            
             FIZX_BodyConfig body_config = {
                 .layer = WINDMILL_PHYSICS_BODY_LAYER,
-                .mask = WINDMILL_PHYSICS_BODY_MASK                
+                .mask = WINDMILL_PHYSICS_BODY_MASK
             };
 
             entity->physics_body_gid = fizx_body_alloc(
@@ -2882,17 +3001,7 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
                 physics_shape,
                 WINDMILL_PHYSICS_SHAPE_MATERIAL
             );
-            
-            Circle area_of_influence_shape = {
-                .radius = 3.0f
-            };
-            GenId area_of_influence_shape_gid = fizx_circle_collider_alloc(
-                &entity_manager->fizx_state, entity->physics_body_gid, TRANSFORM2D_IDENTITY, FIZX_ShapeBehaviour_Trigger,
-                FIZX_CollisionCallbackBehaviour_All, shape_user_data, area_of_influence_shape
-            );
-            
-            fizx_shape_set_on_enter_callback(&entity_manager->fizx_state, area_of_influence_shape_gid, windmill_area_of_influence_on_enter_callback);
-            fizx_shape_set_on_exit_callback(&entity_manager->fizx_state, area_of_influence_shape_gid, windmill_area_of_influence_on_exit_callback);
+                        
             fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
         }
                 
@@ -2911,6 +3020,13 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_WORLD_ENVIRONMENT_TOP);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
         }
+        
+        { // turn_based();
+            entity->max_turns_until_turn_end_callback   = WINDMILL_MAX_TURNS_UNTIL_TURN_END_CALLBACK;
+            entity->turns_until_turn_end_callback       = WINDMILL_MAX_TURNS_UNTIL_TURN_END_CALLBACK;
+            entity->on_turn_end_callback                = windmill_on_turn_end_callback;
+        }
+
 
         Entity* hinge_entity;
         if(!entity_spawn_windmill_hinge(entity_manager, TRANSFORM2D_IDENTITY, entity_gid, &hinge_entity)){
@@ -4267,7 +4383,7 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
         case EntityTypeId_BoostPad:{
             entity_gid = entity_spawn_boost_pad(entity_manager, transform, parent_gid, &entity);
         }break;
-        case EntityTypeId_WindMill:{
+        case EntityTypeId_Windmill:{
             entity_gid = entity_spawn_windmill(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_Thwamper:{
@@ -4804,7 +4920,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                     if(entity->is_physics_body){
                         if(fizx_body_is_active(fizx_state, entity->physics_body_gid)){
                             Transform2D transform;
-                            if(fizx_body_get_transform(fizx_state, entity->physics_body_gid, &transform)){
+                            if(fizx_body_get_global_transform(fizx_state, entity->physics_body_gid, &transform)){
                                 
                                 transform.scale = entity->global_transform.scale;
                                 bool update_components_transform = false;
@@ -4835,9 +4951,6 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                         balls_are_moving = true;
                     }
                 }
-                if(cue_ball_entity->within_windmill_area_of_influence){
-                    balls_are_moving = true;
-                } 
             }
             
             for(i32 i = 0; i < board_state->number_ball_count; i++){
@@ -4854,10 +4967,6 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                             break;
                         }
                     } 
-                    if(number_ball_entity->within_windmill_area_of_influence){
-                        balls_are_moving = true;
-                        break;
-                    }
                 }
             }
             
@@ -4919,8 +5028,8 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             
             switch(entity->type_id){
                 case EntityTypeId_CueBall:{ball_cue_update(entity, game_state, delta_time);}break;
-                case EntityTypeId_WindMillHinge:{windmill_hinge_update(entity, i, game_state, delta_time);}break;
-                case EntityTypeId_WindMill:{windmill_update(&game_state->entity_manager, entity, 
+                case EntityTypeId_WindmillHinge:{windmill_hinge_update(entity, i, game_state, delta_time);}break;
+                case EntityTypeId_Windmill:{windmill_update(&game_state->entity_manager, entity, 
                 i);}break;
             }
         }

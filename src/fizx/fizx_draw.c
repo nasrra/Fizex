@@ -85,7 +85,7 @@ void fizx_state_draw(FIZX_State state, GFX_State* gfx, FIZX_DrawInfo info, f32 d
             i32 first_shape_idx = body_node->first_child;
             if(first_shape_idx == 0){
                 continue;
-            }
+            }            
 
             i32 shape_idx = first_shape_idx;
             while(true){
