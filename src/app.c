@@ -311,7 +311,7 @@ void app_main(){
             
             { // game update.
 
-                f32 game_delta_time = delta_time * game_state.time_scale;
+                f32 game_delta_time = delta_time * game_state.time_scale * (in_editor_mode?0.0f:1.0f);
                 game_state_preupdate(&game_state, game_delta_time, transient);
                 game_state_update(&game_state, persistent, transient, game_delta_time, in_editor_mode);
                 game_state_late_update(&game_state, game_delta_time, in_editor_mode);

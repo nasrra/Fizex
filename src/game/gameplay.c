@@ -140,10 +140,20 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 ///
 
 
+#define WILDWALL_HINGE_CONFIG_I \
+(WildWallHingeConfig){          \
+    .top_wall = true,           \
+    .bot_wall = true            \
+}
+
+#define WILDWALL_HINGE_CONFIG_L \
+(WildWallHingeConfig){          \
+    .top_wall = true,           \
+    .left_wall = true           \
+}
+
 #define WILDWALL_HINGE_PHYSICS_BODY_LAYER (PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_GUIDELINE)
 #define WILDWALL_HINGE_PHYSICS_BODY_MASK PHYSICS_LAYER_BALL 
-
-#define WILDWALL_HINGE_angular_bidirectional_sincos_constrain_start
 
 #define WILDWALL_HINGE_CLOCKWISE_CONSTRAINTS                                \
 (FIZX_ConstrainConfig){                                                     \
@@ -153,11 +163,61 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
     .axis_y = true                                                          \
 }
 
+static const Vector2 wildwall_cw90_start_path[4] = {
+    { .x =  1.0f, .y =  0.0f },
+    { .x =  0.0f, .y =  1.0f },
+    { .x = -1.0f, .y =  0.0f },
+    { .x =  0.0f, .y = -1.0f },
+};
+
+static const Vector2 wildwall_cw90_end_path[4] = {
+    { .x =  0.0f, .y =  1.0f },
+    { .x = -1.0f, .y =  0.0f },
+    { .x =  0.0f, .y = -1.0f },
+    { .x =  1.0f, .y =  0.0f },
+};
+
+static const Vector2 wildwall_ccw90_start_path[4] = {
+    { .x = -1.0f, .y =  0.0f },
+    { .x =  0.0f, .y =  1.0f },
+    { .x =  1.0f, .y =  0.0f },
+    { .x =  0.0f, .y = -1.0f },
+};
+
+static const Vector2 wildwall_ccw90_end_path[4] = {
+    { .x =  0.0f, .y =  1.0f },
+    { .x =  1.0f, .y =  0.0f },
+    { .x =  0.0f, .y = -1.0f },
+    { .x = -1.0f, .y =  0.0f },
+};
+
+static const Vector2 wildwall_cw180_start_path[2] = {
+    { .x = 0.0f, .y = -1.0f },
+    { .x = 0.0f, .y =  1.0f },
+};
+
+static const Vector2 wildwall_cw180_end_path[2] = {
+    {  .x = 0.0f,  .y = 1.0f},
+    {  .x = 0.0f,  .y = -1.0f},
+};
+
+static const Vector2 wildwall_ccw180_start_path[2] = {
+    {0.0f,-1.0f},
+    {0.0f,1.0f},
+};
+
+static const Vector2 wildwall_ccw180_end_path[2] = {
+    {0.0f,1.0f},
+    {0.0f,-1.0f},
+};
+
+
 ///
 /// @ Wildwall defines
 ///
 
 
+#define WILDWALL_TIMER_END_TIME 1.0f
 #define WILDWALL_PHYSICS_BODY_LAYER  PHYSICS_LAYER_ENVIRONMENT_MID
 #define WILDWALL_PHYSICS_BODY_MASK   PHYSICS_LAYER_BALL 
 #define WILDWALL_PHYSICS_SHAPE_MATERIAL \
@@ -168,10 +228,14 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
     .restitution = 0.167f               \
 }
 
-#define WILDWALL_COUNTER_CLOCKWISE_STATE 0
-#define WILDWALL_COUNTER_CLOCKWISE_BODY_TEXTURE_VIEW    (GFX_TextureView){.top_left = {1920, 0}, .bot_right = {2048, 128}}
+#define WILDWALL_CW90I_STATE    0
+#define WILDWALL_CCW90I_STATE   1
+#define WILDWALL_CW90L_STATE    2
+#define WILDWALL_CCW90L_STATE   3
+#define WILDWALL_CW180I_STATE   4
+#define WILDWALL_CCW180I_STATE  5
 
-#define WILDWALL_CLOCKWISE_STATE 1
+#define WILDWALL_COUNTER_CLOCKWISE_BODY_TEXTURE_VIEW    (GFX_TextureView){.top_left = {1920, 0}, .bot_right = {2048, 128}}
 #define WILDWALL_CLOCKWISE_BODY_TEXTURE_VIEW            (GFX_TextureView){.top_left = {1920, 128}, .bot_right = {2048, 256}}
 
 #define WILDWALL_MAX_TURNS_UNTIL_TURN_END_CALLBACK 0
@@ -305,6 +369,13 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 ///
 /// @ Types
 ///
+
+typedef struct WildWallHingeConfig{
+    bool top_wall;
+    bool right_wall;
+    bool bot_wall;
+    bool left_wall;
+}WildWallHingeConfig;
 
 struct Particle{
     // the emitter this particle is attached to.
@@ -559,9 +630,6 @@ struct Entity{
     Transform2D global_transform;
     Transform2D local_transform;
     Transform2D sprite_local_transform;
-    Vector2 physics_body_bidirectional_angular_constrain_start[ENTITY_MAX_PHYSICS_BODY_BIDIRECTIONAL_ANGULAR_CONSTRAIN_START_LENGTH];
-    Vector2 physics_body_bidirectional_angular_constrain_end[ENTITY_MAX_PHYSICS_BODY_BIDIRECTIONAL_ANGULAR_CONSTRAIN_END_LENGTH];
-    i32 physics_body_bidirectional_angular_constrain_count;
     i32 physics_body_bidirectional_angular_constrain_idx;
     
     ParticleEmitter particle_emitter;
@@ -2577,7 +2645,7 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform
     (FIZX_Material){                    \
         .static_friction = 0.02f,       \
         .kinetic_friction = 0.01f,      \
-        .density = 1.20f,               \
+        .density = 22.6f,               \
         .restitution = 0.0f,            \
         .rotational_response = true     \
 }
@@ -2656,14 +2724,10 @@ GenId entity_spawn_wildwall_blade(EntityManager* entity_manager, Transform2D tra
 /// @ WildwallHinge procedures
 ///
 
-void wildwall_hinge_update(Entity* entity, i32 entity_idx, GameState* game_state, f32 delta_time){    
-    // Transform2D rotated_transform = transform2d_rotate(entity->global_transform, to_radians(66.67f) * delta_time);
-    // entity_set_global_transform_unsafe(&game_state->entity_manager, entity_idx, rotated_transform);
-}
 
 GenId entity_spawn_wildwall_hinge(
     EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity,
-    bool up_wall, bool right_wall, bool left_wall, bool down_wall
+    WildWallHingeConfig config
 ){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
         
@@ -2676,30 +2740,6 @@ GenId entity_spawn_wildwall_hinge(
         entity->local_transform = transform;
         
         entity->serialisation_disabled = true;
-        
-        {                
-            // entity->physics_body_bidirectional_angular_constrain_start[0]   = (Vector2){0.0f, 1.0f};
-            // entity->physics_body_bidirectional_angular_constrain_end[0]     = (Vector2){0.0f, -1.0f};
-
-            // entity->physics_body_bidirectional_angular_constrain_start[1]   = (Vector2){0.0f, -1.0f};
-            // entity->physics_body_bidirectional_angular_constrain_end[1]     = (Vector2){0.0f, 1.0f};
-            
-            // entity->physics_body_bidirectional_angular_constrain_count = 2;
-            
-            entity->physics_body_bidirectional_angular_constrain_start[0]   = (Vector2){0.0f, 1.0f};
-            entity->physics_body_bidirectional_angular_constrain_end[0]     = (Vector2){-1.0f, 0.0f};
-
-            entity->physics_body_bidirectional_angular_constrain_start[1]   = (Vector2){-1.0f, 0.0f};
-            entity->physics_body_bidirectional_angular_constrain_end[1]     = (Vector2){0.0f, -1.0f};
-
-            entity->physics_body_bidirectional_angular_constrain_start[2]   = (Vector2){0.0f, -1.0f};
-            entity->physics_body_bidirectional_angular_constrain_end[2]     = (Vector2){1.0f, 0.0f};
-
-            entity->physics_body_bidirectional_angular_constrain_start[3]   = (Vector2){1.0f, 0.0f};
-            entity->physics_body_bidirectional_angular_constrain_end[3]     = (Vector2){0.0f, 1.0f};
-        
-            entity->physics_body_bidirectional_angular_constrain_count = 4;
-        }
         
         { // physics_body();
         
@@ -2726,7 +2766,7 @@ GenId entity_spawn_wildwall_hinge(
 
         blade_transform = TRANSFORM2D_IDENTITY;
         blade_transform.position.y = 0.25f;
-        if(up_wall){
+        if(config.top_wall){
 
             GenId blade_gid = entity_spawn_wildwall_blade(
                 entity_manager, 
@@ -2743,7 +2783,7 @@ GenId entity_spawn_wildwall_hinge(
         
         blade_transform = TRANSFORM2D_IDENTITY;
         blade_transform.position.x = -0.25f;  
-        if(left_wall){
+        if(config.left_wall){
 
             GenId blade_gid = entity_spawn_wildwall_blade(
                 entity_manager, 
@@ -2760,7 +2800,7 @@ GenId entity_spawn_wildwall_hinge(
         
         blade_transform = TRANSFORM2D_IDENTITY;
         blade_transform.position.y = -0.25f;         
-        if(down_wall){
+        if(config.bot_wall){
 
             GenId blade_gid = entity_spawn_wildwall_blade(
                 entity_manager, 
@@ -2777,7 +2817,7 @@ GenId entity_spawn_wildwall_hinge(
 
         blade_transform = TRANSFORM2D_IDENTITY;
         blade_transform.position.x = 0.25f; 
-        if(right_wall){
+        if(config.right_wall){
         
             GenId blade_gid = entity_spawn_wildwall_blade(
                 entity_manager, 
@@ -2809,96 +2849,99 @@ GenId entity_spawn_wildwall_hinge(
 
 void wildwall_set_state_callback(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state){    
         
+    BOUNDS_CHECK(entity_idx, entity_manager->gen_id_allocator.length);
+    GenId entity_gid = entity_manager->gen_id_allocator.gen_ids[entity_idx];
+        
     BOUNDS_CHECK(entity_idx, entity_manager->entity_hierarchy.length);
     i32 hinge_idx = entity_manager->entity_hierarchy.node[entity_idx].first_child;
-    
-    if(!hinge_idx){
-        os_output_message("wildwall does not have a child entity.");
-        return;
+        
+    if(hinge_idx){
+        entity_manager_dealloc_entity_unsafe(entity_manager, hinge_idx);
     }
     
-    BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
-    Entity* hinge_entity = &entity_manager->entity[hinge_idx];
-    
+    const Vector2* start;
+    const Vector2* end;
+    Entity* hinge_entity;
     switch(state){
-        default:{
-            ASSERT(false, "unkown state was set.");
-        } break;
-        case WILDWALL_COUNTER_CLOCKWISE_STATE:{
-            BOUNDS_CHECK(0, hinge_entity->physics_body_bidirectional_angular_constrain_count);
-            fizx_body_set_constraints(
-                &entity_manager->fizx_state, 
-                hinge_entity->physics_body_gid, 
-                (FIZX_ConstrainConfig){
-                    .angular_constrain_mode = FIZX_AngularConstrainMode_Bidirectional,
-                    .angular_constrain_direction = FIZX_AngularConstrainDirection_CounterClockwise,
-                    .angular_bidirectional_sincos_constrain_start = vector2_rotate_by_sincos(
-                        hinge_entity->physics_body_bidirectional_angular_constrain_end[0],
-                        entity->global_transform.sine,
-                        entity->global_transform.cosine
-                    ),
-                    .angular_bidirectional_sincos_constrain_end = vector2_rotate_by_sincos(
-                        hinge_entity->physics_body_bidirectional_angular_constrain_start[0],
-                        entity->global_transform.sine,
-                        entity->global_transform.cosine
-                    ),
-                    .axis_x = true,
-                    .axis_y = true
-                }
-            );
-            
-            fizx_body_snap_to_angular_bidirectional_constrain_end(&entity_manager->fizx_state, hinge_entity->physics_body_gid);
-            // we have to sync the physics and entity transform, as the next fixed update loop will have the entity
-            // overide the above physics transform mutation by syncing the physics transform to the entity's current global 
-            // transform. 
-            Transform2D hinge_physics_transform;
-            fizx_body_get_global_transform(&entity_manager->fizx_state, hinge_entity->physics_body_gid, &hinge_physics_transform);
-            entity_set_global_transform_unsafe(entity_manager, hinge_idx, hinge_physics_transform);
-            
-            gfx_sprite_set_texture_view(
-                entity_manager->gfx_state,
-                entity->sprite_gid,
-                WILDWALL_COUNTER_CLOCKWISE_BODY_TEXTURE_VIEW
-            );
+        case WILDWALL_CW90I_STATE:{
+            entity_spawn_wildwall_hinge(entity_manager, TRANSFORM2D_IDENTITY, entity_gid, &hinge_entity, WILDWALL_HINGE_CONFIG_I);
+            start = wildwall_cw90_start_path;
+            end = wildwall_cw90_end_path;
         }break;
-        case WILDWALL_CLOCKWISE_STATE:{
-            BOUNDS_CHECK(0, hinge_entity->physics_body_bidirectional_angular_constrain_count);
-            fizx_body_set_constraints(
-                &entity_manager->fizx_state, 
-                hinge_entity->physics_body_gid, 
-                (FIZX_ConstrainConfig){
-                    .angular_constrain_mode = FIZX_AngularConstrainMode_Bidirectional,
-                    .angular_constrain_direction = FIZX_AngularConstrainDirection_Clockwise,
-                    .angular_bidirectional_sincos_constrain_start = vector2_rotate_by_sincos(
-                        hinge_entity->physics_body_bidirectional_angular_constrain_start[0],
-                        entity->global_transform.sine,
-                        entity->global_transform.cosine
-                    ),
-                    .angular_bidirectional_sincos_constrain_end = vector2_rotate_by_sincos(
-                        hinge_entity->physics_body_bidirectional_angular_constrain_end[0],
-                        entity->global_transform.sine,
-                        entity->global_transform.cosine
-                    ),
-                    .axis_x = true,
-                    .axis_y = true
-                }
-            );
-            
-            fizx_body_snap_to_angular_bidirectional_constrain_end(&entity_manager->fizx_state, hinge_entity->physics_body_gid);
-            // we have to sync the physics and entity transform, as the next fixed update loop will have the entity
-            // overide the above physics transform mutation by syncing the physics transform to the entity's current global 
-            // transform. 
-            Transform2D hinge_physics_transform;
-            fizx_body_get_global_transform(&entity_manager->fizx_state, hinge_entity->physics_body_gid, &hinge_physics_transform);
-            entity_set_global_transform_unsafe(entity_manager, hinge_idx, hinge_physics_transform);
-
-            gfx_sprite_set_texture_view(
-                entity_manager->gfx_state, 
-                entity->sprite_gid, 
-                WILDWALL_CLOCKWISE_BODY_TEXTURE_VIEW
-            );
+        case WILDWALL_CCW90I_STATE:{
+            entity_spawn_wildwall_hinge(entity_manager, TRANSFORM2D_IDENTITY, entity_gid, &hinge_entity, WILDWALL_HINGE_CONFIG_I);
+            start = wildwall_ccw90_start_path;
+            end = wildwall_ccw90_end_path;
+        }break;
+        case WILDWALL_CW90L_STATE:{
+            entity_spawn_wildwall_hinge(entity_manager, TRANSFORM2D_IDENTITY, entity_gid, &hinge_entity, WILDWALL_HINGE_CONFIG_L);
+            start = wildwall_cw90_start_path;
+            end = wildwall_cw90_end_path;
+        }break;
+        case WILDWALL_CCW90L_STATE:{
+            entity_spawn_wildwall_hinge(entity_manager, TRANSFORM2D_IDENTITY, entity_gid, &hinge_entity, WILDWALL_HINGE_CONFIG_L);
+            start = wildwall_ccw90_start_path;
+            end = wildwall_ccw90_end_path;
+        }break;
+        case WILDWALL_CW180I_STATE:{
+            entity_spawn_wildwall_hinge(entity_manager, TRANSFORM2D_IDENTITY, entity_gid, &hinge_entity, WILDWALL_HINGE_CONFIG_I);        
+            start = wildwall_cw180_start_path;
+            end = wildwall_cw180_end_path;
+        }break;
+        case WILDWALL_CCW180I_STATE:{
+            entity_spawn_wildwall_hinge(entity_manager, TRANSFORM2D_IDENTITY, entity_gid, &hinge_entity, WILDWALL_HINGE_CONFIG_I);
+            start = wildwall_ccw180_start_path;
+            end = wildwall_ccw180_end_path;
         }break;
     }
+    
+    GFX_TextureView texture_view;
+    FIZX_AngularConstrainDirection angular_constrain_direction;
+    
+    i32 mod = state % 2;
+    if(mod){
+        texture_view = WILDWALL_COUNTER_CLOCKWISE_BODY_TEXTURE_VIEW;
+        angular_constrain_direction = FIZX_AngularConstrainDirection_CounterClockwise;
+    }
+    else{    
+        texture_view = WILDWALL_CLOCKWISE_BODY_TEXTURE_VIEW;        
+        angular_constrain_direction = FIZX_AngularConstrainDirection_Clockwise;
+    }
+
+    fizx_body_set_constraints(
+        &entity_manager->fizx_state, 
+        hinge_entity->physics_body_gid, 
+        (FIZX_ConstrainConfig){
+            .angular_constrain_mode = FIZX_AngularConstrainMode_Bidirectional,
+            .angular_constrain_direction = angular_constrain_direction,
+            .angular_bidirectional_sincos_constrain_start = vector2_rotate_by_sincos(
+                start[0],
+                -entity->global_transform.sine,
+                entity->global_transform.cosine
+            ),
+            .angular_bidirectional_sincos_constrain_end = vector2_rotate_by_sincos(
+                end[0],
+                -entity->global_transform.sine,
+                entity->global_transform.cosine
+            ),
+            .axis_x = true,
+            .axis_y = true
+        }
+    );
+        
+    fizx_body_snap_to_angular_bidirectional_constrain_end(&entity_manager->fizx_state, hinge_entity->physics_body_gid);
+    // we have to sync the physics and entity transform, as the next fixed update loop will have the entity
+    // overide the above physics transform mutation by syncing the physics transform to the entity's current global 
+    // transform. 
+    Transform2D hinge_physics_transform;
+    fizx_body_get_global_transform(&entity_manager->fizx_state, hinge_entity->physics_body_gid, &hinge_physics_transform);
+    entity_set_global_transform_unsafe(entity_manager, hinge_idx, hinge_physics_transform);
+    
+    gfx_sprite_set_texture_view(
+        entity_manager->gfx_state,
+        entity->sprite_gid,
+        texture_view
+    );            
 }
 
 void wildwall_update(EntityManager* entity_manager, Entity* entity, i32 entity_idx){
@@ -2934,25 +2977,27 @@ void wildwall_update(EntityManager* entity_manager, Entity* entity, i32 entity_i
         );
     }
     else if(fizx_body_get_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, &angular_velocity)){
-        switch(entity->state){
-            case WILDWALL_CLOCKWISE_STATE:{
-                f32 min_val = -1.0f;
-                if(
-                    !has_reached_end &&
-                    angular_velocity > min_val
-                ){
-                    fizx_body_set_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, min_val * 4.0f);
-                }
-            }break;
-            case WILDWALL_COUNTER_CLOCKWISE_STATE:{
-                f32 min_val = 1.0f;
-                if(
-                    !has_reached_end &&
-                    angular_velocity < min_val
-                ){
-                    fizx_body_set_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, min_val * 4.0f);
-                }
-            }break;
+        
+        i32 mod = entity->state % 2;
+        if(mod){
+            // counter clockwise.
+            f32 min_val = 1.0f;
+            if(
+                !has_reached_end &&
+                angular_velocity < min_val
+            ){
+                fizx_body_set_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, min_val * 4.0f);
+            }            
+        }
+        else{
+            // clockwise
+            f32 min_val = -1.0f;
+            if(
+                !has_reached_end &&
+                angular_velocity > min_val
+            ){
+                fizx_body_set_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, min_val * 4.0f);
+            }
         }
     }
         
@@ -2988,45 +3033,67 @@ void wildwall_on_timeout_callback(void* user_data){
     FIZX_ConstrainConfig hinge_config;
     if(fizx_body_get_constraints(&ctx->entity_manager->fizx_state, hinge_entity->physics_body_gid, &hinge_config)){
         hinge_config.angular_constrain_mode = FIZX_AngularConstrainMode_Bidirectional;
+        
+        Vector2 sincos_start;
+        Vector2 sincos_end;
+        FIZX_AngularConstrainDirection angular_constrain_direction;
+
+        hinge_entity->physics_body_bidirectional_angular_constrain_idx += 1;
+
         switch(wildwall_entity->state){
-            case WILDWALL_CLOCKWISE_STATE:{
-                hinge_config.angular_constrain_direction = FIZX_AngularConstrainDirection_Clockwise;
-                hinge_entity->physics_body_bidirectional_angular_constrain_idx += 1;
-                hinge_entity->physics_body_bidirectional_angular_constrain_idx %= hinge_entity->physics_body_bidirectional_angular_constrain_count;
-                
-                BOUNDS_CHECK(hinge_entity->physics_body_bidirectional_angular_constrain_idx, hinge_entity->physics_body_bidirectional_angular_constrain_count);
-                hinge_config.angular_bidirectional_sincos_constrain_start = vector2_rotate_by_sincos(
-                    hinge_entity->physics_body_bidirectional_angular_constrain_start[hinge_entity->physics_body_bidirectional_angular_constrain_idx],
-                    wildwall_entity->global_transform.sine,
-                    wildwall_entity->global_transform.cosine
-                );
-                hinge_config.angular_bidirectional_sincos_constrain_end = vector2_rotate_by_sincos(
-                    hinge_entity->physics_body_bidirectional_angular_constrain_end[hinge_entity->physics_body_bidirectional_angular_constrain_idx],
-                    wildwall_entity->global_transform.sine,
-                    wildwall_entity->global_transform.cosine
-                );
-
+            default:{
+                ASSERT(false, "unknown state.");
             }break;
-            case WILDWALL_COUNTER_CLOCKWISE_STATE:{
-                hinge_config.angular_constrain_direction = FIZX_AngularConstrainDirection_CounterClockwise;
-                hinge_entity->physics_body_bidirectional_angular_constrain_idx -= 1;
-                if(hinge_entity->physics_body_bidirectional_angular_constrain_idx < 0){
-                    hinge_entity->physics_body_bidirectional_angular_constrain_idx = hinge_entity->physics_body_bidirectional_angular_constrain_count - 1;
-                }
-
-                BOUNDS_CHECK(hinge_entity->physics_body_bidirectional_angular_constrain_idx, hinge_entity->physics_body_bidirectional_angular_constrain_count);                
-                hinge_config.angular_bidirectional_sincos_constrain_end = vector2_rotate_by_sincos(
-                    hinge_entity->physics_body_bidirectional_angular_constrain_start[hinge_entity->physics_body_bidirectional_angular_constrain_idx],
-                    wildwall_entity->global_transform.sine,
-                    wildwall_entity->global_transform.cosine
-                );
-                hinge_config.angular_bidirectional_sincos_constrain_start = vector2_rotate_by_sincos(
-                    hinge_entity->physics_body_bidirectional_angular_constrain_end[hinge_entity->physics_body_bidirectional_angular_constrain_idx],
-                    wildwall_entity->global_transform.sine,
-                    wildwall_entity->global_transform.cosine
-                );
+            case WILDWALL_CW90I_STATE:{
+                hinge_entity->physics_body_bidirectional_angular_constrain_idx %= 4;
+                angular_constrain_direction = FIZX_AngularConstrainDirection_Clockwise;
+                sincos_start    = wildwall_cw90_start_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
+                sincos_end      = wildwall_cw90_end_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
+            }break;
+            case WILDWALL_CCW90I_STATE:{
+                hinge_entity->physics_body_bidirectional_angular_constrain_idx %= 4;
+                angular_constrain_direction = FIZX_AngularConstrainDirection_CounterClockwise;
+                sincos_start    = wildwall_ccw90_start_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
+                sincos_end      = wildwall_ccw90_end_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
+            }break;
+            case WILDWALL_CW90L_STATE:{
+                hinge_entity->physics_body_bidirectional_angular_constrain_idx %= 4;
+                angular_constrain_direction = FIZX_AngularConstrainDirection_Clockwise;
+                sincos_start    = wildwall_cw90_start_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
+                sincos_end      = wildwall_cw90_end_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
+            }break;
+            case WILDWALL_CCW90L_STATE:{
+                hinge_entity->physics_body_bidirectional_angular_constrain_idx %= 4;
+                angular_constrain_direction = FIZX_AngularConstrainDirection_CounterClockwise;
+                sincos_start    = wildwall_ccw90_start_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
+                sincos_end      = wildwall_ccw90_end_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
+            }break;
+            case WILDWALL_CW180I_STATE:{
+                hinge_entity->physics_body_bidirectional_angular_constrain_idx %= 2;
+                angular_constrain_direction = FIZX_AngularConstrainDirection_Clockwise;
+                sincos_start    = wildwall_cw180_start_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
+                sincos_end      = wildwall_cw180_end_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
+            }break;
+            case WILDWALL_CCW180I_STATE:{
+                hinge_entity->physics_body_bidirectional_angular_constrain_idx %= 2;
+                angular_constrain_direction = FIZX_AngularConstrainDirection_CounterClockwise;
+                sincos_start    = wildwall_ccw180_start_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
+                sincos_end      = wildwall_ccw180_end_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
             }break;
         }
+ 
+        hinge_config.angular_constrain_direction = angular_constrain_direction;
+        // orient so that the end and start a relative to the global transform.
+        hinge_config.angular_bidirectional_sincos_constrain_start = vector2_rotate_by_sincos(
+            sincos_start,
+            -wildwall_entity->global_transform.sine,
+            wildwall_entity->global_transform.cosine
+        );
+        hinge_config.angular_bidirectional_sincos_constrain_end = vector2_rotate_by_sincos(
+            sincos_end,
+            -wildwall_entity->global_transform.sine,
+            wildwall_entity->global_transform.cosine
+        );
         fizx_body_set_constraints(&ctx->entity_manager->fizx_state, hinge_entity->physics_body_gid, hinge_config);
     }
 
@@ -3035,7 +3102,7 @@ void wildwall_on_timeout_callback(void* user_data){
         .timeout_data = ctx,
         .timeout_data_size = sizeof(*ctx), 
         .time_scale = 1.0f,
-        .end_time = 3.334f 
+        .end_time = WILDWALL_TIMER_END_TIME 
     };
     timer_manager_timer_start(&ctx->entity_manager->timer_manager, timer_ctx);
 }
@@ -3107,27 +3174,11 @@ GenId entity_spawn_wildwall(EntityManager* entity_manager, Transform2D transform
             .timeout_data = &timeout_ctx,
             .timeout_data_size = sizeof(timeout_ctx), 
             .time_scale = 1.0f,
-            .end_time = 3.334f 
+            .end_time = WILDWALL_TIMER_END_TIME 
         };
         
         timer_manager_timer_start(&entity_manager->timer_manager, timer_ctx);
 
-        // { // turn_based();
-        //     entity->max_turns_until_turn_end_callback   = WILDWALL_MAX_TURNS_UNTIL_TURN_END_CALLBACK;
-        //     entity->turns_until_turn_end_callback       = WILDWALL_MAX_TURNS_UNTIL_TURN_END_CALLBACK;
-        //     entity->on_turn_end_callback                = wildwall_on_turn_end_callback;
-        // }
-
-        Entity* hinge_entity;
-        if(!entity_spawn_wildwall_hinge(
-                entity_manager, TRANSFORM2D_IDENTITY, entity_gid, &hinge_entity,
-                true, true, true, true
-            )
-        ){
-            entity_manager_dealloc_entity(entity_manager, entity_gid);
-            return 0;
-        }
-        
         entity_set_local_transform(entity_manager, entity_gid, transform);        
         *out_entity = entity;
     }
@@ -4961,16 +5012,6 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
     
     { // time management.
 
-        if(input_is_key_pressed(Key_LeftControl)){
-            game_state->time_scale = 0.5f;
-        }
-        else if(input_is_key_pressed(Key_F)) {
-            game_state->time_scale = 0.1f;
-        }
-        else{
-            game_state->time_scale = 1.0f;
-        }
-
         timer_manager_update(timer_manager, delta_time);
     }
 
@@ -5124,9 +5165,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             
             switch(entity->type_id){
                 case EntityTypeId_CueBall:{ball_cue_update(entity, game_state, delta_time);}break;
-                case EntityTypeId_WildwallHinge:{wildwall_hinge_update(entity, i, game_state, delta_time);}break;
-                case EntityTypeId_Wildwall:{wildwall_update(&game_state->entity_manager, entity, 
-                i);}break;
+                case EntityTypeId_Wildwall:{wildwall_update(&game_state->entity_manager, entity, i);}break;
             }
         }
     }
