@@ -140,6 +140,11 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 ///
 
 
+#define WILDWALL_HINGE_CONFIG_SI    \
+(WildWallHingeConfig){              \
+    .top_wall = true,               \
+}
+
 #define WILDWALL_HINGE_CONFIG_I \
 (WildWallHingeConfig){          \
     .top_wall = true,           \
@@ -234,6 +239,8 @@ static const Vector2 wildwall_ccw180_end_path[2] = {
 #define WILDWALL_CCW90L_STATE   3
 #define WILDWALL_CW180I_STATE   4
 #define WILDWALL_CCW180I_STATE  5
+#define WILDWALL_CW90SI_STATE   6
+#define WILDWALL_CCW90SI_STATE  7
 
 #define WILDWALL_COUNTER_CLOCKWISE_BODY_TEXTURE_VIEW    (GFX_TextureView){.top_left = {1920, 0}, .bot_right = {2048, 128}}
 #define WILDWALL_CLOCKWISE_BODY_TEXTURE_VIEW            (GFX_TextureView){.top_left = {1920, 128}, .bot_right = {2048, 256}}
@@ -2893,6 +2900,16 @@ void wildwall_set_state_callback(EntityManager* entity_manager, Entity* entity, 
             start = wildwall_ccw180_start_path;
             end = wildwall_ccw180_end_path;
         }break;
+        case WILDWALL_CW90SI_STATE:{
+            entity_spawn_wildwall_hinge(entity_manager, TRANSFORM2D_IDENTITY, entity_gid, &hinge_entity, WILDWALL_HINGE_CONFIG_SI);
+            start = wildwall_cw90_start_path;
+            end = wildwall_cw90_end_path;
+        }break;
+        case WILDWALL_CCW90SI_STATE:{
+            entity_spawn_wildwall_hinge(entity_manager, TRANSFORM2D_IDENTITY, entity_gid, &hinge_entity, WILDWALL_HINGE_CONFIG_SI);
+            start = wildwall_ccw90_start_path;
+            end = wildwall_ccw90_end_path;
+        }break;
     }
     
     GFX_TextureView texture_view;
@@ -3044,25 +3061,19 @@ void wildwall_on_timeout_callback(void* user_data){
             default:{
                 ASSERT(false, "unknown state.");
             }break;
-            case WILDWALL_CW90I_STATE:{
+            case WILDWALL_CW90I_STATE:
+            case WILDWALL_CW90L_STATE:
+            case WILDWALL_CW90SI_STATE:
+            {
                 hinge_entity->physics_body_bidirectional_angular_constrain_idx %= 4;
                 angular_constrain_direction = FIZX_AngularConstrainDirection_Clockwise;
                 sincos_start    = wildwall_cw90_start_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
                 sincos_end      = wildwall_cw90_end_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
             }break;
-            case WILDWALL_CCW90I_STATE:{
-                hinge_entity->physics_body_bidirectional_angular_constrain_idx %= 4;
-                angular_constrain_direction = FIZX_AngularConstrainDirection_CounterClockwise;
-                sincos_start    = wildwall_ccw90_start_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
-                sincos_end      = wildwall_ccw90_end_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
-            }break;
-            case WILDWALL_CW90L_STATE:{
-                hinge_entity->physics_body_bidirectional_angular_constrain_idx %= 4;
-                angular_constrain_direction = FIZX_AngularConstrainDirection_Clockwise;
-                sincos_start    = wildwall_cw90_start_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
-                sincos_end      = wildwall_cw90_end_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
-            }break;
-            case WILDWALL_CCW90L_STATE:{
+            case WILDWALL_CCW90I_STATE:
+            case WILDWALL_CCW90L_STATE:
+            case WILDWALL_CCW90SI_STATE:
+            {
                 hinge_entity->physics_body_bidirectional_angular_constrain_idx %= 4;
                 angular_constrain_direction = FIZX_AngularConstrainDirection_CounterClockwise;
                 sincos_start    = wildwall_ccw90_start_path[hinge_entity->physics_body_bidirectional_angular_constrain_idx];
