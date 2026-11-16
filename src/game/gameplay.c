@@ -5841,6 +5841,21 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                     load_board_level_callback,
                                     NULL
                                 );
+                                LoadMenuLevelCallbackContext* ctx;
+                                String menu_level_file_path = STRING_FROM_LITERAL("../assets/levels/menu_level.scsv", transient);
+                                MEMORY_ARENA_ALLOC_STRUCT(transient, ctx);
+                                ctx->stage_to_load_to = MenuStage_LevelSelector;
+                                GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
+                                    CLAY_STRING("Return to Level Select"),
+                                    horizontal_size,
+                                    vertical_size,
+                                    transient,
+                                    &game_state->level_manager,
+                                    menu_level_file_path.chars,
+                                    menu_level_file_path.count,
+                                    load_menu_level_callback,
+                                    ctx
+                                );
                             }
                         }break;
                     }
