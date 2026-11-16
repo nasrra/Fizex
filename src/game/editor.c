@@ -2508,7 +2508,7 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
             { // camera_input();
         
                 
-                f32 camera_move_speed = 5.0f * delta_time * editor_state->world_camera_orthographic_size;
+                f32 camera_move_speed = 33.334f * delta_time * editor_state->world_camera_orthographic_size;
                 f32 camera_zoom_speed = 0.156f * delta_time * editor_state->world_camera_orthographic_size;
                 
                 { // movement();
