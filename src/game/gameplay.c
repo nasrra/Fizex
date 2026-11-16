@@ -604,7 +604,7 @@ enum EntityTypeId{
     EntityTypeId_BoostPad               = 15,
     EntityTypeId_Wildwall               = 16,
     EntityTypeId_WildwallHinge          = 17,
-    EntityTypeId_WildwallSegment          = 18,
+    EntityTypeId_WildwallSegment        = 18,
     EntityTypeId_Thwamper               = 19,
     EntityTypeId_BoardTurnText          = 20,
     EntityTypeId_WorldCamera            = 21,
@@ -2652,7 +2652,7 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform
     (FIZX_Material){                    \
         .static_friction = 0.02f,       \
         .kinetic_friction = 0.01f,      \
-        .density = 22.6f,               \
+        .density = 11.3f,               \
         .restitution = 0.0f,            \
         .rotational_response = true     \
 }
@@ -5541,6 +5541,7 @@ CLAY(CLAY_SIDI(CLAY_STRING("Level Select Button Container"), game_gfx_clay_eleme
             .width = CLAY_SIZING_PERCENT(0.95f),                                            \
             .height = CLAY_SIZING_PERCENT(0.25f)                                            \
         },                                                                                  \
+        .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER },           \
         .layoutDirection = CLAY_LEFT_TO_RIGHT,                                              \
         .padding = CLAY_PADDING_ALL(16),                                                    \
         .childGap = 16,                                                                     \
@@ -5664,6 +5665,8 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                         f32 load_world_button_horizontal_percent = 0.25f;
                         f32 load_world_button_vertical_percent = 1.0f;
 
+                        String menu_level_name = STRING_FROM_LITERAL("menu_level.scsv", transient);
+
                         for(i32 i = 0; i < file_count; i += 4){
                             GAME_GFX_CLAY_LEVEL_SELECT_BUTTON_CONTAINER(){
                                 
@@ -5672,6 +5675,10 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                     i32 idx = i + j;
                                     if(idx < file_count){
                                         String partial_file_path = file_paths[idx];
+                                        if(string_contents_equal(partial_file_path, menu_level_name)){
+                                            continue;
+                                        }
+                                        
                                         String full_file_path;
                                         string_init(&full_file_path, transient, os_get_max_file_path_length());
                                         STRING_PUSH_LITERAL(&full_file_path, LEVEL_ASSET_DIRECTORY_PATH);
