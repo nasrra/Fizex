@@ -136,16 +136,16 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 
 ///
-/// @ WindmillHinge defines
+/// @ WildwallHinge defines
 ///
 
 
-#define WINDMILL_HINGE_PHYSICS_BODY_LAYER (PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_GUIDELINE)
-#define WINDMILL_HINGE_PHYSICS_BODY_MASK PHYSICS_LAYER_BALL 
+#define WILDWALL_HINGE_PHYSICS_BODY_LAYER (PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_GUIDELINE)
+#define WILDWALL_HINGE_PHYSICS_BODY_MASK PHYSICS_LAYER_BALL 
 
-#define WINDMILL_HINGE_angular_bidirectional_sincos_constrain_start
+#define WILDWALL_HINGE_angular_bidirectional_sincos_constrain_start
 
-#define WINDMILL_HINGE_CLOCKWISE_CONSTRAINTS                                \
+#define WILDWALL_HINGE_CLOCKWISE_CONSTRAINTS                                \
 (FIZX_ConstrainConfig){                                                     \
     .angular_constrain_mode = FIZX_AngularConstrainMode_Directional,        \
     .angular_constrain_direction = FIZX_AngularConstrainDirection_Clockwise,\
@@ -154,13 +154,13 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 }
 
 ///
-/// @ Windmill defines
+/// @ Wildwall defines
 ///
 
 
-#define WINDMILL_PHYSICS_BODY_LAYER  PHYSICS_LAYER_ENVIRONMENT_MID
-#define WINDMILL_PHYSICS_BODY_MASK   PHYSICS_LAYER_BALL 
-#define WINDMILL_PHYSICS_SHAPE_MATERIAL \
+#define WILDWALL_PHYSICS_BODY_LAYER  PHYSICS_LAYER_ENVIRONMENT_MID
+#define WILDWALL_PHYSICS_BODY_MASK   PHYSICS_LAYER_BALL 
+#define WILDWALL_PHYSICS_SHAPE_MATERIAL \
 (FIZX_Material){                        \
     .static_friction = 0.75f,           \
     .kinetic_friction = 0.65f,          \
@@ -168,13 +168,13 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
     .restitution = 0.167f               \
 }
 
-#define WINDMILL_COUNTER_CLOCKWISE_STATE 0
-#define WINDMILL_COUNTER_CLOCKWISE_BODY_TEXTURE_VIEW    (GFX_TextureView){.top_left = {1920, 0}, .bot_right = {2048, 128}}
+#define WILDWALL_COUNTER_CLOCKWISE_STATE 0
+#define WILDWALL_COUNTER_CLOCKWISE_BODY_TEXTURE_VIEW    (GFX_TextureView){.top_left = {1920, 0}, .bot_right = {2048, 128}}
 
-#define WINDMILL_CLOCKWISE_STATE 1
-#define WINDMILL_CLOCKWISE_BODY_TEXTURE_VIEW            (GFX_TextureView){.top_left = {1920, 128}, .bot_right = {2048, 256}}
+#define WILDWALL_CLOCKWISE_STATE 1
+#define WILDWALL_CLOCKWISE_BODY_TEXTURE_VIEW            (GFX_TextureView){.top_left = {1920, 128}, .bot_right = {2048, 256}}
 
-#define WINDMILL_MAX_TURNS_UNTIL_TURN_END_CALLBACK 0
+#define WILDWALL_MAX_TURNS_UNTIL_TURN_END_CALLBACK 0
 
 
 ///
@@ -524,9 +524,9 @@ enum EntityTypeId{
     EntityTypeId_BallZero               = 13,
     EntityTypeId_Pocket                 = 14,
     EntityTypeId_BoostPad               = 15,
-    EntityTypeId_Windmill               = 16,
-    EntityTypeId_WindmillHinge          = 17,
-    EntityTypeId_WindmillBlade          = 18,
+    EntityTypeId_Wildwall               = 16,
+    EntityTypeId_WildwallHinge          = 17,
+    EntityTypeId_WildwallSegment          = 18,
     EntityTypeId_Thwamper               = 19,
     EntityTypeId_BoardTurnText          = 20,
     EntityTypeId_WorldCamera            = 21,
@@ -2568,12 +2568,12 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform
 
 
 ///
-/// @ WindMillBlade.
+/// @ WildwallSegment.
 ///
 
 
-#define WINDMILL_BLADE_TEXTURE_VIEW      (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
-#define WINDMILL_BLADE_PHYSICS_MATERIAL \
+#define WILDWALL_SEGMENT_TEXTURE_VIEW      (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
+#define WILDWALL_SEGMENT_PHYSICS_MATERIAL \
     (FIZX_Material){                    \
         .static_friction = 0.02f,       \
         .kinetic_friction = 0.01f,      \
@@ -2582,14 +2582,14 @@ GenId entity_spawn_thwamper(EntityManager* entity_manager, Transform2D transform
         .rotational_response = true     \
 }
 
-GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+GenId entity_spawn_wildwall_blade(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
         
-        entity->type_id = EntityTypeId_WindmillBlade;
+        entity->type_id = EntityTypeId_WildwallSegment;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
         entity->local_transform = transform;
         
@@ -2618,7 +2618,7 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D tra
                     FIZX_CollisionCallbackBehaviour_All,
                     shape_user_data,
                     physics_shape,
-                    WINDMILL_BLADE_PHYSICS_MATERIAL
+                    WILDWALL_SEGMENT_PHYSICS_MATERIAL
                 );
             }
             else{
@@ -2634,7 +2634,7 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D tra
             entity->sprite_local_transform.scale.y = height;
             entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
             gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
-            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, WINDMILL_BLADE_TEXTURE_VIEW);
+            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, WILDWALL_SEGMENT_TEXTURE_VIEW);
             gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
             gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_TopLeft);
@@ -2653,15 +2653,15 @@ GenId entity_spawn_windmill_blade(EntityManager* entity_manager, Transform2D tra
 
 
 ///
-/// @ WindMillHinge procedures
+/// @ WildwallHinge procedures
 ///
 
-void windmill_hinge_update(Entity* entity, i32 entity_idx, GameState* game_state, f32 delta_time){    
+void wildwall_hinge_update(Entity* entity, i32 entity_idx, GameState* game_state, f32 delta_time){    
     // Transform2D rotated_transform = transform2d_rotate(entity->global_transform, to_radians(66.67f) * delta_time);
     // entity_set_global_transform_unsafe(&game_state->entity_manager, entity_idx, rotated_transform);
 }
 
-GenId entity_spawn_windmill_hinge(
+GenId entity_spawn_wildwall_hinge(
     EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity,
     bool up_wall, bool right_wall, bool left_wall, bool down_wall
 ){
@@ -2670,7 +2670,7 @@ GenId entity_spawn_windmill_hinge(
     Entity* entity;
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
 
-        entity->type_id = EntityTypeId_WindmillHinge;
+        entity->type_id = EntityTypeId_WildwallHinge;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
         
         entity->local_transform = transform;
@@ -2706,8 +2706,8 @@ GenId entity_spawn_windmill_hinge(
             entity->is_physics_body = true;
             
             FIZX_BodyConfig config = {
-                .layer = WINDMILL_HINGE_PHYSICS_BODY_LAYER,
-                .mask = WINDMILL_HINGE_PHYSICS_BODY_MASK,
+                .layer = WILDWALL_HINGE_PHYSICS_BODY_LAYER,
+                .mask = WILDWALL_HINGE_PHYSICS_BODY_MASK,
                 .angular_drag = 0.75f
             };
 
@@ -2728,7 +2728,7 @@ GenId entity_spawn_windmill_hinge(
         blade_transform.position.y = 0.25f;
         if(up_wall){
 
-            GenId blade_gid = entity_spawn_windmill_blade(
+            GenId blade_gid = entity_spawn_wildwall_blade(
                 entity_manager, 
                 transform2d_rotate(blade_transform, degrees_to_radians(0)), 
                 entity_gid, 
@@ -2745,7 +2745,7 @@ GenId entity_spawn_windmill_hinge(
         blade_transform.position.x = -0.25f;  
         if(left_wall){
 
-            GenId blade_gid = entity_spawn_windmill_blade(
+            GenId blade_gid = entity_spawn_wildwall_blade(
                 entity_manager, 
                 transform2d_rotate(blade_transform, degrees_to_radians(90)), 
                 entity_gid,
@@ -2762,7 +2762,7 @@ GenId entity_spawn_windmill_hinge(
         blade_transform.position.y = -0.25f;         
         if(down_wall){
 
-            GenId blade_gid = entity_spawn_windmill_blade(
+            GenId blade_gid = entity_spawn_wildwall_blade(
                 entity_manager, 
                 transform2d_rotate(blade_transform, degrees_to_radians(180)), 
                 entity_gid,
@@ -2779,7 +2779,7 @@ GenId entity_spawn_windmill_hinge(
         blade_transform.position.x = 0.25f; 
         if(right_wall){
         
-            GenId blade_gid = entity_spawn_windmill_blade(
+            GenId blade_gid = entity_spawn_wildwall_blade(
                 entity_manager, 
                 transform2d_rotate(blade_transform, degrees_to_radians(270)), 
                 entity_gid,
@@ -2803,17 +2803,17 @@ GenId entity_spawn_windmill_hinge(
 
 
 ///
-/// @ WindMill procedures
+/// @ Wildwall procedures
 ///
 
 
-void windmill_set_state_callback(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state){    
+void wildwall_set_state_callback(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state){    
         
     BOUNDS_CHECK(entity_idx, entity_manager->entity_hierarchy.length);
     i32 hinge_idx = entity_manager->entity_hierarchy.node[entity_idx].first_child;
     
     if(!hinge_idx){
-        os_output_message("windmill does not have a child entity.");
+        os_output_message("wildwall does not have a child entity.");
         return;
     }
     
@@ -2824,7 +2824,7 @@ void windmill_set_state_callback(EntityManager* entity_manager, Entity* entity, 
         default:{
             ASSERT(false, "unkown state was set.");
         } break;
-        case WINDMILL_COUNTER_CLOCKWISE_STATE:{
+        case WILDWALL_COUNTER_CLOCKWISE_STATE:{
             BOUNDS_CHECK(0, hinge_entity->physics_body_bidirectional_angular_constrain_count);
             fizx_body_set_constraints(
                 &entity_manager->fizx_state, 
@@ -2858,10 +2858,10 @@ void windmill_set_state_callback(EntityManager* entity_manager, Entity* entity, 
             gfx_sprite_set_texture_view(
                 entity_manager->gfx_state,
                 entity->sprite_gid,
-                WINDMILL_COUNTER_CLOCKWISE_BODY_TEXTURE_VIEW
+                WILDWALL_COUNTER_CLOCKWISE_BODY_TEXTURE_VIEW
             );
         }break;
-        case WINDMILL_CLOCKWISE_STATE:{
+        case WILDWALL_CLOCKWISE_STATE:{
             BOUNDS_CHECK(0, hinge_entity->physics_body_bidirectional_angular_constrain_count);
             fizx_body_set_constraints(
                 &entity_manager->fizx_state, 
@@ -2895,25 +2895,25 @@ void windmill_set_state_callback(EntityManager* entity_manager, Entity* entity, 
             gfx_sprite_set_texture_view(
                 entity_manager->gfx_state, 
                 entity->sprite_gid, 
-                WINDMILL_CLOCKWISE_BODY_TEXTURE_VIEW
+                WILDWALL_CLOCKWISE_BODY_TEXTURE_VIEW
             );
         }break;
     }
 }
 
-void windmill_update(EntityManager* entity_manager, Entity* entity, i32 entity_idx){
+void wildwall_update(EntityManager* entity_manager, Entity* entity, i32 entity_idx){
     
     BOUNDS_CHECK(entity_idx, entity_manager->entity_hierarchy.length);
-    i32 windmill_hinge_idx = entity_manager->entity_hierarchy.node[entity_idx].first_child;
+    i32 wildwall_hinge_idx = entity_manager->entity_hierarchy.node[entity_idx].first_child;
     
-    if(!windmill_hinge_idx){
-        os_output_message("windmill does not have a child entity.");
+    if(!wildwall_hinge_idx){
+        os_output_message("wildwall does not have a child entity.");
         return;
     }
     
     BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
-    Entity* hinge_entity = &entity_manager->entity[windmill_hinge_idx];
-    ASSERT(hinge_entity->type_id == EntityTypeId_WindmillHinge, "child entity is not a windmill hinge.");
+    Entity* hinge_entity = &entity_manager->entity[wildwall_hinge_idx];
+    ASSERT(hinge_entity->type_id == EntityTypeId_WildwallHinge, "child entity is not a wildwall hinge.");
     
     f32 angular_velocity;
     bool has_reached_end = true;
@@ -2935,7 +2935,7 @@ void windmill_update(EntityManager* entity_manager, Entity* entity, i32 entity_i
     }
     else if(fizx_body_get_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, &angular_velocity)){
         switch(entity->state){
-            case WINDMILL_CLOCKWISE_STATE:{
+            case WILDWALL_CLOCKWISE_STATE:{
                 f32 min_val = -1.0f;
                 if(
                     !has_reached_end &&
@@ -2944,7 +2944,7 @@ void windmill_update(EntityManager* entity_manager, Entity* entity, i32 entity_i
                     fizx_body_set_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, min_val * 4.0f);
                 }
             }break;
-            case WINDMILL_COUNTER_CLOCKWISE_STATE:{
+            case WILDWALL_COUNTER_CLOCKWISE_STATE:{
                 f32 min_val = 1.0f;
                 if(
                     !has_reached_end &&
@@ -2959,37 +2959,37 @@ void windmill_update(EntityManager* entity_manager, Entity* entity, i32 entity_i
     entity->turn_based_logic_in_progress = !has_reached_end;
 }
 
-typedef struct WindmillTimeoutCallbackContext{
+typedef struct WildwallTimeoutCallbackContext{
     EntityManager* entity_manager;
     GenId entity_gid;
-} WindmillTimeoutCallbackContext;
+} WildwallTimeoutCallbackContext;
 
-void windmill_on_timeout_callback(void* user_data){
+void wildwall_on_timeout_callback(void* user_data){
     
-    WindmillTimeoutCallbackContext* ctx = (WindmillTimeoutCallbackContext*)user_data;
+    WildwallTimeoutCallbackContext* ctx = (WildwallTimeoutCallbackContext*)user_data;
     
-    Entity* windmill_entity;
-    if(!entity_manager_get_entity(*ctx->entity_manager, ctx->entity_gid, &windmill_entity)){
+    Entity* wildwall_entity;
+    if(!entity_manager_get_entity(*ctx->entity_manager, ctx->entity_gid, &wildwall_entity)){
         return;
     }
-    i32 windmill_idx = gen_id_get_index(ctx->entity_gid);
+    i32 wildwall_idx = gen_id_get_index(ctx->entity_gid);
     
-    i32 windmill_hinge_idx = ctx->entity_manager->entity_hierarchy.node[windmill_idx].first_child;
+    i32 wildwall_hinge_idx = ctx->entity_manager->entity_hierarchy.node[wildwall_idx].first_child;
     
-    if(!windmill_hinge_idx){
-        os_output_message("windmill does not have a child entity.");
+    if(!wildwall_hinge_idx){
+        os_output_message("wildwall does not have a child entity.");
         return;
     }
     
-    BOUNDS_CHECK(windmill_hinge_idx, ctx->entity_manager->entity_length);
-    Entity* hinge_entity = &ctx->entity_manager->entity[windmill_hinge_idx];
-    ASSERT(hinge_entity->type_id == EntityTypeId_WindmillHinge, "child entity is not a windmill hinge.");
+    BOUNDS_CHECK(wildwall_hinge_idx, ctx->entity_manager->entity_length);
+    Entity* hinge_entity = &ctx->entity_manager->entity[wildwall_hinge_idx];
+    ASSERT(hinge_entity->type_id == EntityTypeId_WildwallHinge, "child entity is not a wildwall hinge.");
     
     FIZX_ConstrainConfig hinge_config;
     if(fizx_body_get_constraints(&ctx->entity_manager->fizx_state, hinge_entity->physics_body_gid, &hinge_config)){
         hinge_config.angular_constrain_mode = FIZX_AngularConstrainMode_Bidirectional;
-        switch(windmill_entity->state){
-            case WINDMILL_CLOCKWISE_STATE:{
+        switch(wildwall_entity->state){
+            case WILDWALL_CLOCKWISE_STATE:{
                 hinge_config.angular_constrain_direction = FIZX_AngularConstrainDirection_Clockwise;
                 hinge_entity->physics_body_bidirectional_angular_constrain_idx += 1;
                 hinge_entity->physics_body_bidirectional_angular_constrain_idx %= hinge_entity->physics_body_bidirectional_angular_constrain_count;
@@ -2997,17 +2997,17 @@ void windmill_on_timeout_callback(void* user_data){
                 BOUNDS_CHECK(hinge_entity->physics_body_bidirectional_angular_constrain_idx, hinge_entity->physics_body_bidirectional_angular_constrain_count);
                 hinge_config.angular_bidirectional_sincos_constrain_start = vector2_rotate_by_sincos(
                     hinge_entity->physics_body_bidirectional_angular_constrain_start[hinge_entity->physics_body_bidirectional_angular_constrain_idx],
-                    windmill_entity->global_transform.sine,
-                    windmill_entity->global_transform.cosine
+                    wildwall_entity->global_transform.sine,
+                    wildwall_entity->global_transform.cosine
                 );
                 hinge_config.angular_bidirectional_sincos_constrain_end = vector2_rotate_by_sincos(
                     hinge_entity->physics_body_bidirectional_angular_constrain_end[hinge_entity->physics_body_bidirectional_angular_constrain_idx],
-                    windmill_entity->global_transform.sine,
-                    windmill_entity->global_transform.cosine
+                    wildwall_entity->global_transform.sine,
+                    wildwall_entity->global_transform.cosine
                 );
 
             }break;
-            case WINDMILL_COUNTER_CLOCKWISE_STATE:{
+            case WILDWALL_COUNTER_CLOCKWISE_STATE:{
                 hinge_config.angular_constrain_direction = FIZX_AngularConstrainDirection_CounterClockwise;
                 hinge_entity->physics_body_bidirectional_angular_constrain_idx -= 1;
                 if(hinge_entity->physics_body_bidirectional_angular_constrain_idx < 0){
@@ -3017,13 +3017,13 @@ void windmill_on_timeout_callback(void* user_data){
                 BOUNDS_CHECK(hinge_entity->physics_body_bidirectional_angular_constrain_idx, hinge_entity->physics_body_bidirectional_angular_constrain_count);                
                 hinge_config.angular_bidirectional_sincos_constrain_end = vector2_rotate_by_sincos(
                     hinge_entity->physics_body_bidirectional_angular_constrain_start[hinge_entity->physics_body_bidirectional_angular_constrain_idx],
-                    windmill_entity->global_transform.sine,
-                    windmill_entity->global_transform.cosine
+                    wildwall_entity->global_transform.sine,
+                    wildwall_entity->global_transform.cosine
                 );
                 hinge_config.angular_bidirectional_sincos_constrain_start = vector2_rotate_by_sincos(
                     hinge_entity->physics_body_bidirectional_angular_constrain_end[hinge_entity->physics_body_bidirectional_angular_constrain_idx],
-                    windmill_entity->global_transform.sine,
-                    windmill_entity->global_transform.cosine
+                    wildwall_entity->global_transform.sine,
+                    wildwall_entity->global_transform.cosine
                 );
             }break;
         }
@@ -3031,7 +3031,7 @@ void windmill_on_timeout_callback(void* user_data){
     }
 
     TimerContext timer_ctx = {                
-        .timeout_callback = windmill_on_timeout_callback,
+        .timeout_callback = wildwall_on_timeout_callback,
         .timeout_data = ctx,
         .timeout_data_size = sizeof(*ctx), 
         .time_scale = 1.0f,
@@ -3040,21 +3040,21 @@ void windmill_on_timeout_callback(void* user_data){
     timer_manager_timer_start(&ctx->entity_manager->timer_manager, timer_ctx);
 }
 
-GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+GenId entity_spawn_wildwall(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
     Entity* entity;
     if(entity_manager_get_entity(*entity_manager, entity_gid, &entity)){
-        entity->type_id = EntityTypeId_Windmill;
+        entity->type_id = EntityTypeId_Wildwall;
         entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
                 
-        entity->set_state_callback = windmill_set_state_callback;
+        entity->set_state_callback = wildwall_set_state_callback;
                         
         { // physics_body_alloc();
             
             entity->is_physics_body = true;            
             FIZX_BodyConfig body_config = {
-                .layer = WINDMILL_PHYSICS_BODY_LAYER,
-                .mask = WINDMILL_PHYSICS_BODY_MASK
+                .layer = WILDWALL_PHYSICS_BODY_LAYER,
+                .mask = WILDWALL_PHYSICS_BODY_MASK
             };
 
             entity->physics_body_gid = fizx_body_alloc(
@@ -3075,7 +3075,7 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
                 FIZX_CollisionCallbackBehaviour_All,
                 shape_user_data,
                 physics_shape,
-                WINDMILL_PHYSICS_SHAPE_MATERIAL
+                WILDWALL_PHYSICS_SHAPE_MATERIAL
             );
                         
             fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);
@@ -3087,7 +3087,7 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
             entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
             entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
             gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
-            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, WINDMILL_CLOCKWISE_BODY_TEXTURE_VIEW);
+            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, WILDWALL_CLOCKWISE_BODY_TEXTURE_VIEW);
             gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
             gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
@@ -3098,12 +3098,12 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
         }
         
         
-        WindmillTimeoutCallbackContext timeout_ctx = {
+        WildwallTimeoutCallbackContext timeout_ctx = {
             .entity_manager = entity_manager,
             .entity_gid = entity_gid
         };
         TimerContext timer_ctx = {                
-            .timeout_callback = windmill_on_timeout_callback,
+            .timeout_callback = wildwall_on_timeout_callback,
             .timeout_data = &timeout_ctx,
             .timeout_data_size = sizeof(timeout_ctx), 
             .time_scale = 1.0f,
@@ -3113,13 +3113,13 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
         timer_manager_timer_start(&entity_manager->timer_manager, timer_ctx);
 
         // { // turn_based();
-        //     entity->max_turns_until_turn_end_callback   = WINDMILL_MAX_TURNS_UNTIL_TURN_END_CALLBACK;
-        //     entity->turns_until_turn_end_callback       = WINDMILL_MAX_TURNS_UNTIL_TURN_END_CALLBACK;
-        //     entity->on_turn_end_callback                = windmill_on_turn_end_callback;
+        //     entity->max_turns_until_turn_end_callback   = WILDWALL_MAX_TURNS_UNTIL_TURN_END_CALLBACK;
+        //     entity->turns_until_turn_end_callback       = WILDWALL_MAX_TURNS_UNTIL_TURN_END_CALLBACK;
+        //     entity->on_turn_end_callback                = wildwall_on_turn_end_callback;
         // }
 
         Entity* hinge_entity;
-        if(!entity_spawn_windmill_hinge(
+        if(!entity_spawn_wildwall_hinge(
                 entity_manager, TRANSFORM2D_IDENTITY, entity_gid, &hinge_entity,
                 true, true, true, true
             )
@@ -4477,8 +4477,8 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
         case EntityTypeId_BoostPad:{
             entity_gid = entity_spawn_boost_pad(entity_manager, transform, parent_gid, &entity);
         }break;
-        case EntityTypeId_Windmill:{
-            entity_gid = entity_spawn_windmill(entity_manager, transform, parent_gid, &entity);
+        case EntityTypeId_Wildwall:{
+            entity_gid = entity_spawn_wildwall(entity_manager, transform, parent_gid, &entity);
         }break;
         case EntityTypeId_Thwamper:{
             entity_gid = entity_spawn_thwamper(entity_manager, transform, parent_gid, &entity);
@@ -5124,8 +5124,8 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             
             switch(entity->type_id){
                 case EntityTypeId_CueBall:{ball_cue_update(entity, game_state, delta_time);}break;
-                case EntityTypeId_WindmillHinge:{windmill_hinge_update(entity, i, game_state, delta_time);}break;
-                case EntityTypeId_Windmill:{windmill_update(&game_state->entity_manager, entity, 
+                case EntityTypeId_WildwallHinge:{wildwall_hinge_update(entity, i, game_state, delta_time);}break;
+                case EntityTypeId_Wildwall:{wildwall_update(&game_state->entity_manager, entity, 
                 i);}break;
             }
         }
