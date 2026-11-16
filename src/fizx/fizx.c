@@ -26,7 +26,8 @@ typedef struct FIZX_State FIZX_State;
 typedef enum FIZX_AngularConstrainMode{
     FIZX_AngularConstrainMode_None,
     FIZX_AngularConstrainMode_Directional,
-    FIZX_AngularConstrainMode_Bidirectional
+    FIZX_AngularConstrainMode_Bidirectional,
+    FIZX_AngularConstrainMode_Locked
 } FIZX_AngularConstrainMode;
 
 typedef enum FIZX_AngularConstrainDirection{
@@ -4808,6 +4809,11 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                                     }
                                 }break;
                             }
+                        }break;
+                        case FIZX_AngularConstrainMode_Locked:{
+                            rot_amt = 0.0f;
+                            n_sine = *body_sine;
+                            n_cosine = *body_cosine;
                         }break;
                     }
                     

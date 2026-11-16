@@ -90,7 +90,7 @@ bool sound_play_one_shot_event(char* event_name, FMOD_STUDIO_EVENTINSTANCE** out
     fmod_error_check(
         FMOD_Studio_Bus_SetVolume(
             master_bus,
-            0.8f
+            0.75f
         )
     );
     

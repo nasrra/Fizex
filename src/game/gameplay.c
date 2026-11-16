@@ -1579,7 +1579,7 @@ void board_state_enter_player_turn(BoardState* board_state, EntityManager* entit
             .tick_data_size = sizeof(tick_ctx)
         };
         
-        board_state->player_turn_timer = timer_manager_timer_start(board_state->timer_manager, timer_ctx);
+        // board_state->player_turn_timer = timer_manager_timer_start(board_state->timer_manager, timer_ctx);
     
     }
     
@@ -2916,51 +2916,77 @@ void windmill_update(EntityManager* entity_manager, Entity* entity, i32 entity_i
     ASSERT(hinge_entity->type_id == EntityTypeId_WindmillHinge, "child entity is not a windmill hinge.");
     
     f32 angular_velocity;
-    if(fizx_body_get_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, &angular_velocity)){
-        switch(entity->state){
-            case WINDMILL_CLOCKWISE_STATE:{
-                f32 min_val = -1.0f;
-                if(angular_velocity > min_val){
-                    fizx_body_set_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, min_val * 4.0f);
-                }
-            }break;
-            case WINDMILL_COUNTER_CLOCKWISE_STATE:{
-                f32 min_val = 1.0f;
-                if(angular_velocity < min_val){
-                    fizx_body_set_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, min_val * 4.0f);
-                }
-            }break;
-        }
-    }
-    
     bool has_reached_end = true;
     fizx_body_has_reached_angular_bidirectional_constrain_end(
         &entity_manager->fizx_state, 
         hinge_entity->physics_body_gid,
         &has_reached_end
     );
-    
+    if(has_reached_end){      
+        fizx_body_set_constraints(
+            &entity_manager->fizx_state, 
+            hinge_entity->physics_body_gid, 
+            (FIZX_ConstrainConfig){
+                .angular_constrain_mode = FIZX_AngularConstrainMode_Locked,
+                .axis_x = true,
+                .axis_y = true
+            }
+        );
+    }
+    else if(fizx_body_get_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, &angular_velocity)){
+        switch(entity->state){
+            case WINDMILL_CLOCKWISE_STATE:{
+                f32 min_val = -1.0f;
+                if(
+                    !has_reached_end &&
+                    angular_velocity > min_val
+                ){
+                    fizx_body_set_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, min_val * 4.0f);
+                }
+            }break;
+            case WINDMILL_COUNTER_CLOCKWISE_STATE:{
+                f32 min_val = 1.0f;
+                if(
+                    !has_reached_end &&
+                    angular_velocity < min_val
+                ){
+                    fizx_body_set_angular_velocity(&entity_manager->fizx_state, hinge_entity->physics_body_gid, min_val * 4.0f);
+                }
+            }break;
+        }
+    }
+        
     entity->turn_based_logic_in_progress = !has_reached_end;
 }
 
-void windmill_on_turn_end_callback(EntityManager* entity_manager, i32 entity_idx){    
-    BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
-    Entity* windmill_entity = &entity_manager->entity[entity_idx];
+typedef struct WindmillTimeoutCallbackContext{
+    EntityManager* entity_manager;
+    GenId entity_gid;
+} WindmillTimeoutCallbackContext;
+
+void windmill_on_timeout_callback(void* user_data){
     
-    BOUNDS_CHECK(entity_idx, entity_manager->entity_hierarchy.length);
-    i32 windmill_hinge_idx = entity_manager->entity_hierarchy.node[entity_idx].first_child;
+    WindmillTimeoutCallbackContext* ctx = (WindmillTimeoutCallbackContext*)user_data;
+    
+    Entity* windmill_entity;
+    if(!entity_manager_get_entity(*ctx->entity_manager, ctx->entity_gid, &windmill_entity)){
+        return;
+    }
+    i32 windmill_idx = gen_id_get_index(ctx->entity_gid);
+    
+    i32 windmill_hinge_idx = ctx->entity_manager->entity_hierarchy.node[windmill_idx].first_child;
     
     if(!windmill_hinge_idx){
         os_output_message("windmill does not have a child entity.");
         return;
     }
     
-    BOUNDS_CHECK(entity_idx, entity_manager->entity_length);
-    Entity* hinge_entity = &entity_manager->entity[windmill_hinge_idx];
+    BOUNDS_CHECK(windmill_hinge_idx, ctx->entity_manager->entity_length);
+    Entity* hinge_entity = &ctx->entity_manager->entity[windmill_hinge_idx];
     ASSERT(hinge_entity->type_id == EntityTypeId_WindmillHinge, "child entity is not a windmill hinge.");
     
     FIZX_ConstrainConfig hinge_config;
-    if(fizx_body_get_constraints(&entity_manager->fizx_state, hinge_entity->physics_body_gid, &hinge_config)){
+    if(fizx_body_get_constraints(&ctx->entity_manager->fizx_state, hinge_entity->physics_body_gid, &hinge_config)){
         hinge_config.angular_constrain_mode = FIZX_AngularConstrainMode_Bidirectional;
         switch(windmill_entity->state){
             case WINDMILL_CLOCKWISE_STATE:{
@@ -3001,8 +3027,17 @@ void windmill_on_turn_end_callback(EntityManager* entity_manager, i32 entity_idx
                 );
             }break;
         }
-        fizx_body_set_constraints(&entity_manager->fizx_state, hinge_entity->physics_body_gid, hinge_config);
+        fizx_body_set_constraints(&ctx->entity_manager->fizx_state, hinge_entity->physics_body_gid, hinge_config);
     }
+
+    TimerContext timer_ctx = {                
+        .timeout_callback = windmill_on_timeout_callback,
+        .timeout_data = ctx,
+        .timeout_data_size = sizeof(*ctx), 
+        .time_scale = 1.0f,
+        .end_time = 3.334f 
+    };
+    timer_manager_timer_start(&ctx->entity_manager->timer_manager, timer_ctx);
 }
 
 GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
@@ -3062,12 +3097,26 @@ GenId entity_spawn_windmill(EntityManager* entity_manager, Transform2D transform
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
         }
         
-        { // turn_based();
-            entity->max_turns_until_turn_end_callback   = WINDMILL_MAX_TURNS_UNTIL_TURN_END_CALLBACK;
-            entity->turns_until_turn_end_callback       = WINDMILL_MAX_TURNS_UNTIL_TURN_END_CALLBACK;
-            entity->on_turn_end_callback                = windmill_on_turn_end_callback;
-        }
+        
+        WindmillTimeoutCallbackContext timeout_ctx = {
+            .entity_manager = entity_manager,
+            .entity_gid = entity_gid
+        };
+        TimerContext timer_ctx = {                
+            .timeout_callback = windmill_on_timeout_callback,
+            .timeout_data = &timeout_ctx,
+            .timeout_data_size = sizeof(timeout_ctx), 
+            .time_scale = 1.0f,
+            .end_time = 3.334f 
+        };
+        
+        timer_manager_timer_start(&entity_manager->timer_manager, timer_ctx);
 
+        // { // turn_based();
+        //     entity->max_turns_until_turn_end_callback   = WINDMILL_MAX_TURNS_UNTIL_TURN_END_CALLBACK;
+        //     entity->turns_until_turn_end_callback       = WINDMILL_MAX_TURNS_UNTIL_TURN_END_CALLBACK;
+        //     entity->on_turn_end_callback                = windmill_on_turn_end_callback;
+        // }
 
         Entity* hinge_entity;
         if(!entity_spawn_windmill_hinge(
@@ -3245,12 +3294,12 @@ void cue_ball_pocketed_state_timer_on_tick_callback(void* user_data, f32 current
 
 typedef struct{
     EntityManager* entity_manager;
-    i32 entity_idx;
+    GenId entity_gid;
 } CueBallPocketStateTimerTimeoutCallbackContext;
 
 void cue_ball_pocketed_state_timer_on_timeout_callback(void* user_data){
     CueBallPocketStateTimerTimeoutCallbackContext* ctx = (CueBallPocketStateTimerTimeoutCallbackContext*)user_data;
-    entity_set_active_unsafe(ctx->entity_manager, ctx->entity_idx, false);
+    entity_set_active(ctx->entity_manager, ctx->entity_gid, false);
 }
 
 void cue_ball_set_state_callback(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state){
@@ -3269,7 +3318,7 @@ void cue_ball_set_state_callback(EntityManager* entity_manager, Entity* entity, 
             
             CueBallPocketStateTimerTimeoutCallbackContext timeout_ctx = {
                 .entity_manager = entity_manager,
-                .entity_idx = entity_idx
+                .entity_gid = entity_manager->gen_id_allocator.gen_ids[entity_idx]
             };
             
             TimerContext timer_ctx = {                
@@ -3889,12 +3938,12 @@ void number_ball_pocketed_state_timer_on_tick_callback(void* user_data, f32 curr
 
 typedef struct{
     EntityManager* entity_manager;
-    i32 entity_idx;
+    GenId entity_gid;
 } NumberBallPocketStateTimerTimeoutCallbackContext;
 
 void number_ball_pocketed_state_timer_on_timeout_callback(void* user_data){
     NumberBallPocketStateTimerTimeoutCallbackContext* ctx = (NumberBallPocketStateTimerTimeoutCallbackContext*)user_data;
-    entity_set_active_unsafe(ctx->entity_manager, ctx->entity_idx, false);
+    entity_set_active(ctx->entity_manager, ctx->entity_gid, false);
 }
 
 void number_ball_set_state_callback(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state){
@@ -3913,7 +3962,7 @@ void number_ball_set_state_callback(EntityManager* entity_manager, Entity* entit
             
             NumberBallPocketStateTimerTimeoutCallbackContext timeout_ctx = {
                 .entity_manager = entity_manager,
-                .entity_idx = entity_idx
+                .entity_gid = entity_manager->gen_id_allocator.gen_ids[entity_idx]
             };
             
             TimerContext timer_ctx = {                
@@ -4997,7 +5046,8 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                     }
                 }
             }
-            
+
+#if 0            
             for(i32 i = 0; i < board_state->number_ball_count; i++){
                 
                 Entity* number_ball_entity;
@@ -5014,6 +5064,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                     } 
                 }
             }
+#endif
             
             switch(balls_are_moving){
                 case true:{
