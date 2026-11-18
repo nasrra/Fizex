@@ -3,106 +3,29 @@
 ===================
 
 
-+ BOOST PAD: applies a velocity to the body in the direction it is pointing.
-+ Thwamper:
-    + After three turns, hits the ground, dispersing the balls around it.
 
-+ timed turns
-+ fix pause menu not working?????
-
-+ aim becomes more shakey over time before turn timer ends.
-    + timers need to store 'duration'.
-    + timers need to start from 0 and go to 'duration'.
-    + duration / curr_time.
-    + plug (result * shakeTimeFactor) into sin().
-    + multiply sin() result by shakeDirDiffernce.
-    + get perpendicular normal to the line.
-    + multiply normal by shake value and add to guideline final vertex.
-    
-+ at the end of turn timer the ball gets shot in a random direction (from a cone, where the player would have shot into).
-
-+ life system.
-    + three lives, you can pocket the cue ball three times
-    + choose where to place the ball upon losing a life.
-
-+ do these to get better break on balls.
-    + increase cue stick power?
-    + increase cue stick action range?
-    + decrease the number ball density and increase restitution (by a small amount).
-
-+ Placement Turn Validaiton
-    + collision checks.
-    + specified areas.
-
-+ evaluate board should chec whether or not any balls are within a windmill's radius.
 
 
 ===============
 ==== TO DO ====
 ===============
-
-- remove shake mechanic.
-
-- rework windmills to turn based spiny walls.
-    - angular velocity handling - stop at 
-
-- levels
-    / intro 1
-    / intro 2
-    / speed boost tutorial
-    + speed boost 1
-    + speed boost 2
-    + windmill tutorial
-    + windmill 1
-    - windmill 2
-    - thwamper tutorial
-    - thwamper 1
-    - thwamper 2
-    - fan tutorial
-    - fan 1
-    - fan 2
-- stretch goals
-    - extra 1
-    - extra 2
+   
+   
+- player controller.
     
-- update clickable area hierarchy when deleting an entity; otherwise it crashes as it tries to delete an entity that is no longer allocated 
-
-- Desk Fan
-    - button operated
-    - turns off by pressing it, and turns back on after three turns.
-
-- WALL: Two sided wall (springy side & absorbant side).
-
-- TELEPORTER:
-
-- (MAYBE) C4: ball hits the C4 block, and explodes, pushing away all balls in a radial area.
-    
-- refactor gen id alloctor 'allocated' bool to be two arrays: 'allocated_idx' and 'allocated_idx_idx'
-    - 'allocated_idx_idx': the index  into 'allocated_idx', is zero when the entity isnt allocated.
-    -  'allocated_idx': is a swapbackarray.
-    
-- pocketing a ball is a bit flakey around the edges, 
-    - sometimes the ball clips through the pocket, 
-    - sometimes it doesnt go into the pocket fully, meaning it doesnt start colliding with the interior walls.
-
+- camera work:
+    - follow player camera
+    ? fixed room camera?
+       
    
 =====================
 ==== BACK BURNER ==== 
 =====================
 
 
-- implement two stage editor:
-    - level editor mode: only move and edit native entities.
-    - edit play mode: move around and edit any entity.
-    - add step clamp to rotating entities with mouse.
-    
-- remove line bodies, have only capsule bodies.
 
-- have capsule to capsule collisions.
 
-- get an achievement when getting only the eight ball in.
 
-- change the semicolon (';') separated values to tab ('\t') separated values for level and entity asset files.
 
 
 ===========================
@@ -110,13 +33,8 @@
 ===========================
 
 
-- Ball Power Ups:
-    - Fragmentation Ball: fragments the cue ball into multiple smaller balls.
-    - Heavy/Large Ball: hits number balls harder, moving them faster.
-    - Explosion Ball: explodes around the cue ball, spreading out the number balls.
-- turn timer decay of turns.
-- player hand shakes after time.
-- turn base system.
+
+
 
 
 ==================
@@ -124,11 +42,6 @@
 ==================
 
 
-- Levels have too many balls.
-+ Balls enter their rest points too slowly.
-+ speed boost level needs to be narrowed in.
-+ balls that have been lined up need to have a line going out of them, showing the player where they are going.
-+ linear velocity is wrong.
 
 
 

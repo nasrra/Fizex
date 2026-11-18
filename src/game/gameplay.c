@@ -22,7 +22,7 @@ typedef struct ParticleSystem ParticleSystem;
 typedef struct ParticleEmitterConfig ParticleEmitterConfig;
 typedef enum EntityTypeId EntityTypeId;
 
-GenId level_manager_load_level_file(LevelManager* level_manager, String file_path, MemoryArena* transient, Transform2D transform);
+GenId level_manager_load_asset_file(LevelManager* level_manager, String file_path, MemoryArena* transient, Transform2D transform);
 void level_manager_defer_load_level(LevelManager* level_manager, DeferredLevelLoadContext ctx);
 bool entity_manager_get_entity(EntityManager manager, GenId entity_gid, Entity** out_entity);
 bool entity_is_active_unsafe(EntityManager entity_manager, i32 entity_idx);
@@ -393,23 +393,11 @@ struct EntityManager{
     bool is_init;
 };
 
-typedef enum{
-    // loads the level file as the world root entity.
-    LevelLoadType_World,
-    // loads the level file as an entity and parents to the world root entity.
-    LevelLoadType_WorldEntity,
-    // loads the level file as the ui root entity.
-    LevelLoadType_Ui,
-    // loads the level file as an entity and parents to the ui root entity.
-    LevelLoadType_UiEntity
-} LevelLoadType;
-
 typedef void (*DeferredLevelLoadCallback)(GameState* game_state, void* user_data);
 
 struct DeferredLevelLoadContext{
     Transform2D transform;
     String file_path;
-    LevelLoadType load_type;
     DeferredLevelLoadCallback callback;
     void* callback_user_data;
 };
@@ -418,13 +406,8 @@ struct LevelManager{
     EntityManager* entity_manager;
 
     String* world_root_entity_file_path;
-    // the gen-id of the entity that is the parent of all entities within the world level.
     GenId world_root_entity_gid;
-    
-    String ui_root_entity_file_path;
-    // the gen-id of the entity that is the parent of all entities within the ui level.
-    GenId ui_root_entity_gid;
-    
+        
     // the queue of levels to load at an appropriate time (deffered for later).
     DeferredLevelLoadContext* deferred_level_load;
     i32 deferred_level_load_length;
@@ -461,7 +444,6 @@ typedef struct {
     LevelManager* level_manager;
     DeferredLevelLoadContext deferred_level_load_ctx;
     String file_path;
-    LevelLoadType load_type;
     DeferredLevelLoadCallback callback;
     char* callback_user_data;
     i32 callback_user_data_length;
@@ -1481,29 +1463,20 @@ typedef struct {
     GameState* game_state;
 }LoadBoardLevelCallbackContext;
 
-void load_level_callback(GameState* game_state, void* user_data){
-    // hoisting invariance.
-    EntityManager* entity_manager = &game_state->entity_manager;
-
-    clickable_area_hierarchy_reset(&game_state->entity_manager.clickable_area_hierarchy);
-    game_state->mouse_state.clicked_entity_idx = 0;
-    
-    // reset_entity_manager();
-    entity_manager->world_camera_entity_gid = 0;
-    entity_manager->ui_camera_entity_gid = 0;    
-}
-
 typedef struct{
     MenuStage stage_to_load_to;
 } LoadMenuLevelCallbackContext;
 
 void load_menu_level_callback(GameState* game_state, void* user_data){
-    LoadMenuLevelCallbackContext* ctx = (LoadMenuLevelCallbackContext*)user_data;
-    
-    load_level_callback(game_state, user_data);
+    LoadMenuLevelCallbackContext* ctx = (LoadMenuLevelCallbackContext*)user_data;    
     game_state->stage = GameStage_Menu;
     game_state->menu_state.stage = ctx->stage_to_load_to; 
 }
+
+void load_gameplay_level_callback(GameState* game_state, void* user_data){
+    game_state->stage = GameStage_Gameplay;
+}
+
 
 
 ///
@@ -1841,7 +1814,6 @@ void level_manager_init(
     *level_manager = (LevelManager){0};
     
     i32 file_path_length = os_get_max_file_path_length();
-    string_init(&level_manager->ui_root_entity_file_path, arena, file_path_length);
     MEMORY_ARENA_ALLOC_ARRAY(arena, level_manager->deferred_level_load, &level_manager->deferred_level_load_length, deferred_level_load_length);
     for(i32 i = 0; i < deferred_level_load_length; i++){
         DeferredLevelLoadContext* ctx = &level_manager->deferred_level_load[i];
@@ -1868,7 +1840,7 @@ void level_manager_defer_load_level(LevelManager* level_manager, DeferredLevelLo
     `root_parent_idx`: the index of the current root entity's parent in the deserialised entity array; this should be set to `1` when first calling the recursion/this function.
     `root_transform`: the transform override for the loaded asset root entity.
 */
-GenId level_manager_load_level_file_recurssive(
+GenId level_manager_load_asset_file_recurssive(
     LevelManager* level_manager, String file_path, MemoryArena* transient, 
     i32 parent_idx_offset, i32 root_parent_idx, Transform2D root_transform
 ){
@@ -1961,7 +1933,7 @@ GenId level_manager_load_level_file_recurssive(
                     break;
                 }
                 
-                level_manager_load_level_file_recurssive(level_manager, scratch_space, transient, entity_manager->deserialised_entity_count-1, root_parent_idx, root_transform);
+                level_manager_load_asset_file_recurssive(level_manager, scratch_space, transient, entity_manager->deserialised_entity_count-1, root_parent_idx, root_transform);
             }break;
             case LEVEL_FILE_NATIVE_ENTITY_TOKEN: {
 
@@ -2087,10 +2059,10 @@ GenId level_manager_load_level_file_recurssive(
     return entity_manager->deserialised_entity[1].entity_gid;  
 }
 
-GenId level_manager_load_level_file(
+GenId level_manager_load_asset_file(
     LevelManager* level_manager, String file_path, MemoryArena* transient, Transform2D transform 
 ){
-    return level_manager_load_level_file_recurssive(level_manager, file_path, transient, 0, 1, transform);
+    return level_manager_load_asset_file_recurssive(level_manager, file_path, transient, 0, 1, transform);
 }
 
 
@@ -2147,6 +2119,15 @@ void game_state_init(GameState* game_state, MemoryArena* persistent, MemoryArena
     game_state->is_init = true;
 }
 
+void game_state_on_level_load(GameState* game_state){
+    clickable_area_hierarchy_reset(&game_state->entity_manager.clickable_area_hierarchy);
+    game_state->mouse_state.clicked_entity_idx = 0;
+    
+    // reset_entity_manager();
+    game_state->entity_manager.world_camera_entity_gid = 0;
+    game_state->entity_manager.ui_camera_entity_gid = 0;                
+}
+
 void game_state_preupdate(GameState* game_state, f32 delta_time, MemoryArena* transient){
 
     // hoist invariance.
@@ -2157,42 +2138,24 @@ void game_state_preupdate(GameState* game_state, f32 delta_time, MemoryArena* tr
     
         Entity* world_entity;
         for(i32 i = 0; i < level_manager->deferred_level_load_count; i++){
+
             BOUNDS_CHECK(i, level_manager->deferred_level_load_length);
             DeferredLevelLoadContext* ctx = &level_manager->deferred_level_load[i];
-            switch(ctx->load_type){
-                default:{
-                    ASSERT(false, "undefined level load type.");
-                }break;
-                case LevelLoadType_WorldEntity:{
-                    // spawn entity.
-                    GenId entity_gid = level_manager_load_level_file(level_manager, ctx->file_path, transient, ctx->transform);
-                    // add to world tree.
-                    entity_set_parent(entity_manager, entity_gid, level_manager->world_root_entity_gid);
-                }break;
-                case LevelLoadType_World:{
-                    entity_manager_dealloc_entity(entity_manager, level_manager->world_root_entity_gid);
-                    level_manager->world_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path, transient, ctx->transform);
-                    if(entity_manager_get_entity(*entity_manager, level_manager->world_root_entity_gid, &world_entity)){
-                        level_manager->world_root_entity_file_path = &world_entity->serialisation_file_path;
-                    }
-                    else{
-                        ASSERT(false, "failed to set world root entity file path");
-                    }
-                }break;
-                case LevelLoadType_Ui:{
-                    entity_manager_dealloc_entity(entity_manager, level_manager->ui_root_entity_gid);
-                    level_manager->ui_root_entity_gid = level_manager_load_level_file(level_manager, ctx->file_path, transient, ctx->transform);
-                    if(entity_manager_get_entity(*entity_manager, level_manager->world_root_entity_gid, &world_entity)){
-                        level_manager->world_root_entity_file_path = &world_entity->serialisation_file_path;
-                    }
-                    else{
-                        ASSERT(false, "failed to set world root entity file path");
-                    }
-                }break;
+            entity_manager_dealloc_entity(entity_manager, level_manager->world_root_entity_gid);
+            level_manager->world_root_entity_gid = level_manager_load_asset_file(level_manager, ctx->file_path, transient, ctx->transform);
+            if(entity_manager_get_entity(*entity_manager, level_manager->world_root_entity_gid, &world_entity)){
+                level_manager->world_root_entity_file_path = &world_entity->serialisation_file_path;
+            
+                game_state_on_level_load(game_state);
+    
+                if(ctx->callback){
+                    ctx->callback(game_state, ctx->callback_user_data);
+                }
             }
-            if(ctx->callback){
-                ctx->callback(game_state, ctx->callback_user_data);
+            else{
+                ASSERT(false, "failed to set world root entity file path");
             }
+
         }
         level_manager->deferred_level_load_count = 0;
     }
@@ -2253,9 +2216,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             
             DeferredLevelLoadContext ctx = {
                 .transform = TRANSFORM2D_IDENTITY,
-                .file_path = file_path,
-                .load_type = LevelLoadType_World,
-                .callback = load_level_callback
+                .file_path = file_path
             };
             
             level_manager_defer_load_level(&game_state->level_manager, ctx);
@@ -2503,7 +2464,6 @@ CLAY(                                                                           
     LoadLevelButtonOnHoverContext __ggclwlb_ctx = {0};                                  \
     string_init(&__ggclwlb_ctx.file_path, _transient_arena, _file_path_length);         \
     string_push_chars(&__ggclwlb_ctx.file_path, _file_path_chars, _file_path_length);   \
-    __ggclwlb_ctx.load_type = LevelLoadType_World;                                      \
     __ggclwlb_ctx.callback = _level_load_callback;                                      \
     __ggclwlb_ctx.callback_user_data = (char*)_level_load_callback_user_data;           \
     __ggclwlb_ctx.level_manager = _level_manager;                                       \
@@ -2543,11 +2503,10 @@ CLAY(CLAY_SIDI(CLAY_STRING("Level Select Button Container"), game_gfx_clay_eleme
 
 void load_world_level_button_on_hover_callback(Clay_ElementId element_id, Clay_PointerData pointer_info, void* user_data){
     LoadLevelButtonOnHoverContext* ctx = (LoadLevelButtonOnHoverContext*)user_data;
-    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){
+    if(pointer_info.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME){        
         DeferredLevelLoadContext level_load_ctx = {
             .transform = TRANSFORM2D_IDENTITY,
             .file_path = ctx->file_path,
-            .load_type = ctx->load_type,
             .callback = ctx->callback,
             .callback_user_data = ctx->callback_user_data
         };
@@ -2650,7 +2609,7 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                         f32 load_world_button_horizontal_percent = 0.25f;
                         f32 load_world_button_vertical_percent = 1.0f;
 
-                        String menu_level_name = STRING_FROM_LITERAL("menu_level.scsv", transient);
+                        // String menu_level_name = STRING_FROM_LITERAL("menu_level.scsv", transient);
 
                         for(i32 i = 0; i < file_count; i += 4){
                             GAME_GFX_CLAY_LEVEL_SELECT_BUTTON_CONTAINER(){
@@ -2660,9 +2619,9 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                     i32 idx = i + j;
                                     if(idx < file_count){
                                         String partial_file_path = file_paths[idx];
-                                        if(string_contents_equal(partial_file_path, menu_level_name)){
-                                            continue;
-                                        }
+                                        // if(string_contents_equal(partial_file_path, menu_level_name)){
+                                        //     continue;
+                                        // }
                                         
                                         String full_file_path;
                                         string_init(&full_file_path, transient, os_get_max_file_path_length());
@@ -2681,7 +2640,7 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                                             level_manager,
                                             full_file_path.chars,
                                             full_file_path.count,
-                                            load_level_callback,
+                                            load_gameplay_level_callback,
                                             NULL
                                         );
                                     }
@@ -2699,7 +2658,10 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                         },                                                                
                     },                      
                 });          
-            }break;    
+            }break;
+            case GameStage_Menu:{
+                
+            }break; 
         }
     }
 
