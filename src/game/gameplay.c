@@ -2659,8 +2659,45 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                     },                      
                 });          
             }break;
-            case GameStage_Menu:{
-                
+            case GameStage_Gameplay:{
+                 if(game_state->show_pause_menu){
+                    GFX_CLAY_PAUSE_MENU_CONTAINER(){
+                        
+                        CLAY_TEXT(CLAY_STRING("Pause Menu!"), GAME_GFX_CLAY_SUB_HEADER_TEXT_CONFIG);
+                        
+                        LoadMenuLevelCallbackContext* ctx;
+                        String menu_level_file_path = STRING_FROM_LITERAL("../assets/levels/menu_level.scsv", transient);
+                        f32 horizontal_size = 0.75f;
+                        f32 vertical_size = 0.25f;
+                                                            
+                        MEMORY_ARENA_ALLOC_STRUCT(transient, ctx);
+                        ctx->stage_to_load_to = MenuStage_LevelSelector;
+                        
+                        GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
+                            CLAY_STRING("Restart"),
+                            horizontal_size,
+                            vertical_size,
+                            transient,
+                            &game_state->level_manager,
+                            game_state->level_manager.world_root_entity_file_path->chars,
+                            game_state->level_manager.world_root_entity_file_path->count,
+                            load_gameplay_level_callback,
+                            NULL
+                        );
+                        
+                        GAME_GFX_CLAY_LOAD_WORLD_LEVEL_BUTTON(
+                            CLAY_STRING("Return to Level Select"),
+                            horizontal_size,
+                            vertical_size,
+                            transient,
+                            &game_state->level_manager,
+                            menu_level_file_path.chars,
+                            menu_level_file_path.count,
+                            load_menu_level_callback,
+                            ctx
+                        );
+                    }
+                }
             }break; 
         }
     }
