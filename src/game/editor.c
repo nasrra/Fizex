@@ -1591,39 +1591,21 @@ void gfx_clay_native_entity_spawner_layout(Editor_State* editor_state, GameState
         
         EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("None"), button_width, button_height, transient, editor_state, EntityTypeId_None);
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Cue"), button_width, button_height, transient, editor_state, EntityTypeId_CueBall);
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball One"), button_width, button_height, transient, editor_state, EntityTypeId_BallOne);
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Two"), button_width, button_height, transient, editor_state, EntityTypeId_BallTwo);
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Three"), button_width, button_height, transient, editor_state, EntityTypeId_BallThree);
-        }
-        
-        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Four"), button_width, button_height, transient, editor_state, EntityTypeId_BallFour);
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Five"), button_width, button_height, transient, editor_state, EntityTypeId_BallFive);
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Six"), button_width, button_height, transient, editor_state, EntityTypeId_BallSix);
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Seven"), button_width, button_height, transient, editor_state, EntityTypeId_BallSeven);
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Eight"), button_width, button_height, transient, editor_state, EntityTypeId_BallEight);
-        }
-
-        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Nine"), button_width, button_height, transient, editor_state, EntityTypeId_BallNine);
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Ball Zero"), button_width, button_height, transient, editor_state, EntityTypeId_BallZero);
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Pocket"), button_width, button_height, transient, editor_state, EntityTypeId_Pocket);
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Boost Pad"), button_width, button_height, transient, editor_state, EntityTypeId_BoostPad);
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Wildwall"), button_width, button_height, transient, editor_state, EntityTypeId_Wildwall);
-        }
-        
-        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Thwamper"), button_width, button_height, transient, editor_state, EntityTypeId_Thwamper);
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("World Camera"), button_width, button_height, transient, editor_state, EntityTypeId_WorldCamera);
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Wall"), button_width, button_height, transient, editor_state, EntityTypeId_Wall);
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Empty"), button_width, button_height, transient, editor_state, EntityTypeId_Empty);
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Valid Placement Area"), button_width, button_height, transient, editor_state, EntityTypeId_ValidPlacementArea);
         }
         
         EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Invalid Placement Area"), button_width, button_height, transient, editor_state, EntityTypeId_InvalidPlacementArea);
-            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Pocket Interior Wall"), button_width, button_height, transient, editor_state, EntityTypeId_PocketInteriorWall);
+        }
+
+        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+        }
+        
+        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+        }
+        
+        EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
         }
         
         CLAY_TEXT(CLAY_STRING("Entity To Spawn:"), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);  

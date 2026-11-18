@@ -229,12 +229,6 @@ void app_main(){
     bool was_in_editor_mode = false;
     bool in_editor_mode = false;    
 
-    ParticleEmitter emitter = particle_system_create_emitter(
-        &game_state.entity_manager.particle_system, 
-        BALL_ON_BALL_PARTICLE_EMITTER_CONFIG, 
-        32
-    );
-
     { // update_loop();
 
         u128 prev_process_tick_in_mili  = 0;
@@ -255,11 +249,7 @@ void app_main(){
             { // app begin update.
                 os_window_update(window_ctx);
                 input_update(delta_time);
-                     
-                if(input_is_key_just_pressed(Key_Space)){
-                    particle_emitter_emit(&emitter, (Vector2){0}, 4);
-                }
-                                                
+                                                                
                 if(input_is_key_just_pressed(Key_F1)){
                     if(editor_state.menu == Editor_Menu_LevelManagement){
                         editor_state.menu = Editor_Menu_None;

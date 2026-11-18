@@ -218,9 +218,18 @@ bool sound_play_ball_hit_pocket_interior_wall(f32 velocity){
     return true;
 }
 
-bool soud_play_number_ball_pocketed(){
+bool sound_play_number_ball_pocketed(){
     FMOD_STUDIO_EVENTINSTANCE* event_inst;
     if(!sound_play_one_shot_event("event:/Sfx/number_ball_pocketed", &event_inst)){
+        return false;
+    }
+    
+    return true;
+}
+
+bool sound_play_cue_ball_placed(){
+    FMOD_STUDIO_EVENTINSTANCE* event_inst;
+    if(!sound_play_one_shot_event("event:/Sfx/cue_ball_place", &event_inst)){
         return false;
     }
     

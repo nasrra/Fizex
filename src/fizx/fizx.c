@@ -551,6 +551,12 @@ typedef struct{
     bool* constrain_axis_y;
     i32 constrain_axis_y_length;
     
+    /*
+        
+    */
+    bool* asleep;
+    i32 asleep_length;
+    
     bool* rotate_around_center_of_mass;
     i32 rotate_around_center_of_mass_length;
 
@@ -4155,9 +4161,6 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
     f32* rigid_collision_resolution_other_perpendicular_x_scratch_space  = (f32[FIZX_COLLISION_MAX_CONTACT_POINTS]){0};
     f32* rigid_collision_resolution_other_perpendicular_y_scratch_space  = (f32[FIZX_COLLISION_MAX_CONTACT_POINTS]){0};
 
-    // scale delta time by the substeps.
-    delta_time /= (f32)sub_steps;
-
     { // prepare substep collisions.
         collision_manifold_prepare_for_next_step(&state->collision_manifold);
         i32 dynamic_count = 
@@ -4613,6 +4616,9 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
     // trigget collider line.
     BvhOverlapInfo overlaps_tri_col_lin_to_tri_col_lin = bvh_categorised_leaf_overlaps_get_overlaps(state->overlaps_scratch_buffer, FIZX_ShapeCategory_TriColLine, FIZX_ShapeCategory_TriColLine);
 
+    // scale delta time by the substeps.
+    delta_time /= (f32)sub_steps;
+    
     for(i32 sub_step = 0; sub_step < sub_steps; sub_step++){
     
         // clear garbage collisions that were resolved last sub step.
@@ -4679,18 +4685,6 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                 
                 BOUNDS_CHECK(body_idx, state->entities.rotate_around_center_of_mass_length);
                 bool rotate_around_center_of_mass = state->entities.rotate_around_center_of_mass[body_idx];
-                
-                if(gravity_affected){
-                    *lin_vel_x += gravity.x;
-                    *lin_vel_y += gravity.y;
-                }
-
-                if(*mass > 0){
-                    BOUNDS_CHECK(body_idx, state->entities.force.length);
-                    f32 mass_factor = *mass * delta_time;
-                    *lin_vel_x += state->entities.force.x[body_idx] / mass_factor;
-                    *lin_vel_y += state->entities.force.y[body_idx] / mass_factor;
-                }
 
                 { // apply_angular_drag();
 
@@ -4817,9 +4811,19 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                         }break;
                     }
                     
-                    *body_sine = n_sine;
-                    *body_cosine = n_cosine;
-                
+                    // f32 sincos_diff = vector2_radian_difference_scalar(
+                    //     *body_sine, *body_cosine,
+                    //     n_sine, n_cosine
+                    // );
+                    // if(ABS(sincos_diff) >= F32_MIN){
+                        *body_sine = n_sine;
+                        *body_cosine = n_cosine;                
+                    // }
+                    // else{
+                    //     rot_amt = 0.0f;
+                    //     *ang_vel = 0.0f;
+                    // }
+                    
                     if(rotate_around_center_of_mass){
                         // offset the body in relation to the center of mass.
                         f32 rot_cos = f32_cos(rot_amt);
@@ -4836,6 +4840,18 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                         *body_pos_x = rotated_x + com_x;
                         *body_pos_y = rotated_y + com_y;                
                     }
+                }
+                
+                if(gravity_affected){
+                    *lin_vel_x += gravity.x;
+                    *lin_vel_y += gravity.y;
+                }
+
+                if(*mass > 0){
+                    BOUNDS_CHECK(body_idx, state->entities.force.length);
+                    f32 mass_factor = *mass * delta_time;
+                    *lin_vel_x += state->entities.force.x[body_idx] / mass_factor;
+                    *lin_vel_y += state->entities.force.y[body_idx] / mass_factor;
                 }
 
                 { // apply_linear_drag();
@@ -4884,34 +4900,36 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                 }
 
                 { // apply_linear_velocity_translation();
-                    
+
                     if(constrain_axis_x){
                         *lin_vel_x = 0.0f;
-                        *displacement_x = 0.0f;
                     }
-                    else{
-                        
-                        // apply moovement.
-                        *body_pos_x += *lin_vel_x * delta_time;
-
-                        // apply displacement.
-                        *body_pos_x += *displacement_x;
-                        *displacement_x = 0;
-                    }
+                    else{                        
+                        f32 translation_x = (*lin_vel_x * delta_time) + *displacement_x;
+                        if(ABS(translation_x) > F32_EPSILON * 10.0f){
+                            *body_pos_x += translation_x;
+                        }
+                        else{
+                            *lin_vel_x = 0.0f;
+                            os_output_message("asd\n");
+                        }
+                    }                    
+                    *displacement_x = 0.0f;
                     
                     if(constrain_axis_y){
                         *lin_vel_y = 0.0f;
-                        *displacement_y = 0.0f;
                     }
                     else{
-                        
-                        // apply movement.
-                        *body_pos_y += *lin_vel_y * delta_time;
-                        
-                        // apply displacement.
-                        *body_pos_y += *displacement_y;
-                        *displacement_y = 0;
+                        f32 translation_y = (*lin_vel_y * delta_time) + *displacement_y;
+                        if(ABS(translation_y) > F32_EPSILON * 10.0f){
+                            *body_pos_y += translation_y;
+                        }
+                        else{
+                            *lin_vel_y = 0.0f;
+                        }
                     }
+                    *displacement_y = 0.0f;
+                                    
                 }
 
                 { // move_and_roate_body_shapes();
