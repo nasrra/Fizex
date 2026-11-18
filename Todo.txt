@@ -12,7 +12,11 @@
    
    
 - player controller.
-    
+    - WASD Movement.
+        - rigidbody.
+        - impulses.
+
+
 - camera work:
     - follow player camera
     ? fixed room camera?
@@ -24,14 +28,9 @@
 
 
 
-
-
-
-
 ===========================
 ==== CONTENT GRAVEYARD ====
 ===========================
-
 
 
 

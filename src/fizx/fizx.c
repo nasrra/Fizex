@@ -2021,37 +2021,40 @@ bool fizx_body_set_layer(FIZX_State* state, GenId body_gid, i32 layer){
     return true;
 }
 
-bool fizx_body_get_mask(FIZX_State state, GenId body_gid, i32* out_mask){
-    i32 idx = gen_id_allocator_is_gen_id_valid(&state.gen_id_allocator, body_gid);
-    if(!idx){
+bool fizx_body_get_mask(const FIZX_State* state, GenId body_gid, i32* out_mask){
+    i32 body_idx = fizx_is_valid_body_gen_id(state, body_gid);
+    if(!body_idx){
         return false;
     }
-    BOUNDS_CHECK(idx, state.entities.entity_type_length);
-    if(state.entities.entity_type[idx] != FIZX_EntityType_Body){
+    BOUNDS_CHECK(body_idx, state->entities.mask_length);
+    *out_mask = state->entities.mask[body_idx];
+    return true;
+}
+
+bool fizx_body_get_mass(const FIZX_State* state, GenId body_gid, f32* out_mass){
+    i32 body_idx = fizx_is_valid_body_gen_id(state, body_gid);
+    if(!body_idx){
         return false;
-    }
-    BOUNDS_CHECK(idx, state.entities.mask_length);
-    *out_mask = state.entities.mask[idx];
+    }    
+    
+    BOUNDS_CHECK(body_idx, state->entities.mass_length);
+    *out_mass = state->entities.mass[body_idx];
     return true;
 }
 
 bool fizx_body_set_mask(FIZX_State* state, GenId body_gid, i32 mask){
-    i32 idx = gen_id_allocator_is_gen_id_valid(&state->gen_id_allocator, body_gid);
-    if(!idx){
+    i32 body_idx = fizx_is_valid_body_gen_id(state, body_gid);
+    if(!body_idx){
         return false;
     }
-    BOUNDS_CHECK(idx, state->entities.entity_type_length);
-    if(state->entities.entity_type[idx] != FIZX_EntityType_Body){
-        return false;
-    }
-    
+
     // set body mask.
-    BOUNDS_CHECK(idx, state->entities.mask_length);
-    state->entities.mask[idx] = mask;
+    BOUNDS_CHECK(body_idx, state->entities.mask_length);
+    state->entities.mask[body_idx] = mask;
     
     // get heirarchy node.
-    BOUNDS_CHECK(idx, state->body_hierarchy.length);
-    IntrusiveListNode* body_node = &state->body_hierarchy.node[idx];
+    BOUNDS_CHECK(body_idx, state->body_hierarchy.length);
+    IntrusiveListNode* body_node = &state->body_hierarchy.node[body_idx];
     i32 shape_idx = body_node->first_child;
     
     // set shape masks.
@@ -4810,20 +4813,9 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                             n_cosine = *body_cosine;
                         }break;
                     }
-                    
-                    // f32 sincos_diff = vector2_radian_difference_scalar(
-                    //     *body_sine, *body_cosine,
-                    //     n_sine, n_cosine
-                    // );
-                    // if(ABS(sincos_diff) >= F32_MIN){
-                        *body_sine = n_sine;
-                        *body_cosine = n_cosine;                
-                    // }
-                    // else{
-                    //     rot_amt = 0.0f;
-                    //     *ang_vel = 0.0f;
-                    // }
-                    
+                    *body_sine = n_sine;
+                    *body_cosine = n_cosine;
+                                        
                     if(rotate_around_center_of_mass){
                         // offset the body in relation to the center of mass.
                         f32 rot_cos = f32_cos(rot_amt);
@@ -4906,13 +4898,7 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                     }
                     else{                        
                         f32 translation_x = (*lin_vel_x * delta_time) + *displacement_x;
-                        if(ABS(translation_x) > F32_EPSILON * 10.0f){
-                            *body_pos_x += translation_x;
-                        }
-                        else{
-                            *lin_vel_x = 0.0f;
-                            os_output_message("asd\n");
-                        }
+                        *body_pos_x += translation_x;
                     }                    
                     *displacement_x = 0.0f;
                     
@@ -4921,12 +4907,7 @@ void fizx_state_fixed_update(FIZX_State* state, void* collision_callback_body_us
                     }
                     else{
                         f32 translation_y = (*lin_vel_y * delta_time) + *displacement_y;
-                        if(ABS(translation_y) > F32_EPSILON * 10.0f){
-                            *body_pos_y += translation_y;
-                        }
-                        else{
-                            *lin_vel_y = 0.0f;
-                        }
+                        *body_pos_y += translation_y;
                     }
                     *displacement_y = 0.0f;
                                     
