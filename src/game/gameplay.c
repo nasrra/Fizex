@@ -61,8 +61,8 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 
 #define TEXTURE_VIEW_WALL           (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
-#define TEXTURE_VIEW_PLAYER         (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
-#define TEXTURE_VIEW_BALL_CUE       (GFX_TextureView){.top_left = {1664, 0}, .bot_right = {1792, 128}}
+#define TEXTURE_VIEW_PLAYER         (GFX_TextureView){.top_left = {1664, 0}, .bot_right = {1792, 128}}
+#define TEXTURE_VIEW_VACCUM         (GFX_TextureView){.top_left = {1792, 128}, .bot_right = {1920, 256}}
 #define TEXTURE_VIEW_BALL_ONE       (GFX_TextureView){.top_left = {256, 0}, .bot_right = {384, 128}}
 #define TEXTURE_VIEW_BALL_TWO       (GFX_TextureView){.top_left = {384, 0}, .bot_right = {512, 128}}
 #define TEXTURE_VIEW_BALL_THREE     (GFX_TextureView){.top_left = {512, 0}, .bot_right = {640, 128}}
@@ -74,7 +74,6 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 #define TEXTURE_VIEW_BALL_NINE      (GFX_TextureView){.top_left = {1280, 0}, .bot_right = {1408, 128}}
 #define TEXTURE_VIEW_BALL_ZERO      (GFX_TextureView){.top_left = {1408, 0}, .bot_right = {1536, 128}}
 #define TEXTURE_VIEW_BOOST_PAD      (GFX_TextureView){.top_left = {1536, 0}, .bot_right = {1664, 128}}
-#define TEXTURE_VIEW_POCKET         (GFX_TextureView){.top_left = {128, 0}, .bot_right = {256, 128}}
 
 #define FONT_HEIGHT_IN_PIXELS 48
 
@@ -277,7 +276,7 @@ enum EntityTypeId{
     EntityTypeId_LevelRoot              = 1,
     EntityTypeId_Wall                   = 2,
     EntityTypeId_Player                 = 3,
-    // EntityTypeId_BallOne                = 4,
+    EntityTypeId_Vaccum                 = 4,
     // EntityTypeId_BallTwo                = 5,
     // EntityTypeId_BallThree              = 6,
     // EntityTypeId_BallFour               = 7,
@@ -352,7 +351,6 @@ struct Entity{
     bool is_invincible;
     bool serialisation_disabled;
     bool is_particle_emitter;
-    bool turn_based_logic_in_progress;
 
     void (*set_state_callback)(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state);
 };
@@ -1756,13 +1754,48 @@ GenId entity_spawn_level_root(EntityManager* entity_manager, Transform2D transfo
 
 
 ///
+/// @ Vaccum procedures.
+///
+
+
+GenId entity_spawn_vaccum(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+    GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
+    Entity* entity;
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity))
+    {
+        entity->serialisation_disabled = true;
+        entity->type_id = EntityTypeId_Vaccum;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
+        
+        { // alloc_sprite();
+        
+            entity->is_sprite = true;
+            entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
+            entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
+            gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, TEXTURE_VIEW_VACCUM);
+            gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
+            gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
+            gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
+            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 0.25f, .g = 0.25f, .b = 0.25f, .a = 1.0f});
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_WORLD_ENVIRONMENT_MID);
+            gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 1);
+        }
+        
+        entity_set_local_transform(entity_manager, entity_gid, transform);
+        *out_entity = entity;
+    }
+    return entity_gid;
+}
+
+
+///
 /// @ Player procedures.
 ///
 
 #define PLAYER_MAX_VELOCITY 1.0f
-
-
-void player_update(EntityManager* entity_manager, Entity* entity, f32 delta_time){
+void player_update(EntityManager* entity_manager, Entity* entity, i32 entity_idx,  f32 delta_time){
     
     Vector2 move_dir = {0};
     
@@ -1795,30 +1828,39 @@ void player_update(EntityManager* entity_manager, Entity* entity, f32 delta_time
     
     if(error_len > F32_EPSILON){
         bool has_input = (move_dir.x != 0.0f || move_dir.y != 0.0f);
-        if(!has_input){
-            return;
-        }
+        if(has_input){
         
-        // use this when not doing things with linear drag; instead of the above if statement.
-        // f32 rate = has_input ? params->acceleration : params->deceleration;
-        
-        f32 rate = acceleration;
-        //largest velocity change allowed this frame.
-        f32 max_dv = rate * delta_time;
-        // never overshoot the target velocity.
-        f32 dv_len = MIN(max_dv, error_len);
-        
-        Vector2 dv = vector2_mul_val(error, dv_len / error_len);
-        
-        f32 mass;
-        if(fizx_body_get_mass(&entity_manager->fizx_state, entity->physics_body_gid, &mass)){
-            fizx_body_impulse_linear_force(&entity_manager->fizx_state, entity->physics_body_gid, vector2_mul_val(dv, mass));
-        }
-        else{
-            ASSERT(false, "failed to get mass.");
-        }
-        
+            // use this when not doing things with linear drag; instead of the above if statement.
+            // f32 rate = has_input ? params->acceleration : params->deceleration;
+            
+            f32 rate = acceleration;
+            //largest velocity change allowed this frame.
+            f32 max_dv = rate * delta_time;
+            // never overshoot the target velocity.
+            f32 dv_len = MIN(max_dv, error_len);
+            
+            Vector2 dv = vector2_mul_val(error, dv_len / error_len);
+            
+            f32 mass;
+            if(fizx_body_get_mass(&entity_manager->fizx_state, entity->physics_body_gid, &mass)){
+                fizx_body_impulse_linear_force(&entity_manager->fizx_state, entity->physics_body_gid, vector2_mul_val(dv, mass));
+            }
+            else{
+                ASSERT(false, "failed to get mass.");
+            }
+
+        }        
     }
+    
+    Vector2 mouse_world_position = gfx_get_mouse_world_position(entity_manager->gfx_state);
+    f32 radians = f32_atan2(
+        mouse_world_position.x - entity->global_transform.position.x,
+        mouse_world_position.y - entity->global_transform.position.y
+    );
+    radians += degrees_to_radians(90.0f);
+    entity->global_transform.sine = f32_sin(radians);
+    entity->global_transform.cosine = -f32_cos(radians);
+    entity_set_global_transform_unsafe(entity_manager, entity_idx, entity->global_transform);
 }
 
 GenId entity_spawn_player(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
@@ -1838,7 +1880,7 @@ GenId entity_spawn_player(EntityManager* entity_manager, Transform2D transform, 
                 PLAYER_PHYSICS_BODY_CONFIG
             );
             
-            Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
+            Circle circle = {.radius = 0.5f};
             Transform2D shape_transform = TRANSFORM2D_IDENTITY;
             FIZX_Material material = {
                 .static_friction = 0.224f,
@@ -1846,14 +1888,14 @@ GenId entity_spawn_player(EntityManager* entity_manager, Transform2D transform, 
                 .density = 2.24f
             };
             
-            GenId shape_gid = fizx_rectangle_rigid_alloc(
+            GenId shape_gid = fizx_circle_rigid_alloc(
                 &entity_manager->fizx_state,
                 entity->physics_body_gid,
                 shape_transform,
                 FIZX_ShapeBehaviour_Dynamic,
                 FIZX_CollisionCallbackBehaviour_All,
                 &entity_gid,
-                square,
+                circle,
                 material
             );
                         
@@ -1875,6 +1917,11 @@ GenId entity_spawn_player(EntityManager* entity_manager, Transform2D transform, 
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_WORLD_ENVIRONMENT_MID);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 2);
         }
+        
+        Entity* vaccum;
+        Transform2D vaccum_transform = TRANSFORM2D_IDENTITY;
+        vaccum_transform.position.x += 1.0f;
+        entity_spawn_vaccum(entity_manager, vaccum_transform, entity_gid, &vaccum);
         
         entity_set_local_transform(entity_manager, entity_gid, transform);
         *out_entity = entity;
@@ -2452,7 +2499,7 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             // entity updates.            
             switch(entity->type_id){
                 case EntityTypeId_Player:{
-                    player_update(entity_manager, entity, delta_time);
+                    player_update(entity_manager, entity, i, delta_time);
                 }break;
             }
         }
