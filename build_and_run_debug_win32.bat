@@ -37,7 +37,8 @@ app_win32.c app.c base_layer\base.c input/input.c ^
 Kernel32.lib user32.lib Gdi32.lib ws2_32.lib ntdll.lib userenv.lib ^
 vendors\webgpu\wgpu_native.lib ^
 vendors\freetype\freetype-x64.lib ^
-vendors\fmod\x64\fmod_vc.lib vendors\fmod\x64\fmodstudio_vc.lib & ^
+vendors\fmod\x64\fmod_vc.lib vendors\fmod\x64\fmodstudio_vc.lib ^
+/link /INCREMENTAL:NO & ^
 xcopy /E /I /Y "..\assets" "..\build\assets" & ^
 xcopy /E /I /Y "..\editor" "..\build\editor"
 

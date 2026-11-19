@@ -44,6 +44,7 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 #define PHYSICS_LAYER_ENVIRONMENT_MID       (1 << 3)
 #define PHYSICS_LAYER_ENVIRONMENT_BOT       (1 << 4)
 #define PHYSICS_LAYER_PLAYER                (1 << 5)
+#define PHYSICS_LAYER_MOVEABLE_ENVIRONEMT   (1 << 6)
 
 
 ///
@@ -61,6 +62,7 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 
 #define TEXTURE_VIEW_WALL           (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
+#define TEXTURE_VIEW_TEST_BOX       (GFX_TextureView){.top_left = {0, 128}, .bot_right = {128, 256}}
 #define TEXTURE_VIEW_PLAYER         (GFX_TextureView){.top_left = {1664, 0}, .bot_right = {1792, 128}}
 #define TEXTURE_VIEW_VACCUM         (GFX_TextureView){.top_left = {1792, 128}, .bot_right = {1920, 256}}
 #define TEXTURE_VIEW_BALL_ONE       (GFX_TextureView){.top_left = {256, 0}, .bot_right = {384, 128}}
@@ -277,7 +279,7 @@ enum EntityTypeId{
     EntityTypeId_Wall                   = 2,
     EntityTypeId_Player                 = 3,
     EntityTypeId_Vaccum                 = 4,
-    // EntityTypeId_BallTwo                = 5,
+    EntityTypeId_TestBox                = 5,
     // EntityTypeId_BallThree              = 6,
     // EntityTypeId_BallFour               = 7,
     // EntityTypeId_BallFive               = 8,
@@ -1733,6 +1735,78 @@ GenId entity_spawn_wall(EntityManager* entity_manager, Transform2D transform, Ge
 }
 
 
+
+GenId entity_spawn_test_box(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+    GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
+    Entity* entity;
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity))
+    {
+        entity->type_id = EntityTypeId_TestBox;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
+        
+        { // alloc_physics_body();
+            entity->is_physics_body = true;
+                        
+            FIZX_BodyConfig body_config = {
+                .layer = PHYSICS_LAYER_MOVEABLE_ENVIRONEMT,
+                .mask = PHYSICS_LAYER_ALL,
+                .linear_drag = 16.7f,
+                .angular_drag = 22.4f
+            };
+            
+            entity->physics_body_gid = fizx_body_alloc(
+                &entity_manager->fizx_state, 
+                TRANSFORM2D_IDENTITY, 
+                body_config
+            );
+            
+            Rectangle square = {.x = -0.5f, .y = 0.5f, .width = 1.0f, .height = 1.0f};
+            Transform2D shape_transform = TRANSFORM2D_IDENTITY;
+            FIZX_Material material = {
+                .static_friction = 0.75f, 
+                .kinetic_friction = 0.5f, 
+                .density = 1.6f, 
+                .restitution = 0.224f, 
+                .rotational_response = true
+            };
+            
+            GenId shape_gid = fizx_rectangle_rigid_alloc(
+                &entity_manager->fizx_state,
+                entity->physics_body_gid,
+                shape_transform,
+                FIZX_ShapeBehaviour_Dynamic,
+                FIZX_CollisionCallbackBehaviour_All,
+                &entity_gid,
+                square,
+                material
+            );
+                        
+            fizx_body_set_active(&entity_manager->fizx_state, entity->physics_body_gid, true);     
+        }        
+
+        { // alloc_sprite();
+        
+            entity->is_sprite = true;
+            entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
+            entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
+            gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, TEXTURE_VIEW_TEST_BOX);
+            gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
+            gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
+            gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
+            gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_YELLOW);
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_WORLD_ENVIRONMENT_TOP);
+            gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 2);
+        }
+        
+        entity_set_local_transform(entity_manager, entity_gid, transform);
+        *out_entity = entity;
+    }
+    return entity_gid;
+}
+
+
 ///
 /// @ LevelRoot.
 ///
@@ -1757,6 +1831,118 @@ GenId entity_spawn_level_root(EntityManager* entity_manager, Transform2D transfo
 /// @ Vaccum procedures.
 ///
 
+#define VACCUM_SUCK_FORCE 240.0f
+#define VACCUM_ROTATE_FORCE 100.0f
+
+typedef struct VaccumSuctionAreaQueryCallbackContext{
+    Vector2 nozzle_position;
+    Vector2 nozzle_forward_direction;
+    f32 delta_time;
+    f32 max_radian;
+} VaccumSuctionAreaQueryCallbackContext;
+
+void vaccum_suction_area_query_callback(FIZX_State* state, FIZX_QueryCollisionInfo info, void* user_data){
+    VaccumSuctionAreaQueryCallbackContext* ctx = (VaccumSuctionAreaQueryCallbackContext*)user_data;
+    
+    Transform2D other_transform;
+    i32 body_idx = fizx_shape_get_parent_unsafe(state, info.target_entity_idx);
+    fizx_body_get_global_transform_unsafe(state, body_idx, &other_transform);
+
+    Vector2 dist = vector2_sub(ctx->nozzle_position, other_transform.position);
+    Vector2 dir = vector2_normalise(dist);
+        
+    f32 radian_diff = vector2_radian_difference(ctx->nozzle_forward_direction, vector2_normalise(vector2_sub(other_transform.position, ctx->nozzle_position)));
+    f32 len = vector2_len(dist);
+    f32 inv_len = 0.0f;
+    f32 suck_force = 0.0f;    
+    f32 rotate_force = 0.0f;
+    if (len > F32_EPSILON) {
+        f32 suck_len   = CLAMP(len, 2.24f, 6.72f);
+        f32 rotate_len = CLAMP(len, 2.24f, 6.72f);   // same min clamp as suck
+    
+        Vector2 to_body = vector2_sub(other_transform.position, ctx->nozzle_position);
+        Vector2 to_body_dir = vector2_mul_val(to_body, 1.0f / len);
+    
+        // signed angle, wrapped to [-pi, pi], independent of world orientation
+        f32 cross = ctx->nozzle_forward_direction.x * to_body_dir.y
+                  - ctx->nozzle_forward_direction.y * to_body_dir.x;
+        f32 dot   = vector2_dot(ctx->nozzle_forward_direction, to_body_dir);
+        f32 radian_diff = atan2f(cross, dot);
+    
+        f32 rotation_ratio = CLAMP(ABS(ABS(radian_diff) / ctx->max_radian), 0.167f, 0.85f);
+    
+        f32 suck_force   = VACCUM_SUCK_FORCE / suck_len;
+        f32 rotate_force = (VACCUM_ROTATE_FORCE / rotate_len)
+                         * rotation_ratio
+                         * (radian_diff >= 0.0f ? 1.0f : -1.0f);
+    
+        Vector2 force = vector2_mul_val(dir, suck_force * ctx->delta_time);
+        fizx_body_impulse_linear_force_unsafe(state, body_idx, force);
+        fizx_body_impulse_angular_force_unsafe(state, body_idx, rotate_force * ctx->delta_time);
+    }
+}
+
+void vaccum_update(EntityManager* entity_manager, Entity* entity, f32 delta_time){
+    
+    if(input_is_mouse_button_pressed(MouseButton_Left)){
+        i32 vert_length = 4;
+        f32* vert_x = (f32[]){0.0f, 10.0f, 10.0f, 0.0f};
+        f32* vert_y = (f32[]){0.5f, 3.5f, -3.5f, -0.5f};
+        
+
+        for(i32 i = 0; i < vert_length; i++){
+            vector2_transform_scalar(
+                vert_x[i], vert_y[i],
+                entity->global_transform.scale.x, entity->global_transform.scale.y, 
+                entity->global_transform.cosine, entity->global_transform.sine,
+                entity->global_transform.position.x, entity->global_transform.position.y,
+                &vert_x[i], &vert_y[i]
+            );
+        }
+        
+        Vector2 nozzle_forward_direction = vector2_rotate_by_sincos(
+            VECTOR2_RIGHT, 
+            entity->global_transform.sine, 
+            entity->global_transform.cosine
+        );
+        
+        gfx_draw_line(
+            global_gfx_state, GFX_COLOUR_RED, 
+            entity->global_transform.position, 
+            vector2_add(entity->global_transform.position, nozzle_forward_direction), 
+            SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG,
+            2.0f, GFX_LineScaling_WorldCamera
+        );      
+        
+        f32 max_radian = vector2_radian_difference_scalar(
+            nozzle_forward_direction.x, nozzle_forward_direction.y,
+            vert_x[1] - entity->global_transform.position.x,
+            vert_y[1] - entity->global_transform.position.y
+        );
+
+        gfx_draw_wire_poly(
+            global_gfx_state, vert_x, vert_y, vert_length, 
+            GFX_COLOUR_YELLOW, SPRITE_LAYER_EDITOR_WORLD, 0, SPRITE_MATERIAL_DEBUG,
+            GFX_LineScaling_WorldCamera
+        );
+    
+        VaccumSuctionAreaQueryCallbackContext ctx = {
+            .nozzle_position = entity->global_transform.position,
+            .delta_time = delta_time,
+            .nozzle_forward_direction = nozzle_forward_direction,
+            .max_radian = max_radian
+        };
+    
+        fizx_state_query_polygon_area(
+            &entity_manager->fizx_state, vaccum_suction_area_query_callback,
+            &ctx, PHYSICS_LAYER_MOVEABLE_ENVIRONEMT, 
+            vert_x, vert_y, vert_length
+        );
+        
+        
+    }    
+
+}
 
 GenId entity_spawn_vaccum(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
     GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
@@ -1976,6 +2162,9 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
         }break;
         case EntityTypeId_Player:{
             entity_gid = entity_spawn_player(entity_manager, transform, parent_gid, &entity);
+        }break;
+        case EntityTypeId_TestBox:{
+            entity_gid = entity_spawn_test_box(entity_manager, transform, parent_gid, &entity);
         }break;
     }
     
@@ -2501,6 +2690,9 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
                 case EntityTypeId_Player:{
                     player_update(entity_manager, entity, i, delta_time);
                 }break;
+                case EntityTypeId_Vaccum:{
+                    vaccum_update(entity_manager, entity, delta_time);
+                }break;
             }
         }
     }
@@ -2894,7 +3086,6 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
             }break; 
         }
     }
-
-    
+       
     gfx_clay_end_layout(gfx_state, delta_time, SPRITE_LAYER_GAME_UI, VIRTUAL_TEXTURE_ID_FONT, SPRITE_MATERIAL_TEXT, SPRITE_MATERIAL_DEBUG);
 }

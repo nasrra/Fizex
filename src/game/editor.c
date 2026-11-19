@@ -1597,6 +1597,7 @@ void gfx_clay_native_entity_spawner_layout(Editor_State* editor_state, GameState
         }
         
         EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
+            EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Test Box"), button_width, button_height, transient, editor_state, EntityTypeId_TestBox);
         }
 
         EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){

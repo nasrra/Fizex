@@ -2075,13 +2075,17 @@ bool fizx_body_set_mask(FIZX_State* state, GenId body_gid, i32 mask){
     return true;
 }
 
+void fizx_body_get_global_transform_unsafe(const FIZX_State* state, i32 body_idx, Transform2D* out_transform){
+    *out_transform = soa_transform2d_copy_elem(&state->entities.global_transform, body_idx);    
+}
+
 bool fizx_body_get_global_transform(const FIZX_State* state, GenId body_gid, Transform2D* out_transform){
     i32 body_idx = fizx_is_valid_body_gen_id(state, body_gid);
     if(!body_idx){
         return false;
     }
 
-    *out_transform = soa_transform2d_copy_elem(&state->entities.global_transform, body_idx);
+    fizx_body_get_global_transform_unsafe(state, body_idx, out_transform);
     return true;
 }
 
@@ -8281,7 +8285,7 @@ void fizx_state_query_circle_area(
             f32 other_x = state->entities.centroid.x[info.target_entity_idx];
             f32 other_y = state->entities.centroid.y[info.target_entity_idx];
             BOUNDS_CHECK(info.target_entity_idx, state->entities.global_radius_length);
-            f32 other_radius = state->entities.global_radius[info.target_entity_idx];
+            f32 other_radius = state->entities.global_radius[info.target_entity_idx];   
          
             bool overlaps = circle_overlaps_scalar(
                 other_x, other_y, other_radius, 
@@ -8334,6 +8338,142 @@ void fizx_state_query_circle_area(
         else{
             ASSERT(false, "undefined shape category.");
             continue;
+        }
+    }
+}
+
+void fizx_state_query_polygon_area(
+    FIZX_State* state, FizxQueryAreaFuncptr query_callback, 
+    void* user_data, i32 layer_mask, 
+    f32* vert_x, f32* vert_y, i32 vert_length
+){
+    
+    f32 min_x;
+    f32 min_y;
+    f32 max_x;
+    f32 max_y;
+    
+    
+    polygon_get_min_max_vertices(
+        vert_x, vert_y, vert_length, 
+        &min_x, &min_y, &max_x, &max_y
+    );
+    
+    f32 centroid_x;
+    f32 centroid_y;
+    
+    polygon_calc_centroid_scalar(vert_x, vert_y, vert_length, &centroid_x, &centroid_y);
+    
+    // reset to defined state.
+    state->query_area_leaf_idx_scratch_space_count = 0;
+    
+    bvh_query_area(
+        &state->bvh,
+        min_x, min_y,
+        max_x, max_y, 
+        state->query_area_leaf_idx_scratch_space, 
+        state->query_area_leaf_idx_scratch_space_length, 
+        &state->query_area_leaf_idx_scratch_space_count 
+    );
+
+    for(i32 i = 0; i < state->query_area_leaf_idx_scratch_space_count; i++){
+        FIZX_QueryCollisionInfo info = {0};
+        i32 leaf_idx = state->query_area_leaf_idx_scratch_space[i];
+        info.target_entity_idx = state->entities.bvh_leaf_idx[leaf_idx];
+        
+        BOUNDS_CHECK(info.target_entity_idx, state->entities.layer_length);
+        info.target_layer = state->entities.layer[info.target_entity_idx];
+
+        if((info.target_layer & layer_mask) == 0){
+            continue;
+        }
+        
+        i32 user_data_idx = info.target_entity_idx * state->entities.user_data_element_size;
+        BOUNDS_CHECK(user_data_idx, state->entities.user_data_length);
+        info.target_user_data = &state->entities.user_data[user_data_idx];
+
+        BOUNDS_CHECK(info.target_entity_idx, state->entities.category_length);
+        i32 shape_category = state->entities.category[info.target_entity_idx];
+        
+        if(fizx_shape_category_is_polygon(shape_category)){
+     
+            // gather verts.
+            f32* other_vert_x;
+            f32* other_vert_y;
+            i32 other_vert_length;
+            fizx_shape_get_vertices_unsafe(
+                state->entities.global_vertex, info.target_entity_idx, 
+                &other_vert_x, &other_vert_y, &other_vert_length
+            );       
+            
+            f32 other_centroid_x;
+            f32 other_centroid_y;
+            polygon_calc_centroid_scalar(other_vert_x, other_vert_y, other_vert_length, &other_centroid_x, &other_centroid_y);
+            
+            bool overlaps =  polygon_overlaps(
+                other_vert_x, other_vert_y, other_vert_length,
+                vert_x, vert_y, vert_length,
+                other_centroid_x, other_centroid_y,
+                centroid_x, centroid_y, 
+                &info.normal_1.x, &info.normal_1.y, &info.depth_1
+            );            
+            
+            if(!overlaps){
+                continue;
+            }
+            
+            
+            i32 contact_point_amount;            
+            
+            polygon_find_contact_points(
+                other_vert_x, other_vert_y, other_vert_length,
+                vert_x, vert_y, vert_length,
+                F32_EPSILON, 
+                &info.contact_point_1.x, &info.contact_point_1.y,
+                &info.contact_point_2.x, &info.contact_point_2.y, 
+                &contact_point_amount
+            );
+              
+            if(contact_point_amount == 2){
+                info.normal_2.x = info.normal_1.x;
+                info.normal_2.y = info.normal_1.y;
+                info.depth_2 = info.depth_1;
+                info.two_contact_points = true;
+            }
+            
+            query_callback(state, info, user_data);
+        }
+        else if(fizx_shape_category_is_circle(shape_category)){
+        
+                
+            BOUNDS_CHECK(info.target_entity_idx, state->entities.centroid.length);
+            f32 other_x = state->entities.centroid.x[info.target_entity_idx];
+            f32 other_y = state->entities.centroid.y[info.target_entity_idx];
+            BOUNDS_CHECK(info.target_entity_idx, state->entities.global_radius_length);
+            f32 other_radius = state->entities.global_radius[info.target_entity_idx];        
+
+            bool overlaps = polygon_overlaps_circle_scalar(
+                vert_x, vert_y, vert_length, centroid_x, centroid_y,
+                other_x, other_y, other_radius, 
+                &info.normal_1.x, &info.normal_1.y, 
+                &info.depth_1
+            );
+            
+            if(!overlaps){
+                continue;
+            }
+            
+            polygon_find_point_contact_points_scalar(
+                vert_x, vert_y, vert_length,
+                other_x, other_y,
+                &info.contact_point_1.x, &info.contact_point_1.y
+            );
+
+            query_callback(state, info, user_data);        
+        }
+        else if(fizx_shape_category_is_line(shape_category)){
+       
+            ASSERT(false, "not implemented dumbass.");
         }
     }
 }

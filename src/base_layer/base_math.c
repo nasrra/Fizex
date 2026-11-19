@@ -346,8 +346,19 @@ inline f32 vector2_radian_difference_scalar(
     return f32_atan2(cross, dot);
 }
 
+f32 vector2_radian_difference(Vector2 a_sincos, Vector2 b_sincos){
+    return vector2_radian_difference_scalar(
+        a_sincos.x, a_sincos.y,
+        b_sincos.x, b_sincos.y
+    );
+}
+
 f32 vector2_dot_scalar(f32 lhs_x, f32 lhs_y, f32 rhs_x, f32 rhs_y){
     return (lhs_x * rhs_x) + (lhs_y * rhs_y);
+}
+
+f32 vector2_dot(Vector2 lhs, Vector2 rhs){
+    return vector2_dot_scalar(lhs.x, lhs.y, rhs.x, rhs.y);
 }
 
 inline bool vector2_equals(Vector2 a, Vector2 b){
@@ -3270,8 +3281,8 @@ bool polygon_overlaps_one_way(
 }
 
 bool polygon_overlaps(
-    f32* lhs_verts_x, f32* lhs_verts_y, i32 lhs_verts_size,
-    f32* rhs_verts_x, f32* rhs_verts_y, i32 rhs_verts_size,
+    f32* lhs_vert_x, f32* lhs_vert_y, i32 lhs_vert_length,
+    f32* rhs_vert_x, f32* rhs_vert_y, i32 rhs_vert_length,
     f32 lhs_centroid_x, f32 lhs_centroid_y, f32 rhs_centroid_x, f32 rhs_centroid_y,
     f32* out_normal_x, f32* out_normal_y, f32* out_depth
 ){
@@ -3284,8 +3295,8 @@ bool polygon_overlaps(
 
 
     bool lhs_overlaps_rhs = polygon_overlaps_one_way(
-        lhs_verts_x, lhs_verts_y, lhs_verts_size,
-        rhs_verts_x, rhs_verts_y, rhs_verts_size,
+        lhs_vert_x, lhs_vert_y, lhs_vert_length,
+        rhs_vert_x, rhs_vert_y, rhs_vert_length,
         &found_normal_x, &found_normal_y, &found_depth
     );
 
@@ -3301,8 +3312,8 @@ bool polygon_overlaps(
     }
 
     bool rhs_overlaps_lhs = polygon_overlaps_one_way(
-        rhs_verts_x, rhs_verts_y, rhs_verts_size,
-        lhs_verts_x, lhs_verts_y, lhs_verts_size,
+        rhs_vert_x, rhs_vert_y, rhs_vert_length,
+        lhs_vert_x, lhs_vert_y, lhs_vert_length,
         &found_normal_x, &found_normal_y, &found_depth
     );
 
@@ -3332,7 +3343,7 @@ bool polygon_overlaps(
 
 /*
     remarks:
-    this is an internal function for `polygon_find_contact_points()`
+    this is an internal function for `polygon_find_contac1t_points()`
     do NOT use this function; instead use said function instead.
 */
 void polygon_find_contact_points_one_way(
@@ -3407,8 +3418,8 @@ void polygon_find_contact_points_one_way(
     `out_contact_point_count`: can return either 1 or 2.
 */
 void polygon_find_contact_points(
-    f32* a_vert_x, f32* a_vert_y, i32 a_verts_length,
-    f32* b_vert_x, f32* b_vert_y, i32 b_verts_length,
+    f32* a_vert_x, f32* a_vert_y, i32 a_vert_length,
+    f32* b_vert_x, f32* b_vert_y, i32 b_vert_length,
     f32 epsilon, f32* out_contact_point_1_x, f32* out_contact_point_1_y,
     f32* out_contact_point_2_x, f32* out_contact_point_2_y, i32* out_contact_point_count
 ){
@@ -3421,16 +3432,16 @@ void polygon_find_contact_points(
 
     // polygon a to b.
     polygon_find_contact_points_one_way(
-        a_vert_x, a_vert_y, a_verts_length,
-        b_vert_x, b_vert_y, b_verts_length,
+        a_vert_x, a_vert_y, a_vert_length,
+        b_vert_x, b_vert_y, b_vert_length,
         epsilon, &min_dist_sqrd, out_contact_point_1_x, out_contact_point_1_y,
         out_contact_point_2_x, out_contact_point_2_y, out_contact_point_count
     );
 
     // polygon b to a.
     polygon_find_contact_points_one_way(
-        b_vert_x, b_vert_y, b_verts_length,
-        a_vert_x, a_vert_y, a_verts_length,
+        b_vert_x, b_vert_y, b_vert_length,
+        a_vert_x, a_vert_y, a_vert_length,
         epsilon, &min_dist_sqrd, out_contact_point_1_x, out_contact_point_1_y,
         out_contact_point_2_x, out_contact_point_2_y, out_contact_point_count
     );
@@ -3642,7 +3653,11 @@ f32 calc_area_rectangle(Rectangle rect){
 /**
     Gets the min and max vectors from an array of vertices.
 **/
-void polygon_get_min_max_vertices(f32* vert_x, f32* vert_y, i32 vert_length, f32* out_min_x, f32* out_min_y, f32* out_max_x, f32* out_max_y){
+void polygon_get_min_max_vertices(
+    f32* vert_x, f32* vert_y, i32 vert_length, 
+    f32* out_min_x, f32* out_min_y, f32* out_max_x, f32* out_max_y
+){
+
     *out_min_x = F32_MAX;
     *out_min_y = F32_MAX;
     *out_max_x = -F32_MAX;
