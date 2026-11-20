@@ -5037,12 +5037,6 @@ void game_state_update(GameState* game_state, MemoryArena* persistent, MemoryAre
             
             if(input_is_key_just_pressed(Key_Escape)){
                 board_state->show_pause_menu = !board_state->show_pause_menu;
-                if(board_state->show_pause_menu){
-                    timer_manager_timer_pause(&game_state->entity_manager.timer_manager, board_state->player_turn_timer);
-                }
-                else{
-                    timer_manager_timer_resume(&game_state->entity_manager.timer_manager, board_state->player_turn_timer);
-                }
             }
         }
 
@@ -5915,42 +5909,6 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                             },                                                                
                         }                      
                     });
-                    GFX_CLAY_BOARD_TURN_TEXT_CONTAINER(){
-
-                        CLAY_TEXT(CLAY_STRING("Player Turn Timer:"), GAME_GFX_CLAY_TEXT_CONFIG);
-                        
-                        { // display turn current time.
-                        
-                            f32 current_time = 0.0f;
-                            timer_manager_timer_get_current_tick(entity_manager->timer_manager, board_state->player_turn_timer, &current_time);                            
-                            char char_buffer[F32_STRING_MIN_LENGTH] = {0};
-                            Clay_String time_string = {
-                                .chars = char_buffer, 
-                                .length = F32_STRING_MIN_LENGTH
-                            };
-                            time_string.length = snprintf((char*)time_string.chars, F32_STRING_MIN_LENGTH, "%f", current_time);
-                            CLAY_TEXT(time_string, GAME_GFX_CLAY_TEXT_CONFIG);                                
-                        }
-                        
-                    
-                        switch(board_state->turn){
-                            case BoardTurn_Placement:{
-                                CLAY_TEXT(CLAY_STRING("Turn: Placement"), GAME_GFX_CLAY_TEXT_CONFIG);
-                            }break;
-                            case BoardTurn_Player:{
-                                CLAY_TEXT(CLAY_STRING("Turn: Player"), GAME_GFX_CLAY_TEXT_CONFIG);
-                            }break;
-                            case BoardTurn_Ball:{
-                                CLAY_TEXT(CLAY_STRING("Turn: Ball"), GAME_GFX_CLAY_TEXT_CONFIG);
-                            }break;
-                            case BoardTurn_TurnBased:{
-                                CLAY_TEXT(CLAY_STRING("Turn: Turn Based"), GAME_GFX_CLAY_TEXT_CONFIG);
-                            }break;
-                            case BoardTurn_Completed:{
-                                CLAY_TEXT(CLAY_STRING("Turn: Completed"), GAME_GFX_CLAY_TEXT_CONFIG);
-                            }break;
-                        }
-                    }
                 }
             }break;        
         }
