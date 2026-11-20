@@ -102,20 +102,25 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 #define TEXTURE_VIEW_512_512        (GFX_TextureView){.top_left = {0, 0}, .bot_right = {512, 512}}
 
-#define TEXTURE_VIEW_WALL           (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
-#define TEXTURE_VIEW_BALL_CUE       (GFX_TextureView){.top_left = {1664, 0}, .bot_right = {1792, 128}}
-#define TEXTURE_VIEW_BALL_ONE       (GFX_TextureView){.top_left = {256, 0}, .bot_right = {384, 128}}
-#define TEXTURE_VIEW_BALL_TWO       (GFX_TextureView){.top_left = {384, 0}, .bot_right = {512, 128}}
-#define TEXTURE_VIEW_BALL_THREE     (GFX_TextureView){.top_left = {512, 0}, .bot_right = {640, 128}}
-#define TEXTURE_VIEW_BALL_FOUR      (GFX_TextureView){.top_left = {640, 0}, .bot_right = {768, 128}}
-#define TEXTURE_VIEW_BALL_FIVE      (GFX_TextureView){.top_left = {768, 0}, .bot_right = {896, 128}}
-#define TEXTURE_VIEW_BALL_SIX       (GFX_TextureView){.top_left = {896, 0}, .bot_right = {1024, 128}}
-#define TEXTURE_VIEW_BALL_SEVEN     (GFX_TextureView){.top_left = {1024, 0}, .bot_right = {1152, 128}}
-#define TEXTURE_VIEW_BALL_EIGHT     (GFX_TextureView){.top_left = {1152, 0}, .bot_right = {1280, 128}}
-#define TEXTURE_VIEW_BALL_NINE      (GFX_TextureView){.top_left = {1280, 0}, .bot_right = {1408, 128}}
-#define TEXTURE_VIEW_BALL_ZERO      (GFX_TextureView){.top_left = {1408, 0}, .bot_right = {1536, 128}}
-#define TEXTURE_VIEW_BOOST_PAD      (GFX_TextureView){.top_left = {1536, 0}, .bot_right = {1664, 128}}
-#define TEXTURE_VIEW_POCKET         (GFX_TextureView){.top_left = {128, 0}, .bot_right = {256, 128}}
+#define TEXTURE_VIEW_WALL               (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
+
+#define TEXTURE_VIEW_WALL_HORIZONTAL    (GFX_TextureView){.top_left = {0,128}, .bot_right = {128, 256}}
+#define TEXTURE_VIEW_WALL_VERTICAL      (GFX_TextureView){.top_left = {128,128}, .bot_right = {256, 256}}
+#define TEXTURE_VIEW_WALL_CORNER        (GFX_TextureView){.top_left = {256,128}, .bot_right = {384, 256}}
+
+#define TEXTURE_VIEW_BALL_CUE           (GFX_TextureView){.top_left = {1664, 0}, .bot_right = {1792, 128}}
+#define TEXTURE_VIEW_BALL_ONE           (GFX_TextureView){.top_left = {256, 0}, .bot_right = {384, 128}}
+#define TEXTURE_VIEW_BALL_TWO           (GFX_TextureView){.top_left = {384, 0}, .bot_right = {512, 128}}
+#define TEXTURE_VIEW_BALL_THREE         (GFX_TextureView){.top_left = {512, 0}, .bot_right = {640, 128}}
+#define TEXTURE_VIEW_BALL_FOUR          (GFX_TextureView){.top_left = {640, 0}, .bot_right = {768, 128}}
+#define TEXTURE_VIEW_BALL_FIVE          (GFX_TextureView){.top_left = {768, 0}, .bot_right = {896, 128}}
+#define TEXTURE_VIEW_BALL_SIX           (GFX_TextureView){.top_left = {896, 0}, .bot_right = {1024, 128}}
+#define TEXTURE_VIEW_BALL_SEVEN         (GFX_TextureView){.top_left = {1024, 0}, .bot_right = {1152, 128}}
+#define TEXTURE_VIEW_BALL_EIGHT         (GFX_TextureView){.top_left = {1152, 0}, .bot_right = {1280, 128}}
+#define TEXTURE_VIEW_BALL_NINE          (GFX_TextureView){.top_left = {1280, 0}, .bot_right = {1408, 128}}
+#define TEXTURE_VIEW_BALL_ZERO          (GFX_TextureView){.top_left = {1408, 0}, .bot_right = {1536, 128}}
+#define TEXTURE_VIEW_BOOST_PAD          (GFX_TextureView){.top_left = {1536, 0}, .bot_right = {1664, 128}}
+#define TEXTURE_VIEW_POCKET             (GFX_TextureView){.top_left = {128, 0}, .bot_right = {256, 128}}
 
 #define FONT_HEIGHT_IN_PIXELS 48
 
@@ -302,6 +307,10 @@ static const Vector2 wildwall_ccw180_end_path[2] = {
 
 
 #define WALL_PHYSICS_BODY_LAYER (PHYSICS_LAYER_ENVIRONMENT_MID | PHYSICS_LAYER_GUIDELINE)
+#define WALL_DEFAULT_STATE      0
+#define WALL_HORIZONTAL_STATE   1
+#define WALL_VERTICAL_STATE     2
+#define WALL_CORNER_STATE       3
 
 
 ///
