@@ -929,9 +929,7 @@ void editor_open_asset_button_on_hover_callback(Clay_ElementId element_id, Clay_
         if(ctx->editor_state->mouse_state.asset_entity_to_spawn_file_path.count){
             DeferredLevelLoadContext level_load_ctx = {
                 .transform = TRANSFORM2D_IDENTITY,
-                .file_path = ctx->editor_state->mouse_state.asset_entity_to_spawn_file_path,
-                .load_type = LevelLoadType_World,
-                .callback = load_level_callback
+                .file_path = ctx->editor_state->mouse_state.asset_entity_to_spawn_file_path
             };
             level_manager_defer_load_level(&ctx->game_state->level_manager, level_load_ctx);
         }
@@ -967,11 +965,13 @@ void editor_new_level_button_on_hover_callback(Clay_ElementId element_id, Clay_P
         else{
             ASSERT(false, "failed to set world root entity file path");
         }
+                
+        load_board_level_callback(ctx->game_state, NULL);
         
         // reset to a well defined state.
         // note that this will most likely need to change in the future
         // perhaps a 'game_state_reset()' function? maybe idk lol.
-        load_level_callback(ctx->game_state, NULL);
+        game_state_on_level_load(ctx->game_state);
     }    
 }
 
@@ -1279,7 +1279,7 @@ void gfx_clay_level_management(Editor_State* editor_state, GameState* game_state
         Editor_NewLevelButtonOnHoverContext* new_ctx_ptr;
         MEMORY_ARENA_PUSH_STRUCT(transient, new_ctx, new_ctx_ptr);
         EDITOR_GFX_CLAY_BUTTON(
-            CLAY_STRING("New Level"), 
+            CLAY_STRING("New Level"),
             button_width, 
             button_height, 
             editor_new_level_button_on_hover_callback, 
@@ -2574,13 +2574,13 @@ void editor_state_update(Editor_State* editor_state, GameState* game_state, Memo
                     }
                     else if(editor_state->menu == Editor_Menu_AssetEntitySpawner){
                         
-                        if(editor_mouse_state->asset_entity_to_spawn_file_path.count){
-                            DeferredLevelLoadContext level_load_ctx = {
-                                .transform = spawn_transform,
-                                .file_path = editor_mouse_state->asset_entity_to_spawn_file_path,
-                                .load_type = LevelLoadType_WorldEntity
-                            };
-                            level_manager_defer_load_level(level_manager, level_load_ctx);
+                        if(editor_mouse_state->asset_entity_to_spawn_file_path.count){                            
+                            level_manager_load_asset_file(
+                                level_manager, 
+                                editor_mouse_state->asset_entity_to_spawn_file_path, 
+                                transient, 
+                                spawn_transform
+                            );
                         }
                         else{
                             os_output_message("[Warning]: editor attempted to spawn an asset entity without a filepath; i.e, None Asset Entity.\n");

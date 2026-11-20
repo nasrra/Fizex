@@ -340,6 +340,10 @@ void app_main(){
                                 editor_state.world_camera_position            = world_camera_entity->global_transform.position;
                                 editor_state.world_camera_orthographic_size   = world_camera_entity->camera_orthographic_size;
                             }
+                            else{
+                                editor_state.world_camera_position            = vector3_to_vector2(CAMERA_POSITIONAL_OFFSET);
+                                editor_state.world_camera_orthographic_size   = WORLD_CAMERA_DEFAULT_ORTHOGRAPHIC_SIZE;
+                            }
                         }
                         
                         gfx_orthographic_camera_init(
