@@ -1624,9 +1624,10 @@ void gfx_clay_native_entity_spawner_layout(Editor_State* editor_state, GameState
         EDITOR_GFX_CLAY_ROW_BUTTON_CONTAINER(0.1f){
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Invalid Placement Area"), button_width, button_height, transient, editor_state, EntityTypeId_InvalidPlacementArea);
             EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Pocket Interior Wall"), button_width, button_height, transient, editor_state, EntityTypeId_PocketInteriorWall);
+                EDITOR_GFX_CLAY_SPAWN_ENTITY_BUTTON(CLAY_STRING("Background"), button_width, button_height, transient, editor_state, EntityTypeId_Background);
         }
         
-        CLAY_TEXT(CLAY_STRING("Entity To Spawn:"), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);  
+        CLAY_TEXT(CLAY_STRING("Entity To Spawn:"), EDITOR_GFX_CLAY_DEFAULT_TEXT_CONFIG);
         if(editor_state->mouse_state.native_entity_to_spawn){                             
             CLAY_TEXT(
                 gfx_string_to_clay_string(editor_state->mouse_state.native_entity_to_spawn_name),

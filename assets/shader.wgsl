@@ -115,7 +115,8 @@ const sprite_state_deallocated: i32 = 0;
 ========================================**/
 const colour_blend_tint: i32 = 0;
 const colour_blend_override: i32 = 1;
-const colour_blend_masked_override: i32 = 2;
+const colour_blend_masked_override_rgb: i32 = 2;
+const colour_blend_masked_override_rgba: i32 = 3;
 
 /**========================================
     MATERIALS.
@@ -190,10 +191,8 @@ struct vertex_output {
 @group(0) @binding(3) var<storage> sprites: sprite;
 @group(1) @binding(1) var textures_fonts: texture_2d_array<f32>;
 @group(1) @binding(2) var textures_512_512: texture_2d_array<f32>;
-@group(1) @binding(3) var textures_360_162: texture_2d_array<f32>;
-@group(1) @binding(4) var textures_640_360: texture_2d_array<f32>;
-@group(1) @binding(5) var textures_16_16: texture_2d_array<f32>;
-@group(1) @binding(6) var textures_1028_1028: texture_2d_array<f32>;
+@group(1) @binding(3) var textures_1028_1028: texture_2d_array<f32>;
+@group(1) @binding(4) var textures_2048_2048: texture_2d_array<f32>;
 @group(2) @binding(0) var non_filter_texture_sampler: sampler;
 
 /**##########################################################################################################################################
@@ -261,11 +260,17 @@ fn fs_main(
         case default:{return fail_colour;}
         case colour_blend_tint: {colour = vec4f(mix(colour.rgb, colour.rgb * sprite_colour.rgb, sprite_colour.a), colour.a);}
         case colour_blend_override: {colour = sprite_colour;}// {colour = vec4f(mix(colour.rgb, sprite_colour.rgb, sprite_colour.a), sprite_colour.a);}
-        case colour_blend_masked_override:{
+        case colour_blend_masked_override_rgb:{
             var og_alpha: f32;
             og_alpha = colour.a;
             colour = vec4f(mix(colour.rgb, sprite_colour.rgb, sprite_colour.a), colour.a);
             colour.a = og_alpha;
+        }
+        case colour_blend_masked_override_rgba:{
+            var og_alpha: f32;
+            og_alpha = colour.a;
+            colour = sprite_colour;
+            colour.a *= og_alpha;
         }
     }
 
@@ -288,10 +293,8 @@ fn fs_draw_sprite_simple(
     switch virtual_texture.binding {
         case 1: {return textureLoad(textures_fonts, pixel_position, virtual_texture.layer_index, 0);}
         case 2: {return textureLoad(textures_512_512, pixel_position, virtual_texture.layer_index, 0);}
-        case 3: {return textureLoad(textures_360_162, pixel_position, virtual_texture.layer_index, 0);}
-        case 4: {return textureLoad(textures_640_360, pixel_position, virtual_texture.layer_index, 0);}
-        case 5: {return textureLoad(textures_16_16, pixel_position, virtual_texture.layer_index, 0);}
-        case 6: {return textureLoad(textures_1028_1028, pixel_position, virtual_texture.layer_index, 0);}
+        case 3: {return textureLoad(textures_1028_1028, pixel_position, virtual_texture.layer_index, 0);}
+        case 4: {return textureLoad(textures_2048_2048, pixel_position, virtual_texture.layer_index, 0);}
         case default:{return fail_colour;}
     }
 }

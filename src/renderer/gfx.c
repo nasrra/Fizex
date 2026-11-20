@@ -301,7 +301,8 @@ typedef struct{
 typedef enum{
     GFX_ColourBlend_Tint,
     GFX_ColourBlend_Override,
-    GFX_ColourBlend_MaskedOverride
+    GFX_ColourBlend_MaskedOverrideRGB,
+    GFX_ColourBlend_MaskedOverrideRGBA
 } GFX_ColourBlend;
 
 typedef enum{
@@ -3096,7 +3097,7 @@ void gfx_state_draw(GFX_State* state, MemoryArena* transient){
             .loadOp = WGPULoadOp_Clear,
             .storeOp = WGPUStoreOp_Store,
             // clear colour.
-            .clearValue = (WGPUColor){.r = 0.1f, .g = 0.25f, .b = 0.1f, .a = 1.0f},
+            .clearValue = (WGPUColor){.r = 0.001f, .g = 0.002f, .b = 0.0015f, .a = 1.0f},
             .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED
         };
 

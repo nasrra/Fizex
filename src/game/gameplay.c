@@ -40,6 +40,15 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 
 ///
+/// @ Background defines.
+///
+
+
+#define BACKGROUND_STATE_CHECKERBOARD   0
+#define BACKGROUND_STATE_DITHER         1
+
+
+///
 /// @ Player.
 ///
 
@@ -80,14 +89,18 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 ///
 
 
-#define VIRTUAL_TEXTURE_ID_FONT 1
-#define VIRTUAL_TEXTURE_ID_GAME_BOARD 2
+#define VIRTUAL_TEXTURE_ID_FONT                     1
+#define VIRTUAL_TEXTURE_ID_GAME_BOARD               2
+#define VIRTUAL_TEXTURE_ID_BACKGROUND_CHECKERBOARD  3
+#define VIRTUAL_TEXTURE_ID_BACKGROUND_DITHER        4
 
 
 ///
 /// @ TextureView defines.
 ///
 
+
+#define TEXTURE_VIEW_512_512        (GFX_TextureView){.top_left = {0, 0}, .bot_right = {512, 512}}
 
 #define TEXTURE_VIEW_WALL           (GFX_TextureView){.top_left = {0, 0}, .bot_right = {128, 128}}
 #define TEXTURE_VIEW_BALL_CUE       (GFX_TextureView){.top_left = {1664, 0}, .bot_right = {1792, 128}}
@@ -106,6 +119,7 @@ bool entity_set_active(EntityManager* entity_manager, GenId entity_gid, bool is_
 
 #define FONT_HEIGHT_IN_PIXELS 48
 
+#define SPRITE_LAYER_BACKGROUND                 9
 #define SPRITE_LAYER_WORLD_ENVIRONMENT_BOT      8
 #define SPRITE_LAYER_WORLD_ENVIRONMENT_BOT_FX   7
 #define SPRITE_LAYER_WORLD_ENVIRONMENT_MID      6
@@ -612,7 +626,8 @@ enum EntityTypeId{
     EntityTypeId_Empty                  = 23,
     EntityTypeId_ValidPlacementArea     = 24,
     EntityTypeId_InvalidPlacementArea   = 25,
-    EntityTypeId_PocketInteriorWall     = 26
+    EntityTypeId_PocketInteriorWall     = 26,
+    EntityTypeId_Background             = 27
 };
 
 typedef enum{
@@ -3457,7 +3472,7 @@ GenId entity_spawn_cue_ball(EntityManager* entity_manager, Transform2D transform
             gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_NONE);
-            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_MaskedOverride);
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_MaskedOverrideRGB);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_WORLD_ENVIRONMENT_MID);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0);
         }
@@ -4163,7 +4178,7 @@ GenId entity_spawn_number_ball(EntityManager* entity_manager, Transform2D transf
             gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_GAME_BOARD);
             gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
             gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_NONE);
-            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_MaskedOverride);
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_MaskedOverrideRGB);
             gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_WORLD_ENVIRONMENT_MID);
             gfx_sprite_set_depth(           entity_manager->gfx_state, entity->sprite_gid, 0); 
         }
@@ -4481,6 +4496,60 @@ GenId entity_spawn_invalid_placement_area(EntityManager* entity_manager, Transfo
     return entity_gid;
 }
 
+
+///
+/// @ Background procedures
+///
+
+
+void background_set_state_callback(EntityManager* entity_manager, Entity* entity, i32 entity_idx, i32 state){
+    switch(state){
+        default:{
+            ASSERT(false, "unknown state set.");
+        }break;
+        case BACKGROUND_STATE_CHECKERBOARD:{
+            gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_BACKGROUND_CHECKERBOARD);
+            gfx_sprite_set_depth(entity_manager->gfx_state, entity->sprite_gid, 2);
+            gfx_sprite_set_colour(entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 0.225f, .g = 0.825f, .b = 0.6f, .a = 1.0f});
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_Tint);
+        }break;
+        case BACKGROUND_STATE_DITHER:{
+            gfx_sprite_set_virtual_texture( entity_manager->gfx_state, entity->sprite_gid, VIRTUAL_TEXTURE_ID_BACKGROUND_DITHER);
+            gfx_sprite_set_depth(entity_manager->gfx_state, entity->sprite_gid, 1);
+            gfx_sprite_set_colour(entity_manager->gfx_state, entity->sprite_gid, (GFX_Colour){.r = 0.334f, .g = 0.334f, .b = 0.334f, .a = 0.224f});
+            gfx_sprite_set_colour_blend(    entity_manager->gfx_state, entity->sprite_gid, GFX_ColourBlend_MaskedOverrideRGBA);
+        }break;
+    }
+}
+
+GenId entity_spawn_background(EntityManager* entity_manager, Transform2D transform, GenId parent, Entity** out_entity){
+    GenId entity_gid = entity_manager_alloc_entity(entity_manager, parent);
+    Entity* entity;
+    if(entity_manager_get_entity(*entity_manager, entity_gid, &entity))
+    {
+        entity->type_id = EntityTypeId_Background;
+        entity->visibility_layer = ENTITY_VISIBILITY_LAYER_WORLD;
+        entity->set_state_callback = background_set_state_callback;
+        
+        { // alloc_sprite();
+                
+            entity->is_sprite = true;
+            entity->sprite_local_transform = TRANSFORM2D_IDENTITY;
+            entity->sprite_gid = gfx_sprite_alloc(entity_manager->gfx_state);
+            gfx_sprite_set_active(          entity_manager->gfx_state, entity->sprite_gid);
+            gfx_sprite_set_texture_view(    entity_manager->gfx_state, entity->sprite_gid, TEXTURE_VIEW_512_512);
+            gfx_sprite_set_material(        entity_manager->gfx_state, entity->sprite_gid, SPRITE_MATERIAL_IMAGE);
+            gfx_sprite_set_origin(          entity_manager->gfx_state, entity->sprite_gid, GFX_SpriteOrigin_Center);
+            // gfx_sprite_set_colour(          entity_manager->gfx_state, entity->sprite_gid, GFX_COLOUR_WHITE);
+            gfx_sprite_set_layer(           entity_manager->gfx_state, entity->sprite_gid, SPRITE_LAYER_BACKGROUND);
+        }
+        
+        entity_set_local_transform(entity_manager, entity_gid, transform);
+        *out_entity = entity;
+    }
+    return entity_gid;
+}
+
 GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transform2D transform, GenId parent_gid, Entity** out_entity){
     Entity* entity = NULL;
     GenId entity_gid = {0};
@@ -4559,7 +4628,10 @@ GenId entity_spawn(EntityManager* entity_manager, EntityTypeId type_id, Transfor
         }break;
         case EntityTypeId_PocketInteriorWall:{
             entity_gid = entity_spawn_pocket_interior_wall(entity_manager, transform, parent_gid, &entity);
-        }
+        }break;
+        case  EntityTypeId_Background:{
+            entity_gid = entity_spawn_background(entity_manager, transform, parent_gid, &entity);
+        }break;
     }
     
     if(entity){        

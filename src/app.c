@@ -83,18 +83,13 @@ void app_main(){
         // image textures.
         GFX_ImageTexturesInitInfo* image_textures_init_info;
         i32 image_textures_init_info_length;
-        MEMORY_ARENA_ALLOC_ARRAY(transient, image_textures_init_info, &image_textures_init_info_length, 5);
-
+        MEMORY_ARENA_ALLOC_ARRAY(transient, image_textures_init_info, &image_textures_init_info_length, 3);
         BOUNDS_CHECK(0, image_textures_init_info_length);
-        image_textures_init_info[0] = (GFX_ImageTexturesInitInfo){.width = 150, .height = 150, .max_textures = 16};
+        image_textures_init_info[0] = (GFX_ImageTexturesInitInfo){.width = 512, .height = 512, .max_textures = 2};
         BOUNDS_CHECK(1, image_textures_init_info_length);
-        image_textures_init_info[1] = (GFX_ImageTexturesInitInfo){.width = 360, .height = 162, .max_textures = 2};
+        image_textures_init_info[1] = (GFX_ImageTexturesInitInfo){.width = 1028, .height = 1028, .max_textures = 3};
         BOUNDS_CHECK(2, image_textures_init_info_length);
-        image_textures_init_info[2] = (GFX_ImageTexturesInitInfo){.width = 640, .height = 360, .max_textures = 2};
-        BOUNDS_CHECK(3, image_textures_init_info_length);
-        image_textures_init_info[3] = (GFX_ImageTexturesInitInfo){.width = 1028, .height = 1028, .max_textures = 3};
-        BOUNDS_CHECK(4, image_textures_init_info_length);
-        image_textures_init_info[4] = (GFX_ImageTexturesInitInfo){.width = 2048, .height = 2048, .max_textures = 4};
+        image_textures_init_info[2] = (GFX_ImageTexturesInitInfo){.width = 2048, .height = 2048, .max_textures = 4};
 
         // context.
         GFX_StateInitInfo gfx_init_info = {
@@ -204,6 +199,16 @@ void app_main(){
             STRING_PUSH_LITERAL(&file_path, "../assets/fonts/PixelOperatorSC-Bold.ttf");
             gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_FONT);
             gfx_load_font_texture(&gfx_state, transient, VIRTUAL_TEXTURE_ID_FONT, 24, 32, 12);
+            
+            string_clear(&file_path);
+            STRING_PUSH_LITERAL(&file_path, "../assets/sprites/background_1.png");
+            gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_BACKGROUND_CHECKERBOARD);
+            gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_BACKGROUND_CHECKERBOARD);
+        
+            string_clear(&file_path);
+            STRING_PUSH_LITERAL(&file_path, "../assets/sprites/background_2.png");
+            gfx_virtual_texture_set_file_path(&gfx_state, file_path, VIRTUAL_TEXTURE_ID_BACKGROUND_DITHER);
+            gfx_load_image_texture(&gfx_state, VIRTUAL_TEXTURE_ID_BACKGROUND_DITHER);
         }
 
         { // load level.
