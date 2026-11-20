@@ -5918,8 +5918,6 @@ void game_state_draw(GameState* game_state, MemoryArena* transient, f32 delta_ti
                 }
             }break;        
         }
-
-
     }
 
     
